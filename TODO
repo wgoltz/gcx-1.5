@@ -1,0 +1,19 @@
+read matrix wcs from headers
+star list editing
+mag from cats
+star find (by name)
+auto recipy name (from frame obj)
+efficient wcs std search
+extend pairs
+polynomial wcs fit
+move gui stars to cats
+check band case insensitive, long names
+correct zpoints in zp vs time for airmass
+
+check gnuplot
+
+keep order of brightness in detected stars even with a bright one.
+
+
+option for non-standard fits extension.
+

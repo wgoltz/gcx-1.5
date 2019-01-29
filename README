@@ -1,0 +1,60 @@
+=====================================
+Building and running gcx
+
+To build the program, do a:
+  ./configure ; make 
+Check the INSTALL file for build options. To install, become root, then run:
+  make install
+You can then run the program:
+  gcx
+
+To create an initial configuration file (~/.gcxrc), run the program, then
+select File->Edit Options, then Save. Options can be edited from inside the
+Edit Options dialog, or directly in .gcxrc.
+
+The manual is distributed as a latex file, and already built into a pdf and 
+dvi. To rebuild it, cd to docs, then do make/make dvi/make pdf. make pdf requires
+pdflatex. 
+
+=====================================
+Catalogs
+
+The gsc catalog is available for download from 
+ftp://cdsarc.u-strasbg.fr/cats/I/220/
+
+The path to gcx should be set in the config file. Make sure all directory and file 
+names are in lowercase.
+
+gcx can read edb catalogs (fixed objects only). Currently, it looks
+for Messier.edb, NGC.edb, UGC.edb, YBS.edb and gcvs.edb. 
+
+=====================================
+Controlling cameras
+
+gcx uses a separate camera control process, which can run on the same computer,
+or somewhere on the network. For cpx3m cameras, the camera control server is 
+cpxctrl. 
+
+=====================================
+Controlling a telescope
+
+gcx can control a telescope using the LX200 protocol. It must have read-write
+access to a serial port (default: /dev/ttyS0) to do that. 
+
+
+=====================================
+This program is free software, provided under the Gnu General 
+Public License. Please see the file 'LICENSE' for details.
+
+=====================================
+Build problems
+
+The most common reason ./configure may fail is if the development package 
+containing gtk1.2 is not intalled (the package is usually called gtk-devel 
+or similar).
+
+Some people report problem building / running on suse10. The most likely 
+cause of this is the way the gtk1.2 or associated libraries are configured
+on that distribution. If anyone has a fix or procedure for building on that 
+distribution, i'd like to hear about it (and include it here).
+
