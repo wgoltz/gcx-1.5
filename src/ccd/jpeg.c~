@@ -1,0 +1,87 @@
+
+#include <stdio.h>
+#include <jpeglib.h>
+
+#include "ccd.h"
+
+struct ccd_frame *read_jpeg_file(char *filename) {
+	struct jpeg_decompress_struct cinfo;
+        struct jpeg_error_mgr jerr;
+
+	FILE * infile;
+
+        if ((infile = fopen(filename, "rb")) == NULL) {
+            fprintf(stderr, "can't open %s\n", filename);
+            return NULL;
+        }
+
+	struct ccd_frame *frame = NULL;
+
+        cinfo.err = jpeg_std_error(&jerr);
+        jpeg_create_decompress(&cinfo);
+        jpeg_stdio_src(&cinfo, infile);
+
+	if (jpeg_read_header(&cinfo, TRUE) != 1) {
+		fprintf(stderr, "can't read header\n");
+		frame = (void *) (-1);
+		goto exit1;
+	}
+
+	jpeg_calc_output_dimensions(&cinfo);
+
+	frame = new_frame(cinfo.image_width, cinfo.image_height);
+
+	JSAMPARRAY scanline = (cinfo.mem->alloc_small) ((j_common_ptr)&cinfo, JPOOL_IMAGE,
+			cinfo.image_width * cinfo.output_components);
+
+	if (cinfo.num_components == 3) 
+		frame->magic &= FRAME_VALID_RGB;
+
+	frame->pix_size = cinfo.data_precision;
+
+	alloc_frame_data(frame);
+
+	jpeg_start_decompress(&cinfo);
+
+	if (cinfo.num_components == 3) {
+		float *rptr, *gptr, *bptr;
+
+		rptr = frame->rdat;
+		gptr = frame->gdat;
+		bptr = frame->bdat;
+
+		while (cinfo.output_scanline < cinfo.output_height) {
+
+			jpeg_read_scanlines(&cinfo, scanline, 1);
+
+			unsigned char *p;
+			int i;
+			for (i = 0, p = scanline; i < cinfo.output_width; i++) {
+				switch (i % 3) {
+					case 0: *rptr++ = *p++; break;
+					case 1: *gptr++ = *p++; break;
+					case 2: *bptr++ = *p++; break;
+				}
+			} 
+		}
+	} else {
+		float *ptr = frame->dat;
+		while (cinfo.output_scanline < cinfo.output_height) {
+
+			jpeg_read_scanlines(&cinfo, scanline, 1);
+
+			unsigned char *p;
+			int i;
+			for (i = 0, p = scanline; i < cinfo.output_width; i++) 
+				*ptr++ = *p++;
+		}
+	}
+
+	jpeg_finish_decompress(&cinfo);
+
+exit1:
+	jpeg_destroy_decompress(&cinfo);
+	fclose(infile);
+
+	return frame;
+}
