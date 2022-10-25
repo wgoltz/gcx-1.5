@@ -40,7 +40,7 @@
 #include "sidereal_time.h"
 #include "misc.h"
 #include "match.h"
-#include "warpaffine.h"
+//#include "warpaffine.h"
 
 //#define CHECK_WCS_CLOSURE
 

@@ -710,7 +710,7 @@ extern int filter_frame(struct ccd_frame *fr, struct ccd_frame *fro, float *kern
 extern int filter_frame_inplace(struct ccd_frame *fr, float *kern, int size);
 extern int make_gaussian(float sigma, int size, float *kern);
 extern int rotate_frame(struct ccd_frame *fr, double theta);
-extern void warp_frame(struct ccd_frame *fr, double dx, double dy, double dt);
+//extern void warp_frame(struct ccd_frame *fr, double dx, double dy, double dt);
 
 /* from edb.c */
 int locate_edb(char name[], double *ra, double *dec, double *mag, char *edbdir);

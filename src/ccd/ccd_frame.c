@@ -238,7 +238,7 @@ frame_count++;
 	return hd;
 }
 
-extern free_alignment_mask(struct ccd_frame *fr); // qt code in warpaffine.cpp
+//extern free_alignment_mask(struct ccd_frame *fr); // qt code in warpaffine.cpp
 
 // free_frame frees a frame completely (data array and header)
 void free_frame(struct ccd_frame *fr)
@@ -253,7 +253,7 @@ d3_printf("freed %p '%s' frame_count %d \n", fr, fr->name, frame_count);
         if (fr->gdat) free(fr->gdat);
         if (fr->bdat) free(fr->bdat);
         if (fr->name) free(fr->name);
-        if (fr->alignment_mask) free_alignment_mask(fr);
+//        if (fr->alignment_mask) free_alignment_mask(fr);
         free(fr);
 	}
 }

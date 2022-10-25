@@ -26,7 +26,7 @@ INCLUDEPATH += ccd gsc libindiclient
 
 LIBS += -lz -ljpeg -ltiff
 
-#DEFINES = HAVE_CONFIG_H
+DEFINES = HAVE_CONFIG_H
 
 HEADERS = \
    $$PWD/src/ccd/ccd.h \
@@ -42,6 +42,7 @@ HEADERS = \
    $$PWD/src/libindiclient/indi_list.h \
    $$PWD/src/libindiclient/indigui.h \
    $$PWD/src/libindiclient/lilxml.h \
+   $$PWD/src/abort.h \
    $$PWD/src/camera_indi.h \
    $$PWD/src/cameragui.h \
    $$PWD/src/catalogs.h \
@@ -72,7 +73,8 @@ HEADERS = \
    $$PWD/src/plots.h \
    $$PWD/src/psf.h \
    $$PWD/src/query.h \
-   $$PWD/src/recipe.h \
+#   $$PWD/src/recipe.h \
+   $$PWD/src/recipy.h \
    $$PWD/src/reduce.h \
    $$PWD/src/sidereal_time.h \
    $$PWD/src/sourcesdraw.h \
@@ -94,7 +96,8 @@ SOURCES = \
    $$PWD/src/ccd/edb.c \
    $$PWD/src/ccd/errlog.c \
    $$PWD/src/ccd/median.c \
-   $$PWD/src/ccd/rcp.c \
+#   $$PWD/src/ccd/rcp.c \
+   $$PWD/src/ccd/recipe.c \
    $$PWD/src/ccd/sources.c \
 #   $$PWD/src/ccd/sources_int.c \
    $$PWD/src/ccd/use_dcraw.c \
@@ -163,8 +166,10 @@ SOURCES = \
    $$PWD/src/plots.c \
    $$PWD/src/psf.c \
    $$PWD/src/query.c \
-   $$PWD/src/recipe.c \
-   $$PWD/src/recipegui.c \
+#   $$PWD/src/recipe.c \
+   $$PWD/src/recipy.c \
+#   $$PWD/src/recipegui.c \
+   $$PWD/src/recipygui.c \
    $$PWD/src/reduce.c \
 #   $$PWD/src/reduce_int.c \
    $$PWD/src/reducegui.c \

@@ -1295,7 +1295,7 @@ int main(int ac, char **av) {
 //    while (TRUE) {
         if (optind != 0) optind = 1;
 
-        start_QGuiApplication();
+//        start_QGuiApplication();
 
         fake_main(ac, av);
 

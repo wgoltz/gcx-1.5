@@ -37,7 +37,7 @@
 
 #include "ccd.h"
 //#include "x11ops.h"
-#include "warpaffine.h"
+//#include "warpaffine.h"
 
 float smooth3[9] = {0.25, 0.5, 0.25, 0.5, 1.0, 0.5, 0.25, 0.5, 0.25};
 
@@ -493,7 +493,7 @@ void warp_frame(struct ccd_frame *fr, double dx, double dy, double dt) {
 
     while ((plane_iter = color_plane_iter(fr, plane_iter))) {
         float *in = get_color_plane(fr, plane_iter);
-        warp(in, fr->w, fr->h, dx, dy, dt, filler);
+//        warp(in, fr->w, fr->h, dx, dy, dt, filler);
     }
 }
 

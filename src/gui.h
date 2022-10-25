@@ -87,8 +87,8 @@ extern void image_box_to_cache(struct map_cache *cache, struct image_channel *ch
 			double zoom, int x, int y, int w, int h);
 
 /* from abort.c */
-extern int user_abort(void); // control-c polling
-extern void set_abort_flag();
+//extern int user_abort(void); // control-c polling
+//extern void set_abort_flag();
 
 /* from gui.c */
 extern void error_beep(void);

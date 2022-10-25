@@ -56,7 +56,7 @@
 #include "demosaic.h"
 #include "match.h"
 #include "sourcesdraw.h"
-#include "warpaffine.h"
+//#include "warpaffine.h"
 
 
 int progress_print(char *msg, void *data)
@@ -940,117 +940,117 @@ static float get_weight(struct ccd_frame *fr)
 static int do_stack_weighted_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
 			int (* progress)(char *msg, void *data), void *data)
 {
-    struct ccd_frame **frames;
+//    struct ccd_frame **frames;
 
-    int n = get_unskipped_frames(imfl, &frames);
-    if (n <= 0) return n;
+//    int n = get_unskipped_frames(imfl, &frames);
+//    if (n <= 0) return n;
 
-    float *weights = NULL;
-    float **p, **p0 = NULL;
+//    float *weights = NULL;
+//    float **p, **p0 = NULL;
 
-    weights = malloc(n * sizeof(float));
+//    weights = malloc(n * sizeof(float));
 
-    p = malloc(n * sizeof(float *));
-    p0 = malloc(n * sizeof(float *));
+//    p = malloc(n * sizeof(float *));
+//    p0 = malloc(n * sizeof(float *));
 
-    if (! weights || ! p || ! p0) {
-        free(frames);
-        if (weights) free(weights);
-        if (p) free(p);
-        if (p0) free(p0);
-        return -1;
-    }
+//    if (! weights || ! p || ! p0) {
+//        free(frames);
+//        if (weights) free(weights);
+//        if (p) free(p);
+//        if (p0) free(p0);
+//        return -1;
+//    }
 
-    int use_weights = (n > 1);
-    float sum_weights = 0.0;
+//    int use_weights = (n > 1);
+//    float sum_weights = 0.0;
 
-    if (use_weights) {
-        float min_weight, max_weight;
+//    if (use_weights) {
+//        float min_weight, max_weight;
 
-        int i;
-        for (i = 0; i < n; i++) {
-            float weight = get_weight(frames[i]);
-            if (i) {
-                if (weight < min_weight)
-                    min_weight = weight;
-                if (weight > max_weight)
-                    max_weight = weight;
-            }
-            else
-                min_weight = max_weight = weight;
+//        int i;
+//        for (i = 0; i < n; i++) {
+//            float weight = get_weight(frames[i]);
+//            if (i) {
+//                if (weight < min_weight)
+//                    min_weight = weight;
+//                if (weight > max_weight)
+//                    max_weight = weight;
+//            }
+//            else
+//                min_weight = max_weight = weight;
 
-            weights[i] = weight;
-            sum_weights += weight;
-        }
-        use_weights = (max_weight - min_weight > 0.03 * (max_weight + min_weight));
-    }
+//            weights[i] = weight;
+//            sum_weights += weight;
+//        }
+//        use_weights = (max_weight - min_weight > 0.03 * (max_weight + min_weight));
+//    }
 
-    char lb[81];
-    if (use_weights) {
-        snprintf(lb, 80, "'WEIGHTED AVERAGE %d FRAMES'", n);
-        fits_add_history(ofr, lb);
-    } else {
-        snprintf(lb, 80, "'AVERAGE STACK %d FRAMES'", n);
-        fits_add_history(ofr, lb);
-    }
+//    char lb[81];
+//    if (use_weights) {
+//        snprintf(lb, 80, "'WEIGHTED AVERAGE %d FRAMES'", n);
+//        fits_add_history(ofr, lb);
+//    } else {
+//        snprintf(lb, 80, "'AVERAGE STACK %d FRAMES'", n);
+//        fits_add_history(ofr, lb);
+//    }
 
-    struct visible_bounds *bounds = frame_bounds(ofr, NULL, TRUE); // use full frame
+//    struct visible_bounds *bounds = frame_bounds(ofr, NULL, TRUE); // use full frame
 
-    int plane_iter = 0;
-    while ((plane_iter = color_plane_iter(ofr, plane_iter))) {
+//    int plane_iter = 0;
+//    while ((plane_iter = color_plane_iter(ofr, plane_iter))) {
 
-/* not working yet */
-//        AND_frame_bounds(imfl, ofr);
-//        bounds = frame_bounds(ofr, NULL, FALSE);
+///* not working yet */
+////        AND_frame_bounds(imfl, ofr);
+////        bounds = frame_bounds(ofr, NULL, FALSE);
 
-        int i;
+//        int i;
 
-        float **dp = p;
+//        float **dp = p;
 
-		for (i = 0; i < n; i++) {
-            p0[i] = dp[i] = get_color_plane(frames[i], plane_iter);
-		}
+//		for (i = 0; i < n; i++) {
+//            p0[i] = dp[i] = get_color_plane(frames[i], plane_iter);
+//		}
 
-        float *odp = get_color_plane(ofr, plane_iter);
-        float *odp0 = odp;
+//        float *odp = get_color_plane(ofr, plane_iter);
+//        float *odp0 = odp;
 
-        int y = bounds->first_row;
-        int row;
-        for (row = 0; row < bounds->num_rows; row++) {
-            int i;
+//        int y = bounds->first_row;
+//        int row;
+//        for (row = 0; row < bounds->num_rows; row++) {
+//            int i;
 
-            int x = bounds->row[row].first; // skip to first visible pixel
-            for (i = 0; i < n; i++)
-                dp[i] = p0[i] + y * frames[i]->w + x;
+//            int x = bounds->row[row].first; // skip to first visible pixel
+//            for (i = 0; i < n; i++)
+//                dp[i] = p0[i] + y * frames[i]->w + x;
 
-            odp = odp0 + y * ofr->w + bounds->row[row].first;
+//            odp = odp0 + y * ofr->w + bounds->row[row].first;
 
-            while (x < bounds->row[row].last) {
-                if (! use_weights)
-                    *odp = pix_average(dp, n, 0, 1);
-                else
-                    *odp = weighted_pix_sum(dp, weights, n) / sum_weights;
-                int i;
-                for (i = 0; i < n; i++) // next pixel
-                    dp[i]++;
-                odp++;
+//            while (x < bounds->row[row].last) {
+//                if (! use_weights)
+//                    *odp = pix_average(dp, n, 0, 1);
+//                else
+//                    *odp = weighted_pix_sum(dp, weights, n) / sum_weights;
+//                int i;
+//                for (i = 0; i < n; i++) // next pixel
+//                    dp[i]++;
+//                odp++;
 
-                x++;
-            }
+//                x++;
+//            }
 
-            y++;
-        }
-    }
-    // find cavg
-    // set out of bounds pixels to cavg
-    free(bounds);
+//            y++;
+//        }
+//    }
+//    // find cavg
+//    // set out of bounds pixels to cavg
+//    free(bounds);
 
-// if use_weights maybe muck around with ofr stats?
+//// if use_weights maybe muck around with ofr stats?
 
-    free(frames);
-    free(p);
-    free(p0);
-    free(weights);
+//    free(frames);
+//    free(p);
+//    free(p0);
+//    free(weights);
 
 	return 0;
 }
@@ -1894,7 +1894,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
                     adjust_wcs(wcs, -dx, -dy, 1, 0);
                     wcs_to_fits_header(imf->fr); // not quite correct
                 }
-                make_alignment_mask(imf->fr, ccdr->alignref->fr, -dx, -dy, 1, -dt);
+//                make_alignment_mask(imf->fr, ccdr->alignref->fr, -dx, -dy, 1, -dt);
             }
 
             g_slist_free(pairs);
