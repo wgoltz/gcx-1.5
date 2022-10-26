@@ -43,7 +43,7 @@
 #include "params.h"
 #include "wcs.h"
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "misc.h"
 #include "query.h"
 #include "interface.h"
@@ -162,12 +162,12 @@ static struct cat_star * parse_cat_line_ucac2_main(char *line)
         if (m > 0.0 && jm > 0.0 && km > 0.0) {
             if (-1 == asprintf(&cats->comments, "p=u 2mass=%.0f", m)) cats->comments = NULL;
 			if (uc == 0)
-                ret = asprintf(&cats->smags, "J=%.3f K=%.3f", jm, km);
+                ret = asprintf(&cats->cmags, "J=%.3f K=%.3f", jm, km);
 			else
-                ret = asprintf(&cats->smags, "UC=%.3f J=%.3f K=%.3f", uc, jm, km);
+                ret = asprintf(&cats->cmags, "UC=%.3f J=%.3f K=%.3f", uc, jm, km);
 		}
 	}
-    if (ret == -1) cats->smags = NULL;
+    if (ret == -1) cats->cmags = NULL;
 
     w = strtod(line + cols[8], &endp);
     if (line+cols[8] == endp) return cats;
@@ -251,8 +251,6 @@ static struct cat_star * parse_cat_line_ucac2_bss(char *line)
 
     if (m > 0) n += snprintf(buf+n, 255-n, "2mass=%.0f ", m);
 
-    if (n) cats->comments = strdup(buf);
-
 	n = 0;
     if (uc > 0) n += snprintf(buf, 255-n, "V=%.3f ", uc);
 
@@ -260,7 +258,7 @@ static struct cat_star * parse_cat_line_ucac2_bss(char *line)
 
     if (j > 0) n += snprintf(buf+n, 255-n, "J=%.3f ", j);
 
-    if (n) cats->smags = strdup(buf);
+    if (n) cats->cmags = strdup(buf);
 
 	/* proper motions */
     w = strtod(line + cols[7], &endp);
@@ -342,17 +340,17 @@ static struct cat_star * parse_cat_line_ucac3(char *line)
 
 	/* what is "p=..." ? */
 	m = strtod(line+cols[5], &endp);
-	asprintf(&cats->comments, "ucac3_class=%.0f", m);
+//	asprintf(&cats->comments, "ucac3_class=%.0f", m);
 
 	j = strtod(line+cols[9], &endp);
 	k = strtod(line+cols[10], &endp);
-	cats->smags = NULL;
+    cats->cmags = NULL;
 
 	if (j > 0.0 && k > 0.0) {
 		if (uc == 0)
-            asprintf(&cats->smags, "J=%.3f K=%.3f", j, k);
+            asprintf(&cats->cmags, "J=%.3f K=%.3f", j, k);
 		else
-            asprintf(&cats->smags, "UC=%.3f J=%.3f K=%.3f", uc, j, k);
+            asprintf(&cats->cmags, "UC=%.3f J=%.3f K=%.3f", uc, j, k);
 	}
 
 	w = strtod(line+cols[7], &endp);
@@ -422,7 +420,7 @@ static struct cat_star * parse_cat_line_gsc2(char *line)
 		cats->mag = bj;
 
 	cats->perr = BIG_ERR;
-    if (-1 == asprintf(&cats->comments, "p=g gsc2_class=%.0f", class)) cats->comments = NULL;
+//    if (-1 == asprintf(&cats->comments, "p=g gsc2_class=%.0f", class)) cats->comments = NULL;
 
 	n = 0;
 	if (fr > 0) {
@@ -438,7 +436,9 @@ static struct cat_star * parse_cat_line_gsc2(char *line)
             n += snprintf(buf+n, 255-n, "Bj=%.3f ", bj);
 	}
 
-    if (n) cats->smags = strdup(buf);
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
 	cats->flags |= CATS_FLAG_ASTROMET;
 	return cats;
 }
@@ -506,7 +506,7 @@ static struct cat_star * parse_cat_line_gsc23(char *line)
 	if (vm > 0) cats->mag = vm;
 
 	cats->perr = BIG_ERR;
-    if (-1 == asprintf(&cats->comments, "p=g gsc2.3_class=%.0f", class)) cats->comments = NULL;
+//    if (-1 == asprintf(&cats->comments, "p=g gsc2.3_class=%.0f", class)) cats->comments = NULL;
 
     n = 0;
     if (fm > 0) n += snprintf(buf, 255, "Rf=%.3f ", fm);
@@ -514,7 +514,9 @@ static struct cat_star * parse_cat_line_gsc23(char *line)
     if (vm > 0) n += snprintf(buf+n, 255-n, "V=%.3f ", vm);
     if (nm > 0) n += snprintf(buf+n, 255-n, "N=%.3f ", nm);
 
-    if (n) cats->smags = strdup(buf);
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
 	cats->flags |= CATS_FLAG_ASTROMET;
 	return cats;
 }
@@ -585,11 +587,11 @@ static struct cat_star * parse_cat_line_gsc_act(char *line)
 
     if (p > 0) {
 		if (pe > 0)
-			ret = asprintf(&cats->smags, "p=%.3f/%.3f ", p, pe);
+            ret = asprintf(&cats->cmags, "p=%.3f/%.3f ", p, pe);
 		else
-			ret = asprintf(&cats->smags, "p=%.3f ", p);
+            ret = asprintf(&cats->cmags, "p=%.3f ", p);
 	}
-    if (ret == -1) cats->smags = NULL;
+    if (ret == -1) cats->cmags = NULL;
 
 	cats->flags |= CATS_FLAG_ASTROMET;
     double ep = strtod(line + cols[8], &endp);
@@ -702,9 +704,9 @@ static struct cat_star * parse_cat_line_usnob(char *line)
     if (r1 > 0) n += snprintf(buf+n, 255-n, "Rf=%.3f ", r1);
     if (in > 0) n += snprintf(buf+n, 255-n, "N=%.3f ", in);
 
-    if (n) cats->smags = strdup(buf);
-
-	cats->comments = strdup("p=b");
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
 
     double w = strtod(line+cols[6], &endp);
     if (line+cols[6] == endp) return cats;
@@ -834,9 +836,9 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
     if (jm > 0) n += snprintf(buf+n, 255-n, "J=%.3f ", jm);
     if (km > 0) n += snprintf(buf+n, 255-n, "K=%.3f ", km);
 
-    if (n) cats->smags = strdup(buf);
-
-    cats->comments = strdup("p=b");
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
 
     double w = strtod(line + cols[7], &endp);
     if (line + cols[7] == endp) return cats;
@@ -943,9 +945,9 @@ static struct cat_star * parse_cat_line_tycho(char *line)
     if (bm > 0) n += snprintf(buf+n, 255-n, "Bt=%.3f ", bm);
     if (vm > 0) n += snprintf(buf+n, 255-n, "Vt=%.3f ", vm);
 
-    if (n) cats->smags = strdup(buf);
-
-    cats->comments = strdup("p=b");
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
 
     double u = strtod(line + cols[3], &endp);
     double v = strtod(line + cols[4], &endp);
@@ -1047,9 +1049,9 @@ static struct cat_star * parse_cat_line_hip(char *line)
     if (vm > 0) n += snprintf(buf+n, 255-n, "V=%.3f ", vm);
     if (bm > 0) n += snprintf(buf+n, 255-n, "B-V=%.3f ", bm);
 
-    if (n) cats->smags = strdup(buf);
+    if (n) cats->cmags = strdup(buf);
 
-    cats->comments = strdup("p=b");
+//    cats->comments = strdup("p=b");
 
     double w = strtod(line + cols[7], &endp);
     if (line + cols[7] == endp) return cats;
@@ -1185,7 +1187,9 @@ static struct cat_star * parse_cat_line_apass(char *line)
 
 #undef BUF_PRINT_MAG
 
-    if (n) cats->smags = strdup(buf);
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
 
     return cats;
 }
@@ -1404,7 +1408,7 @@ static GList *query_catalog(unsigned int catalog, double ra, double dec, int (* 
              vizquery_catalog [catalog].name, ra, dec, P_DBL(QUERY_MAX_RADIUS), P_DBL(QUERY_FAINTEST_MAG), P_INT(QUERY_MAX_STARS));
 		(* progress)(prp, data);
 	}
-printf("query.query_catalog |%s|\n", cmd);
+//printf("query.query_catalog |%s|\n", cmd);
 	return query_catalog_body(cmd, progress, data);
 }
 
@@ -1484,8 +1488,7 @@ static int logw_print(char *msg, void *data)
 	gtk_text_buffer_insert_at_cursor(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)),
 					 msg, -1);
 
-	while (gtk_events_pending())
-		gtk_main_iteration();
+    while (gtk_events_pending()) gtk_main_iteration();
 
 	stopb = g_object_get_data(G_OBJECT(logw), "query_stop_toggle");
 	if (gtk_toggle_button_get_active(stopb)) {
@@ -1555,14 +1558,14 @@ static GList *remove_duplicates(GList *list) {
 		}
 
         keep_err = 99.0;
-        if (keep->smags) {
-            sscanf(keep->smags, "%*[^/]/%f", &keep_err);
+        if (keep->cmags) {
+            sscanf(keep->cmags, "%*[^/]/%f", &keep_err);
             if (keep_err < 0.001) keep_err = 0;
         }
 
         cats_err = 99.0;
-        if (cats->smags) {
-            sscanf(cats->smags, "%*[^/]/%f", &cats_err);
+        if (cats->cmags) {
+            sscanf(cats->cmags, "%*[^/]/%f", &cats_err);
             if (cats_err < 0.001) cats_err = 0;
         }
 
@@ -1629,8 +1632,17 @@ static void cds_query(gpointer window, guint action)
 //	if (action == QUERY_GSC2)
 //		tsl = query_catalog_gsc_23(wcs->xref, wcs->yref, logw_print, logw);
 //	else
-    tsl = query_catalog(action, wcs->xref, wcs->yref, logw_print, logw);
 
+/* something strange happening here */
+    tsl = query_catalog(action, wcs->xref, wcs->yref, logw_print, logw);
+/*
+    double xc = wcs->xrefpix + i_ch->fr->w / 2;
+    double yc = wcs->yrefpix + i_ch->fr->h / 2;
+    double xpos, ypos;
+    wcs_worldpos(wcs, xc, yc, &xpos, &ypos);
+
+    tsl = query_catalog(action, xpos, ypos, logw_print, logw);
+*/
 	tsl = remove_duplicates(tsl);
 
     info_printf_sb2(window, "Received %d %s stars", g_list_length(tsl),	vizquery_catalog[action].name);

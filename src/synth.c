@@ -40,8 +40,18 @@
 #include "params.h"
 #include "wcs.h"
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "misc.h"
+
+
+static double gauss (double mu, double sigma2)
+{
+  double u, v;
+  while ((u = random () / (double) RAND_MAX) == 0.0);
+  v = random () / (double) RAND_MAX;
+  /* FIXME: rounding bias here! */
+  return mu + sigma2 * sqrt (-2 * log (u)) * cos (2 * PI * v);
+}
 
 /* fill the rectangular data area with a gaussian profile with a sigma of s, centered on
    xc, yc. the total generated volume is returned. */
@@ -56,6 +66,7 @@ static double create_gaussian_psf(float *data, int pw, int ph,
 	for (i = 0; i < ph; i++)
 		for (j=0; j < pw; j++) {
 			v = exp( - (sqr(j - xc) + sqr(i - yc)) / 2 / sqr(s));
+//            v += gauss(v, sqrt(v)); // add photon noise
 			vol += v;
 			*data ++ = v;
 		}
@@ -77,7 +88,8 @@ static double create_moffat_psf(float *data, int pw, int ph,
 	for (i = 0; i < ph; i++)
 		for (j=0; j < pw; j++) {
 			v = pow(1 + (sqr(j - xc) + sqr(i - yc)) / sqr(s), -b);
-			vol += v;
+//            v += gauss(v, sqrt(v)); // add photon noise
+            vol += v;
 			*data ++ = v;
 		}
 	return vol;
@@ -103,8 +115,19 @@ double add_psf_to_frame(struct ccd_frame *fr, float *psf, int pw, int ph, int xc
 	xf = floor(x+0.5);
 	yf = floor(y+0.5);
 
-	xc -= floor((x + 0.5 - xf) * d + 0.5);
-	yc -= floor((y + 0.5 - yf) * d + 0.5);
+//	xc -= floor((x + 0.5 - xf) * d + 0.5);
+//	yc -= floor((y + 0.5 - yf) * d + 0.5);
+
+//    int decx = (x + 0.5 - xf) * d + 0.5 >= 1.0;
+//    int decy = (y + 0.5 - yf) * d + 0.5 >= 1.0;
+
+//    if (decx)
+//        xc -= 1.0;
+
+//    if (decy)
+//        yc -= 1.0;
+    xc -= 1;
+    yc -= 1;
 
 	if (xc < 0 || xc >= pw || yc < 0 || yc >= ph) {
 		d4_printf("profile center outside psf area\n");
@@ -140,8 +163,11 @@ double add_psf_to_frame(struct ccd_frame *fr, float *psf, int pw, int ph, int xc
 					}
 					prp2 += pw;
 				}
-				frp[xi] += (g * v);
-				vv += (g * v);
+                double f = g * v;
+                f += gauss(f, sqrt(f)); // add photon noise
+
+                frp[xi] += f;
+                vv += f;
 			}
 			prp += pw * d;
 			frp += fr->w;
@@ -165,7 +191,7 @@ int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *sl)
 	g_return_val_if_fail(fr != NULL, 0);
 	g_return_val_if_fail(wcs != NULL, 0);
 
-	ph = pw = 10 * P_INT(SYNTH_OVSAMPLE) * P_DBL(SYNTH_FWHM);
+    ph = pw = 15 * P_INT(SYNTH_OVSAMPLE) * P_DBL(SYNTH_FWHM);
 	yc = xc = pw / 2;
 
 	psf = malloc(pw * ph * sizeof(float));
@@ -174,15 +200,13 @@ int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *sl)
 
 	switch(P_INT(SYNTH_PROFILE)) {
 	case PAR_SYNTH_GAUSSIAN:
-		vol = create_gaussian_psf(psf, pw, ph, xc, yc, 0.4246 *
-					  P_DBL(SYNTH_FWHM) * P_INT(SYNTH_OVSAMPLE));
+        vol = create_gaussian_psf(psf, pw, ph, xc, yc, 0.4246 * P_DBL(SYNTH_FWHM) * P_INT(SYNTH_OVSAMPLE));
 		break;
 	case PAR_SYNTH_MOFFAT:
-		vol = create_moffat_psf(psf, pw, ph, xc, yc,
-					P_DBL(SYNTH_FWHM) * P_INT(SYNTH_OVSAMPLE),
-					P_DBL(SYNTH_MOFFAT_BETA));
+        vol = create_moffat_psf(psf, pw, ph, xc, yc, P_DBL(SYNTH_FWHM) * P_INT(SYNTH_OVSAMPLE), P_DBL(SYNTH_MOFFAT_BETA));
 		break;
 	default:
+        free(psf);
 		err_printf("unknown star profile %d\n", P_INT(SYNTH_PROFILE));
 		return 0;
 	}
@@ -206,9 +230,7 @@ mag = 0;
         if (get_band_by_name(cats->smags, P_STR(AP_IBAND_NAME), &mag, NULL))
 			mag = cats->mag;
 		flux = absmag_to_flux(mag - P_DBL(SYNTH_ZP));
-		vv = v = add_psf_to_frame(fr, psf, pw, ph, xc, yc,
-				      x, y, flux / vol,
-				      P_INT(SYNTH_OVSAMPLE));
+        vv = v = add_psf_to_frame(fr, psf, pw, ph, xc, yc, x - 1.0, y - 1.0, flux / vol, P_INT(SYNTH_OVSAMPLE));
 		if (vv == 0)
 			continue;
 /*
@@ -221,6 +243,7 @@ mag = 0;
 */
 		n++;
 	}
+    free(psf);
 	return n;
 }
 
@@ -243,20 +266,76 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 		error_beep();
 		return;
 	}
+
 	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL) {
-		err_printf_sb2(window, "Need Some Catalog Stars");
-		error_beep();
-		return;
-	}
-	sl = gsl->sl;
-	for (; sl != NULL; sl = sl->next) {
-		gs = GUI_STAR(sl->data);
-        if (gs->s != NULL && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF))
-			ssl = g_list_prepend(ssl, gs->s);
-	}
-	synth_stars_to_frame(i_ch->fr, wcs, ssl);
-	frame_stats(i_ch->fr);
+//	if (gsl == NULL) {
+//		err_printf_sb2(window, "Need Some Catalog Stars");
+//		error_beep();
+//		return;
+//	}
+    if (gsl) {
+        sl = gsl->sl;
+        for (; sl != NULL; sl = sl->next) {
+            gs = GUI_STAR(sl->data);
+            if (gs->s != NULL && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF))
+                ssl = g_list_prepend(ssl, gs->s);
+        }
+    }
+
+    struct ccd_frame *fr = i_ch->fr;
+
+    if (P_INT(SYNTH_ADDNOISE)) {
+
+// assume start with a dark frame
+// assume largish counts so noise distribution is gaussian
+// monochrome image only
+
+        if (! fr->stats.statsok)
+            frame_stats(fr);
+
+//        struct exp_data exp;
+//        rescan_fits_exp(fr, &exp);
+
+        double dark_adu, sky_adu, offset_adu;
+
+        if ((dark_adu = fr->stats.csigma - fr->exp.rdnoise) < 0) {
+            dark_adu = 0;
+            offset_adu = 0;
+        } else {
+            // dark value inferred from dark frame noise
+            offset_adu = fr->stats.cavg - dark_adu;
+        }
+        sky_adu = P_DBL(SYNTH_SKYLEVEL);
+
+        struct ccd_frame *star_fr = new_frame_fr(fr, fr->w, fr->h);
+        if (ssl) synth_stars_to_frame(star_fr, wcs, ssl);
+
+        float *dat = fr->dat;
+        float *star_dat = star_fr->dat;
+        int i;
+        for (i = 0; i < fr->w * fr->h; i++, dat++, star_dat++) {
+
+            double signal_adu = dark_adu + sky_adu + *star_dat;
+
+            double signal_el = signal_adu * fr->exp.scale;
+
+            double noise_el = sqrt(signal_el) + fr->exp.rdnoise * fr->exp.scale;
+
+            // synthesize noise
+            double noise_adu = (gauss(signal_el, noise_el) - signal_el) / fr->exp.scale;
+
+            // residual noise from dark frame
+            double residual_adu = *dat - fr->stats.cavg;
+
+            *dat = offset_adu + signal_adu + residual_adu + noise_adu;
+        }
+        release_frame(star_fr);
+
+    } else {
+        synth_stars_to_frame(fr, wcs, ssl);
+    }
+
+    frame_stats(fr);
 	i_ch->channel_changed = 1;
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 	g_list_free(ssl);

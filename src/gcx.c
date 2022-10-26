@@ -47,11 +47,12 @@
 #include "filegui.h"
 #include "obslist.h"
 #include "helpmsg.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "reduce.h"
 #include "obsdata.h"
 #include "multiband.h"
 #include "query.h"
+#include "misc.h"
 
 static void show_usage(void) {
 	info_printf("%s", help_usage_page);
@@ -114,12 +115,11 @@ static int save_par_file(char *fn, GcxPar p)
 	return 0;
 }
 
-int load_params_rc(void)
+int load_params_rc(void *window)
 {
 	uid_t my_uid;
 	struct passwd *passwd;
-	char *rcname;
-	int ret = -1;
+    int ret = -1;
 
 	my_uid = getuid();
 	passwd = getpwuid(my_uid);
@@ -128,20 +128,35 @@ int load_params_rc(void)
         err_printf("load_params_rc: cannot determine home directory\n");
 
     } else {
-        if (-1 != asprintf(&rcname, "%s/.gcxrc", passwd->pw_dir)) {
-            ret = load_par_file(rcname, PAR_NULL);
-            free(rcname);
+        char *last_rc = NULL;
+        char *rcname = NULL;
+
+        if (window) {
+            last_rc = g_object_get_data(G_OBJECT(window), "rcname");
+        }
+
+        if (last_rc == NULL) {
+            rcname = strdup(".gcxrc");
+            if (window) {
+                g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
+            }
+        } else
+            rcname = last_rc;
+
+        char *fn = NULL;
+        if (-1 != asprintf(&fn, "%s/%s", passwd->pw_dir, rcname)) {
+            ret = load_par_file(fn, PAR_NULL);
+            free(fn);
         }
     }
 	return ret;
 }
 
-int save_params_rc(void)
+int save_params_rc(void *window)
 {
 	uid_t my_uid;
 	struct passwd *passwd;
-	char *rcname;
-	int ret = -1;
+    int ret = -1;
 
 	my_uid = getuid();
 	passwd = getpwuid(my_uid);
@@ -149,9 +164,25 @@ int save_params_rc(void)
 		err_printf("save_params_rc: cannot determine home directoy\n");
 		return -1;
 	}
-	if (-1 != asprintf(&rcname, "%s/.gcxrc", passwd->pw_dir)) {
-		ret = save_par_file(rcname, PAR_NULL);
-		free(rcname);
+
+    char *last_rc = NULL;
+    char *rcname = NULL;
+
+    if (window)
+        last_rc = g_object_get_data(G_OBJECT(window), "rcname");
+
+    if (last_rc == NULL) {
+        rcname = strdup(".gcxrc");
+        if (window) {
+            g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
+        }
+    } else
+        rcname = last_rc;
+
+    char *fn = NULL;
+    if (-1 != asprintf(&fn, "%s/%s", passwd->pw_dir, rcname)) {
+        ret = save_par_file(fn, PAR_NULL);
+        free(fn);
 	}
 	return ret;
 }
@@ -430,12 +461,14 @@ static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
             spp = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
 //    if (! havescale) spp = 1.5; // give up
 //    if (fr->fim) {
+    printf("set_wcs_from_object wcsset = WCS_INITIAL\n"); fflush(NULL);
 
         fr->fim.wcsset = WCS_INITIAL;
         fr->fim.xref = cats->ra;
         fr->fim.yref = cats->dec;
         fr->fim.xrefpix = fr->w / 2;
         fr->fim.yrefpix = fr->h / 2;
+
         fr->fim.equinox = cats->equinox;
         fr->fim.rot = 0.0;
 
@@ -553,12 +586,20 @@ d3_printf("gcx.extract_sources %s\n", starf);
 
 
 
-static struct ccd_frame *make_blank_obj_fr(char *obj)
+static struct ccd_frame *make_blank_obj_fr(char *obj, gpointer window)
 {
 	struct ccd_frame *fr;
 	fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
     set_wcs_from_object(fr, obj, P_DBL(FILE_NEW_SECPIX));
-    fr->name = strdup("Empty frame");
+
+    char *fn = (obj[0] == 0) ? "New Frame" : obj;
+    fr->name = strdup(fn);
+
+    GSList *fl = NULL;
+    fl = g_slist_append(fl, fr);
+    window_add_frames(fl, window);
+    g_slist_free(fl);
+
 	return fr;
 }
 
@@ -609,6 +650,7 @@ int fake_main(int ac, char **av)
     char mergef[1024] = ""; /* rcp we merge stars from */
     char tobj[1024] = ""; 	/* object we set as target in the rcp */
     char *cwd = getcwd(NULL, 0);
+    char *rcname = NULL;
 
     gboolean op_to_pnm = FALSE;
     gboolean op_fit_wcs = FALSE;
@@ -696,7 +738,7 @@ int fake_main(int ac, char **av)
 
     init_ptable();
 
-    int main_ret = load_params_rc();
+    int main_ret = load_params_rc(NULL);
 //    if (main_ret)
 //        goto exit_main;
 
@@ -706,6 +748,7 @@ int fake_main(int ac, char **av)
     gboolean interactive = (ac == 1);
 
     debug_level = 0;
+//    debug_level = 3;
 
     char oc;
 	while ((oc = getopt_long(ac, av, shortopts, longopts, NULL)) > 0) {
@@ -894,7 +937,8 @@ int fake_main(int ac, char **av)
             break;
 
         case 'r': // load param file
-            load_par_file(optarg, PAR_NULL);
+            rcname = strdup(optarg);
+            load_par_file(rcname, PAR_NULL);
             break;
 /*
         case 'r': // load rc file
@@ -1148,7 +1192,7 @@ int fake_main(int ac, char **av)
 	}
 
     interactive = interactive || imfl;
-    interactive = 1;
+//    interactive = 1;
 
     if (interactive) {
 
@@ -1158,6 +1202,8 @@ int fake_main(int ac, char **av)
         gtk_widget_show_all(window);
 
         if (window) {
+            if (rcname)
+                g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
 
             g_object_set_data_full(G_OBJECT(window), "home_path", strdup(cwd), (GDestroyNotify) free);
 
@@ -1167,7 +1213,8 @@ int fake_main(int ac, char **av)
             if (imfl) {
                 if (!op_no_reduce && ccdr) fr = reduce_frames_load(imfl, ccdr);
             } else {
-                fr = make_blank_obj_fr(obj);
+//                fr = make_blank_obj_fr(obj, window);
+//                get_frame(fr);
             }
 
             if (fr) {
@@ -1212,12 +1259,7 @@ int fake_main(int ac, char **av)
                         wcs_to_fits_header(channel->fr);
 
                         if (file_is_zipped(fn)) {
-                            int i;
-                            for (i = strlen(fn); i > 0; i--)
-                                if (fn[i] == '.') {
-                                    fn[i] = 0;
-                                    break;
-                                }
+                            drop_dot_extension(fn);
                             main_ret = write_gz_fits_frame(channel->fr, fn, P_STR(FILE_COMPRESS));
                         } else {
                             main_ret = write_fits_frame(channel->fr, fn);

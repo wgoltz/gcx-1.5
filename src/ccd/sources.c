@@ -801,6 +801,7 @@ void release_star(struct star *s)
 	if (s->ref_count < 1)
 		err_printf("cat_star has ref_count of %d\n", s->ref_count);
 	if (s->ref_count == 1) {
+        printf("release_star\n"); fflush(NULL);
 		free(s);
 	} else {
 		s->ref_count --;

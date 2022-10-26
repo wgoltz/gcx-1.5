@@ -63,6 +63,158 @@ enum {
 	SWITCH_COMBOBOX,
 };
 
+
+#define MAXINDIFORMAT  64
+
+/* convert sexagesimal string str AxBxC to double.
+  *   x can be anything non-numeric. Any missing A, B or C will be assumed 0.
+  *   optional - and + can be anywhere.
+  * return 0 if ok, -1 if can't find a thing.
+  */
+int f_scansexa(const char *str0, /* input string */
+               double *dp)       /* cracked value, if return 0 */
+{
+//    locale_char_t *orig = indi_locale_C_numeric_push();
+
+    double a = 0, b = 0, c = 0;
+    char str[128];
+    //char *neg;
+    uint8_t isNegative=0;
+    int r= 0;
+
+    /* copy str0 so we can play with it */
+    strncpy(str, str0, sizeof(str) - 1);
+    str[sizeof(str) - 1] = '\0';
+
+    /* remove any spaces */
+    char* i = str;
+    char* j = str;
+    while(*j != 0)
+    {
+        *i = *j++;
+        if(*i != ' ')
+            i++;
+    }
+    *i = 0;
+
+    // This has problem process numbers in scientific notations e.g. 1e-06
+    /*neg = strchr(str, '-');
+     if (neg)
+         *neg = ' ';
+     */
+    if (str[0] == '-')
+    {
+        isNegative = 1;
+        str[0] = ' ';
+    }
+
+    r = sscanf(str, "%lf%*[^0-9]%lf%*[^0-9]%lf", &a, &b, &c);
+
+//    indi_locale_C_numeric_pop(orig);
+
+    if (r < 1)
+        return (-1);
+    *dp = a + b / 60 + c / 3600;
+    if (isNegative)
+        *dp *= -1;
+    return (0);
+}
+
+/* sprint the variable a in sexagesimal format into out[].
+  * w is the number of spaces for the whole part.
+  * fracbase is the number of pieces a whole is to broken into; valid options:
+  *      360000: <w>:mm:ss.ss
+  *      36000:  <w>:mm:ss.s
+  *      3600:   <w>:mm:ss
+  *      600:    <w>:mm.m
+  *      60:     <w>:mm
+  * return number of characters written to out, not counting final '\0'.
+  */
+static int fs_sexa(char *out, double a, int w, int fracbase)
+{
+    char *out0 = out;
+    unsigned long n;
+    int d;
+    int f;
+    int m;
+    int s;
+    int isneg;
+
+    /* save whether it's negative but do all the rest with a positive */
+    isneg = (a < 0);
+    if (isneg)
+        a = -a;
+
+    /* convert to an integral number of whole portions */
+    n = (unsigned long)(a * fracbase + 0.5);
+    d = n / fracbase;
+    f = n % fracbase;
+
+    /* form the whole part; "negative 0" is a special case */
+    if (isneg && d == 0)
+        out += snprintf(out, MAXINDIFORMAT, "%*s-0", w - 2, "");
+    else
+        out += snprintf(out, MAXINDIFORMAT, "%*d", w, isneg ? -d : d);
+
+    /* do the rest */
+    switch (fracbase)
+    {
+    case 60: /* dd:mm */
+        m = f / (fracbase / 60);
+        out += snprintf(out, MAXINDIFORMAT, ":%02d", m);
+        break;
+    case 600: /* dd:mm.m */
+        out += snprintf(out, MAXINDIFORMAT, ":%02d.%1d", f / 10, f % 10);
+        break;
+    case 3600: /* dd:mm:ss */
+        m = f / (fracbase / 60);
+        s = f % (fracbase / 60);
+        out += snprintf(out, MAXINDIFORMAT, ":%02d:%02d", m, s);
+        break;
+    case 36000: /* dd:mm:ss.s*/
+        m = f / (fracbase / 60);
+        s = f % (fracbase / 60);
+        out += snprintf(out, MAXINDIFORMAT, ":%02d:%02d.%1d", m, s / 10, s % 10);
+        break;
+    case 360000: /* dd:mm:ss.ss */
+        m = f / (fracbase / 60);
+        s = f % (fracbase / 60);
+        out += snprintf(out, MAXINDIFORMAT, ":%02d:%02d.%02d", m, s / 100, s % 100);
+        break;
+    default:
+        printf("fs_sexa: unknown fracbase: %d\n", fracbase);
+        return -1;
+    }
+
+    return (out - out0);
+}
+
+/* fill buf with properly formatted INumber string. return length */
+static int numberFormat(char *buf, const char *format, double value)
+{
+    int w, f, s;
+    char m;
+
+    if (sscanf(format, "%%%d.%d%c", &w, &f, &m) == 3 && m == 'm')
+    {
+        /* INDI sexi format */
+        switch (f)
+        {
+        case 9:  s = 360000;  break;
+        case 8:  s = 36000;   break;
+        case 6:  s = 3600;    break;
+        case 5:  s = 600;     break;
+        default: s = 60;      break;
+        }
+        return (fs_sexa(buf, value, w - f, s));
+    }
+    else
+    {
+        /* normal printf format */
+        return (snprintf(buf, MAXINDIFORMAT, format, value));
+    }
+}
+
 void indigui_make_device_page(struct indi_device_t *idev)
 {
 	GtkWidget *parent_notebook;
@@ -72,6 +224,7 @@ g_object_ref(idev->window);
     GtkWidget *idev_name = gtk_label_new(idev->name);
 g_object_ref(idev_name);
     gtk_notebook_append_page(GTK_NOTEBOOK (parent_notebook), GTK_WIDGET (idev->window), idev_name);
+// add some callbacks ?
 	gtk_widget_show_all(parent_notebook);
 }
 
@@ -119,7 +272,7 @@ static int indigui_get_switch_type(struct indi_prop_t *iprop)
 	if (iprop->rule == INDI_RULE_ANYOFMANY)
 		return SWITCH_CHECKBOX;
 
-    if (! strcmp(iprop->name, "CONFIG_PROCESS")) // should be atmostone
+    if (! strcmp(iprop->name, "CONFIG_PROCESS")) // should be at most one
         return SWITCH_BUTTON;
 
     if (iprop->rule == INDI_RULE_ATMOSTONE && num_props == 2)
@@ -130,82 +283,95 @@ static int indigui_get_switch_type(struct indi_prop_t *iprop)
 
 void indigui_update_widget(struct indi_prop_t *iprop)
 {
-	int switch_type = -1;
-
 	indigui_prop_set_signals(iprop, 0);
-	if (iprop->type == INDI_PROP_SWITCH)
-		switch_type = indigui_get_switch_type(iprop);
 
     indi_list *isl;
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
 
-        GtkWidget *value = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
+        char val[MAXINDIFORMAT];
+        char *bold_text;
 
-		switch (iprop->type) {
+        GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
+        GtkWidget *value;
+
+        switch (iprop->type) {
         case INDI_PROP_TEXT:
-            if (iprop->permission == INDI_RO) {
-//                if (elem->value.str[0]) {
-                    char *markup = g_markup_printf_escaped ("<b>%s</b>", elem->value.str);
-                    gtk_label_set_markup(GTK_LABEL (value), markup);
-                    g_free (markup);
-//                }
-            } else {
-                GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
-                gtk_entry_set_text(GTK_ENTRY (entry), elem->value.str);
-            }
+
+//            if (iprop->permission != INDI_RO) {
+//                GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
+//                gtk_entry_set_text(GTK_ENTRY (entry), elem->value.str);
+//            }
+
+            value = (GtkWidget *)g_object_get_data(G_OBJECT (element), "value");
+
+            bold_text = g_markup_printf_escaped ("<b>%s</b>", elem->value.str);
+            gtk_label_set_markup(GTK_LABEL(value), bold_text);
+            g_free (bold_text);
+
             break;
 
-        case INDI_PROP_NUMBER: {
-            char val[80];
-            sprintf(val, elem->value.num.fmt, elem->value.num.value);
+        case INDI_PROP_NUMBER:
 
-//            if (val[0]) {
-                if (iprop->permission == INDI_RO) {
-                    char *markup = g_markup_printf_escaped ("<b>%s</b>", val);
-                    gtk_label_set_markup(GTK_LABEL (value), markup);
-                    g_free (markup);
+            value = (GtkWidget *)g_object_get_data(G_OBJECT (element), "value");
 
-                } else {
-                    // if INDI has count-down the entry to 0, restore val from "reset_value"
-                    int reset = 0;
-                    GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
+            numberFormat(val, elem->value.num.fmt, elem->value.num.value);
 
-                    if (elem->value.num.value == 0) {
-                        GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (value));
-                        GtkTreeIter iter;
-                        if (gtk_tree_model_get_iter_first(history, &iter)) {
-                            gchar *str;
-                            gtk_tree_model_get(history, &iter, 0, &str, -1);
-                            reset = (str && str[0] && strcmp(val, str) != 0); // i.e. str != "0"
-                            if (reset)
-                                gtk_entry_set_text(GTK_ENTRY (entry), str);
-                        }
-                    }
-                    if (! reset)
-                        gtk_entry_set_text(GTK_ENTRY (entry), val);
-                }
+//            if (iprop->permission != INDI_RO) {
+
+                // if INDI has count-down the entry to 0, restore val from "reset_value"
+//                int reset = 0;
+//                GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
+
+//                if (elem->value.num.value == 0) {
+//                    GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (value));
+//                    GtkTreeIter iter;
+//                    if (gtk_tree_model_get_iter_first(history, &iter)) {
+//                        gchar *str;
+//                        gtk_tree_model_get(history, &iter, 0, &str, -1);
+//                        reset = (str && str[0] && strcmp(val, str) != 0); // i.e. str != "0"
+//                        if (reset)
+//                            gtk_entry_set_text(GTK_ENTRY (entry), str);
+//                    }
+//                }
+//                if (! reset) {
+//                    char *elem_value = NULL;
+//                    asprintf(&elem_value, "%s_value", elem->name);
+//                    GtkWidget *label = g_object_get_data(G_OBJECT (value), elem_value);
+//                    free(elem_value);
+//                    gtk_label_set_text(GTK_LABEL(label), val);
+
+//                        gtk_entry_set_text(GTK_ENTRY (entry), val);
+//                }
 //            }
-        }
-			break;
 
-		case INDI_PROP_SWITCH:
-			switch (switch_type) {
-			case SWITCH_BUTTON:
-			case SWITCH_CHECKBOX:
-				gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (value), elem->value.set);
-				break;
-			case SWITCH_COMBOBOX:
-				if (elem->value.set) {
-					GtkWidget *combo = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), "__combo");
-					long iter = (long)value;
-					gtk_combo_box_set_active(GTK_COMBO_BOX (combo), iter);
-				}
-				break;
-			}
-			break;
-		}
-	}
+
+            bold_text = g_markup_printf_escaped ("<b>%s</b>", val);
+            gtk_label_set_markup(GTK_LABEL (value), bold_text);
+            g_free (bold_text);
+
+            break;
+
+        case INDI_PROP_SWITCH:
+
+            switch (indigui_get_switch_type(iprop)) {
+            case SWITCH_BUTTON:
+            case SWITCH_CHECKBOX:
+                gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (element), elem->value.set);
+                break;
+            case SWITCH_COMBOBOX:
+                if (elem->value.set) {
+                    GtkWidget *combo = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), "__combo");
+                    long iter = (long)element;
+                    gtk_combo_box_set_active(GTK_COMBO_BOX (combo), iter);
+                }
+                break;
+            }
+
+            break;
+        }
+    }
+
     GtkWidget *state_label = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), "_state");
 	indigui_set_state(state_label, iprop->state);
 
@@ -227,7 +393,7 @@ void indigui_show_message(struct indi_t *indi, const char *message)
 		char timestr[30];
 		struct tm time_loc;
 
-		textbuffer = (GtkTextBuffer *)g_object_get_data(G_OBJECT (indi->window), "textbuffer");
+        textbuffer = (GtkTextBuffer *)g_object_get_data(G_OBJECT (indi->window), "textbuffer");
 		gtk_text_buffer_get_start_iter(textbuffer, &text_start);
 		gtk_text_buffer_place_cursor(textbuffer, &text_start);
 		curtime = time(NULL);
@@ -242,32 +408,35 @@ void indigui_show_message(struct indi_t *indi, const char *message)
 
 static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
 {
-    char *valstr;
 	indi_list *isl;
-	GtkWidget *value;
-	GtkWidget *entry;
 
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
-		value = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
 
-		switch (iprop->type) {
-		case INDI_PROP_TEXT:
-			entry = (GtkWidget *)g_object_get_data(G_OBJECT (value), "entry");
-            valstr = gtk_entry_get_text(GTK_ENTRY (entry));
-            strncpy(elem->value.str, valstr, sizeof(elem->value.str));
-            set_combo_text_with_history(value, elem->value.str);
-			break;
+        GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
+        GtkWidget *combo = (GtkWidget *)g_object_get_data(G_OBJECT (element), "combo");
+        if (combo) {
+            GtkWidget *entry = (GtkWidget *)g_object_get_data(G_OBJECT (combo), "entry");
 
-		case INDI_PROP_NUMBER:
-			entry = (GtkWidget *)g_object_get_data(G_OBJECT (value), "entry");
-            valstr = gtk_entry_get_text(GTK_ENTRY (entry));
-			elem->value.num.value = strtod(valstr, NULL);
-            set_combo_text_with_history(value, valstr);
-			break;
+            char *valstr = gtk_entry_get_text(GTK_ENTRY (entry));
 
-		}			
-	}
+            switch (iprop->type) {
+            case INDI_PROP_TEXT:
+
+                strncpy(elem->value.str, valstr, sizeof(elem->value.str));
+                set_combo_text_with_history(combo, elem->value.str);
+
+                break;
+
+            case INDI_PROP_NUMBER:
+//check elem for range and convert if necessary
+                f_scansexa(valstr, &elem->value.num.value);
+                set_combo_text_with_history(combo, valstr);
+                break;
+
+            }
+        }
+    }
 	indi_send(iprop, NULL);
 }
 
@@ -312,53 +481,80 @@ static void indigui_send_switch_button_cb( GtkWidget *widget, struct indi_prop_t
 	}
 }
 
-
-static void indigui_create_text_widget(struct indi_prop_t *iprop, int num_props)
+static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *iprop, int num_props)
 {
-	int pos = 0;
-	indi_list *isl;
+    int x = 0, y = 0;
+    indi_list *isl;
 
-	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl), pos++) {
+    for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl), y++) {
         struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
 
-        GtkWidget *elem_label = gtk_label_new(NULL);
-        gchar *markup = g_markup_printf_escaped ("<i>%s</i>", elem->label);
-        gtk_label_set_markup (GTK_LABEL (elem_label), markup);
-        g_free(markup);
+        GtkWidget *element = gtk_label_new(NULL); // data: "combo", "value"
+        g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, element, (GDestroyNotify)g_object_unref);
 
-        gtk_table_attach(GTK_TABLE (iprop->widget), elem_label, 0, 1, pos, pos + 1,
+        gchar *bold_text = g_markup_printf_escaped ("<i>%s</i>", elem->label);
+        gtk_label_set_markup (GTK_LABEL (element), bold_text);
+        g_free(bold_text);
+
+        x = 1;
+        gtk_table_attach(GTK_TABLE (iprop->widget), element, x, x + 1, y, y + 1,
                          (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
 
-        if (iprop->permission == INDI_RO) {
-            GtkWidget *value = gtk_label_new(NULL);
+        char val[MAXINDIFORMAT];
+        char *text = &val;
 
-            gchar *markup = g_markup_printf_escaped ("<b>%s</b>", elem->value.str);
-            gtk_label_set_markup (GTK_LABEL (value), markup);
-            g_free(markup);
+        if (iprop->type == INDI_PROP_TEXT)
+            text = &(elem->value.str);
+        else
+            numberFormat(text, elem->value.num.fmt, elem->value.num.value);
 
-            g_object_ref(value);
-            g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, value, (GDestroyNotify)g_object_unref);
-            gtk_table_attach(GTK_TABLE (iprop->widget), value, 1, 2, pos, pos + 1,
+        if (iprop->permission != INDI_RO) { // user entry
+            x++;
+            GtkWidget *combo = create_combo_text_with_history(text);
+            g_object_ref(combo);
+            g_object_set_data_full(G_OBJECT (element), "combo", combo, (GDestroyNotify)g_object_unref);
+
+            GtkWidget *entry = g_object_get_data(G_OBJECT (combo), "entry");
+            gtk_entry_set_text(GTK_ENTRY(entry), text); // try this
+
+            gtk_table_attach(GTK_TABLE (iprop->widget), combo, x, x + 1, y, y + 1,
                              (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-
-        } else {
-            GtkWidget *value = create_combo_text_with_history(elem->value.str);
-            g_object_ref(value);
-            g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, value, (GDestroyNotify)g_object_unref); // quick access to value widget
-
-            gtk_table_attach(GTK_TABLE (iprop->widget), value, 1, 2, pos, pos + 1,
-                             (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-
         }
+
+        x++;
+        GtkWidget *value = gtk_label_new(NULL); // the value
+
+        if (iprop->permission == INDI_RO) {
+            bold_text = g_markup_printf_escaped ("<b>%s</b>", text);
+            gtk_label_set_markup (GTK_LABEL (value), bold_text);
+            g_free(bold_text);
+        } else
+            gtk_label_set_text (GTK_LABEL (value), text);
+
+        g_object_ref(value);
+        g_object_set_data_full(G_OBJECT (element), "value", value, (GDestroyNotify)g_object_unref);
+        gtk_table_attach(GTK_TABLE (iprop->widget), value, x, x + 1, y, y + 1,
+                         (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
     }
 
-	if (iprop->permission != INDI_RO) {
+    x++;
+    if (iprop->permission != INDI_RO) {
         GtkWidget *button = gtk_button_new_with_label("Set");
         unsigned long signal = g_signal_connect(G_OBJECT (button), "clicked", G_CALLBACK (indigui_send_cb), iprop);
         indigui_prop_add_signal(iprop, button, signal);
-        gtk_table_attach(GTK_TABLE (iprop->widget), button,	2, 3, 0, num_props,
-			(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-	}	
+        gtk_table_attach(GTK_TABLE (iprop->widget), button,	x, x + 1, 0, num_props,
+            (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+    }
+}
+
+static void indigui_create_text_widget(struct indi_prop_t *iprop, int num_props)
+{
+    indigui_create_combo_text_with_history_widget(iprop, num_props);
+}
+
+static void indigui_create_number_widget(struct indi_prop_t *iprop, int num_props)
+{
+    indigui_create_combo_text_with_history_widget(iprop, num_props);
 }
 
 
@@ -440,58 +636,6 @@ static void indigui_create_switch_widget(struct indi_prop_t *iprop, int num_prop
 }
 
 
-static void indigui_create_number_widget(struct indi_prop_t *iprop, int num_props)
-{
-	int pos = 0;
-	indi_list *isl;
-
-    for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl), pos++) {
-		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
-
-        GtkWidget *elem_label = gtk_label_new(NULL);
-
-        gchar *markup = g_markup_printf_escaped ("<i>%s</i>", elem->label);
-        gtk_label_set_markup (GTK_LABEL (elem_label), markup);
-        g_free(markup);
-
-        gtk_table_attach(GTK_TABLE (iprop->widget), elem_label, 0, 1, pos, pos + 1,
-			(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-
-        char val[80];
-        if (elem->value.num.step == 1)
-            sprintf(val, "%.0f", elem->value.num.value);
-        else
-            sprintf(val, elem->value.num.fmt, elem->value.num.value);
-
-        if (iprop->permission == INDI_RO) {
-            GtkWidget *value = gtk_label_new(NULL);
-
-            gchar *markup = g_markup_printf_escaped ("<b>%s</b>", val);
-            gtk_label_set_markup (GTK_LABEL (value), markup);
-            g_free(markup);
-
-            g_object_ref(value);
-            g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, value, (GDestroyNotify)g_object_unref);
-            gtk_table_attach(GTK_TABLE (iprop->widget), value, 1, 2, pos, pos + 1,
-                             (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-        } else {
-            GtkWidget *value = create_combo_text_with_history(val);
-            g_object_ref(value);
-            g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, value, (GDestroyNotify)g_object_unref); // quick access to value widget
-
-            gtk_table_attach(GTK_TABLE (iprop->widget), value, 1, 2, pos, pos + 1,
-                             (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-
-        }
-	}
-	if (iprop->permission != INDI_RO) {
-        GtkWidget *button = gtk_button_new_with_label("Set");
-        unsigned long signal = g_signal_connect(G_OBJECT (button), "clicked", G_CALLBACK (indigui_send_cb), iprop);
-		indigui_prop_add_signal(iprop, button, signal);
-        gtk_table_attach(GTK_TABLE (iprop->widget),	button,	2, 3, 0, num_props,
-			(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-	}
-}
 
 
 static void indigui_create_light_widget(struct indi_prop_t *iprop, int num_props)
@@ -573,9 +717,12 @@ void indigui_show_dialog(void *data)
     g_return_if_fail(data != NULL);
     struct indi_t *indi = (struct indi_t *)data;
 
-    gtk_widget_show_all(GTK_WIDGET (indi->window));
-    gdk_window_raise(GTK_WIDGET(indi->window)->window);
+    if (indi->window) {
+        gtk_widget_show_all(GTK_WIDGET (indi->window));
+        gdk_window_raise(GTK_WIDGET(indi->window)->window);
+    }
 }
+
 
 void *indigui_create_window(struct indi_t *indi)
 {
@@ -591,14 +738,16 @@ void *indigui_create_window(struct indi_t *indi)
 	GError *error = NULL;
 	GtkActionGroup *action_group;
 
-	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+
     g_object_set(G_OBJECT (window), "destroy-with-parent", TRUE, NULL);
     g_signal_connect (G_OBJECT (window), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
     g_object_set(G_OBJECT (window), "destroy-with-parent", TRUE, NULL);
 
+
     // create menu
 	vbox = gtk_vbox_new(FALSE, 10);
-	gtk_container_add(GTK_CONTAINER (window), vbox);
+    gtk_container_add(GTK_CONTAINER (window), vbox);
 
 	action_group = gtk_action_group_new("INDIAction");
     gtk_action_group_add_actions (action_group, menu_actions, G_N_ELEMENTS (menu_actions), indi);
@@ -617,16 +766,25 @@ void *indigui_create_window(struct indi_t *indi)
 
 	g_object_unref (ui);
 
+    GtkScrolledWindow *scr = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(scr, GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+    gtk_box_pack_start(GTK_BOX (vbox), scr, TRUE, TRUE, 0);
+//    gtk_container_add(GTK_CONTAINER (vbox), GTK_WIDGET (scr));
+
+
     // create notebook
 	notebook = gtk_notebook_new();
     g_object_ref(notebook);
+    gtk_notebook_set_scrollable(GTK_NOTEBOOK (notebook), TRUE);
     g_object_set_data_full(G_OBJECT (window), "notebook", notebook, (GDestroyNotify)g_object_unref);
-//	gtk_widget_show(notebook);
-	gtk_container_add(GTK_CONTAINER (vbox), notebook);
+
+    gtk_scrolled_window_add_with_viewport(scr, notebook);
 
 	textscroll = gtk_scrolled_window_new(NULL, NULL);
-//	gtk_widget_show(textscroll);
-	gtk_container_add(GTK_CONTAINER (vbox), textscroll);
+    gtk_scrolled_window_set_policy(textscroll, GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+    gtk_box_pack_start(vbox, textscroll, FALSE, TRUE, 0);
 
 	textbuffer = gtk_text_buffer_new(NULL);
     g_object_ref(textbuffer);
@@ -637,11 +795,12 @@ void *indigui_create_window(struct indi_t *indi)
     g_object_ref(textview);
     g_object_set_data_full(G_OBJECT (window), "textview", textview, (GDestroyNotify)g_object_unref);
 //	gtk_widget_show(textview);
-	gtk_container_add(GTK_CONTAINER (textscroll), textview);
+    gtk_container_add(GTK_CONTAINER (textscroll), textview);
 
 	gtk_window_set_title (GTK_WINDOW (window), "INDI Options");
 	gtk_window_set_default_size (GTK_WINDOW (window), 640, 400);
 
+// do: comera_find(window, "MAIN_CAMERA") somewhere
 	return window;
 }
 

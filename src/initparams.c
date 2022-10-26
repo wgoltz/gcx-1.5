@@ -254,7 +254,7 @@ void init_ptable(void)
 	set_par_description(QUERY_WGET, "Path to the wget program.");
 
     add_par_string(QUERY_SKYVIEW_RUNQUERY_URL, PAR_QUERY, 0, "skyview_runquery_url", "SkyView request URL",
-		       "http://skyview.gsfc.nasa.gov/cgi-bin/runquery.pl");
+                   "http://skyview.gsfc.nasa.gov/current/cgi/pskcall");
 	set_par_description(QUERY_SKYVIEW_RUNQUERY_URL,
 			    "The URL for the SkyView request form.");
 
@@ -318,7 +318,7 @@ void init_ptable(void)
     add_par_string(FN_DEC, PAR_FITS_FIELDS, 0, "dec", "Fits field for field center", "DEC");
     add_par_string(FN_FILTER, PAR_FITS_FIELDS, 0, "filter", "Fits field for filter name", "FILTER");
     add_par_string(FN_EXPTIME, PAR_FITS_FIELDS, 0, "exptime", "Fits field for exposure time", "EXPTIME");
-    add_par_string(FN_JDATE, PAR_FITS_FIELDS, 0, "jdate", "Fits field for julian date of observation", "JDATE");
+    add_par_string(FN_JDATE, PAR_FITS_FIELDS, 0, "jdate", "Fits field for julian date at center of observation", "JDATE");
     add_par_string(FN_MJD, PAR_FITS_FIELDS, 0, "mjd", "Fits field for modified julian date of observation", "MJD");
     add_par_string(FN_DATE_OBS, PAR_FITS_FIELDS, 0, "dateobs", "Fits field for date/time of observation", "DATE-OBS");
     add_par_string(FN_TIME_OBS, PAR_FITS_FIELDS, 0, "timeobs", "Fits field for time of observation", "TIME-OBS");
@@ -335,8 +335,8 @@ void init_ptable(void)
     add_par_string(FN_AIRMASS, PAR_FITS_FIELDS, 0, "airmass", "Fits field for airmas", "AIRMASS");
     add_par_string(FN_ZD, PAR_FITS_FIELDS, 0, "zd", "Fits field for zenith distance", "ZD");
     add_par_string(FN_SNSTEMP, PAR_FITS_FIELDS, 0, "snstemp", "Fits field for sensor temperature", "SNS_TEMP");
-    add_par_string(FN_BINX, PAR_FITS_FIELDS, 0, "binx", "Fits field for horisontal binning", "CCDBIN1");
-    add_par_string(FN_BINY, PAR_FITS_FIELDS, 0, "biny", "Fits field for vertical binning", "CCDBIN2");
+    add_par_string(FN_BIN_X, PAR_FITS_FIELDS, 0, "binx", "Fits field for horisontal binning", "CCDBIN1");
+    add_par_string(FN_BIN_Y, PAR_FITS_FIELDS, 0, "biny", "Fits field for vertical binning", "CCDBIN2");
     add_par_string(FN_SKIPX, PAR_FITS_FIELDS, 0, "skipx", "Fits field for horisontal window origin", "CCDSKIP1");
     add_par_string(FN_SKIPY, PAR_FITS_FIELDS, 0, "skipy", "Fits field for vertical window origin", "CCDSKIP2");
     add_par_string(FN_ELADU, PAR_FITS_FIELDS, 0, "eladu", "Fits field for electrons per ADU", "ELADU");
@@ -548,6 +548,12 @@ void init_ptable(void)
 			    "this option is better turned off."
 		);
 
+    add_par_int(WCS_IGNORE_PRECESSION, PAR_WCS_OPTIONS, FMT_BOOL, "precession",
+               "Ignore Precession", 0);
+    set_par_description(WCS_IGNORE_PRECESSION,
+                "Ignore precession in WCS calculations."
+        );
+
 
 /* obs */
     add_par_double(OBS_DEFAULT_ELADU, PAR_OBS_DEFAULTS, FMT_DEC, "eladu", "default ELADU", 1.0);
@@ -558,10 +564,10 @@ void init_ptable(void)
     set_par_description(OBS_DEFAULT_RDNOISE,
                 "Default RDNOISE in ADUs if it is missing from frame. ");
 
-//    add_par_int(OBS_FORCE_DEFAULT, PAR_OBS_DEFAULTS, FMT_BOOL, "force_default", "use default ELADU and RDNOISE", 0);
-//    set_par_description(OBS_FORCE_DEFAULT,
-//                "Override the frame specification for ELADU and RDNOISE "
-//                "with that set in defaults.");
+    add_par_int(OBS_FORCE_DEFAULT, PAR_OBS_DEFAULTS, FMT_BOOL, "force_default", "use default ELADU and RDNOISE", 0);
+    set_par_description(OBS_FORCE_DEFAULT,
+                "Override the frame specification for ELADU and RDNOISE "
+                "with that set in defaults.");
 
 
     add_par_double(OBS_LATITUDE, PAR_OBS_DEFAULTS, FMT_DEC, "latitude", "Latitude of observing site", 44.430556);
@@ -583,6 +589,10 @@ void init_ptable(void)
 
     add_par_double(OBS_TIME_ZONE, PAR_OBS_DEFAULTS, PREC_1, "timezone", "Time zone of observing site", 0);
     set_par_description(OBS_TIME_ZONE, "Correct obs times to UT if the observations have been recorded as local time. (hours)");
+
+    add_par_double(OBS_TIME_OFFSET, PAR_OBS_DEFAULTS, PREC_1, "timeoffset", "Offset of DATE_TIME to exposure centre", -0.5);
+    set_par_description(OBS_TIME_OFFSET, "Correct frames DATE_TIME to get true center of exposure in units of exposure time. "
+                        "i.e. if recorded time is end of exposure, -0.5: center of exposure, 0: start of exposure, 0.5");
 
     add_par_string(OBS_OBSERVER, PAR_OBS_DEFAULTS, 0, "observer", "Observer name", "R. Corlan");
     set_par_description(OBS_OBSERVER, "Used to annotate frames' fits header. ");
@@ -894,12 +904,28 @@ void init_ptable(void)
 //		       "Relative error of color term", 0.0);
 //	set_par_description(AP_COLTERM_ERR,
 //			    "Error of color transformation coefficient.");
-	add_par_double(AP_DEFAULT_STD_ERROR, PAR_APHOT, 0, "def_std_err",
+	add_par_double(AP_STD_DEFAULT_ERROR, PAR_APHOT, 0, "def_std_err",
 		       "Default catalog error", 0.05);
-	set_par_description(AP_DEFAULT_STD_ERROR,
+	set_par_description(AP_STD_DEFAULT_ERROR,
 			    "Default standard magnitude error used "
 			    "when a value is not available.");
-	add_par_double(AP_ALPHA, PAR_APHOT, 0, "alpha",
+//    AP_STD_BRIGHT_LIMIT ,
+//    AP_STD_FAINT_LIMIT ,
+    add_par_double(AP_STD_BRIGHT_LIMIT, PAR_APHOT, 0, "std_bright_limit",
+               "Std star bright limit", 7.0);
+    set_par_description(AP_STD_BRIGHT_LIMIT,
+               "Standard star brightest magnitude.");
+    add_par_double(AP_STD_FAINT_LIMIT, PAR_APHOT, 0, "std_faint_limit",
+               "Std star faint limit", 13.2);
+    set_par_description(AP_STD_FAINT_LIMIT,
+               "Standard star faintest magnitude.");
+    add_par_int(AP_USE_CMAGS, PAR_APHOT, FMT_BOOL, "use_cmags",
+               "Use c-mags for standard stars mags", TRUE);
+    set_par_description(AP_USE_CMAGS,
+               "Take standard star mags from catalog mags. Otherwise, "
+               "use s-mags (fitted with errors) derived from averaged "
+               "local observations that have lower internal scatter.");
+    add_par_double(AP_ALPHA, PAR_APHOT, 0, "alpha",
 		       "Alpha", 2.0);
 	set_par_description(AP_ALPHA,
 			    "Parameter of the robust fitting alogorithm. It sets "
@@ -1123,5 +1149,11 @@ void init_ptable(void)
 
     add_par_int(SYNTH_OVSAMPLE, PAR_SYNTH, 0, "oversample", "Oversampling", 11);
     set_par_description(SYNTH_OVSAMPLE, "Oversampling factor when generating the reference psf.");
+
+    add_par_double(SYNTH_SKYLEVEL, PAR_SYNTH, 0, "sky_level", "Sky Level", 0);
+    set_par_description(SYNTH_SKYLEVEL, "Sky level for synthesized frame.");
+
+    add_par_int(SYNTH_ADDNOISE, PAR_SYNTH, FMT_BOOL, "add_noise", "Add Noise", FALSE);
+    set_par_description(SYNTH_ADDNOISE, "Add noise to synthesized frame.");
 
 }

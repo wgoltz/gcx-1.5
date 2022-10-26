@@ -63,8 +63,9 @@ static void wcs_accelerator_cb( GtkWidget *widget, gpointer data );
 static void wcs_flip_field_cb( GtkWidget *widget, gpointer data );
 
 static int wcs_entry_cb( GtkWidget *widget, gpointer dialog );
+static gboolean wcs_focus_out_cb (GtkWidget *widget, GdkEventFocus *event, gpointer data);
 
-static void wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs);
+static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs);
 static void wcs_ok_cb( GtkWidget *widget, gpointer data );
 
 static void wcsedit_close( GtkWidget *widget, gpointer data )
@@ -116,9 +117,24 @@ static gpointer wcsedit_create(gpointer window) {
     set_named_callback (G_OBJECT (dialog), "wcs_scale_up_button", "released", G_CALLBACK (stop_autobutton_cb));
     set_named_callback (G_OBJECT (dialog), "wcs_scale_dn_button", "released", G_CALLBACK (stop_autobutton_cb));
 
-    set_named_callback (G_OBJECT (dialog), "wcs_flip_field_checkb", "toggled", G_CALLBACK (wcs_flip_field_cb));
-
+//    set_named_callback (G_OBJECT (dialog), "wcs_flip_field_checkb", "toggled", G_CALLBACK (wcs_flip_field_cb));
+    set_named_callback (G_OBJECT (dialog), "wcs_flip_field_checkb", "clicked", G_CALLBACK (wcs_flip_field_cb));
     set_named_callback (G_OBJECT (dialog), "wcs_accelerator_button", "clicked", G_CALLBACK (wcs_accelerator_cb));
+
+    set_named_callback(G_OBJECT(dialog), "wcs_ra_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(dialog, "wcs_ra_entry", "focus-out-event", wcs_focus_out_cb);
+
+    set_named_callback(G_OBJECT(dialog), "wcs_dec_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(dialog, "wcs_dec_entry", "focus-out-event", wcs_focus_out_cb);
+
+    set_named_callback(G_OBJECT(dialog), "wcs_equinox_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(dialog, "wcs_equinox_entry", "focus-out-event", wcs_focus_out_cb);
+
+    set_named_callback(G_OBJECT(dialog), "wcs_scale_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(dialog, "wcs_scale_entry", "focus-out-event", wcs_focus_out_cb);
+
+    set_named_callback(G_OBJECT(dialog), "wcs_rot_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(dialog, "wcs_rot_entry", "focus-out-event", wcs_focus_out_cb);
 
     return dialog;
 }
@@ -133,51 +149,64 @@ void act_control_wcs (GtkAction *action, gpointer window)
 	}
 
     GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
-    if (! dialog) dialog = wcsedit_create(window);
-
-    wcsedit_from_wcs(dialog, wcs);
+    if (! dialog) {
+        dialog = wcsedit_create(window);
+        wcsedit_from_wcs(dialog, wcs);
+    }
     gtk_widget_show(dialog);
     gdk_window_raise(dialog->window);
 }
 
-static void wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
+static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
 {
+    g_assert(wcs != NULL);
+
+    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    g_return_val_if_fail(window != NULL, 0);
+
 	char buf[256];
 
-	switch(wcs->wcsset) {
+    switch(wcs->wcsset) {
 	case WCS_INVALID:
 		set_named_checkb_val(dialog, "wcs_unset_rb", 1);
-/* also clear the fields here */
-		return;
+        break;
 	case WCS_INITIAL:
 		set_named_checkb_val(dialog, "wcs_initial_rb", 1);
 		break;
-	case WCS_FITTED:
-		set_named_checkb_val(dialog, "wcs_fitted_rb", 1);
-		break;
+//	case WCS_FITTED: // not used
+//		set_named_checkb_val(dialog, "wcs_fitted_rb", 1);
+//		break;
 	case WCS_VALID:
 		set_named_checkb_val(dialog, "wcs_valid_rb", 1);
 		break;
 	}
 
-    degrees_to_hms_pr(buf, wcs->xref, 2);
-    named_entry_set(dialog, "wcs_ra_entry", buf);
+    if (wcs->xref != INV_DBL) {
+        degrees_to_hms_pr(buf, wcs->xref, 2);
+        named_entry_set(dialog, "wcs_ra_entry", buf);
+    }
 
-	degrees_to_dms_pr(buf, wcs->yref, 1);
-    named_entry_set(dialog, "wcs_dec_entry", buf);
+    if (wcs->yref != INV_DBL) {
+        degrees_to_dms_pr(buf, wcs->yref, 1);
+        named_entry_set(dialog, "wcs_dec_entry", buf);
+    }
 
-    snprintf(buf, 255, "%.2f", wcs->equinox);
-    named_entry_set(dialog, "wcs_equinox_entry", buf);
+    if (wcs->equinox != INV_DBL) {
+        snprintf(buf, 255, "%.2f", wcs->equinox);
+        named_entry_set(dialog, "wcs_equinox_entry", buf);
+    }
 
-    snprintf(buf, 255, "%.4f", wcs->rot);
-    named_entry_set(dialog, "wcs_rot_entry", buf);
+    if (wcs->rot != INV_DBL) {
+        snprintf(buf, 255, "%.4f", wcs->rot);
+        named_entry_set(dialog, "wcs_rot_entry", buf);
+    }
 
-    snprintf(buf, 255, "%.4f", fabs(wcs->xinc * 3600));
-    named_entry_set(dialog, "wcs_scale_entry", buf);
+    if ((wcs->xinc != INV_DBL && wcs->yinc != INV_DBL)) {
+        snprintf(buf, 255, "%.4f", (fabs(wcs->xinc) + fabs(wcs->yinc)) * 1800);
+        named_entry_set(dialog, "wcs_scale_entry", buf);
+    }
 
-    set_named_checkb_val(dialog, "wcs_flip_field_checkb", (wcs->xinc * wcs->yinc) < 0);
-
-    gtk_widget_queue_draw(dialog); // ?
+    gtk_widget_queue_draw(dialog);
 }
 
 /*
@@ -193,22 +222,106 @@ void wcsedit_refresh(gpointer window)
     GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
     if (dialog == NULL) dialog = wcsedit_create(window);
 
+//    int flip_field = get_named_checkb_val(dialog, "wcs_flip_field_checkb");
+
+    int frame_flipped = (wcs->wcsset != WCS_INVALID) && (wcs->xinc * wcs->yinc < 0);
+//    int frame_data_is_flipped = ((wcs->flags & WCS_DATA_IS_FLIPPED) != 0);
+
+//    int current_flip = (frame_data_is_flipped ^ frame_flipped);
+//    int new_flip = frame_flipped;
+
+//printf("wcsedit_refresh --- flip_field %s frame_flipped %s frame_data_is_flipped %s current_flip %s new_flip %s\n",
+//   flip_field ? "Yes" : "No",
+//   frame_flipped ? "Yes" : "No",
+//   frame_data_is_flipped ? "Yes" : "No",
+//   current_flip ? "Yes" : "No",
+//   new_flip ? "Yes" : "No");
+
+    g_object_set_data(G_OBJECT(dialog), "no_toggle", (gpointer) 1); // NOT called by toggling flip_field button
+    set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
+    g_object_set_data(G_OBJECT(dialog), "no_toggle", NULL);
+
+//    fflush(NULL);
+
     wcsedit_from_wcs(dialog, wcs);
 
-// refresh gui stars
+    // refresh gui stars
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
+//    printf("refresh gui stars\n"); fflush(NULL);
 
     gtk_widget_queue_draw(window);
 }
 
-/* push values from the dialog back into the wcs
+static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
+{
+    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    int toggle = (g_object_get_data(G_OBJECT(dialog), "no_toggle") == NULL);
+    if (toggle) { // flip_field button clicked
+        struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+        struct ccd_frame *fr = i_chan->fr;
+        struct wcs *frame_wcs = &(fr->fim);
+
+        struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+
+//        int flip_field = get_named_checkb_val(dialog, "wcs_flip_field_checkb");
+
+//        int frame_flipped = (frame_wcs->wcsset != WCS_INVALID) && (frame_wcs->xinc * frame_wcs->yinc < 0);
+//        int frame_data_is_flipped = ((frame_wcs->flags & WCS_DATA_IS_FLIPPED) != 0);
+
+//        int current_flip = (frame_data_is_flipped ^ frame_flipped);
+//        int new_flip = (flip_field ^ frame_flipped);
+
+//        printf("wcs_flip_field_cb ****  flip_field %s frame_flipped %s frame_data_is_flipped %s current_flip %s new_flip %s\n",
+//               flip_field ? "Yes" : "No",
+//               frame_flipped ? "Yes" : "No",
+//               frame_data_is_flipped ? "Yes" : "No",
+//               current_flip ? "Yes" : "No",
+//               new_flip ? "Yes" : "No");
+
+        printf("\nflip\n");
+        flip_frame(fr);
+
+        i_chan->channel_changed = 1;
+        frame_wcs->flags ^= WCS_DATA_IS_FLIPPED;
+        if (frame_wcs->wcsset) {
+            frame_wcs->yinc = -frame_wcs->yinc;
+        }
+
+        window_wcs->flags ^= WCS_DATA_IS_FLIPPED;
+        if (window_wcs->wcsset) {
+            window_wcs->yinc = -window_wcs->yinc;
+        }
+
+        // refresh gui stars
+        struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+        if (gsl != NULL) cat_change_wcs(gsl->sl, window_wcs);
+//        printf("refresh gui stars\n"); fflush(NULL);
+
+        gtk_widget_queue_draw(window);
+    }
+
+//fflush(NULL);
+}
+
+/* called by wcsedit_refresh_parent
+ *
+ * push values from the dialog back into the window_wcs
  * if some values are missing, we try to guess them
- * return 0 if we could set the wcs from values, 1 if some
- * values were defaulted, 2 if there were changes,
- * -1 if we didn't have enough data*/
+ *
+ * return:
+ * 0 if we could set the wcs from values
+ * 1 if some values were defaulted
+ * 2 if there were changes
+ * -1 if we didn't have enough data
+*/
 static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 {
+    g_assert(wcs != NULL);
+printf("wcsedit_to_wcs\n"); fflush(NULL);
+    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    g_return_val_if_fail(window != NULL, 0);
+
     double d, i;
 
 	char *text = NULL, *end;
@@ -216,13 +329,18 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 
 /* parse the fields */
     text = named_entry_text(dialog, "wcs_ra_entry");
-    if (! dms_to_degrees(text, &d)) ra = fabs(modf(d * 15 / 360, &i) * 360);
+    int degrees;
+    if ((degrees = dms_to_degrees(text, &d)) >= 0) {
+        if (!degrees)
+            d *= 15;
+        ra = fabs(modf(d / 360, &i) * 360);
+    }
 	g_free(text);
 
     text = named_entry_text(dialog, "wcs_dec_entry");
-    if (!dms_to_degrees(text, &d)) {
+    if (dms_to_degrees(text, &d) >= 0) {
         dec = modf(d / 90, &i) * 90;
-        if (dec == 0) {
+        if (dec > 90) {
             if (i < 0)
                 dec -= 90;
             else if (i > 0)
@@ -232,7 +350,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 	g_free(text);
 
     text = named_entry_text(dialog, "wcs_equinox_entry");
-	d = strtod(text, &end);
+    d = strtod(text, &end);
     if (text != end) equ = d;
 	g_free(text);
 
@@ -240,8 +358,6 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     d = strtod(text, &end);
     if (text != end) scale = d ;
     g_free(text);
-
-    int flip_field = get_named_checkb_val(dialog, "wcs_flip_field_checkb");
 
 	text = named_entry_text(dialog, "wcs_rot_entry");
 	d = strtod(text, &end);
@@ -254,24 +370,23 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 		return -1; /* can't do anything without those */
 	}
 
-    int ret = 3; // valid ra, dec
-    wcs->xref = ra;
-    wcs->yref = dec;
+    int ret = 0;
+//    wcs->xref = ra;
+//    wcs->yref = dec;
 
 	if (equ == INV_DBL) {
         equ = 2000.0;
-        ret |= 4;
+        ret |= 1;
 	}
 
-    if (scale == 0.0) scale = P_DBL(OBS_SECPIX);
-
-    double xs = -scale;
-    double ys = -scale;
-    if (flip_field) ys = -ys;
+    if (scale == INV_DBL) {
+        scale = P_DBL(OBS_SECPIX);
+        ret |= 2;
+    }
 
 	if (rot == INV_DBL) {
 		rot = 0.0;
-        ret |= 32;
+        ret |= 4;
 	}
 
     rot = modf(rot / 360, &i) * 360;
@@ -280,43 +395,86 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 //	d3_printf("diff is %f\n", fabs(ra - wcs->xref));
 
     int chg = 0;
-    if ( (wcs->xref == INV_DBL) || (fabs(ra - wcs->xref) > (1.5 / 36000)) ) {
+    if (fabs(ra - wcs->xref) > (1.5 / 36000)) {
         chg |= 1;
-		wcs->xref = ra;
+        wcs->xref = ra;
 	}
-    if ( (wcs->yref == INV_DBL) || (fabs(dec - wcs->yref) > (1.0 / 36000)) ) {
+    if (fabs(dec - wcs->yref) > (1.0 / 36000)) {
         chg |= 2;
-		wcs->yref = dec;
+        wcs->yref = dec;
 	}
-    if ( (wcs->rot == INV_DBL) || (fabs(rot - wcs->rot) > (1.0 / 9900)) ) {
+    if (fabs(rot - wcs->rot) > (1.0 / 9900)) {
         chg |= 4;
-		wcs->rot = rot;
+        wcs->rot = rot;
 	}
-    if ( (wcs->equinox == INV_DBL) || (fabs(equ - wcs->equinox) > 1.0 / 20) ) {
+    if (fabs(equ - wcs->equinox) > 1.0 / 20) {
         chg |= 8;
-		wcs->equinox = equ;
-	}
-    if ( (wcs->xinc == INV_DBL) || (fabs(xs - 3600 * wcs->xinc) > (1.0 / 990000)) ) {
-        chg |= 16;
-		wcs->xinc = xs / 3600.0;
-	}
-    if ( (wcs->yinc == INV_DBL) || (fabs(ys - 3600 * wcs->yinc) > (1.0 / 990000)) ) {
-        chg |= 32;
-		wcs->yinc = ys / 3600.0;
+        wcs->equinox = equ;
 	}
 
-    if (chg || ret)	wcs->wcsset = WCS_INITIAL;
+    int sign;
+
+    double xs = -scale;
+    sign = signbit(xs * wcs->xinc) ? -1 : 1;
+
+    if (fabs(sign * xs - 3600 * wcs->xinc) > (1.0 / 990000)) {
+        chg |= 16;
+        wcs->xinc = xs / 3600.0;
+	}
+
+    double ys = -scale;
+    sign = signbit(ys * wcs->yinc) ? -1 : 1;
+
+    if (fabs(sign * ys - 3600 * wcs->yinc) > (1.0 / 990000)) {
+        chg |= 16;
+        wcs->yinc = ys / 3600.0;
+    }
+
+    wcs->yinc = - sign * fabs(wcs->yinc);
+
+// catch validation change
+    char *wcsset_rb_name;
+    switch(wcs->wcsset) {
+    case WCS_INVALID:
+        wcsset_rb_name = "wcs_unset_rb";
+        break;
+    case WCS_INITIAL:
+        wcsset_rb_name = "wcs_initial_rb";
+        break;
+    case WCS_VALID:
+        wcsset_rb_name = "wcs_valid_rb";
+        break;
+    }
+    if (! get_named_checkb_val(dialog, wcsset_rb_name))
+        chg |= 64;
 
     if (ret) return 1;
 
-	if (chg) {
-//		d3_printf("chg is %d\n", chg);
-		return 2;
-	}
+//    static char *change_msg[8] = {
+//        "ra",
+//        "dec",
+//        "rotation",
+//        "equinox",
+//        "scale".
+//        "flip field",
+//        "validation"
+//    };
+//    unsigned int bit;
+//    for (bit = 0; bit < 8; bit++) {
+//        if (chg & (1 << bit)) {
+//            printf("changed %d %s\n", bit, change_msg[bit]);
+//            fflush(NULL);
+//        }
+//    }
+printf("chg %x\n", chg); fflush(NULL);
+    if (chg) return 2;
+
 	return 0;
 }
 
-/* set wcs of parent window from dialog and refresh */
+/* set wcs of parent window from dialog and refresh
+ * called by wcsedit call backs
+ */
 static int wcsedit_refresh_parent(gpointer dialog)
 {
     if (dialog == NULL) printf("dialog == NULL in wcsedit_refresh_parent\n");
@@ -324,20 +482,13 @@ static int wcsedit_refresh_parent(gpointer dialog)
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
     g_return_val_if_fail(window != NULL, 0);
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    g_return_val_if_fail(wcs != NULL, 0);
+    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    g_return_val_if_fail(window_wcs != NULL, 0);
 
-    int ret = wcsedit_to_wcs(dialog, wcs);
-//	d3_printf("wdtw returns %d\n", ret);
+    int ret = wcsedit_to_wcs(dialog, window_wcs);
+
     if (ret > 0) {
-        wcsedit_from_wcs(dialog, wcs);
-        warning_beep();
-
-        struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-        if (gsl != NULL) {
-            cat_change_wcs(gsl->sl, wcs);
-        }
-        gtk_widget_queue_draw(window);
+        wcsedit_refresh(window);
 
     } else if (ret < 0) {
         error_beep();
@@ -345,8 +496,34 @@ static int wcsedit_refresh_parent(gpointer dialog)
     return ret;
 }
 
+// set wcs validation
+static void wcs_set_validation(gpointer window, int valid)
+{
+    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+    struct ccd_frame *fr = i_chan->fr;
+    struct wcs *frame_wcs = & fr->fim;
+
+    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+
+    window_wcs->wcsset = valid;
+    wcs_clone(frame_wcs, window_wcs); // copy window_wcs to frame
+
+    wcs_to_fits_header(fr); // update frame header
+    wcsedit_refresh(window);
+}
+
 static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
 {
+   GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
+   struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+   struct ccd_frame *fr = i_chan->fr;
+   struct wcs *frame_wcs = & fr->fim;
+
+   struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    wcs_clone(frame_wcs, window_wcs);
+
+    wcs_set_validation(window, WCS_INITIAL);
+
     wcsedit_refresh_parent(dialog);
 }
 
@@ -354,6 +531,12 @@ static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
 static int wcs_entry_cb(GtkWidget *widget, gpointer dialog)
 {
     return wcsedit_refresh_parent(dialog);
+}
+
+static gboolean wcs_focus_out_cb (GtkWidget *widget, GdkEventFocus *event, gpointer data)
+{
+    wcs_entry_cb(GTK_WIDGET(widget), data);
+    return FALSE;
 }
 
 void act_wcs_auto (GtkAction *action, gpointer window)
@@ -426,26 +609,13 @@ void act_wcs_reload (GtkAction *action, gpointer window)
 
 void act_wcs_validate (GtkAction *action, gpointer window)
 {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-
-    if (wcs) {
-        wcs->wcsset = WCS_VALID;
-        wcs_clone(& i_chan->fr->fim, wcs);
-    }
-	wcsedit_refresh(window);
+    wcs_set_validation(window, WCS_VALID);
+    wcsedit_refresh(window);
 }
 
 void act_wcs_invalidate (GtkAction *action, gpointer window)
 {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-
-    if (wcs) {
-        if (wcs->wcsset) wcs->wcsset = WCS_INITIAL;
-        wcs_clone(& i_chan->fr->fim, wcs);
-    }
-
+    wcs_set_validation(window, WCS_INVALID);
 	wcsedit_refresh(window);
 }
 
@@ -487,10 +657,6 @@ int match_field_in_window_quiet(gpointer window)
 	return 0;
 }
 
-static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
-{
-    wcsedit_refresh_parent(dialog);
-}
 
 static double get_zoom(gpointer dialog)
 {
@@ -500,21 +666,6 @@ static double get_zoom(gpointer dialog)
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
     if (geom == NULL) return;
     return geom->zoom;
-}
-
-static double wcs_k(struct wcs *wcs, double xpix, double ypix)
-{
-    double xpos, ypos, xe, ye;
-
-    wcs_worldpos(wcs, xpix, ypix, & xpos, & ypos);
-    wcs_xypix(wcs, xpos, ypos, & xe, & ye);
-
-    xe -= xpix;
-    ye -= ypix;
-
-    double dr = raddeg(atan2(xe, ye));
-//    dr = sqr(xe * xe + ye * ye);
-    return cos(degrad(wcs->yref)) * xe;
 }
 
 /* Move WCS centre */
@@ -532,18 +683,14 @@ static void move(int move_x, int move_y, gpointer dialog)
 
     double d = (1 + 9.0 * (btnstate > 0)) / get_zoom(dialog);
 
-    double dx = move_x * d;
-    double dy = move_y * d;
+    double dr = wcs->xref - wcs->rot;
 
-    double r = wcs->xref - wcs->rot; // + wcs_k(wcs, xrefpix, yrefpix);
+    double dx = d * move_x;
+    double dy = d * move_y;
 
-//    wcs_worldpos(wcs, wcs->xrefpix + dx, wcs->yrefpix + dy, & wcs->xref, & wcs->yref);
-    double X, E;
+    wcs_worldpos(wcs, wcs->xrefpix + dx, wcs->yrefpix + dy, & wcs->xref, & wcs->yref);
 
-    xy_to_XE(wcs, wcs->xrefpix + dx, wcs->yrefpix + dy, &X, &E);
-    worldpos(X, E, wcs->xref, wcs->yref, 0.0, 0.0, 1.0, 1.0, 0.0, "-TAN", &wcs->xref, &wcs->yref);
-
-    wcs->rot = wcs->xref - r; // + wcs_k(wcs, xrefpix, yrefpix);
+    wcs->rot = wcs->xref - dr;
 
     char buf[256];
 
@@ -559,7 +706,6 @@ static void move(int move_x, int move_y, gpointer dialog)
 
     wcsedit_refresh(window);
 }
-
 
 /* Rotate WCS, only the rotation text field is changed and WCS entries updated */
 static void rot(int dir, gpointer dialog)
@@ -685,7 +831,7 @@ static gboolean scale_dn_cb(gpointer dialog) {
     return timeout_repeat;
 }
 
-#define REPEAT_TIMEOUT 70
+#define REPEAT_TIMEOUT 40
 /* Move WCS field right */
 static void wcs_R_cb(GtkWidget *wid, gpointer dialog)
 {

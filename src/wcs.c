@@ -40,12 +40,12 @@
 #include "sidereal_time.h"
 #include "misc.h"
 #include "match.h"
-//#include "warpaffine.h"
+#include "warpaffine.h"
 
 //#define CHECK_WCS_CLOSURE
 
 /* try to get an inital wcs from observation data */
-static void try_wcs_from_frame_obs(struct ccd_frame *fr, struct wcs *wcs)
+static void fits_obs_params_to_fim(struct ccd_frame *fr, struct wcs *wcs)
 {
     gboolean havera = FALSE, havedec = FALSE, haveeq = FALSE, havescale = FALSE, haverot = FALSE;
     double ra, dec, eq, scale, rot;
@@ -81,15 +81,18 @@ static void try_wcs_from_frame_obs(struct ccd_frame *fr, struct wcs *wcs)
     haverot = (fits_get_double(fr, P_STR(FN_CROTA1), &rot) > 0);
     if (! haverot) rot = 0;
 
-    fr->fim.xrefpix = fr->w / 2;
-    fr->fim.yrefpix = fr->h / 2;
-    fr->fim.rot = rot;
-    fr->fim.equinox = eq;
-    fr->fim.xinc = - scale / 3600.0;
-    fr->fim.yinc = - scale / 3600.0;
-    if (P_INT(OBS_FLIPPED))	fr->fim.yinc = -fr->fim.yinc;
+//    struct wcs *frame_wcs = & fr->fim;
 
-d2_printf("wcs.try_wcs_from_frame_obs setting wcsset to WCS_INITIAL\n");
+    wcs->xrefpix = fr->w / 2;
+    wcs->yrefpix = fr->h / 2;
+
+    wcs->rot = rot;
+    wcs->equinox = eq;
+    wcs->xinc = - scale / 3600.0;
+    wcs->yinc = - scale / 3600.0;
+    if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+
+d2_printf("wcs.fits_obs_params_to_fim setting wcsset to WCS_INITIAL\n");
     gboolean haveobject = FALSE;
 
     if (! havera || ! havedec) {
@@ -106,60 +109,81 @@ d2_printf("wcs.try_wcs_from_frame_obs setting wcsset to WCS_INITIAL\n");
         }
     }
 
-//    fr->fim.wcsset = WCS_INVALID;
     if (haveobject || (havera && havedec)) {
-        fr->fim.xref = ra;
-        fr->fim.yref = dec;
-        fr->fim.wcsset = WCS_INITIAL;
-        fr->fim.flags &= ~WCS_HINTED;
-    }
+        wcs->xref = ra;
+        wcs->yref = dec;
 
-    wcs_clone(wcs, & fr->fim);
+        wcs->flags &= ~WCS_HINTED;
+    }
 }
 
-/* adjust the current wcs when a new frame is loaded
- */
-void wcs_from_frame(struct ccd_frame *fr, struct wcs *wcs)
+/* adjust the window wcs when a new frame is loaded */
+void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 {
-d2_printf("wcs.wcs_from_frame rescan_fits_wcs enabled\n");
+     // for empty frame have name w,h, type, equinox 2000
+    struct wcs *fr_wcs = & fr->fim;
 
-    if ( fr->fim.wcsset != WCS_VALID )
-        rescan_fits_wcs (fr, & fr->fim);
+// *******************
 
-    if ( fr->fim.wcsset == WCS_INVALID ) {
-// keep wcs position as first guess
-        wcs_clone(& fr->fim, wcs);
-        if (wcs->wcsset) {
-            fr->fim.flags |= WCS_HINTED;
-            fr->fim.wcsset = WCS_INITIAL;
-        }
+//    if ( fr_wcs->wcsset == WCS_INVALID )
+//        wcs_transform_from_frame (fr, fr_wcs);
 
-        try_wcs_from_frame_obs (fr, wcs);
+    if ( fr_wcs->wcsset <= WCS_INITIAL ) {
+        fits_obs_params_to_fim (fr, window_wcs);
 
-    } else if ( (wcs->wcsset <= fr->fim.wcsset) || (wcs->flags & WCS_HINTED) )
-        wcs_clone(wcs, & fr->fim);
+    } else if ( (window_wcs->wcsset <= fr_wcs->wcsset) || (window_wcs->flags & WCS_HINTED) ) {
+        wcs_clone(window_wcs, fr_wcs);
+    }
 
-    wcs->jd = frame_jdate (fr);
-	if (wcs->jd != 0.0)
-		wcs->flags |= WCS_JD_VALID;
+// *******************
+//    if (fr_wcs->wcsset == WCS_INVALID ) {
+//        if (window_wcs->wcsset) {
+//            window_wcs->wcsset = WCS_INITIAL;
+//            wcs_clone(fr_wcs, window_wcs); // initial fr_wcs from window_wcs
+
+//            fr_wcs->xrefpix = fr->w / 2 + 0.5;
+//            fr_wcs->yrefpix = fr->h / 2 + 0.5;
+
+//            fr_wcs->flags |= WCS_HINTED;
+//        }
+//        fits_obs_params_to_fim (fr); // presumably only for locally acquired images?
+//    } else {
+//        printf("fr_wcs is valid\n");
+//        fflush(NULL);
+// this only works if transform is set in frame
+//        wcs_transform_from_frame (fr, fr_wcs); // set transform from frame params
+
+//    }
+
+//    if (fr_wcs->wcsset) {
+//        fr_wcs->flags &= ~WCS_HINTED;
+//        fr_wcs->flags &= ~WCS_USE_LIN;
+//    }
+
+//    wcs_clone(window_wcs, fr_wcs); // fr_wcs to window_wcs
+// ********************
+    window_wcs->jd = frame_jdate (fr); // frame center jd
+    // what about fr_wcs->jd ?
+    if (window_wcs->jd != 0.0)
+        window_wcs->flags |= WCS_JD_VALID;
 	else
-		wcs->flags &= ~WCS_JD_VALID;
+        window_wcs->flags &= ~WCS_JD_VALID;
 
     char s[80];
 
     double lat;
     gboolean hla = (fits_get_double (fr, P_STR(FN_LATITUDE), &lat) > 0);
-    if (! hla) hla = (fits_get_string (fr, P_STR(FN_LATITUDE), s, 79) > 0) && (! dms_to_degrees (s, &lat));
+    if (! hla) hla = (fits_get_string (fr, P_STR(FN_LATITUDE), s, 79) > 0) && (dms_to_degrees (s, &lat) >= 0);
 
     double lng;
     gboolean hlo = (fits_get_double (fr, P_STR(FN_LONGITUDE), &lng) > 0);
-    if (! hlo) hlo = (fits_get_string( fr, P_STR(FN_LONGITUDE), s, 79) > 0) && (! dms_to_degrees (s, &lng));
+    if (! hlo) hlo = (fits_get_string( fr, P_STR(FN_LONGITUDE), s, 79) > 0) && (dms_to_degrees (s, &lng) >= 0);
     if (hlo && ! P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
 
     if (hla && hlo) {
-        wcs->lng = lng;
-        wcs->lat = lat;
-        wcs->flags |= WCS_LOC_VALID;
+        window_wcs->lng = lng;
+        window_wcs->lat = lat;
+        window_wcs->flags |= WCS_LOC_VALID;
     }
 }
 
@@ -179,6 +203,10 @@ struct wcs *wcs_new(void)
         wcs->xinc = INV_DBL;
         wcs->yinc = INV_DBL;
         wcs->wcsset = WCS_INVALID;
+        wcs->pc[0][0] = 1;
+        wcs->pc[0][1] = 0;
+        wcs->pc[1][0] = 0;
+        wcs->pc[1][1] = 1;
 
         wcs->ref_count = 1;
     }
@@ -294,7 +322,7 @@ int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double
 //	d3_printf("pix x:%.4f y:%.4f\n", xpix, ypix);
 	xy_to_XE(wcs, xpix, ypix, &X, &E);
 //	d3_printf("pix X:%.4f E:%.4f\n", X, E);
-    if (wcs->flags & WCS_JD_VALID) {
+    if ((wcs->flags & WCS_JD_VALID) && !P_INT(WCS_IGNORE_PRECESSION)) {
         precess_hiprec(wcs->equinox, epoch, &xref, &yref);
         if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
             refracted_from_true(&xref, &yref, wcs->jd, wcs->lat, wcs->lng);
@@ -302,7 +330,7 @@ int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double
     }
     worldpos(X, E, xref, yref, 0.0, 0.0, 1.0, 1.0, 0.0, "-TAN", &ra, &dec);
 //	d3_printf("pix apparent ra:%.4f dec:%.4f\n", ra, dec);
-    if (wcs->flags & WCS_JD_VALID) {
+    if ((wcs->flags & WCS_JD_VALID) && !P_INT(WCS_IGNORE_PRECESSION)) {
         if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
             true_from_refracted(&ra, &dec, wcs->jd, wcs->lat, wcs->lng);
         }
@@ -355,7 +383,7 @@ void cats_xypix (struct wcs *wcs, struct cat_star *cats, double *xpix, double *y
 #ifdef CHECK_WCS_CLOSURE
 	double cra, cdec, cle = 0.0;
 #endif
-	cats_to_XE(wcs, cats, &X, &E);
+    cats_to_XE(wcs, cats, &X, &E); // xypix on (refracted) cats(ra, dec) -> (X, E)
 	XE_to_xy(wcs, X, E, xpix, ypix);
 //printf("wcs.cats_xypix apparent x:%.4f y:%.4f\n", *xpix, *ypix);
 
@@ -432,7 +460,7 @@ void cat_change_wcs(GSList *sl, struct wcs *wcs)
 {
 	struct gui_star *gs;
 	struct cat_star *cats;
-//printf("wcs.cat_change_wcs\n");
+//printf("cat_change_wcs wcs->xinc * wcs->yinc < 0 %s\n", wcs->xinc * wcs->yinc < 0 ? "Yes" : "No"); fflush(NULL);
 	while (sl != NULL) {
 		gs = GUI_STAR(sl->data);
 		if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) && gs->s != NULL) {
@@ -522,10 +550,17 @@ void pairs_fit_errxy(GSList *pairs, struct wcs *wcs, double *ra_err, double *de_
 		cgs = GUI_STAR(gs->pair);
         wcs_worldpos(wcs, gs->x, gs->y, &gs_ra, &gs_de);
         wcs_worldpos(wcs, cgs->x, cgs->y, &cgs_ra, &cgs_de);
-		sumsq_ra += sqr((gs_ra - cgs_ra) * cos(degrad((gs_de + cgs_de)/2.0)));
-		sumsq_de += sqr(gs_de - cgs_de);
-//		sumsq_ra += sqr(fabs(gs->x - cgs->x));
-//		sumsq_de += sqr(fabs(gs->y - cgs->y));
+
+        double err = gs_ra - cgs_ra;
+//        int test_ra = round(gs_ra + cgs_ra); // catch ra change 0 to 360
+//        if (abs(test_ra - 360) > 10)
+        if (fabs(err) < 1)
+            sumsq_ra += sqr(err * cos(degrad((gs_de + cgs_de)/2.0)));
+
+        err = gs_de - cgs_de;
+//        if (fabs(err) < 1) // find better way to exclude large errors
+            sumsq_de += sqr(gs_de - cgs_de);
+
 		sl = g_slist_next(sl);
 		n++;
 	}
@@ -836,6 +871,7 @@ static double fit_pairs_xy(GSList *pairs, struct wcs *wcs, int scale_en, int rot
 
     return ret;
 }
+
 /* fit wcs pairs the "old" way */
 static void fit_pairs_old(GSList *pairs, struct wcs *wcs, int scale_en, int rot_en)
 {
@@ -913,8 +949,8 @@ fexit:
 /* return 0 if a good fit was found, -1 if we had an error */
 int fit_wcs_window(GtkWidget *window)
 {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
+    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    if (window_wcs == NULL || window_wcs->wcsset == WCS_INVALID) {
 		err_printf_sb2(window, "Need an Initial WCS to Attempt Fit");
 		error_beep();
 		return -1;
@@ -973,19 +1009,19 @@ int fit_wcs_window(GtkWidget *window)
     int scale_en = (lock_scale == 0);
     int rot_en = (lock_rot == 0);
 
-	wcs->fit_err = HUGE;
+    window_wcs->fit_err = HUGE;
 	if (npairs >= 2) {
-		if (fit_pairs(pairs, wcs) < 0)
-            fit_pairs_old(pairs, wcs, scale_en, rot_en);
+        if (fit_pairs(pairs, window_wcs) < 0)
+            fit_pairs_old(pairs, window_wcs, scale_en, rot_en);
 	}
 
     char buf[256];
     double ra_err = HUGE, de_err = HUGE;
 
-	pairs_fit_errxy(pairs, wcs, &ra_err, &de_err);
-	if (npairs >= VLD_PAIRS && wcs->fit_err < VLD_ERR) {
-		wcs->wcsset = WCS_VALID;
-		wcs->flags &= ~WCS_HINTED;
+    pairs_fit_errxy(pairs, window_wcs, &ra_err, &de_err);
+    if (npairs >= VLD_PAIRS && window_wcs->fit_err < VLD_ERR) {
+        window_wcs->wcsset = WCS_VALID;
+        window_wcs->flags &= ~WCS_HINTED;
         sprintf(buf,
              "Fitted %d pairs, Error in R.A.: %.2f\", Error in dec: %.2f\". Fit Validated",	npairs, ra_err*3600.0, de_err*3600.0);
 	} else {
@@ -997,19 +1033,25 @@ int fit_wcs_window(GtkWidget *window)
 	g_slist_free(pairs);
 
 	info_printf_sb2(window, buf);
-	cat_change_wcs(gsl->sl, wcs);
+    cat_change_wcs(gsl->sl, window_wcs);
 
     struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-    if (wcs == NULL || i_chan == NULL || i_chan->fr == NULL) return 0;
+    if (i_chan == NULL || i_chan->fr == NULL) return 0;
 
-    wcs_clone(& i_chan->fr->fim, wcs);
-    wcs_to_fits_header(i_chan->fr);
+    struct ccd_frame *fr = i_chan->fr;
+    struct wcs *frame_wcs = & fr->fim;
+
+    wcs_clone(frame_wcs, window_wcs);
+
+    wcs_to_fits_header(fr);
+
+    gtk_widget_queue_draw(window);
 
 	return 0;
 }
 
 
-static int gui_star_compare(struct gui_star *a, struct gui_star *b)
+static int gui_star_compare_size(struct gui_star *a, struct gui_star *b)
 {
     if (a->size > b->size) return -1;
     if (a->size < b->size) return 1;
@@ -1062,16 +1104,19 @@ int auto_pairs(struct gui_star_list *gsl)
 //            continue;
 //        }
 
-        if (gs->s && (CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET)) {
+//      if (gs->s && (CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET)) { // any star marked as astromet
+        if (gs->s && ((TYPE_MASK_GSTAR(gs)) & TYPE_MASK_CATREF)) { // skips field stars?
+            if (P_INT(AP_MOVE_TARGETS) && ((CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET) == 0)) continue;
+
             cat = g_slist_prepend(cat, gs);
         }
     }
 
     d3_printf("matching to %d cat stars\n", g_slist_length(cat));
-    cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare);
+    cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare_size);
 
 	field = filter_selection(gsl->sl, TYPE_MASK_FRSTAR, 0, 0);
-	field = g_slist_sort(field, (GCompareFunc)gui_star_compare);
+    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
 //    for (sl = cat; sl != NULL; sl = sl->next) {
 //        struct gui_star *gs = GUI_STAR(sl->data);

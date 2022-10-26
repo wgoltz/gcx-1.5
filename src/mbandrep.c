@@ -44,7 +44,7 @@
 #include "obsdata.h"
 #include "multiband.h"
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "filegui.h"
 
 static char constell[100][4] = {
@@ -112,99 +112,97 @@ static int search_validation_file(FILE *fp, char *name, char *des, int len)
 }
 
 
-
-static int REP_FMT_AAVSO_star(FILE *repfp, struct star_obs *sob, struct star_obs *comp)
+/* update this to current format */
+/* add csv format or do that as part of report converter routines */
+static void REP_FMT_AAVSO_header(FILE *repfp)
 {
-	char line[256];
-	int i, nl;
-	char *sequence;
-	FILE *vfp;
-	char des[64];
+    fprintf(repfp, "#TYPE=EXTENDED\n#OBSCODE=%s\n#SOFTWARE=GCX 1.5 modified\n#DELIM=,\n#DATE=JD\n", P_STR(OBS_OBSERVER_CODE));
+    fprintf(repfp, "#NAME,DATE,MAG,MERR,FILT,TRANS,MTYPE,CNAME,CMAG,KNAME,KMAG,AIRMASS,GROUP,CHART,NOTES\n");
+    //SS CYG,2450702.1234,11.135,0.003,V,NO,STD,105,na,na,na,na,na,X16382L,This is a test
+}
 
+
+struct check_star {
+    struct star_obs *sob;
+    char *id;
+};
+
+static int REP_FMT_AAVSO_star(FILE *repfp, struct star_obs *sob, struct star_obs *comp, struct star_obs *check)
+{
 	if (sob->err >= BIG_ERR)
 		return -1;
-	for (i=0; i<255; i++)
-		line[i] = ' ';
-	/* designator */
-	vfp = open_expanded(P_STR(FILE_AAVSOVAL), "r");
-	if (vfp == NULL) {
-		err_printf("cannot open validation file\n");
-		strncpy(line, "9999+99  ", 8);
-	} else {
-		if (search_validation_file(vfp, sob->cats->name, des, 63))
-			strncpy(line, "9999+99  ", 8);
-		else {
-			strncpy(line, des, 8);
-			if (line[7] == 0)
-				line[7] = ' ';
-		}
-		fclose(vfp);
-	}
 
-	/* name */
-	nl = strlen(sob->cats->name);
-	if (nl > 9)
-		nl = 9;
-	if (is_constell(sob->cats->name + (nl - 3))) {
-		for (i = 0; i < nl - 3; i++)
-			line[i+8] = toupper(sob->cats->name[i]);
-		line[i+8] = ' ';
-		for (i++; i < nl + 1; i++)
-			line[i+8] = toupper(sob->cats->name[i-1]);
-	} else {
-		for (i = 0; i < nl; i++)
-			line[i+8] = toupper(sob->cats->name[i]);
-	}
-	/* jdate */
-	sprintf(line+18, "%12.4f ", mjd_to_jd(sob->ofr->mjd));
-	/* magnitude */
-	if (sob->mag <= sob->ofr->lmag) {
-		sprintf(line+31, "%5.2fK ", sob->mag);
-		if (sob->flags & CPHOT_NOT_FOUND)
-			line[35] = ':';
-	} else { 
-		sprintf(line+30, "<%5.2fK ", sob->ofr->lmag);
-	}
-	/* band */
-	sprintf(line+38, "CCD%c ", toupper(sob->ofr->trans->bname[0]));
-	/* comp stars */
-	if (comp != NULL && sob->ofr->band >= 0) {
-		sprintf(line+43, "%.0f          ", 10*comp->ost->smag[sob->ofr->band]);
-	} else {
-		sprintf(line+43, "           ");
-	}
-	/* chart */
-	sprintf(line+54, "        ");
-	/* observer */
-	sprintf(line+62, "%s  ", P_STR(OBS_OBSERVER_CODE));
-	/* comments */
-	i = 0;
-	if (sob->mag <= sob->ofr->lmag) {
-		i += sprintf(line+67, "Err:%.3f ", sob->err);
-		if (comp != NULL)
-			i += sprintf(line+67+i, "Diff ");
-		if (sob->flags & CPHOT_TRANSFORMED)
-			i += sprintf(line+67+i, "Transformed ");
-		if (sob->flags & CPHOT_ALL_SKY)
-			i += sprintf(line+67+i, "All-sky ");
-		if (sob->flags & CPHOT_BURNED) 
-			i += sprintf(line+67+i, "Possibly_saturated ");
-		if (sob->flags & (CPHOT_BURNED | CPHOT_BADPIX))
-			line[35] = ':';
-	}
-	sequence = stf_find_string(sob->ofr->stf, 0, SYM_SEQUENCE);
-	if (sequence != NULL) 
-		i += snprintf(line+67+i, 188-i, "Sequence:%s ", sequence);
-	fprintf(repfp, "%s\n", line);
+    char *mag_part;
+    if (sob->flags & CPHOT_NOT_FOUND) {
+        asprintf (&mag_part, "<%5.3f,NA", sob->ofr->lmag);
+    } else {
+        asprintf (&mag_part, "%5.3f,%5.3f", sob->mag, sob->err);
+    }
+
+    char *comp_part;
+    if (comp != NULL && comp->ofr->band >= 0) {
+        asprintf (&comp_part, "%s,%5.3f", comp->cats->name, comp->ost->smag[sob->ofr->band]);
+    } else {
+        asprintf (&comp_part, "ENSEMBLE,NA");
+    }
+
+    char *check_part;
+    if (check != NULL && check->ofr->band >= 0) {
+        asprintf (&check_part, "%s,%5.3f", check->cats->name, check->mag);
+    } else {
+        asprintf (&check_part, "NA,NA");
+    }
+
+    char *line;
+
+    //#NAME,DATE,(MAG,MERR),FILTER,TRANS,MTYPE,(CNAME,CMAG),(KNAME,KMAG),AIRMASS,GROUP,CHART,NOTES
+
+    asprintf (&line, "%s,%12.5f,%s,%s,NO,STD,%s,%s,%5.3f,GROUP,CHART,NOTES",
+              sob->cats->name, mjd_to_jd(sob->ofr->mjd), mag_part, sob->ofr->trans->bname,
+              comp_part, check_part, sob->ofr->airmass);
+
+    fprintf(repfp, "%s\n", line);
+
+    free(mag_part);
+    free(comp_part);
+    free(check_part);
+    free(line);
+
 	return 0;
 }
 
-static int rep_star(FILE *repfp, struct star_obs *sob, int format, struct star_obs *comp)
+static int rep_star(FILE *repfp, struct star_obs *sob, int format, struct star_obs *comp, GList *check_stars)
 {
 	switch(format) {
 	case REP_FMT_AAVSO:
-		return REP_FMT_AAVSO_star(repfp, sob, comp);
-		break;
+        if (sob->cats->comments) {
+            char *s = strstr(sob->cats->comments, "target");
+            if (s) { // found a target star
+                s += 6;
+                char *e = s;
+                while ((*e != ' ') && (*e != '\t') && (*e != '\0')) e++;
+
+                struct star_obs *check = NULL;
+
+                GList *sl;
+                for (sl = check_stars; sl != NULL; sl = sl->next) {
+                    struct check_star *cs = sl->data;
+                    if (cs->id) {
+                        if (strcmp(s, cs->id) == 0) { // found the check star matching this target
+                            check = cs->sob;
+                            break;
+                        }
+                    }
+                    if (!cs->id || (*cs->id == '\0')) { // check star with no id
+                        check = cs->sob;
+                    }
+                }
+
+                REP_FMT_AAVSO_star(repfp, sob, comp, check);
+                return 0;
+            }
+        }
+        break;
 	}
 	return -1;
 }
@@ -213,46 +211,109 @@ static int rep_star(FILE *repfp, struct star_obs *sob, int format, struct star_o
 /* report the stars in ofrs frames according to action */
 int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, int action)
 {
-	int n = 0;
-	GList *sl, *fl;
-	struct star_obs *comp = NULL;
-	int ncomp;
-
 	g_return_val_if_fail(repfp != NULL, -1);
 
-	if ((action & FMT_FMT_MASK) == REP_FMT_DATASET) {
-		for (fl = ofrs; fl != NULL; fl = g_list_next(fl)) {
-			ofr_to_stf_cats(O_FRAME(fl->data));
-			ofr_transform_to_stf(mbds, O_FRAME(fl->data));
-			n += g_list_length(O_FRAME(fl->data)->sol);
-			stf_fprint(repfp, O_FRAME(fl->data)->stf, 0, 0);
-		}
-		return n;
-	}
+    if ((action & REP_FMT_MASK) == REP_FMT_DATASET) {
+        int n = 0;
+        GList *sl;
+        for (sl = g_list_reverse(ofrs); sl != NULL; sl = g_list_next(sl)) {
 
-	switch(action & REP_STAR_MASK) {
-	case REP_STAR_TGT:
-		for (fl = ofrs; fl != NULL; fl = g_list_next(fl)) {
-			ncomp = 0;
-			for (sl = O_FRAME(fl->data)->sol; sl != NULL; sl = g_list_next(sl)) {
-				if (CATS_TYPE(STAR_OBS(sl->data)->cats) == CATS_TYPE_APSTD) {
-					comp = STAR_OBS(sl->data);
-					ncomp ++;
-				}
-			}
-			for (sl = O_FRAME(fl->data)->sol; sl != NULL; sl = g_list_next(sl)) {
-				if (CATS_TYPE(STAR_OBS(sl->data)->cats) == CATS_TYPE_APSTAR) 
-					n += !rep_star(repfp, STAR_OBS(sl->data), action & FMT_FMT_MASK, 
-						       ncomp == 1 ? comp : NULL);
-			}
+            struct o_frame *ofr = O_FRAME(sl->data);
+// need to copy all data from ofr and sob to stf
+            ofr_to_stf_cats(ofr);             // set target star smags
+            ofr_transform_to_stf(mbds, ofr);  // append transform to stf
+            n += g_list_length(ofr->sol);
+            stf_fprint(repfp, ofr->stf, 0, 0);
 		}
+
+        fflush(repfp);
 		return n;
-		break;
-	default:
-		err_printf("Bad report action\n");
-		return -1;
-	}
-	return 0;
+
+    } else {
+        if((action & REP_STAR_MASK) == REP_STAR_TGT) {
+            if (!(action & REP_ACTION_APPEND)) {
+                switch (action & REP_FMT_MASK) {
+                case REP_FMT_AAVSO:
+                    REP_FMT_AAVSO_header(repfp);
+                    break;
+                }
+            }
+
+            int nstars;
+            GList *sl;
+
+            for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) { // for each selected frame
+                struct star_obs *comp = NULL;
+                struct o_frame *ofr = O_FRAME(sl->data);
+
+                GList *fl;
+
+// implement multiple target/check stars using a list of check stars identified in comments
+                int ncheck = 0;
+                GList *check_stars = NULL;
+                for (fl = ofr->sol; fl != NULL; fl = g_list_next(fl)) { // make list of check stars
+                    struct star_obs *sob = STAR_OBS(fl->data);
+                    if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR) {
+                        char *s = sob->cats->comments;
+                        if (s) {
+                            while ((s = strstr(s, "check")) != NULL) { // look for multiple check stars in comment
+                                struct check_star *cs = malloc(sizeof(struct check_star));
+
+                                s += 5;
+                                char *e = s;
+                                while ((*e != ' ') && (*e != '\t') && (*e != '\0')) e++;
+                                if (e - s > 0)
+                                    cs->id = strndup(s, e - s);
+                                else
+                                    cs->id = NULL;
+
+                                cs->sob = sob;
+                                check_stars = g_list_prepend(check_stars, cs);
+                                ncheck ++;
+
+                                s = e;
+                            }
+                        }
+                    }
+                }
+
+                if (ncheck != 1)
+                    printf("%d check stars\n", ncheck);
+
+                int nstd = 0;
+                for (fl = ofr->sol; fl != NULL; fl = g_list_next(fl)) { // count std stars
+                    struct star_obs *sob = STAR_OBS(fl->data);
+                    if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+                        comp = sob;
+                        nstd ++;
+                    }
+                }
+                if (nstd == 0)
+                    printf("no std stars\n");
+
+                nstars = 0; // could be different for different frames?
+                for (fl = ofr->sol; fl != NULL; fl = g_list_next(fl)) { // report target stars
+                    struct star_obs *sob = STAR_OBS(fl->data);
+                    if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR || CATS_TYPE(sob->cats) == CATS_TYPE_APSTD)
+                        nstars += ! rep_star(repfp, sob, action & REP_FMT_MASK, nstd == 1 ? comp : NULL, check_stars);
+                }
+
+                if (check_stars) { // free check_stars
+                    for (fl = check_stars; fl != NULL; fl = g_list_next(fl)) {
+                        struct check_star *cs = fl->data;
+                        if (cs->id) free(cs->id);
+                    }
+                    g_list_free(check_stars);
+                }
+            }
+
+            fflush(repfp);
+            return nstars;
+        }
+
+        err_printf("Bad report action\n");
+        return -1;
+    }
 }
 
 
@@ -262,20 +323,22 @@ char * mbds_short_result(struct o_frame *ofr)
 	GList *sl;
 	char buf[1024];
 	char * rep = NULL;
-	int i, n, flags;
+    int n, flags;
 
 	d3_printf("qr\n");
 	g_return_val_if_fail(ofr != NULL, NULL);
 
 	ofr_to_stf_cats(ofr);
 	for (sl = ofr->sol; sl != NULL; sl = g_list_next(sl)) {
-        if ( CATS_TYPE(STAR_OBS(sl->data)->cats) != CATS_TYPE_APSTAR ) continue;
+        struct star_obs *sob = STAR_OBS(sl->data);
+        if ( CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR ) continue;
+
 		n = snprintf(buf, 1023, "%s: %s=%.3f/%.3f  %d outliers, fit me1=%.2g ",
-			     STAR_OBS(sl->data)->cats->name, ofr->trans->bname,
-			     STAR_OBS(sl->data)->mag, STAR_OBS(sl->data)->err,
+                 sob->cats->name, ofr->trans->bname,
+                 sob->mag, sob->err,
 			     ofr->outliers, ofr->me1);
-		i = 0;
-        flags = STAR_OBS(sl->data)->flags & CPHOT_MASK & ~CPHOT_NO_COLOR;
+
+        flags = sob->flags & CPHOT_MASK & ~CPHOT_NO_COLOR;
 		if (flags) {
 			n += snprintf(buf + n, 1023-n, "[ ");
             n += cat_flags_to_string(flags, buf + n, 1023 - n);
@@ -284,7 +347,7 @@ char * mbds_short_result(struct o_frame *ofr)
 		rep = strdup(buf);
 		d3_printf("%s\n", rep);
 
-		break;
+        break;
 	}
 	return rep;
 }

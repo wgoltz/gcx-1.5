@@ -34,12 +34,17 @@
 
 void INDI_connect_cb(struct indi_prop_t *iprop, struct INDI_common_t *device)
 {
-	device->is_connected = (iprop->state == INDI_STATE_IDLE || iprop->state == INDI_STATE_OK) && indi_prop_get_switch(iprop, "CONNECT");
-	d4_printf("%s connected state: %d\n", device->name, device->is_connected);
-	device->check_state(device);
+    device->is_connected = 0;
+    if (iprop->state == INDI_STATE_IDLE || iprop->state == INDI_STATE_OK) {
+        device->is_connected = indi_prop_get_switch(iprop, "CONNECT");
+
+        if (device->is_connected)
+            device->check_state(device);
+    }
 }
 
-void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *func, void *data)
+// add a callback to device callback list
+void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *func, void *data, char *msg)
 {
 	GSList *gsl;
 	struct INDI_callback_t *cb;
@@ -55,12 +60,15 @@ void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *fu
 			return;
 		}
 	}
-        cb = g_new0(struct INDI_callback_t, 1);
+
+    cb = g_new0(struct INDI_callback_t, 1);
 	cb->func = func;
 	cb->data = data;
 	cb->type = type;
 	cb->device = device;
+    cb->msg = (msg) ? strdup(msg) : NULL;
 	device->callbacks = g_slist_append(device->callbacks, cb);
+printf("INDI_set_callback: \"%s\" callback \"%s\" type %d\n", device->name, (cb->msg) ? cb->msg : "", type); fflush(NULL);
 }
 
 void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void *func)
@@ -76,6 +84,8 @@ void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void 
 		cb = gsl->data;
 		if (cb->type == type && cb->func == func) {
 			device->callbacks = g_slist_remove(device->callbacks, cb);
+            if (cb->msg)
+                free(cb->msg);
 			g_free(cb);
 			return;
 		}
@@ -96,9 +106,9 @@ int INDI_update_elem_if_changed(struct indi_prop_t *iprop, const char *elemname,
 void INDI_try_dev_connect(struct indi_prop_t *iprop, struct INDI_common_t *device, const char *portname)
 {
 	if (strcmp(iprop->name, "CONNECTION") == 0) {
-		d4_printf("Found CONNECTION for %s: %s\n", device->name, iprop->idev->name);
-		indi_send(iprop, indi_prop_set_switch(iprop, "CONNECT", TRUE));
-		indi_prop_add_cb(iprop, (IndiPropCB)INDI_connect_cb, device);
+printf("Found CONNECTION for %s: %s\n", device->name, iprop->idev->name); fflush(NULL);
+        indi_send(iprop, indi_prop_set_switch(iprop, "CONNECT", TRUE));
+        indi_prop_add_cb(iprop, (IndiPropCB)INDI_connect_cb, device);
 	}
 	else if (strcmp(iprop->name, "DEVICE_PORT") == 0 && portname && strlen(portname)) {
 		indi_send(iprop, indi_prop_set_string(iprop, "PORT", portname));
@@ -109,7 +119,7 @@ void INDI_try_dev_connect(struct indi_prop_t *iprop, struct INDI_common_t *devic
 
 struct indi_t *INDI_get_indi(void *window)
 {
-	struct indi_t *indi;
+    struct indi_t *indi;
 	indi = (struct indi_t *)g_object_get_data(G_OBJECT(window), "indi");
 	if (! indi) {
 		d4_printf("Trying indi connection\n");
@@ -134,11 +144,18 @@ void INDI_common_init(struct INDI_common_t *device, const char *name, void *chec
 static int INDI_callback(struct INDI_callback_t *cb)
 {
 	int (*func)(void *data) = cb->func;
-	if (func(cb->data) == FALSE) {
-		// If fucntion returns false, remove self from callback list
-        cb->device->callbacks = g_slist_remove(cb->device->callbacks, cb);
-		g_free(cb);
-	}
+
+    if (cb->func && cb->device) {
+        int result = func(cb->data);
+        if (result == FALSE) {
+            // If fucntion returns false, remove self from callback list
+            cb->device->callbacks = g_slist_remove(cb->device->callbacks, cb);
+printf("INDI_callback: \"%s\" removed callback \"%s\"\n", cb->device->name, (cb->msg != NULL) ? cb->msg : ""); fflush(NULL);
+            if (cb->msg)
+                free(cb->msg);
+            g_free(cb);
+        }
+    }
 	return FALSE;
 }
 
@@ -146,11 +163,18 @@ void INDI_exec_callbacks(struct INDI_common_t *device, int type)
 {
 	GSList *gsl;
 	struct INDI_callback_t *cb;
-
+//printf("INDI_exec_callbacks: type %d ", type);
+//if (! device->callbacks) printf("device->callbacks == NULL");
+int i = 0;
 	for(gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
+i++;
 		cb = gsl->data;
-		if (cb->type == type)
-			g_idle_add((GSourceFunc)INDI_callback, cb);
+
+        if (cb->type == type) {
+            g_idle_add((GSourceFunc)INDI_callback, cb);
+        }
+//printf("%d %s ", i, (cb->type == type) ? "found" : "not found");
 	}
+//printf("\n"); fflush(NULL);
 }
 

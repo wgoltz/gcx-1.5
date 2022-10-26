@@ -283,6 +283,24 @@ GtkWidget* create_pstar (void)
   gtk_widget_show (pstar_comments_entry);
   gtk_box_pack_start (GTK_BOX (pstar_bottom_vbox), pstar_comments_entry, FALSE, FALSE, 0);
 
+  //**************
+  GtkWidget *pstar_cat_mag_label = gtk_label_new ("Catalog magnitudes");
+  g_object_ref (pstar_cat_mag_label);
+  g_object_set_data_full (G_OBJECT (pstar), "pstar_cat_mag_label", pstar_cat_mag_label, (GDestroyNotify) g_object_unref);
+  gtk_widget_show (pstar_cat_mag_label);
+  gtk_box_pack_start (GTK_BOX (pstar_bottom_vbox), pstar_cat_mag_label, FALSE, FALSE, 0);
+  gtk_label_set_justify (GTK_LABEL (pstar_cat_mag_label), GTK_JUSTIFY_LEFT);
+  gtk_misc_set_alignment (GTK_MISC (pstar_cat_mag_label), 0, 0.5);
+  gtk_misc_set_padding (GTK_MISC (pstar_cat_mag_label), 3, 0);
+
+  GtkWidget *pstar_cat_mag_entry = gtk_entry_new ();
+  g_object_ref (pstar_cat_mag_entry);
+  g_object_set_data_full (G_OBJECT (pstar), "pstar_cat_mag_entry", pstar_cat_mag_entry, (GDestroyNotify) g_object_unref);
+  gtk_widget_show (pstar_cat_mag_entry);
+  gtk_box_pack_start (GTK_BOX (pstar_bottom_vbox), pstar_cat_mag_entry, FALSE, FALSE, 0);
+  gtk_widget_set_tooltip_text (pstar_cat_mag_entry, "Catalog magnitudes list, formated as <band>=<mag>/<error> ...");
+  //**************
+
   GtkWidget *pstar_std_mag_label = gtk_label_new ("Standard magnitudes");
   g_object_ref (pstar_std_mag_label);
   g_object_set_data_full (G_OBJECT (pstar), "pstar_std_mag_label", pstar_std_mag_label, (GDestroyNotify) g_object_unref);
@@ -369,88 +387,21 @@ GtkWidget* create_pstar (void)
 
 GtkWidget* create_camera_control (void)
 {
-  GtkWidget *camera_control;
-  GtkWidget *vbox3;
-  GtkWidget *notebook1;
-  GtkWidget *vbox4;
-  GtkWidget *table2;
-  GtkWidget *img_bin_combo;
-  GtkObject *img_exp_spin_adj;
-  GtkWidget *img_exp_spin;
-  GtkObject *img_width_spin_adj;
-  GtkWidget *img_width_spin;
-  GtkObject *img_height_spin_adj;
-  GtkWidget *img_height_spin;
-  GtkObject *img_x_skip_spin_adj;
-  GtkWidget *img_x_skip_spin;
-  GtkObject *img_y_skip_spin_adj;
-  GtkWidget *img_y_skip_spin;
-  GtkWidget *label15;
-  GtkWidget *label16;
-  GtkWidget *label17;
-  GtkWidget *label18;
-  GtkWidget *label19;
-  GtkWidget *img_dark_checkb;
-
-  GtkWidget *label14;
-  GtkWidget *hbox2;
-  GtkWidget *img_get_img_button;
-  GtkWidget *img_multiple_combo;
-  GtkWidget *img_focus_button;
-  GtkWidget *label9;
-  GtkWidget *vbox5;
-  GtkWidget *table3;
-  GtkWidget *obs_object_entry;
-  GtkWidget *obs_ra_entry;
-  GtkWidget *obs_dec_entry;
-  GtkWidget *obs_epoch_entry;
-  GtkWidget *obs_filter_combo;
-  GtkWidget *obs_info_button;
-  GtkWidget *label20;
-  GtkWidget *label21;
-  GtkWidget *label22;
-  GtkWidget *label23;
-  GtkWidget *label24;
-  GtkWidget *obj_comment_label;
-  GtkWidget *hbuttonbox3;
-  GtkWidget *scope_goto_button;
-  GtkWidget *scope_abort_button;
-  GtkWidget *scope_auto_button;
-  GtkWidget *label10;
-  GtkWidget *vbox6;
-  GtkWidget *obs_list_scrolledwin;
-  GtkWidget *viewport1;
-  GtkWidget    *obs_list_view;
-  GtkListStore *obs_list_store;
-  GtkWidget *table4;
-  GtkWidget *obs_list_fname_combo;
-  GtkWidget *obs_list_fname;
-  GtkWidget *obs_list_file_button;
-  GtkWidget *hbox13;
-  GtkWidget *label78;
-  GtkWidget *hbox1;
-  GtkWidget *obs_list_run_button;
-  GtkWidget *obs_list_step_button;
-  GtkWidget *obs_list_abort_button;
-  GtkWidget *obs_list_err_stop_checkb;
-  GtkWidget *label11;
-
-
   GtkWidget *label27;
   GtkWidget *file_combo;
   GtkWidget *file_entry;
   GtkWidget *file_auto_name_checkb;
-  GtkWidget *file_match_wcs_checkb;
-  GtkWidget *file_compress_checkb;
+//  GtkWidget *file_match_wcs_checkb;
+  GtkWidget *exp_compress_checkb;
   GtkWidget *table6;
   GtkWidget *label28;
   GtkWidget *label29;
   GtkWidget *label30;
   GtkObject *file_seqn_spin_adj;
   GtkWidget *file_seqn_spin;
-  GtkObject *img_number_spin_adj;
-  GtkWidget *img_number_spin;
-  GtkWidget *current_frame_entry;
+  GtkObject *exp_number_spin_adj;
+  GtkWidget *exp_number_spin;
+  GtkWidget *exp_frame_entry;
   GtkWidget *label12;
   GtkWidget *vbox8;
   GtkWidget *table7;
@@ -488,14 +439,14 @@ GtkWidget* create_camera_control (void)
   GtkWidget *label86;
   GtkWidget *statuslabel;
 
-  GtkWidget *label;
   GtkWidget *adjustment;
-  GtkWidget *item;
   GtkWidget *entry;
-  GtkWidget *hbox, *vbox;
+  GtkWidget *hbox;
+  GtkWidget *vbox;
   GtkWidget *table;
+  GtkWidget *label;
 
-  camera_control = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  GtkWidget *camera_control = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_object_set_data (G_OBJECT (camera_control), "camera_control", camera_control);
   gtk_window_set_title (GTK_WINDOW (camera_control), "Camera and Telescope Control");
 
@@ -505,7 +456,7 @@ GtkWidget* create_camera_control (void)
   GtkWidget *notebook = gtk_notebook_new ();
   gtk_box_pack_start (GTK_BOX (vbox), notebook, TRUE, TRUE, 0);
 
-  item = gtk_label_new ("");
+  GtkWidget *item = gtk_label_new ("");
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "statuslabel", item, (GDestroyNotify) g_object_unref);
   gtk_misc_set_alignment (GTK_MISC (item), 0, 0.5);
@@ -831,21 +782,21 @@ GtkWidget* create_camera_control (void)
   gtk_widget_set_tooltip_text (item, "Browse");
   gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, TRUE, 0);
 
-  item = gtk_check_button_new_with_label ("Dark");
-  g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_dark_checkb", item, (GDestroyNotify) g_object_unref);
-  gtk_widget_set_tooltip_text (item, "Take dark frames");
-  gtk_box_pack_start(GTK_BOX (vbox), item, FALSE, FALSE, 0);
+//  item = gtk_check_button_new_with_label ("Dark");
+//  g_object_ref (item);
+//  g_object_set_data_full (G_OBJECT (camera_control), "img_dark_checkb", item, (GDestroyNotify) g_object_unref);
+//  gtk_widget_set_tooltip_text (item, "Take dark frames");
+//  gtk_box_pack_start(GTK_BOX (vbox), item, FALSE, FALSE, 0);
 
-  item = gtk_check_button_new_with_label ("Match frame wcs before saving");
-  g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "file_match_wcs_checkb", item, (GDestroyNotify) g_object_unref);
-  gtk_box_pack_start (GTK_BOX (vbox), item, FALSE, FALSE, 0);
-  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (item), TRUE);
+//  item = gtk_check_button_new_with_label ("Match frame wcs before saving");
+//  g_object_ref (item);
+//  g_object_set_data_full (G_OBJECT (camera_control), "file_match_wcs_checkb", item, (GDestroyNotify) g_object_unref);
+//  gtk_box_pack_start (GTK_BOX (vbox), item, FALSE, FALSE, 0);
+//  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (item), TRUE);
 
   item = gtk_check_button_new_with_label ("Compress fits files");
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "file_compress_checkb", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_compress_checkb", item, (GDestroyNotify) g_object_unref);
   gtk_box_pack_start (GTK_BOX (vbox), item, FALSE, FALSE, 0);
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (item), TRUE);
 
@@ -861,7 +812,7 @@ GtkWidget* create_camera_control (void)
   adjustment = gtk_adjustment_new (1, 0, 3600, 0.00001, 1, 0);
   item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 5);
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_exp_spin", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_spin", item, (GDestroyNotify) g_object_unref);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE);
   gtk_spin_button_set_snap_to_ticks (GTK_SPIN_BUTTON (item), TRUE);
   TABLE_ATTACH(table, item, 0, 0, 1, 1);
@@ -874,7 +825,7 @@ GtkWidget* create_camera_control (void)
   adjustment = gtk_adjustment_new (10, 1, 1000, 1, 10, 0);
   item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_number_spin", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_number_spin", item, (GDestroyNotify) g_object_unref);
   TABLE_ATTACH(table, item, 1, 0, 1, 1);
 
   label = gtk_label_new ("To read");
@@ -884,7 +835,7 @@ GtkWidget* create_camera_control (void)
 
   item = gtk_entry_new ();
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "current_frame_entry", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_frame_entry", item, (GDestroyNotify) g_object_unref);
   gtk_widget_set_size_request (item, 50, -1);
   gtk_editable_set_editable (GTK_EDITABLE (item), FALSE);
   TABLE_ATTACH(table, item, 2, 0, 1, 1);
@@ -894,16 +845,16 @@ GtkWidget* create_camera_control (void)
 
   item = gtk_combo_box_text_new();
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_multiple_combo", item, (GDestroyNotify) g_object_unref);
-  gtk_combo_box_append_text (GTK_COMBO_BOX_TEXT (item), "Get");
-  gtk_combo_box_append_text (GTK_COMBO_BOX_TEXT (item), "Get and Save");
-  gtk_combo_box_append_text (GTK_COMBO_BOX_TEXT (item), "Get Stream");
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_mode_combo", item, (GDestroyNotify) g_object_unref);
+  gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (item), "Preview");
+  gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (item), "Save");
+  gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (item), "Stream");
   gtk_combo_box_set_active (GTK_COMBO_BOX_TEXT (item), 0);
   gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
   item = gtk_toggle_button_new_with_label("Run");
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_run_button", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_run_button", item, (GDestroyNotify) g_object_unref);
   gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
 
@@ -1318,16 +1269,17 @@ GtkWidget* create_wcs_edit (void)
   gtk_box_pack_start (GTK_BOX (wcs_wcsset_vbox), wcs_initial_rb, FALSE, FALSE, 0);
   gtk_widget_set_sensitive (wcs_initial_rb, FALSE);
 
-  GtkWidget *wcs_fitted_rb = gtk_radio_button_new_with_mnemonic (_1_group, "_Fitted");
-  guint wcs_fitted_rb_key = gtk_label_get_mnemonic_keyval (GTK_LABEL(GTK_BIN(wcs_fitted_rb)->child));
+// not used
+//  GtkWidget *wcs_fitted_rb = gtk_radio_button_new_with_mnemonic (_1_group, "_Fitted");
+//  guint wcs_fitted_rb_key = gtk_label_get_mnemonic_keyval (GTK_LABEL(GTK_BIN(wcs_fitted_rb)->child));
 
-  gtk_widget_add_accelerator (wcs_fitted_rb, "clicked", accel_group, wcs_fitted_rb_key, GDK_MOD1_MASK, (GtkAccelFlags) 0);
-  _1_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (wcs_fitted_rb));
-  g_object_ref (wcs_fitted_rb);
-  g_object_set_data_full (G_OBJECT (wcs_edit), "wcs_fitted_rb", wcs_fitted_rb, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (wcs_fitted_rb);
-  gtk_box_pack_start (GTK_BOX (wcs_wcsset_vbox), wcs_fitted_rb, FALSE, FALSE, 0);
-  gtk_widget_set_sensitive (wcs_fitted_rb, FALSE);
+//  gtk_widget_add_accelerator (wcs_fitted_rb, "clicked", accel_group, wcs_fitted_rb_key, GDK_MOD1_MASK, (GtkAccelFlags) 0);
+//  _1_group = gtk_radio_button_get_group (GTK_RADIO_BUTTON (wcs_fitted_rb));
+//  g_object_ref (wcs_fitted_rb);
+//  g_object_set_data_full (G_OBJECT (wcs_edit), "wcs_fitted_rb", wcs_fitted_rb, (GDestroyNotify) g_object_unref);
+//  gtk_widget_show (wcs_fitted_rb);
+//  gtk_box_pack_start (GTK_BOX (wcs_wcsset_vbox), wcs_fitted_rb, FALSE, FALSE, 0);
+//  gtk_widget_set_sensitive (wcs_fitted_rb, FALSE);
 
   GtkWidget *wcs_valid_rb = gtk_radio_button_new_with_mnemonic (_1_group, "_Validated");
   guint wcs_valid_rb_key = gtk_label_get_mnemonic_keyval (GTK_LABEL(GTK_BIN(wcs_valid_rb)->child));
@@ -1509,9 +1461,9 @@ GtkWidget* create_show_text (void)
   return show_text;
 }
 
-GtkWidget* create_create_recipe (void)
+GtkWidget* create_recipe_dialog (void)
 {
-  GtkWidget *create_recipe;
+  GtkWidget *recipe_dialog;
   GtkWidget *vbox16;
   GtkWidget *table13;
   GtkWidget *var_checkb;
@@ -1540,29 +1492,29 @@ GtkWidget* create_create_recipe (void)
   GtkWidget *mkrcp_ok_button;
   GtkWidget *mkrcp_close_button;
 
-  create_recipe = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  g_object_set_data (G_OBJECT (create_recipe), "create_recipe", create_recipe);
-  gtk_window_set_title (GTK_WINDOW (create_recipe), "Create Recipe");
-  gtk_window_set_position (GTK_WINDOW (create_recipe), GTK_WIN_POS_CENTER);
+  recipe_dialog = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+//  g_object_set_data (G_OBJECT (recipe_dialog), "recipe_dialog", recipe_dialog);
+  gtk_window_set_title (GTK_WINDOW (recipe_dialog), "Create Recipe");
+  gtk_window_set_position (GTK_WINDOW (recipe_dialog), GTK_WIN_POS_CENTER);
 
   vbox16 = gtk_vbox_new (FALSE, 0);
   g_object_ref (vbox16);
-  g_object_set_data_full (G_OBJECT (create_recipe), "vbox16", vbox16,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "vbox16", vbox16,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (vbox16);
-  gtk_container_add (GTK_CONTAINER (create_recipe), vbox16);
+  gtk_container_add (GTK_CONTAINER (recipe_dialog), vbox16);
   gtk_container_set_border_width (GTK_CONTAINER (vbox16), 3);
 
   table13 = gtk_table_new (15, 2, FALSE);
   g_object_ref (table13);
-  g_object_set_data_full (G_OBJECT (create_recipe), "table13", table13,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "table13", table13,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (table13);
   gtk_box_pack_start (GTK_BOX (vbox16), table13, FALSE, TRUE, 0);
 
   var_checkb = gtk_check_button_new_with_label ("Target stars");
   g_object_ref (var_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "var_checkb", var_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "var_checkb", var_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (var_checkb);
   gtk_table_attach (GTK_TABLE (table13), var_checkb, 1, 2, 10, 11,
@@ -1573,7 +1525,7 @@ GtkWidget* create_create_recipe (void)
 
   field_checkb = gtk_check_button_new_with_label ("Field stars");
   g_object_ref (field_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "field_checkb", field_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "field_checkb", field_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (field_checkb);
   gtk_table_attach (GTK_TABLE (table13), field_checkb, 1, 2, 12, 13,
@@ -1583,7 +1535,7 @@ GtkWidget* create_create_recipe (void)
 
   user_checkb = gtk_check_button_new_with_label ("User stars");
   g_object_ref (user_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "user_checkb", user_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "user_checkb", user_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (user_checkb);
   gtk_table_attach (GTK_TABLE (table13), user_checkb, 1, 2, 13, 14,
@@ -1593,7 +1545,7 @@ GtkWidget* create_create_recipe (void)
 
   det_checkb = gtk_check_button_new_with_label ("Detected stars");
   g_object_ref (det_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "det_checkb", det_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "det_checkb", det_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (det_checkb);
   gtk_table_attach (GTK_TABLE (table13), det_checkb, 1, 2, 14, 15,
@@ -1603,7 +1555,7 @@ GtkWidget* create_create_recipe (void)
 
   label49 = gtk_label_new ("File name:");
   g_object_ref (label49);
-  g_object_set_data_full (G_OBJECT (create_recipe), "label49", label49,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "label49", label49,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (label49);
   gtk_table_attach (GTK_TABLE (table13), label49, 0, 1, 0, 1,
@@ -1613,7 +1565,7 @@ GtkWidget* create_create_recipe (void)
 
   convuser_checkb = gtk_check_button_new_with_label ("Convert user stars to target");
   g_object_ref (convuser_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "convuser_checkb", convuser_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "convuser_checkb", convuser_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (convuser_checkb);
   gtk_table_attach (GTK_TABLE (table13), convuser_checkb, 0, 1, 13, 14,
@@ -1623,7 +1575,7 @@ GtkWidget* create_create_recipe (void)
 
   convdet_checkb = gtk_check_button_new_with_label ("Convert detected stars to target");
   g_object_ref (convdet_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "convdet_checkb", convdet_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "convdet_checkb", convdet_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (convdet_checkb);
   gtk_table_attach (GTK_TABLE (table13), convdet_checkb, 0, 1, 14, 15,
@@ -1633,7 +1585,7 @@ GtkWidget* create_create_recipe (void)
 
   convfield_checkb = gtk_check_button_new_with_label ("Convert field stars to target");
   g_object_ref (convfield_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "convfield_checkb", convfield_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "convfield_checkb", convfield_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (convfield_checkb);
   gtk_table_attach (GTK_TABLE (table13), convfield_checkb, 0, 1, 12, 13,
@@ -1643,7 +1595,7 @@ GtkWidget* create_create_recipe (void)
 
   std_checkb = gtk_check_button_new_with_label ("Standard stars");
   g_object_ref (std_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "std_checkb", std_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "std_checkb", std_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (std_checkb);
   gtk_table_attach (GTK_TABLE (table13), std_checkb, 1, 2, 9, 10,
@@ -1654,7 +1606,7 @@ GtkWidget* create_create_recipe (void)
 
   convcat_checkb = gtk_check_button_new_with_label ("Convert catalog objects to std");
   g_object_ref (convcat_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "convcat_checkb", convcat_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "convcat_checkb", convcat_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (convcat_checkb);
   gtk_table_attach (GTK_TABLE (table13), convcat_checkb, 0, 1, 11, 12,
@@ -1664,7 +1616,7 @@ GtkWidget* create_create_recipe (void)
 
   catalog_checkb = gtk_check_button_new_with_label ("Catalog objects");
   g_object_ref (catalog_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "catalog_checkb", catalog_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "catalog_checkb", catalog_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (catalog_checkb);
   gtk_table_attach (GTK_TABLE (table13), catalog_checkb, 1, 2, 11, 12,
@@ -1674,7 +1626,7 @@ GtkWidget* create_create_recipe (void)
 
   label97 = gtk_label_new ("Target object:");
   g_object_ref (label97);
-  g_object_set_data_full (G_OBJECT (create_recipe), "label97", label97,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "label97", label97,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (label97);
   gtk_table_attach (GTK_TABLE (table13), label97, 0, 1, 2, 3,
@@ -1684,7 +1636,7 @@ GtkWidget* create_create_recipe (void)
 
   label98 = gtk_label_new ("Sequence source:");
   g_object_ref (label98);
-  g_object_set_data_full (G_OBJECT (create_recipe), "label98", label98,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "label98", label98,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (label98);
   gtk_table_attach (GTK_TABLE (table13), label98, 0, 1, 4, 5,
@@ -1694,7 +1646,7 @@ GtkWidget* create_create_recipe (void)
 
   label50 = gtk_label_new ("Comments:");
   g_object_ref (label50);
-  g_object_set_data_full (G_OBJECT (create_recipe), "label50", label50,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "label50", label50,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (label50);
   gtk_table_attach (GTK_TABLE (table13), label50, 0, 1, 6, 7,
@@ -1704,7 +1656,7 @@ GtkWidget* create_create_recipe (void)
 
   tgt_entry = gtk_entry_new ();
   g_object_ref (tgt_entry);
-  g_object_set_data_full (G_OBJECT (create_recipe), "tgt_entry", tgt_entry,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "tgt_entry", tgt_entry,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (tgt_entry);
   gtk_table_attach (GTK_TABLE (table13), tgt_entry, 0, 2, 3, 4,
@@ -1714,7 +1666,7 @@ GtkWidget* create_create_recipe (void)
 
   seq_entry = gtk_entry_new ();
   g_object_ref (seq_entry);
-  g_object_set_data_full (G_OBJECT (create_recipe), "seq_entry", seq_entry,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "seq_entry", seq_entry,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (seq_entry);
   gtk_table_attach (GTK_TABLE (table13), seq_entry, 0, 2, 5, 6,
@@ -1724,7 +1676,7 @@ GtkWidget* create_create_recipe (void)
 
   comments_entry = gtk_entry_new ();
   g_object_ref (comments_entry);
-  g_object_set_data_full (G_OBJECT (create_recipe), "comments_entry", comments_entry,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "comments_entry", comments_entry,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (comments_entry);
   gtk_table_attach (GTK_TABLE (table13), comments_entry, 0, 2, 7, 8,
@@ -1734,7 +1686,7 @@ GtkWidget* create_create_recipe (void)
 
   hbox25 = gtk_hbox_new (FALSE, 0);
   g_object_ref (hbox25);
-  g_object_set_data_full (G_OBJECT (create_recipe), "hbox25", hbox25,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "hbox25", hbox25,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (hbox25);
   gtk_table_attach (GTK_TABLE (table13), hbox25, 0, 2, 1, 2,
@@ -1743,7 +1695,7 @@ GtkWidget* create_create_recipe (void)
 
   recipe_file_entry = gtk_entry_new ();
   g_object_ref (recipe_file_entry);
-  g_object_set_data_full (G_OBJECT (create_recipe), "recipe_file_entry", recipe_file_entry,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "recipe_file_entry", recipe_file_entry,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (recipe_file_entry);
   gtk_box_pack_start (GTK_BOX (hbox25), recipe_file_entry, TRUE, TRUE, 0);
@@ -1751,7 +1703,7 @@ GtkWidget* create_create_recipe (void)
 
   browse_file_button = gtk_button_new_with_label (" ... ");
   g_object_ref (browse_file_button);
-  g_object_set_data_full (G_OBJECT (create_recipe), "browse_file_button", browse_file_button,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "browse_file_button", browse_file_button,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (browse_file_button);
   gtk_box_pack_start (GTK_BOX (hbox25), browse_file_button, FALSE, FALSE, 0);
@@ -1759,7 +1711,7 @@ GtkWidget* create_create_recipe (void)
 
   off_frame_checkb = gtk_check_button_new_with_label ("Include off-frame stars");
   g_object_ref (off_frame_checkb);
-  g_object_set_data_full (G_OBJECT (create_recipe), "off_frame_checkb", off_frame_checkb,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "off_frame_checkb", off_frame_checkb,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (off_frame_checkb);
   gtk_table_attach (GTK_TABLE (table13), off_frame_checkb, 1, 2, 8, 9,
@@ -1770,21 +1722,21 @@ GtkWidget* create_create_recipe (void)
 
   hseparator3 = gtk_hseparator_new ();
   g_object_ref (hseparator3);
-  g_object_set_data_full (G_OBJECT (create_recipe), "hseparator3", hseparator3,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "hseparator3", hseparator3,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (hseparator3);
   gtk_box_pack_start (GTK_BOX (vbox16), hseparator3, TRUE, FALSE, 0);
 
   hbuttonbox9 = gtk_hbutton_box_new ();
   g_object_ref (hbuttonbox9);
-  g_object_set_data_full (G_OBJECT (create_recipe), "hbuttonbox9", hbuttonbox9,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "hbuttonbox9", hbuttonbox9,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (hbuttonbox9);
   gtk_box_pack_start (GTK_BOX (vbox16), hbuttonbox9, FALSE, FALSE, 0);
 
   mkrcp_ok_button = gtk_button_new_with_label ("OK");
   g_object_ref (mkrcp_ok_button);
-  g_object_set_data_full (G_OBJECT (create_recipe), "mkrcp_ok_button", mkrcp_ok_button,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "mkrcp_ok_button", mkrcp_ok_button,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (mkrcp_ok_button);
   gtk_container_add (GTK_CONTAINER (hbuttonbox9), mkrcp_ok_button);
@@ -1792,7 +1744,7 @@ GtkWidget* create_create_recipe (void)
 
   mkrcp_close_button = gtk_button_new_with_label ("Close");
   g_object_ref (mkrcp_close_button);
-  g_object_set_data_full (G_OBJECT (create_recipe), "mkrcp_close_button", mkrcp_close_button,
+  g_object_set_data_full (G_OBJECT (recipe_dialog), "mkrcp_close_button", mkrcp_close_button,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (mkrcp_close_button);
   gtk_container_add (GTK_CONTAINER (hbuttonbox9), mkrcp_close_button);
@@ -1801,9 +1753,9 @@ GtkWidget* create_create_recipe (void)
   gtk_widget_grab_focus (recipe_file_entry);
   gtk_widget_grab_default (mkrcp_ok_button);
 
-  return create_recipe;
+  return recipe_dialog;
 }
-
+/*
 //GtkWidget* create_yes_no (void)
 //{
 //  GtkWidget *yes_no = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -1863,6 +1815,7 @@ GtkWidget* create_create_recipe (void)
 //  gtk_widget_grab_default (yes_button);
 //  return yes_no;
 //}
+*/
 
 GtkWidget* create_yes_no (void)
 {
@@ -2348,10 +2301,21 @@ GtkWidget* create_image_processing (void)
  gtk_widget_set_tooltip_text (item, "Browse");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
- item = gtk_check_button_new_with_label ("Enable");
+// item = gtk_check_button_new_with_label ("Enable");
+// g_object_ref (item);
+// g_object_set_data_full (G_OBJECT (image_processing), "align_checkb", item, (GDestroyNotify) g_object_unref);
+// gtk_widget_set_tooltip_text (item, "Enable image alignment");
+// gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
+
+ item = gtk_combo_box_text_new();
  g_object_ref (item);
- g_object_set_data_full (G_OBJECT (image_processing), "align_checkb", item, (GDestroyNotify) g_object_unref);
- gtk_widget_set_tooltip_text (item, "Enable image alignment");
+// g_object_set_data_full (G_OBJECT (image_processing), "mul_combo", item, (GDestroyNotify) g_object_unref);
+ g_object_set_data_full (G_OBJECT (image_processing), "align_combo", item, (GDestroyNotify) g_object_unref);
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Disable");
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Match Stars");
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "WCS");
+ gtk_combo_box_set_active(GTK_COMBO_BOX(item), 0);
+ gtk_widget_set_tooltip_text (item, "Align frame by matching stars or validated WCS");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
 // ****************** align options
@@ -2432,7 +2396,7 @@ GtkWidget* create_image_processing (void)
 
  TABLE_ATTACH(stack_table, item, 0, 1, 1, 1);
 
- adjustment = gtk_adjustment_new (10, 0.5, 10, 0.25, 10, 0);
+ adjustment = gtk_adjustment_new (10, 0.1, 10, 0.1, 10, 0);
  item = gtk_spin_button_new (adjustment, 1, 1);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "stack_sigmas_spin", item, (GDestroyNotify) g_object_unref);
@@ -3769,11 +3733,11 @@ GtkWidget* create_guide_window (void)
   gtk_widget_set_size_request (guide_exp_combo_entry, 64, -1);
   gtk_entry_set_text (GTK_ENTRY (guide_exp_combo_entry), "2");
 
-  GtkWidget *guide_options = gtk_button_new_with_label ("Options");
-  g_object_ref (guide_options);
-  g_object_set_data_full (G_OBJECT (guide_window), "guide_options", guide_options, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (guide_options);
-  gtk_box_pack_start (GTK_BOX (vbox32), guide_options, FALSE, FALSE, 0);
+//  GtkWidget *guide_options = gtk_button_new_with_label ("Options");
+//  g_object_ref (guide_options);
+//  g_object_set_data_full (G_OBJECT (guide_window), "guide_options", guide_options, (GDestroyNotify) g_object_unref);
+//  gtk_widget_show (guide_options);
+//  gtk_box_pack_start (GTK_BOX (vbox32), guide_options, FALSE, FALSE, 0);
 
   GtkWidget *alignment1 = gtk_alignment_new (0.5, 0.5, 0, 0);
   g_object_ref (alignment1);

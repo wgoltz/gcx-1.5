@@ -43,7 +43,7 @@
 #include "params.h"
 #include "sourcesdraw.h"
 #include "obsdata.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "symbols.h"
 #include "wcs.h"
 #include "multiband.h"
@@ -446,7 +446,7 @@ int growth_curve(struct ccd_frame *fr, double x, double y, double grc[], int n)
 		center_star(fr, &s, P_DBL(AP_MAX_CENTER_ERR));
 	}
 	apdef.center = P_INT(AP_AUTO_CENTER);
-	ret = aperture_photometry(fr, &s, &apdef, NULL);
+    ret = aperture_photometry(fr, &s, &apdef, NULL); // measure without scintillation
 	if (ret)
 		return ret;
 	apdef.center = 0;
@@ -729,31 +729,28 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
     double sky = get_sky(fr, s->x, s->y, p, &sky_err, &sky_stats, NULL, NULL);
     double flux = get_star(fr, s->x, s->y, p, &star_stats, NULL);
 
-	s->aph.tflux = flux;
-	s->aph.star_all = star_stats.all;
-	s->aph.sky = sky;
-	s->aph.sky_err = sky_err;
-	s->aph.star_max = star_stats.max;
-
-	s->aph.star = flux - star_stats.all * sky;
-
-//    double phnsq = fabs(s->aph.tflux - p->exp.bias * s->aph.star_all) / p->exp.scale; // total photon shot noise
-
-    double phnsq = fabs(s->aph.tflux - p->exp.bias * s->aph.star_all) / p->exp.scale;
-//phnsq *= 36;
+    double phnsq = fabs(flux - p->exp.bias * star_stats.all) / p->exp.scale; // total photon shot noise
     double flnsq = sqr(p->exp.flat_noise) * star_stats.sumsq;
-    double rdnsq = sqr(fr->exp.rdnoise) * s->aph.star_all;
-//rdnsq *= 36; //try this
+    double rdnsq = sqr(p->exp.rdnoise) * star_stats.all;
+
+    double flux_err_sq = rdnsq + phnsq + flnsq;
+
     //    s->aph.flux_err = sqrt(sqr(p->exp.rdnoise) * s->aph.star_all + phnsq + flnsq); // ****
     // 	  s->aph.rd_noise = fr->exp.rdnoise * sqrt(s->aph.star_all);
 
-    s->aph.flux_err = sqrt(rdnsq + phnsq + flnsq);
+    s->aph.tflux = flux;
+    s->aph.star_all = star_stats.all;
+    s->aph.sky = sky;
+    s->aph.sky_err = sky_err;
+    s->aph.star_max = star_stats.max;
+    s->aph.star = flux - star_stats.all * sky;
+    s->aph.flux_err = sqrt(flux_err_sq);
     s->aph.pshot_noise = sqrt(phnsq);
     s->aph.rd_noise = sqrt(rdnsq);
+    s->aph.star_err = sqrt(flux_err_sq + sqr(star_stats.all * sky_err));
 
     d4_printf(">>>>peak: %.1f sat_limit: %.1f\n", s->aph.star_max, p->sat_limit);
 
-    s->aph.star_err = sqrt(sqr(s->aph.flux_err) + sqr(s->aph.star_all * s->aph.sky_err));
 
 //	d3_printf("get star: star_err %.5g flux_err %.5g sky_err %.5g\n", s->aph.star_err, s->aph.flux_err, s->aph.sky_err);
 
@@ -768,7 +765,7 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
 
 	s->aph.absmag = flux_to_absmag(s->aph.star);
     s->aph.magerr = 1.08 * fabs(s->aph.star_err / s->aph.star); // **************
-    s->aph.magerr = fabs(flux_to_absmag(s->aph.star + s->aph.star_err) - flux_to_absmag(s->aph.star));
+    s->aph.magerr = fabs(flux_to_absmag(s->aph.star + s->aph.star_err) - flux_to_absmag(s->aph.star)); // error without scintillation
 
 //	d3_printf("get star: absmag:%.4g magerr:%.4g\n", s->aph.absmag, s->aph.magerr);
 
@@ -1052,7 +1049,7 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
     int np = 0;
 	np += snprintf(preamble+np, 16384-np, "set key below\n");
 //
-    np += snprintf(preamble+np, 16384-np, "set term wxt size 800,500\n");
+    np += snprintf(preamble+np, 16384-np, "set term qt size 800,500\n");
     np += snprintf(preamble+np, 16384-np, "set mouse\n");
 //
 	np += snprintf(preamble+np, 16384-np, "set y2tics autofreq\n");
@@ -1060,6 +1057,7 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
 	np += snprintf(preamble+np, 16384-np, "set ylabel 'radial profile'\n");
 	np += snprintf(preamble+np, 16384-np, "set grid xtics\n");
     np += snprintf(preamble+np, 16384-np, "set linetype 1 lc rgb 'dark-red'\n");
+    np += snprintf(preamble+np, 16384-np, "set clip two\n");
     np += snprintf(preamble+np, 16384-np, "plot [0:%.1f] 0 notitle lt 0, 1 axes x1y2 notitle lt 0, ", 2 * ceil(r1) );
 
     int n =  2 * GROWTH_POINTS * r1 / growth_radius(GROWTH_POINTS) + 0.5;
@@ -1213,12 +1211,15 @@ void plot_psf(struct psf *psf)
 
 	pop = open_plot(&dfp, NULL);
 	if (pop >= 0) {
-//		fprintf(dfp, "set nosurface \n");
 //        fprintf(dfp, "set view 0,90,1,1 \n");
+//        fprintf(dfp, "set nosurface \n");
+
         fprintf(dfp, "set size square\n");
 
 		fprintf(dfp, "set nokey\n");
 //        fprintf(dfp, "set hidden3d\n");
+        fprintf(dfp, "set hidden3d\n");
+
 		fprintf(dfp, "set contour base\n");
 		fprintf(dfp, "set cntrparam levels 20\n");
         fprintf(dfp, "set yrange [] reverse\n");
@@ -1227,7 +1228,7 @@ void plot_psf(struct psf *psf)
 
         fprintf(dfp, "splot '-' with pm3d\n");
 
-		for(x = 0; x < psf->w; x++) {
+        for(x = 0; x < psf->w; x++) {
             for(y = 0; y < psf->h; y++) {
 				fprintf(dfp, "%.2f %.2f %.2f\n",
                     1.0 * (x - psf->cx - psf->dx),

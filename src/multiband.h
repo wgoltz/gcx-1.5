@@ -1,7 +1,9 @@
 #ifndef _MULTIBAND_H_
 #define _MULTIBAND_H_
 
+#include "catalogs.h"
 #include "sourcesdraw.h"
+#include "reduce.h"
 
 #define MAX_MBANDS 8		/* max number of bands we care about at one time */
 #define OUTLIER_THRESHOLD P_DBL(MB_OUTLIER_THRESHOLD)
@@ -11,7 +13,7 @@
 #define MIN_COLOR_VARIANCE P_DBL(MB_MIN_COLOR_VARIANCE) 
 #define AIRMASS_BRACKET_OVERSIZE P_DBL(MB_AIRMASS_BRACKET_OVSIZE)
 #define AIRMASS_BRACKET_MAX_OVERSIZE P_DBL(MB_AIRMASS_BRACKET_OVSIZE)
-#define LMAG_FROM_ZP P_DBL(MB_LMAG_FROM_ZP)	
+#define LMAG_FROM_ZP P_DBL(MB_LMAG_FROM_ZP)	// depends on S/N of sky
 
 /* an object being observed */
 struct o_star {
@@ -19,6 +21,7 @@ struct o_star {
 	double smag[MAX_MBANDS];/* standard magnitudes */
 	double smagerr[MAX_MBANDS]; /* errors */
 	unsigned int data;	/* user data */
+    int ref_count;
 };
 
 
@@ -81,6 +84,7 @@ struct o_frame {
 	double weight; 		/* actual weight of the zp */
 	double residual;	/* fit residual */
 	int as_zp_valid;	/* this is a valid (non-outlier) all-sky fitted frame */
+    gpointer mbds;  /* link to mband dataset */
 };
 
 
@@ -121,6 +125,8 @@ struct mband_dataset {
 #define O_STAR(x) ((struct o_star *)(x))
 #define STAR_OBS(x) ((struct star_obs *)(x))
 
+#define MAG_SOURCE_SMAGS 0
+#define MAG_SOURCE_CMAGS 1
 
 int mband_reduce(FILE *inf, FILE *outf);
 struct mband_dataset *mband_dataset_new(void);
@@ -128,17 +134,22 @@ void mband_dataset_release(struct mband_dataset *mbds);
 double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res);
 void mband_dataset_set_ubvri(struct mband_dataset *mbds);
 void mband_dataset_set_bands_by_string(struct mband_dataset *mbds, char *bspec);
+void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, struct o_frame *ofr, int mag_source);
+int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr, int mag_source);
 void ofr_transform_stars(struct o_frame *ofr, struct mband_dataset *mbds, int trans, int avg);
+void ofr_accum_avs(struct o_frame *ofr);
 int solve_star(struct star_obs *sob, struct mband_dataset *mbds, int trans, int avg);
 void mbds_transform_all(struct mband_dataset *mbds, GList *ofrs, int avg);
 int fit_all_sky_zp(struct mband_dataset *mbds, GList *ofrs);
-int mband_dataset_add_stf(struct mband_dataset *mbds, struct stf *stf);
+struct o_frame* mband_dataset_add_stf(struct mband_dataset *mbds, struct stf *stf);
 void ofr_to_stf_cats(struct o_frame *ofr);
 void ofr_transform_to_stf(struct mband_dataset *mbds, struct o_frame *ofr);
 void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data), void *data);
 void mbds_fit_all(GList *ofrs, int (* progress)(char *msg, void *data), void *data);
 void mbds_to_mband(gpointer dialog, struct mband_dataset *nmbds);
 void stf_to_mband(gpointer dialog, struct stf *stf, gpointer fr);
+struct mband_dataset *dialog_get_mbds(gpointer dialog);
+
 
 /* from mbandrep.c */
 #define REP_STAR_TGT 1
@@ -146,11 +157,15 @@ void stf_to_mband(gpointer dialog, struct stf *stf, gpointer fr);
 #define REP_STAR_ALL 3
 #define REP_FMT_AAVSO 0x100
 #define REP_FMT_DATASET 0x200
+#define REP_ACTION_APPEND 0x8000
 #define REP_STAR_MASK 0xff
-#define FMT_FMT_MASK 0xff00
+#define REP_FMT_MASK 0x7f00
 
 int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, int action);
 char * mbds_short_result(struct o_frame *ofr);
+
+void ofr_link_frame(struct o_frame *ofr, struct ccd_frame *fr);
+void ofr_unlink_frame(struct o_frame *ofr);
 
 /* from photometry.c */
 int stf_centering_stats(struct stf *stf, struct wcs *wcs, double *rms, double *max);
@@ -158,6 +173,5 @@ void ap_params_from_par(struct ap_params *ap);
 int center_star(struct ccd_frame *fr, struct star *st, double max_ce);
 
 struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gsl, struct ccd_frame *fr);
-
 
 #endif

@@ -8,6 +8,8 @@ extern "C" {
 #include <stdlib.h>
 #include "indi_list.h"
 
+
+
 typedef void (*IndiDevCB) (void *iprop, void *cb_data);
 typedef void (*IndiPropCB) (void *iprop, void *cb_data);
 enum INDI_PERMISSIONS {
@@ -96,6 +98,7 @@ struct indi_prop_t {
 	int rule;
 	int save;
 	indi_list *prop_update_cb;
+    indi_list *prop_wait_connect_cb;
 };
 
 struct indi_device_t {
@@ -123,6 +126,7 @@ struct indi_t {
 	void *config;
 };
 
+extern struct indi_device_t *indi_new_device(struct indi_t *indi, const char *devname);
 extern struct indi_device_t *indi_find_device(struct indi_t *indi, const char *dev);
 extern struct indi_prop_t *indi_find_prop(struct indi_device_t *idev, const char *name);
 extern struct indi_elem_t *indi_find_elem(struct indi_prop_t *iprop, const char *name);
@@ -142,7 +146,8 @@ extern struct indi_t *indi_init(const char *hostname, int port, const char *conf
 
 void indi_device_add_cb(struct indi_t *indi, const char *devname,
                      void (* cb_func)(void *iprop, void *cb_data),
-                     void *cb_data);
+                     void *cb_data, char *msg);
+void indi_device_remove_callbacks(struct indi_t *indi, const char *devname);
 
 extern int indi_prop_get_switch(struct indi_prop_t *iprop, const char *elemname);
 extern struct indi_elem_t *indi_prop_set_switch(struct indi_prop_t *iprop, const char *elemname, int state);

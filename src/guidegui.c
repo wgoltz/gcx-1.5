@@ -460,7 +460,7 @@ static int run_guider( GtkWidget *window)
 		return -1;
 	}
 	// Call expose_cb when image is ready
-	INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_cb, window);
+    INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_cb, window,  "expose_cb");
 
 	exposure = get_exposure(window);
 
@@ -514,12 +514,22 @@ static void calibrate_button_cb( GtkWidget *calibrate_button, gpointer window)
 	run_guider(window);
 }
 
+/* move to indi settings menu
 static void options_button_cb( GtkWidget *options_button, gpointer window)
 {
 	GtkWidget *main_window;
 	main_window = g_object_get_data(G_OBJECT(window), "image_window");
 // have to set up properties as well
 	indigui_show_dialog(g_object_get_data(G_OBJECT(main_window), "indi"));
+}
+*/
+
+
+void act_indi_settings (GtkAction *action, gpointer window)
+{
+    struct indi_t *indi = INDI_get_indi(window);
+    if (indi)
+        indigui_show_dialog(g_object_get_data(G_OBJECT(window), "indi"));
 }
 
 //guide_motion_stop will be called once the telescope has completed it's motion
@@ -553,14 +563,14 @@ void calibrate_sm( GtkWidget *window, struct guider *guider, struct tele_t *tele
 		guider->cal_state = GUIDE_WEST;
 		guider->cal_time = 1000;
 		info_printf("Slewing west 1000ms\n");
-		INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window);
+        INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window,  "guide_motion_stop");
 		tele_guide_move(tele, -1000, 0);
 		break;
 	case GUIDE_WEST:
 		if (dist < 10) {
 			guider->cal_time += 1000;
 			info_printf("Slewing west 1000ms\n");
-			INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window);
+            INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window,  "guide_motion_stop");
 			tele_guide_move(tele, -1000, 0);
 		} else {
 			guider->cal_wtime = guider->cal_time / dist;
@@ -571,7 +581,7 @@ void calibrate_sm( GtkWidget *window, struct guider *guider, struct tele_t *tele
 			guider->ytgt += dy;
 			guider->cal_time = guider->cal_wtime * 10;
 			info_printf("Slewing east 1000ms\n");
-			INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window);
+            INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window, "guide_motion_stop");
 			tele_guide_move(tele, guider->cal_time, 0);
 		}
 		break;
@@ -579,7 +589,7 @@ void calibrate_sm( GtkWidget *window, struct guider *guider, struct tele_t *tele
 		if (dist < 10) {
 			guider->cal_time += 1000;
 			info_printf("Slewing east 1000ms\n");
-			INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window);
+            INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window, "guide_motion_stop");
 			tele_guide_move(tele, 1000, 0);
 			break;
 		} else {
@@ -629,7 +639,7 @@ void guide_adjust_mount( GtkWidget *window, struct guider *guider, struct tele_t
 	}
 	info_printf("Slewing %f\n", adjust);
 	if(adjust != 0) {
-		INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window);
+        INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, guide_motion_stop, window, "guide_motion_stop");
 		tele_guide_move(tele, adjust, 0);
 	}
 }
@@ -836,7 +846,8 @@ void act_control_guider (GtkAction *action, gpointer window)
 		signal = set_named_callback(gwindow, "guide_calibrate", "clicked", calibrate_button_cb);
 		g_object_set_data(G_OBJECT(gwindow), "calibrate_button_signal", (gpointer)signal);
 
-		set_named_callback(gwindow, "guide_options", "clicked", options_button_cb);
+// move to indi settings menu
+//		set_named_callback(gwindow, "guide_options", "clicked", options_button_cb);
 
         struct tele_t *tele = tele_find(window);
         struct camera_t *camera = camera_find(window, CAMERA_GUIDE);

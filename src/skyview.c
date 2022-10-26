@@ -291,8 +291,7 @@ static int logw_print(char *msg, void *data)
 	gtk_text_buffer_insert_at_cursor(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)),
 					 msg, -1);
 
-	while (gtk_events_pending())
-		gtk_main_iteration();
+    while (gtk_events_pending()) gtk_main_iteration();
 
 	stopb = g_object_get_data(G_OBJECT(logw), "query_stop_toggle");
 	if (gtk_toggle_button_get_active(stopb)) {
@@ -304,10 +303,13 @@ static int logw_print(char *msg, void *data)
 
 static int fetch_skyview_image(GtkWidget *window, const char *position, const char *survey, const char *field)
 {
+    extern void window_add_files(GSList *files, gpointer window);
+    extern void set_last_open(gpointer object, char *file_class, char *path);
+
 	GtkWidget *logw, *im_window;
 	char *epos, *esurvey, *efield;
 	char cmd[1024];
-	char *fn = NULL;
+    char *fn = "/tmp/skyview.fits";
 	FILE *vq;
 	fd_set fds;
 	struct timeval tv;
@@ -324,120 +326,79 @@ static int fetch_skyview_image(GtkWidget *window, const char *position, const ch
 	esurvey = g_uri_escape_string(survey, NULL, FALSE);
 	efield  = g_uri_escape_string(field, NULL, FALSE);
 
-	snprintf(cmd, 1024, "%s -q -O - \"%s?Position='%s'"
-		 "&survey=%s&Size=%s&Pixels=%d&coordinates=J2000"
-		 "&projection=Tan&float=on&scaling=Linear"
-		 "&resolver=SIMBAD-NED&Sampler=LI"
-		 "&return=filename\"",
-		 P_STR(QUERY_WGET),
-		 P_STR(QUERY_SKYVIEW_RUNQUERY_URL),
-		 epos, esurvey, efield,
-		 P_INT(QUERY_SKYVIEW_PIXELS));
+    snprintf(cmd, 1024, "%s -q -O %s \"%s?Position='%s'"
+                        "&survey=%s&Size=%s&Pixels=%d&coordinates=J2000"
+                        "&projection=Tan&float=on&scaling=Linear"
+                        "&resolver=SIMBAD-NED&Sampler=LI\"",
+             P_STR(QUERY_WGET), "/tmp/skyview.fits",
+             P_STR(QUERY_SKYVIEW_RUNQUERY_URL),
+             epos, esurvey, efield,
+             P_INT(QUERY_SKYVIEW_PIXELS));
 
-	g_free(epos); g_free(esurvey); g_free(efield);
+    g_free(epos); g_free(esurvey); g_free(efield);
 
-	vq = popen(cmd, "r");
-	if (vq == NULL) {
-		err_printf("cannot run wget (%s)\n", strerror(errno));
-		return -1;
-	}
+    printf("%s\n", cmd); fflush(NULL);
 
-	/* FIXME: should probably use g_spawn_async here, and refactor
-	   query.c to use the same mechanism */
-	logw = create_query_log_window();
-	g_object_set_data_full(G_OBJECT(window), "download",
-			       logw, (GDestroyNotify)(gtk_widget_destroy));
-	g_signal_connect (G_OBJECT (logw), "delete_event",
-			  G_CALLBACK (delete_download), window);
-	gtk_widget_show(logw);
+    vq = popen(cmd, "r");
+    if (vq == NULL) {
+        err_printf("cannot run wget (%s)\n", strerror(errno));
+        return -1;
+    }
 
+    /* FIXME: should probably use g_spawn_async here, and refactor
+       query.c to use the same mechanism */
+    logw = create_query_log_window();
+    g_object_set_data_full(G_OBJECT(window), "download",
+                           logw, (GDestroyNotify)(gtk_widget_destroy));
+    g_signal_connect (G_OBJECT (logw), "delete_event",
+                      G_CALLBACK (delete_download), window);
+    gtk_widget_show(logw);
 
-	logw_print("Running SkyView query ", logw);
+    logw_print("Running SkyView query ", logw);
 
-	do {
-		FD_ZERO(&fds);
-		FD_SET(fileno(vq), &fds);
-		tv.tv_sec = 0;
-		tv.tv_usec = 500000;
-		errno = 0;
-		ret = select(fileno(vq) + 1, &fds, NULL, NULL, &tv);
-		if (ret == 0 || errno || !FD_ISSET(fileno(vq), &fds)) {
-			if (logw_print(".", logw))
-				break;
+    do {
+        FD_ZERO(&fds);
+        FD_SET(fileno(vq), &fds);
+        tv.tv_sec = 0;
+        tv.tv_usec = 500000;
+        errno = 0;
+        ret = select(fileno(vq) + 1, &fds, NULL, NULL, &tv);
+        if (ret == 0 || errno || !FD_ISSET(fileno(vq), &fds)) {
+            if (logw_print(".", logw))
+                break;
 
-			continue;
-		}
-		ret = getline(&line, &ll, vq);
-		if (ret <= 0)
-			continue;
-	} while (ret >= 0);
+            continue;
+        }
+        ret = getline(&line, &ll, vq);
+        if (ret <= 0)
+            continue;
+    } while (ret >= 0);
 
-	pclose(vq);
+    pclose(vq);
 
-	logw_print("\n", logw);
+    logw_print("\n", logw);
 
-	if ((p = strchr(line, '\n')) != NULL)
-		*p = 0;
+    snprintf(cmd, 1024, "Fetched to %s", fn);
+    logw_print(cmd, logw);
 
-	if (strncasecmp(line, "skv", 3) || strlen(line) > 16)
-		goto err_out;
+    /* load it in the im_window */
+    im_window = g_object_get_data (G_OBJECT(window), "im_window");
 
-	/* destination filename */
-	snprintf(cmd, 1024, "%s/%s.fits", P_STR(QUERY_SKYVIEW_DIR), line);
-	fn = strdup(cmd);
+    GSList *fl = NULL;
+    fl = g_slist_append(fl, strdup(fn));
+    window_add_files(fl, im_window); // this does frame to channel
+    g_slist_free(fl);
 
-	snprintf(cmd, 1024, "Fetching to %s.fits ", line);
-	logw_print(cmd, logw);
-
-	snprintf(cmd, 1024, "%s -q -O %s %s/%s.fits",
-		 P_STR(QUERY_WGET), fn,
-		 P_STR(QUERY_SKYVIEW_TEMPSPACE_URL), line);
-
-	vq = popen(cmd, "r");
-	if (vq == NULL) {
-		err_printf("cannot run wget (%s)\n", strerror(errno));
-		goto err_out;
-	}
-
-	ll = 256;
-	line[0] = 0;
-
-	do {
-		FD_ZERO(&fds);
-		FD_SET(fileno(vq), &fds);
-		tv.tv_sec = 0;
-		tv.tv_usec = 200000;
-		errno = 0;
-		ret = select(fileno(vq) + 1, &fds, NULL, NULL, &tv);
-		if (ret == 0 || errno || !FD_ISSET(fileno(vq), &fds)) {
-			if (logw_print(".", logw))
-				break;
-
-			continue;
-		}
-
-		/* consume the event, if any */
-		ret = getline(&line, &ll, vq);
-		if (ret <= 0)
-			continue;
-	} while (ret >= 0);
-
-	pclose(vq);
-
-	/* load it in the im_window */
-	im_window = g_object_get_data (G_OBJECT(window), "im_window");
-    fr = read_image_file(fn, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
-	if (fr == NULL) {
-		err_printf_sb2(im_window, "Error opening %s", fn);
-		goto err_out;
-	}
-
-    rescan_fits_wcs(fr, & fr->fim);
-    rescan_fits_exp(fr, & fr->exp);
-	frame_to_channel(fr, im_window, "i_channel");
-	release_frame(fr);
-
-extern void set_last_open(gpointer object, char *file_class, char *path);
+//    fr = read_image_file(fn, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
+//    if (fr == NULL) {
+//        err_printf_sb2(im_window, "Error opening %s", fn);
+//        goto err_out;
+//    }
+//printf("4\n"); fflush(NULL);
+//    wcs_transform_from_frame(fr, & fr->fim);
+//    rescan_fits_exp(fr, & fr->exp);
+//	frame_to_channel(fr, im_window, "i_channel"); // done by window add files above
+//	release_frame(fr);
 
 	set_last_open(im_window, "last_open_fits", strdup(fn));
 
@@ -455,7 +416,7 @@ err_out:
 out:
 	g_object_set_data(G_OBJECT(window), "download", NULL);
 	free(line);
-	free(fn);
+//	free(fn);
 
 	return ret;
 
@@ -555,7 +516,13 @@ static GtkWidget *create_skyview(gpointer window)
 		gtk_entry_set_text (GTK_ENTRY(g_object_get_data(G_OBJECT(skyview), "skyview_position")), buf);
 	}
 
-	gtk_entry_set_text (GTK_ENTRY(g_object_get_data(G_OBJECT(skyview), "skyview_fieldsize")), "1.5");
+    int skyview_width = P_INT(QUERY_SKYVIEW_PIXELS);
+    double width_in_degrees = skyview_width * fabs(wcs->xinc);
+
+    char buf[256];
+    snprintf(buf, 255, "%.3f", width_in_degrees);
+
+    gtk_entry_set_text (GTK_ENTRY(g_object_get_data(G_OBJECT(skyview), "skyview_fieldsize")), buf);
 
 	return skyview;
 }

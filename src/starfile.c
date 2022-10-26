@@ -47,7 +47,7 @@
 #include "cameragui.h"
 #include "filegui.h"
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 
 /* the chunk we alloc stf atoms in */
 static GMemChunk *stf_chunk = NULL;
@@ -127,7 +127,7 @@ static GList *read_star_list(GScanner *scan)
 
 
 
-/* recipy reading */
+/* recipe reading */
 
 /* create a scanner and tell it about the symbols we look for */
 GScanner* init_scanner()
@@ -156,21 +156,16 @@ void print_token(GScanner * scan, GTokenType tok)
 		d3_printf("tok: %c\n", tok);
 	else {
 		if (tok == G_TOKEN_STRING)
-			d3_printf("tok: string val: %s\n",  
-				  g_scanner_cur_value(scan).v_string);
+            d3_printf("tok: string val: %s\n", g_scanner_cur_value(scan).v_string);
 		else if (tok == G_TOKEN_IDENTIFIER)
-			d3_printf("tok: ident val: %s\n",  
-				  g_scanner_cur_value(scan).v_string);
+            d3_printf("tok: ident val: %s\n", g_scanner_cur_value(scan).v_string);
 		else if (tok == G_TOKEN_SYMBOL)
 			d3_printf("tok: symbol [%s] val: %d\n", 
-				  symname[g_scanner_cur_value(scan).v_int],
-				  (int)g_scanner_cur_value(scan).v_int);
+                  symname[g_scanner_cur_value(scan).v_int], (int)g_scanner_cur_value(scan).v_int);
 		else if (tok == G_TOKEN_INT)
-			d3_printf("tok: int val: %d\n", 
-				  (int)g_scanner_cur_value(scan).v_int);
+            d3_printf("tok: int val: %d\n", (int)g_scanner_cur_value(scan).v_int);
 		else if (tok == G_TOKEN_FLOAT)
-			d3_printf("tok: float val: %f\n", 
-				  g_scanner_cur_value(scan).v_float);
+            d3_printf("tok: float val: %f\n", g_scanner_cur_value(scan).v_float);
 		else
 			d3_printf("tok: %d\n", tok);
 	}
@@ -183,8 +178,7 @@ void test_parse_rcp(void)
 	FILE *fp;
 	GTokenType tok;
 
-	fp = fopen("test.rcp", "r");
-	if (fp == NULL) {
+    if (fp == NULL) {
 		err_printf("cannot open test.rcp\n");
 		return;
 	}
@@ -419,10 +413,17 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 		case SYM_RA:
 			tok = g_scanner_get_next_token(scan);
 			switch(tok) {
-			case G_TOKEN_STRING:
-				havera = !dms_to_degrees(stringval(scan),
-							  &cats->ra);
-				cats->ra *= 15.0;
+            case G_TOKEN_STRING:
+            {
+                double val;
+                int degrees;
+                havera = ((degrees = dms_to_degrees(stringval(scan), &val)) >= 0);
+                if (havera) {
+                    if (!degrees)
+                        val *= 15;
+                    cats->ra = val;
+                }
+            }
 				break;
 			case '-':
 				tok = g_scanner_get_next_token(scan);
@@ -446,8 +447,12 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 			tok = g_scanner_get_next_token(scan);
 			switch(tok) {
 			case G_TOKEN_STRING:
-				havedec = !dms_to_degrees(stringval(scan),
-							  &cats->dec);
+            {
+                double val;
+                havedec = (dms_to_degrees(stringval(scan), &val) >= 0);
+                if (havedec)
+                    cats->dec = val;
+            }
 				break;
 			case '-':
 				tok = g_scanner_get_next_token(scan);
@@ -625,6 +630,19 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 				break;
 			}
 			break;
+        case SYM_CMAGS:
+            tok = g_scanner_get_next_token(scan);
+            switch(tok) {
+            case G_TOKEN_STRING:
+                cats->cmags = strdup(stringval(scan));
+                break;
+            case '(':
+                skip_list(scan);
+                break;
+            default:
+                break;
+            }
+            break;
 		case SYM_SMAGS:
 			tok = g_scanner_get_next_token(scan);
 			switch(tok) {
@@ -671,22 +689,18 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 			case G_TOKEN_SYMBOL:
 				switch(intval(scan)) {
 				case SYM_STD:
-					cats->flags = (cats->flags & ~CATS_TYPE_MASK)
-						| CATS_TYPE_APSTD;
+                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTD;
 					cats->flags &= ~CATS_FLAG_VARIABLE;
 					break;
 				case SYM_TGT:
 				case SYM_TARGET:
-					cats->flags = (cats->flags & ~CATS_TYPE_MASK)
-						| CATS_TYPE_APSTAR;
+                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
 					break;
 				case SYM_FIELD:
-					cats->flags = (cats->flags & ~CATS_TYPE_MASK)
-						| CATS_TYPE_SREF;
+                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_SREF;
 					break;
 				case SYM_CATALOG:
-					cats->flags = (cats->flags & ~CATS_TYPE_MASK)
-						| CATS_TYPE_CAT;
+                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_CAT;
 					break;
 				default:
 					break;
@@ -834,7 +848,8 @@ struct stf *stf_read_frame(FILE *fp)
 				stf->next = nstf;
 				stf = nstf;
 			}
-			STF_SET_STRING(stf, strdup(stringval(scan)));
+            char *s = strdup(stringval(scan));
+            STF_SET_STRING(stf, s);
 			break;
 		case G_TOKEN_IDENTIFIER:
 			err_printf("unexpected identifier: %s\n", stringval(scan));
@@ -846,7 +861,7 @@ struct stf *stf_read_frame(FILE *fp)
 //			STF_SET_IDENT(stf, strdup(stringval(scan)));
 //			break;
 		default:
-			err_printf("unexected token %d\n", tok);
+            err_printf("unexpected token %x\n", tok);
 			break;
 		}
 	} while (tok != G_TOKEN_EOF);
@@ -958,6 +973,10 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
 		fprintf(repfp, "%s \"%s\"", symname[SYM_COMMENTS], cats->comments);
 		stf_linebreak(repfp, level);
 	}
+    if (cats->cmags != NULL && cats->cmags[0] != 0) {
+        fprintf(repfp, "%s \"%s\"", symname[SYM_CMAGS], cats->cmags);
+        stf_linebreak(repfp, level);
+    }
 	if (cats->smags != NULL && cats->smags[0] != 0) {
 		fprintf(repfp, "%s \"%s\"", symname[SYM_SMAGS], cats->smags);
 		stf_linebreak(repfp, level);
@@ -1045,18 +1064,25 @@ int stf_fprint(FILE *fp, struct stf *stf, int level, int col)
 //	if (level == 1)
 //		col = stf_linebreak(fp, level);
 	for (; stf != NULL; stf = stf->next) {
+        double d;
+        char *s;
+        int i;
+        unsigned int ui;
 		switch(stf->type) {
 		case STFT_SYMBOL:
 			if (col > STF_PRINT_RIGHT)
 				col = stf_linebreak(fp, level);
 			if (level == 0 && col > STF_PRINT_TAB)
 				col = stf_linebreak(fp, level);
+            s = symname[STF_SYMBOL(stf)];
 			col += fprintf(fp, "%s ", symname[STF_SYMBOL(stf)]);
 			break;
 		case STFT_DOUBLE:
+            d = STF_DOUBLE(stf);
 			col += fprintf(fp, "%.12g ", STF_DOUBLE(stf));
 			break;
 		case STFT_STRING:
+            s = STF_STRING(stf);
 			l = strlen(STF_STRING(stf));
 			if (col + l > STF_PRINT_COLS)
 				col = stf_linebreak(fp, level);
@@ -1065,16 +1091,19 @@ int stf_fprint(FILE *fp, struct stf *stf, int level, int col)
 		case STFT_IDENT:
 //			if (col > STF_PRINT_RIGHT)
 //				col = stf_linebreak(fp, level);
+            s = STF_IDENT(stf);
 			col += fprintf(fp, "%s ", STF_IDENT(stf));
 			break;
 		case STFT_INT:
+            i = STF_INT(stf);
 			col += fprintf(fp, "%d ", STF_INT(stf));
 			break;
 		case STFT_UINT:
+            ui = STF_UINT(stf);
 			col += fprintf(fp, "%ud ", STF_UINT(stf));
 			break;
 		case STFT_GLIST:
-			col = fprint_star_list(fp, STF_GLIST(stf), level);
+            col = fprint_star_list(fp, STF_GLIST(stf), level);
 			break;
 		case STFT_LIST:
 //			col += fprintf(fp, "(...) ");

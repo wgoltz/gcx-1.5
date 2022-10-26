@@ -41,19 +41,18 @@
 
 static double median_pixel(float *dp, int w)
 {
-	double p[9];
+    double p[8];
 
 	p[0] = dp[-w - 1];
 	p[1] = dp[-w];
 	p[2] = dp[-w + 1];
 	p[3] = dp[-1];
-	p[4] = dp[0]; // ?
-	p[5] = dp[1];
-	p[6] = dp[w - 1];
-	p[7] = dp[w];
-	p[8] = dp[w + 1];
+    p[4] = dp[1];
+    p[5] = dp[w - 1];
+    p[6] = dp[w];
+    p[7] = dp[w + 1];
 
-	return dmedian(p, 9);
+    return dmedian(p, 8);
 }
 
 /* add_bad_pixel adds a bad pixel to the bad pixel map */
@@ -90,31 +89,30 @@ static int add_bad_pixel(int x, int y, struct bad_pix_map *map, int type, float 
    the bad pixel map's size is increased if necessary */
 int find_bad_pixels(struct bad_pix_map *map, struct ccd_frame *fr, double sig)
 {
-	int x, y, ret;
-	double lo, hi;
-	float v;
-	float *dp, *dpt;
-	int count=0;
+    int x, y;
 
-	ret = 0;
+	float v;
+
+    int ret = 0;
 	if (!fr->stats.statsok)
 		frame_stats(fr);
 
-	lo = - sig * fr->stats.csigma;
-	hi =   sig * fr->stats.csigma;
+    double lo = - sig * fr->stats.csigma;
+    double hi =   sig * fr->stats.csigma;
 
-	dp = (float *)(fr->dat);
+    float *dp = (float *)(fr->dat);
 
 	for (x = 1; x < fr->w - 1; x++) {
-		dpt = dp + x + fr->w;
+        float *dpt = dp + x + fr->w;
 		for (y = 1; y < fr->h - 1; y++) {
+            float median_pix = median_pixel(dpt, fr->w); // should we exclude center pixel?
 
-			v = *dpt - median_pixel(dpt, fr->w);
+            v = *dpt - median_pix;
 
-			if (v > hi)
-				ret = add_bad_pixel(x, y, map, BAD_HOT, fabs(v));
-			else if (v < lo)
-				ret = add_bad_pixel(x, y, map, BAD_DARK, fabs(v));
+            if (v > hi)
+                ret = add_bad_pixel(x, y, map, BAD_HOT, fabs(v));
+            else if (v < lo)
+                ret = add_bad_pixel(x, y, map, BAD_DARK, fabs(v));
 
 			if (ret)
 				goto error;
@@ -122,6 +120,7 @@ int find_bad_pixels(struct bad_pix_map *map, struct ccd_frame *fr, double sig)
 			dpt += fr->w;
 		}
 	}
+// todo: find bad regions
 
 error:
 	map->x_skip = fr->x_skip;
@@ -226,10 +225,18 @@ int load_bad_pix(struct bad_pix_map *map)
 	map->size = pixels;
 
 	for (i=0; i<pixels; i++) {
-		ret = fscanf(fp, " %c %d %d %f", &map->pix[i].type, 
-			&map->pix[i].x, &map->pix[i].y, &map->pix[i].v);
+        int v;
+        ret = fscanf(fp, " %c %d %d %d", &map->pix[i].type,
+            &map->pix[i].x, &map->pix[i].y, &v);
 		if (ret != 4)
 			break;
+
+        int bad_region = map->pix[i].type == (char)BAD_REGION;
+        if (bad_region)
+            map->pix[i].bad_neighbors = (unsigned short)v;
+        else
+            map->pix[i].v = v;
+
 	}
 	if (i != pixels)
 		err_printf("load_bad_pix: file is short");
@@ -424,6 +431,40 @@ static void fix_pixel(struct ccd_frame *fr, int x, int y, int bn)
 		*pp = v / n;
 }
 
+static void fix_region(struct ccd_frame *fr, int x, int y, unsigned short bn)
+{
+    if ((x < 0) || (x >= fr->w) || (y < 0) || (y >= fr->h))
+        return;
+
+    int w = fr->w;
+    float *pp = ((float *) fr->dat) + x + y * w;
+    double s = 0;
+    int n = 0;
+
+    float *p_minus = &(pp[-w - 1]);
+    float *p = &(pp[-1]);
+    float *p_plus = &(pp[w - 1]);
+
+    int i;
+    for (i = 0; i < 8; i++) {
+        if (bn & (1 << i)) {
+            switch(i) {
+            case 0 : s += pp[-w - 1]; break;
+            case 1 : s += pp[-w];     break;
+            case 2 : s += pp[-w + 1]; break;
+            case 3 : s += pp[1];      break;
+            case 4 : s += pp[w + 1];  break;
+            case 5 : s += pp[w];      break;
+            case 6 : s += pp[w - 1];  break;
+            case 7 : s += pp[-1];     break;
+            }
+            n++;
+        }
+    }
+
+    *pp = s / n;
+}
+
 static void fix_pixel_redblue(struct ccd_frame *fr, int x, int y, int bn)
 {
 	double vals[9];
@@ -540,19 +581,24 @@ int fix_bad_pixels (struct ccd_frame *fr, struct bad_pix_map *map)
 	} else {
 		/* regular BW image */
 		for (i = 0; i < map->pixels; i++) {
-			if (fr->exp.bin_y != 0 && fr->exp.bin_x != 0) {
-				frx = map->pix[i].x - fr->x_skip / fr->exp.bin_x;
-				fry = map->pix[i].y - fr->y_skip / fr->exp.bin_y;
-			} else {
-				frx = map->pix[i].x;
-				fry = map->pix[i].y;
-			}
+            if (fr->exp.bin_y != 0 && fr->exp.bin_x != 0) {
+                frx = map->pix[i].x - fr->x_skip / fr->exp.bin_x;
+                fry = map->pix[i].y - fr->y_skip / fr->exp.bin_y;
+            } else {
+                frx = map->pix[i].x;
+                fry = map->pix[i].y;
+            }
 
-			if (frx > 1 && frx < fr->w - 2 && fry > 1 && fry < fr->h - 2) {
-				bn = bad_neighbours(map, i,  fr->exp.bin_x, fr->exp.bin_y);
-				fix_pixel(fr, frx, fry, bn);
-			}
-		}
+            if (frx > 1 && frx < fr->w - 2 && fry > 1 && fry < fr->h - 2) {
+                if (map->pix[i].type == BAD_REGION) {
+                    fix_region(fr, frx, fry, map->pix[i].bad_neighbors);
+                } else {
+                    bn = bad_neighbours(map, i,  fr->exp.bin_x, fr->exp.bin_y);
+                    fix_pixel(fr, frx, fry, bn);
+                }
+            }
+
+        }
 	}
 	return 0;
 }

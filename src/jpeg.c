@@ -100,6 +100,8 @@ struct ccd_frame *read_jpeg_file(char *filename) {
 
 	frame->data_valid = 1;
 	frame_stats(frame);
+
+    if (frame->name) free(frame->name);
     frame->name = strdup(filename);
 
 exit1:

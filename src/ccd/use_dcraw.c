@@ -28,7 +28,7 @@ int try_dcraw(char *filename)
 {
 	char *cmd;
 	int ret = ERR_ALLOC;
-	if (-1 != asprintf(&cmd, "%s -i %s 2> /dev/null", dcraw_cmd, filename)) {
+    if (-1 != asprintf(&cmd, "%s -i '%s' 2> /dev/null", dcraw_cmd, filename)) {
 		ret = WEXITSTATUS(system(cmd));
 		free(cmd);
 		if (! ret) printf("Using dcraw\n");
@@ -84,92 +84,97 @@ static unsigned int read_uint( FILE *fp )
 
 int read_ppm(struct ccd_frame *frame, FILE *handle)
 {
-	char prefix[] = {0, 0};
-	int bpp, maxcolor, row, i;
-	unsigned char *ppm = NULL;
-	float *data, *r_data, *g_data, *b_data;
-	int width, height;
-	int has_rgb = 0;
-
+    char prefix[] = {0, 0};
 	prefix[0] = fgetc(handle);
 	prefix[1] = fgetc(handle);
-        if (prefix[0] != 'P' || (prefix[1] != '6' && prefix[1] != '5')) {
+
+    if (prefix[0] != 'P' || (prefix[1] != '6' && prefix[1] != '5')) {
 		err_printf("read_ppm: got unexpected prefix %x %x\n", prefix[0], prefix[1]);
-		goto err_release;
+        return 1;
 	}
 
-	if (prefix[1] == '6') {
-		if (alloc_frame_rgb_data(frame)) {
-			return 1;
-		}
-		frame->magic |= FRAME_VALID_RGB;
+    int width = read_uint(handle);
+    int height = read_uint(handle);
+    if (width != frame->w || height != frame->h) return 1;
+
+    int has_rgb = (prefix[1] == '6');
+
+    if (has_rgb) {
+        if (alloc_frame_rgb_data(frame))
+            return 1;
+        frame->magic |= FRAME_VALID_RGB;
 		remove_bayer_info(frame);
-		has_rgb = 1;
+
+    } else {
+        if (alloc_frame_data(frame))
+            return 1;
 	}
 
-	width = read_uint(handle);
-	height = read_uint(handle);
-	if (width != frame->w || height != frame->h) {
-		err_printf("read_ppm: expected size %d x %d , but received %d x %d\n", frame->w, frame->h, width, height);
-		goto err_release;
-	}
+    int maxcolor = read_uint(handle);
 
-	maxcolor = read_uint(handle);
-	d4_printf("next char: %02x\n", fgetc(handle));
+//	d4_printf("next char: %02x\n", fgetc(handle));
+    fgetc(handle);
 	if (maxcolor > 65535) {
 		err_printf("read_ppm: 32bit PPM isn't supported\n");
-		goto err_release;
-	} else if (maxcolor > 255) {
-		bpp = 2 * (has_rgb ? 3 : 1);
-	} else {
-		bpp = 1 * (has_rgb ? 3 : 1);
-	}
+        return 1;
+    }
+
+    int bpp = (maxcolor > 255) ? 2 * (has_rgb ? 3 : 1) : 1 * (has_rgb ? 3 : 1);
+
 	d4_printf("bpp: %d\n", bpp);
-	ppm = malloc(frame->w * bpp);
+    int row_len = width * bpp;
+    unsigned char *ppm = malloc(row_len);
 
-	data = (float *)(frame->dat);
-	r_data = (float *)(frame->rdat);
-	g_data = (float *)(frame->gdat);
-	b_data = (float *)(frame->bdat);
+    float *data = (float *)(frame->dat);
+    float *r_data = (float *)(frame->rdat);
+    float *g_data = (float *)(frame->gdat);
+    float *b_data = (float *)(frame->bdat);
 
-	for (row = 0; row < frame->h; row++) {
-		int len;
-		len = fread(ppm, 1, frame->w * bpp, handle);
-		if (len != frame->w * bpp) {
+    int row;
+    for (row = 0; row < height; row++) {
+        int len = fread(ppm, 1, row_len, handle);
+        if (len != row_len) {
 			err_printf("read_ppm: aborted during PPM reading at row: %d, read %d bytes\n", row, len);
 			goto err_release;
 		}
-		if (bpp == 6 || bpp == 2) {
+        if (maxcolor > 255) {
 			unsigned short *ppm16 = (unsigned short *)ppm;
 			if (htons(0x55aa) != 0x55aa) {
-				swab(ppm, ppm,  frame->w * bpp);
+                swab(ppm, ppm,  row_len);
 			}
-			for (i = 0; i < frame->w; i++) {
-				if (has_rgb) {
-					*r_data++ = *ppm16++;
+
+            int i;
+            if (has_rgb)
+                for (i = 0; i < width; i++) {
+                    *r_data++ = *ppm16++;
 					*g_data++ = *ppm16++;
 					*b_data++ = *ppm16++;
-				} else {
-					*data++ = *ppm16++;
 				}
-			}
+            else
+                for (i = 0; i < width; i++) {
+                    *data++ = *ppm16++;
+                }
+
 		} else {
 			unsigned char *ppm8 = ppm;
-			for (i = 0; i < frame->w; i++) {
-				if (has_rgb) {
+            int i;
+            if (has_rgb)
+                for (i = 0; i < width; i++) {
 					*r_data++ = *ppm8++;
 					*g_data++ = *ppm8++;
 					*b_data++ = *ppm8++;
-				} else {
-					*data++ = *ppm8++;
 				}
-			}
-		}
+            else
+                for (i = 0; i < width; i++) {
+                    *data++ = *ppm8++;
+                }
+        }
 	}
 	if (ppm) {
 		free(ppm);
 	}
 	return 0;
+
 err_release:
 	if (ppm) {
 		free(ppm);
@@ -209,7 +214,7 @@ int dcraw_set_exposure(struct ccd_frame *frame, float exposure)
 {
 	char strbuf[64];
 	if (exposure != 0.0) {
-		snprintf(strbuf, 64, "%10.4f", exposure);
+        snprintf(strbuf, 64, "%10.5f", exposure);
 		fits_add_keyword(frame, "EXPTIME", strbuf);
 	}
 	return 0;
@@ -223,7 +228,7 @@ int dcraw_parse_header_info(struct ccd_frame *frame, char *filename)
 	int day, year;
 	float exposure;
 
-	if (-1 != asprintf(&cmd, "%s -i -v %s 2> /dev/null", dcraw_cmd, filename)) {
+    if (-1 != asprintf(&cmd, "%s -i -v -t 0 '%s' 2> /dev/null", dcraw_cmd, filename)) {
 		handle = popen(cmd, "r");
 		free(cmd);
 	}
@@ -283,7 +288,7 @@ struct ccd_frame *read_file_from_dcraw(char *filename)
 		goto err_release;
 	}
 
-	if (-1 != asprintf(&cmd, "%s -c -4 -D %s 2> /dev/null", dcraw_cmd, filename)) {
+    if (-1 != asprintf(&cmd, "%s -c -4 -D -t 0 '%s' 2> /dev/null", dcraw_cmd, filename)) {
 		handle = popen(cmd, "r");
 		free(cmd);
 	}
@@ -298,6 +303,9 @@ struct ccd_frame *read_file_from_dcraw(char *filename)
 
 	frame->magic = FRAME_HAS_CFA;
 	frame_stats(frame);
+
+    if (frame->name) free(frame->name);
+    frame->name = strdup(filename);
 
 	pclose(handle);
 	return frame;

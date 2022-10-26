@@ -33,6 +33,7 @@
 #include <errno.h>
 #include <math.h>
 #include <libgen.h>
+
 #include "gcx.h"
 #include "catalogs.h"
 #include "gui.h"
@@ -46,12 +47,13 @@
 #include "obsdata.h"
 #include "multiband.h"
 #include "plots.h"
-#include "recipy.h"
+#include "recipe.h"
+#include "reduce.h"
 #include "symbols.h"
 #include "treemodel.h"
 
-static void ofr_selection_cb(GtkWidget *selection, gpointer mband_dialog);
-static void sob_selection_cb(GtkWidget *selection, gpointer mband_dialog);
+static void ofr_selection_cb(GtkWidget *ofr_selection, gpointer mband_dialog);
+static void sob_selection_cb(GtkWidget *sob_selection, gpointer mband_dialog);
 
 #define PLOT_RES_SM 1
 #define PLOT_RES_COL 2
@@ -64,11 +66,16 @@ static void sob_selection_cb(GtkWidget *selection, gpointer mband_dialog);
 #define FIT_ZP_WTRANS 3
 #define FIT_TRANS 2
 #define FIT_ALL_SKY 4
+#define FIT_SET_AVS 5
 
 #define SEL_ALL 1
 #define UNSEL_ALL 2
 #define HIDE_SEL 3
 #define UNHIDE_ALL 4
+
+// selection_control
+#define FRAME_CHANGE 1
+#define REFRESH_SELECTED 2
 
 #define ERR_SIZE 1024
 /* print the error string and save it to storage */
@@ -100,22 +107,30 @@ static void mbds_print_summary(gpointer mband_dialog)
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
     g_return_if_fail(mbds != NULL);
 
-    mbds_printf(mband_dialog, "Dataset has %d observation(s) %d object(s), %d frame(s)\n",
-            g_list_length(mbds->sobs), g_list_length(mbds->ostars), g_list_length(mbds->ofrs));
+    int skipped = 0;
+    GList *gl;
+    for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
+        struct o_frame *ofr = O_FRAME(gl->data);
+        if (ofr == NULL || ofr->skip)
+            skipped++;
+    }
+
+    mbds_printf(mband_dialog, "Dataset has %d observation(s) %d object(s), %d (%d skipped) frames)\n",
+            g_list_length(mbds->sobs), g_list_length(mbds->ostars), g_list_length(mbds->ofrs), skipped);
 }
 
 static int fit_progress(char *msg, void *data)
 {
-//	mbds_printf(data, "%s", msg);
+    mbds_printf(data, "%s", msg);
 
-    while (gtk_events_pending ())
-        gtk_main_iteration ();
+    while (gtk_events_pending ()) gtk_main_iteration ();
+
     return 0;
 }
 
 
 // initialise new mbds for dialog or return existing
-static struct mband_dataset *dialog_get_mbds(gpointer mband_dialog)
+struct mband_dataset *dialog_get_mbds(gpointer mband_dialog)
 {
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
     if (mbds == NULL) {
@@ -127,7 +142,6 @@ static struct mband_dataset *dialog_get_mbds(gpointer mband_dialog)
     mband_dataset_set_bands_by_string(mbds, P_STR(AP_BANDS_SETUP));
     return mbds;
 }
-
 
 gint sort_func(GtkTreeModel *model, GtkTreeIter *a, GtkTreeIter *b, gpointer data) {
     float va = 0, vb = 0;
@@ -156,10 +170,11 @@ gint sort_func(GtkTreeModel *model, GtkTreeIter *a, GtkTreeIter *b, gpointer dat
     return ret;
 }
 
+// frames table
 #define NUM_OFR_COLUMNS 11
 
 char *ofr_titles[NUM_OFR_COLUMNS] =
-        {"Object", "Band", "Status", "Zpoint", "Err", "Fitted", "Outliers", "MEU", "Airmass", "MJD", "File Name"};
+        {"Object", "Band", "Status", "Zpoint", "Err", "Fitted", "Outliers", "MEU", "Airmass", "JD", "File Name"};
 
 // initialise ofr_list for dialog or return existing
 static GtkWidget *dialog_get_ofr_list(gpointer mband_dialog)
@@ -182,14 +197,8 @@ static GtkWidget *dialog_get_ofr_list(gpointer mband_dialog)
 
         gtk_tree_view_column_set_sort_column_id(column, i + 1);
         gtk_tree_view_append_column(GTK_TREE_VIEW(ofr_list), column);
-        switch (i) {
-            case 3:
-            case 4:
-            case 6:
-            case 7:
-            case 8:
-                gtk_tree_sortable_set_sort_func (GTK_TREE_SORTABLE(ofr_store), i + 1, sort_func, (gpointer)(i + 1), NULL);
-        }
+        if ((i >= 3) && (i <= 8))
+            gtk_tree_sortable_set_sort_func (GTK_TREE_SORTABLE(ofr_store), i + 1, sort_func, (gpointer)(i + 1), NULL);
     }
 
     GtkScrolledWindow *mband_ofr_scw = g_object_get_data(G_OBJECT(mband_dialog), "mband_ofr_scw");
@@ -199,34 +208,32 @@ static GtkWidget *dialog_get_ofr_list(gpointer mband_dialog)
     g_object_ref(ofr_list);
     g_object_set_data_full(G_OBJECT(mband_dialog), "ofr_list", ofr_list, (GDestroyNotify) gtk_widget_destroy);
 
-    GtkTreeSelection *selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(ofr_list));
-    gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
+    GtkTreeSelection *ofr_selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(ofr_list));
+    gtk_tree_selection_set_mode(ofr_selection, GTK_SELECTION_MULTIPLE);
 
-    g_signal_connect (G_OBJECT(selection), "changed", G_CALLBACK(ofr_selection_cb), mband_dialog);
+    g_signal_connect (G_OBJECT(ofr_selection), "changed", G_CALLBACK(ofr_selection_cb), mband_dialog);
 
     gtk_widget_show(ofr_list);
     return ofr_list;
 }
 
-static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, struct o_frame *ofr)
+static int ofr_store_set_row_vals(int i, GtkListStore *ofr_store, GtkTreeIter *iter, struct o_frame *ofr)
 {
-    char s[50];
 
-#define add_ofr_store_entry(i, f, ...) { snprintf(s, 40, (f), __VA_ARGS__); gtk_list_store_set(ofr_store, iter, (i), s, -1); }
+#define add_ofr_store_entry(i, f, ...) { char *s; asprintf(&s, (f), __VA_ARGS__); if (s) { gtk_list_store_set(ofr_store, iter, (i), s, -1); free(s); } }
 
     char *states[] = {"Not Fitted", "Err", "All-sky", "Diff", "ZP Only", "OK",
               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
               NULL, NULL, NULL};
 
-    gtk_list_store_set(ofr_store, iter, 0, ofr, -1);
+    gtk_list_store_set(GTK_LIST_STORE(ofr_store), iter, 0, ofr, -1);
 
     char *obj = stf_find_string(ofr->stf, 1, SYM_OBSERVATION, SYM_OBJECT);
     if (! obj) obj = "";
 
     add_ofr_store_entry( 1, "%s", obj )
     add_ofr_store_entry( 2, "%s", ofr->trans->bname);
-    add_ofr_store_entry( 3, "%s%s", states[ofr->zpstate & ZP_STATE_MASK], ofr->as_zp_valid ? "-AV" : "" )
-
+    add_ofr_store_entry( 3, "%s%s", states[ofr->zpstate & ZP_STATE_MASK], ofr->as_zp_valid ? "-AV" : "" ) // clear as_zp_valid somewhere
     if (ofr->zpstate >= ZP_ALL_SKY) {
         add_ofr_store_entry( 4, "%.3f", ofr->zpoint )
         add_ofr_store_entry( 5, "%.3f", ofr->zpointerr )
@@ -244,42 +251,41 @@ static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, s
         add_ofr_store_entry( 7, "%s", "" )
     }
     add_ofr_store_entry( 9, "%.2f", ofr->airmass )
-    add_ofr_store_entry( 10, "%.5f", ofr->mjd )
+    add_ofr_store_entry( 10, "%.5f", mjd_to_jd(ofr->mjd) )
 
     if (ofr->fr_name)
         add_ofr_store_entry( 11, "%s", basename(ofr->fr_name) )
     else
         add_ofr_store_entry( 11, "%s", "" )
 
+    return i;
+
 }
 
 static void mbds_to_ofr_list(GtkWidget *mband_dialog, GtkWidget *ofr_list)
 {
+//printf("mbds_to_ofr_list\n"); fflush(NULL);
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
     g_return_if_fail(mbds != NULL);
 
     GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
 
-    GList *sl = mbds->ofrs;
-    while(sl != NULL) {
-        struct o_frame *ofr = O_FRAME(sl->data);
-        sl = g_list_next(sl);
-        if (ofr->skip) { // alas, not quite
-//            if (ofr->ccd_frame) {
-//                ofr->ccd_frame = release_frame(ofr->ccd_frame);
-//                if (! ofr->ccd_frame) free(ofr->fr_name);
-//            }
-            continue;
-        }
+    GList *gl;
+    int i = 0;
+    for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
+        struct o_frame *ofr = O_FRAME(gl->data);        
+
+        if (ofr->skip) continue;
 
         GtkTreeIter iter;
         gtk_list_store_prepend(GTK_LIST_STORE(ofr_store), &iter);
-        ofr_store_set_row_vals(GTK_LIST_STORE(ofr_store), &iter, ofr);
+        i = ofr_store_set_row_vals(i, GTK_LIST_STORE(ofr_store), &iter, ofr);
     }
 }
 
 static void mb_rebuild_ofr_list(gpointer mband_dialog)
 {
+//printf("mb_rebuild_ofr_list\n"); fflush(NULL);
     GtkWidget *ofr_list = dialog_get_ofr_list(mband_dialog);
     if (ofr_list == NULL) return;
 
@@ -289,7 +295,7 @@ static void mb_rebuild_ofr_list(gpointer mband_dialog)
     mbds_to_ofr_list(mband_dialog, ofr_list);
 }
 
-
+// bands table
 #define NUM_BANDS_COLUMNS 7
 
 char *bands_titles[NUM_BANDS_COLUMNS] =
@@ -327,14 +333,12 @@ static GtkWidget *dialog_get_bands_list(gpointer mband_dialog)
 
 static void bands_store_set_row_vals(GtkListStore *bands_store, GtkTreeIter *iter, int band, struct mband_dataset *mbds)
 {
-    char s[50];
 
-#define add_bands_store_entry(i, f, ...) { snprintf(s, 40, (f), __VA_ARGS__); gtk_list_store_set(bands_store, iter, (i), s, -1); }
+#define add_bands_store_entry(i, f, ...) { char *s = NULL; asprintf(&s, (f), __VA_ARGS__); if (s) { gtk_list_store_set(bands_store, iter, (i), s, -1); free(s); } }
 
     gtk_list_store_set(bands_store, iter, 0, mbds, -1);
 
     add_bands_store_entry( 1, "%s", mbds->trans[band].bname )
-    d4_printf("%s\n", s);
 
     if (mbds->trans[band].c1 >= 0 && mbds->trans[band].c2 >= 0) {
 
@@ -343,7 +347,7 @@ static void bands_store_set_row_vals(GtkListStore *bands_store, GtkTreeIter *ite
         if (mbds->trans[band].kerr < BIG_ERR) {
             add_bands_store_entry( 3, "%.3f/%.3f", mbds->trans[band].k, mbds->trans[band].kerr )
         } else {
-            add_bands_store_entry(    3, "%s", "" )
+            add_bands_store_entry( 3, "%s", "" )
         }
     } else {
         add_bands_store_entry( 2, "%s", "" )
@@ -392,7 +396,7 @@ static void mb_rebuild_bands_list(gpointer mband_dialog)
     bands_list_update_vals(bands_list, mbds);
 }
 
-
+// star observations table
 #define NUM_SOB_COLUMNS 13
 
 char *sob_titles[NUM_SOB_COLUMNS] =
@@ -420,15 +424,8 @@ static GtkWidget *dialog_get_sob_list(gpointer mband_dialog)
         gtk_tree_view_column_set_sort_column_id(column, i + 1);
         gtk_tree_view_append_column(GTK_TREE_VIEW(sob_list), column);
 
-        switch (i) {
-        case 3:
-        case 4:
-        case 5:
-        case 6:
-        case 7:
-        case 8:
+        if ((i >= 3) && (i <= 8))
             gtk_tree_sortable_set_sort_func(GTK_TREE_SORTABLE(sob_store), i + 1, sort_func, (gpointer)(i + 1), NULL);
-        }
     }
 
     gtk_tree_selection_set_mode(gtk_tree_view_get_selection(GTK_TREE_VIEW(sob_list)), GTK_SELECTION_MULTIPLE);
@@ -440,10 +437,10 @@ static GtkWidget *dialog_get_sob_list(gpointer mband_dialog)
     g_object_ref(sob_list);
     g_object_set_data_full(G_OBJECT(mband_dialog), "sob_list", sob_list, (GDestroyNotify) gtk_widget_destroy);
 
-    GtkTreeSelection *selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(sob_list));
-    gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
+    GtkTreeSelection *sob_selection = gtk_tree_view_get_selection (GTK_TREE_VIEW(sob_list));
+    gtk_tree_selection_set_mode(sob_selection, GTK_SELECTION_MULTIPLE);
 
-    g_signal_connect (G_OBJECT(selection), "changed", G_CALLBACK(sob_selection_cb), mband_dialog);
+    g_signal_connect (G_OBJECT(sob_selection), "changed", G_CALLBACK(sob_selection_cb), mband_dialog);
 
     char buf[100];
     snprintf(buf, sizeof(buf) - 1, "no frame");
@@ -459,13 +456,15 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
 {
     char s[100];
 
-#define add_sob_store_entry(i, f, v) { snprintf(s, 40, (f), (v)); gtk_list_store_set(sob_store, iter, (i), s, -1); }
+//#define add_sob_store_entry(i, f, v) { snprintf(s, 40, (f), (v)); gtk_list_store_set(sob_store, iter, (i), s, -1); }
+
+#define add_sob_store_entry(i, f, v) { char *s = NULL; asprintf(&s, (f), (v)); if (s) { gtk_list_store_set(sob_store, iter, (i), s, -1); free(s); } }
 #define add_sob_store_dms_entry(i, f, v) { degrees_to_dms_pr(s, (v), (f)); gtk_list_store_set(sob_store, iter, (i), s, -1); }
 #define add_sob_store_hms_entry(i, f, v) { degrees_to_hms_pr(s, (v), (f)); gtk_list_store_set(sob_store, iter, (i), s, -1); }
 #define add_sob_store_flags_entry(i, v) { cat_flags_to_string((v), s, sizeof(s)); gtk_list_store_set(sob_store, iter, (i), s, -1); }
 
     gtk_list_store_set(sob_store, iter, 0, sob, -1);
-
+// mband crashes here bad sob when run photometry on new frames or just rerun
     add_sob_store_entry( 1, "%s", sob->cats->name )
 
     char *v = "";
@@ -486,9 +485,24 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
         add_sob_store_entry( 7, "%s", "" )
 
     } else {
-        if ( (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) && (sob->ofr->band >= 0) && (sob->ost->smagerr [sob->ofr->band] < BIG_ERR) ) {
-            add_sob_store_entry( 4, "%5.3f", sob->ost->smag[sob->ofr->band] )
-            add_sob_store_entry( 5, "%.3f", sob->ost->smagerr[sob->ofr->band] )
+        if ( CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+            if (sob->ofr->band >= 0) {
+                if ( sob->ost->smag[sob->ofr->band] != MAG_UNSET) {
+                    double m = sob->imag + sob->ofr->zpoint;
+                    double me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
+                    char *format[2] = {"[%5.3f]", "%5.3f"};
+                    char *f = format[0];
+
+                    if (sob->nweight != 0) {
+                        m = sob->ost->smag[sob->ofr->band];
+                        me = DEFAULT_ERR(sob->ost->smagerr[sob->ofr->band]);
+                        f = format[1];
+                    }
+
+                    add_sob_store_entry( 4, f,  m )
+                    add_sob_store_entry( 5, "%.3f", me )
+                }
+            }
 
         } else {
             add_sob_store_entry( 4, "[%5.3f]", sob->mag )
@@ -518,6 +532,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
     add_sob_store_flags_entry( 13, sob->flags & CPHOT_MASK & ~CPHOT_NO_COLOR )
 }
 
+// fill all sob_store rows from sol
 static void sobs_to_sob_list(GtkWidget *sob_list, GList *sol)
 {
     GtkTreeModel *sob_store = gtk_tree_view_get_model(GTK_TREE_VIEW(sob_list));
@@ -538,7 +553,7 @@ static void sob_list_update_vals(GtkWidget *sob_list)
     GtkTreeIter iter;
 
     GtkTreeModel *sob_store = gtk_tree_view_get_model(GTK_TREE_VIEW(sob_list));
-
+// no sobs in sob_store
     if (gtk_tree_model_get_iter_first(sob_store, &iter)) {
         do {
             struct star_obs *sob;
@@ -550,50 +565,19 @@ static void sob_list_update_vals(GtkWidget *sob_list)
     }
 }
 
-static gboolean cats_in_selection(GList *selection, struct cat_star *cats)
+// selected_gui_stars sorted by gs->sort, highest first
+static gboolean gui_star_in_selection(GList *selected_gui_stars, struct gui_star *gs)
 {
-    GList *gl = g_list_first(selection);
-    while (gl) {
-        if (cats == gl->data) return TRUE;
-        gl = g_list_next(gl);
+    GList *gl = g_list_first(selected_gui_stars);
+    int sort = gs->sort;
+    for (gl; gl != NULL; gl = g_list_next(gl)) {
+        struct gui_star *gs2 = GUI_STAR(gl->data);
+        if (gs2->sort > sort) continue;
+        if (gs2->sort == sort) return TRUE;
+        break;
     }
     return FALSE;
 }
-
-static void sob_list_restore_selection (GtkWidget *sob_list)
-{
-    GtkTreeSelection *selection = gtk_tree_view_get_selection(sob_list);
-    GList *last_selected = g_object_get_data (G_OBJECT(selection), "last_selected");
-
-    if (last_selected == NULL) return;
-
-    GtkTreeModel *sob_store = gtk_tree_view_get_model (GTK_TREE_VIEW(sob_list));
-
-    GtkTreeIter iter;
-    if (gtk_tree_model_get_iter_first (sob_store, &iter)) {
-//        gtk_tree_selection_unselect_all (selection);
-        do {
-            struct star_obs *sob;
-            gtk_tree_model_get (sob_store, &iter, 0, &sob, -1);
-            if ( sob == NULL ) continue;
-
-            if ( cats_in_selection (last_selected, sob->cats) ) gtk_tree_selection_select_iter (selection, &iter);
-        } while (gtk_tree_model_iter_next (sob_store, &iter));
-    }
-}
-
-static void mb_rebuild_sob_list(gpointer mband_dialog, GList *sol)
-{
-    GtkWidget *sob_list = dialog_get_sob_list(mband_dialog);
-    if (sob_list == NULL) return;
-
-    GtkListStore *sob_store = GTK_LIST_STORE (gtk_tree_view_get_model (GTK_TREE_VIEW (sob_list)));
-    gtk_list_store_clear(sob_store);
-
-    sobs_to_sob_list(sob_list, sol);
-    sob_list_restore_selection (sob_list);
-}
-
 
 // delete existing mbds
 static void dialog_delete_mbds(gpointer mband_dialog)
@@ -603,7 +587,8 @@ static void dialog_delete_mbds(gpointer mband_dialog)
         int i;
         char *names[] = {"ofr_list", "sob_list", "band_list"};
         for (i = 0; i < 3; i++) {
-            if (g_object_get_data(G_OBJECT(mband_dialog), names[i])) g_object_set_data(G_OBJECT(mband_dialog), names[i], NULL);
+            if (g_object_get_data(G_OBJECT(mband_dialog), names[i]))
+                g_object_set_data(G_OBJECT(mband_dialog), names[i], NULL);
         }
         g_object_set_data(G_OBJECT(mband_dialog), "mbds", NULL);
     }
@@ -613,71 +598,83 @@ static void dialog_delete_mbds(gpointer mband_dialog)
 // whole of dataset operations
 static void rep_file_cb(char *fn, gpointer data, unsigned action)
 {
-	GtkWidget *ofr_list;
-	GtkTreeModel *ofr_store;
-	GList *ofrs = NULL, *sl;
-	FILE *repfp = NULL;
-
-	struct o_frame *ofr;
-	char qu[1024];
-	int ret;
-	GList *gl, *glh;
-	GtkTreeSelection *sel;
-	GtkTreeIter iter;
-
 	d3_printf("Report action %x fn:%s\n", action, fn);
 
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(data), "mbds");
 	g_return_if_fail(mbds != NULL);
 
-	ofr_list = g_object_get_data(G_OBJECT(data), "ofr_list");
+    GtkWidget *ofr_list = g_object_get_data(G_OBJECT(data), "ofr_list");
 	g_return_if_fail(ofr_list != NULL);
 
-	ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
+    GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
 
-	if ((repfp = fopen(fn, "r")) != NULL) { /* file exists */
-		snprintf(qu, 1023, "File %s exists\nAppend?", fn);
-		if (!modal_yes_no(qu, "gcx: file exists")) {
-			fclose(repfp);
-			return;
-		} else {
-			fclose(repfp);
-		}
-	}
+    FILE *repfp = fopen(fn, "r");
 
-	repfp = fopen(fn, "a");
+    gboolean append = FALSE;
+    if (repfp != NULL) { /* file exists */
+        fclose(repfp);
+
+        char *qu = NULL;
+        asprintf(&qu, "File %s exists\nAppend (or overwrite)?", fn);
+
+        int result = append_overwrite_cancel(qu, "gcx: file exists");
+        if (qu) free(qu);
+
+        if (result < 0)
+            return;
+
+        switch (result) {
+        case AOC_APPEND:
+            repfp = fopen(fn, "a");
+            append = TRUE;
+            break;
+        case AOC_OVERWRITE:
+            repfp = fopen(fn, "w");
+            break;
+        default: // cancel
+            repfp = NULL;
+        }
+
+    } else {
+        repfp = fopen(fn, "w");
+    }
+
 	if (repfp == NULL) {
-		mbds_printf(data, "Cannot open/create file %s (%s)", fn, strerror(errno));
+        err_printf("Cannot open/create file %s (%s)", fn, strerror(errno));
 		return;
 	}
 
-	sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
-	glh = gtk_tree_selection_get_selected_rows(sel, NULL);
-	if (glh != NULL) {
-		for (gl = g_list_first(glh); gl != NULL; gl = g_list_next(gl)) {
+    GList *ofrs = NULL;
+
+    GtkTreeSelection *ofr_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
+    GList *selected_ofr = gtk_tree_selection_get_selected_rows(ofr_selection, NULL);
+
+    gboolean use_selection = (selected_ofr != NULL);
+
+    GList *gl = use_selection ? g_list_first(selected_ofr) : mbds->ofrs;
+
+    for (; gl != NULL; gl = g_list_next(gl)) {
+        struct o_frame *ofr;
+        if (use_selection) {
+            GtkTreeIter iter;
             if (!gtk_tree_model_get_iter(ofr_store, &iter, gl->data)) continue;
+            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
+        } else {
+             ofr = O_FRAME(gl->data);
+        }
 
-			gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
-            if (ofr->skip) continue;
+        if (ofr->sol == NULL) continue;
+        if (ofr->skip) continue;
 
-            if (((action & FMT_FMT_MASK) != REP_FMT_DATASET) && (ofr == NULL || ZPSTATE(ofr) <= ZP_FIT_ERR)) continue;
+        if (((action & REP_FMT_MASK) != REP_FMT_DATASET) && (ZPSTATE(ofr) <= ZP_FIT_ERR)) continue;
 
-			ofrs = g_list_prepend(ofrs, ofr);
-		}
-		ofrs = g_list_reverse(ofrs);
+        ofrs = g_list_prepend(ofrs, ofr);
+    }
 
-		g_list_foreach(glh, (GFunc) gtk_tree_path_free, NULL);
-		g_list_free(glh);
-	} else {
-		for (sl = mbds->ofrs; sl != NULL; sl = g_list_next(sl)) {
-			ofr = O_FRAME(sl->data);
-            if (ofr->skip) continue;
-            if (((action & FMT_FMT_MASK) != REP_FMT_DATASET) && (ofr == NULL || ZPSTATE(ofr) <= ZP_FIT_ERR)) continue;
-
-			ofrs = g_list_prepend(ofrs, ofr);
-		}
-		ofrs = g_list_reverse(ofrs);
-	}
+    if (use_selection) { // free selection
+        g_list_foreach(selected_ofr, (GFunc) gtk_tree_path_free, NULL);
+        g_list_free(selected_ofr);
+    }
 
 	if (ofrs == NULL) {
 		error_beep();
@@ -685,12 +682,15 @@ static void rep_file_cb(char *fn, gpointer data, unsigned action)
 		return;
 	}
 
-	ret = mbds_report_from_ofrs(mbds, repfp, ofrs, action);
+//    ofrs = g_list_reverse(ofrs);
+
+    if (append)
+        action |= REP_ACTION_APPEND;
+    int ret = mbds_report_from_ofrs(mbds, repfp, ofrs, action);
 	if (ret < 0) {
 		mbds_printf(data, "%s", last_err());
 	} else {
-		mbds_printf(data, "%d frame(s), %d star(s) reported to %s",
-			    g_list_length(ofrs), ret, fn);
+        mbds_printf(data, "%d frame(s), %d star(s) reported to %s", g_list_length(ofrs), ret, fn);
 	}
 
     g_list_free(ofrs);
@@ -768,10 +768,8 @@ static void select_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
                     gtk_tree_model_get(store, &iter, 0, &ofr, -1);
 
                     ofr->skip = 1;
-                    if (ofr->ccd_frame) {
-                        release_frame(ofr->ccd_frame);
-                        ofr->ccd_frame = NULL;
-                    }
+//                    if (ofr->ccd_frame)
+//                        ofr_unlink_frame(ofr);
 
                     n++;
                 }
@@ -780,6 +778,7 @@ static void select_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
                 g_list_free(glh);
 
                 if (n > 0) {
+printf("4\n"); fflush(NULL);
                     mb_rebuild_ofr_list(mband_dialog);
                     mbds_printf(mband_dialog, "%d frames hidden: they will not be processed or saved\n", n);
                 }
@@ -796,13 +795,14 @@ static void select_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
         int n = 0;
         for (gl = mbds->ofrs; gl != NULL; gl = gl->next) {
             struct o_frame *ofr = gl->data;
-            if (ofr->skip) {
+            if (ofr && ofr->skip) {
                 ofr->skip = 0;
                 n++;
             }
         }
 
         if (n > 0) {
+printf("5\n"); fflush(NULL);
             mb_rebuild_ofr_list(mband_dialog);
             mbds_printf(mband_dialog, "%d frames restored\n", n);
         }
@@ -832,16 +832,17 @@ void act_mband_unhide (GtkAction *action, gpointer data)
 }
 
 
+
 void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
 {
     GtkWidget *ofr_list = g_object_get_data(data, "ofr_list");
     g_return_if_fail(ofr_list != NULL);
 
-    GtkTreeSelection *selection = tree_view_get_selection(GTK_TREE_VIEW(ofr_list), SELECT_PATH_CURRENT);
-    if (selection == NULL) return;
+    GtkTreeSelection *selected_ofr = tree_view_get_selection(GTK_TREE_VIEW(ofr_list), SELECT_PATH_CURRENT);
+    if (selected_ofr == NULL) return;
 
     struct o_frame *ofr;
-    if (! tree_selection_get_item(selection, 0, &ofr)) return;
+    if (! tree_selection_get_item(selected_ofr, 0, &ofr)) return;
 
     if (ofr && ofr->ccd_frame) {
         gpointer window = g_object_get_data(G_OBJECT(data), "im_window");
@@ -849,8 +850,10 @@ void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
 
         get_frame(ofr->ccd_frame);
         frame_to_channel(ofr->ccd_frame, window, "i_channel");
+
         release_frame(ofr->ccd_frame);
         update_fits_header_display(window);
+// update edit_star
     }
 }
 
@@ -859,174 +862,153 @@ void act_mband_next_ofr(GtkAction *action, gpointer data)
     GtkTreeView *ofr_list = g_object_get_data(G_OBJECT(data), "ofr_list");
     if (ofr_list == NULL) return;
 
-    GtkTreeSelection *selection = tree_view_get_selection (ofr_list, SELECT_PATH_NEXT);
-//    ofr_selection_cb (selection, data);
+    tree_view_get_selection (ofr_list, SELECT_PATH_NEXT);
+    act_mband_display_ofr_frame(action, data);
 }
 
 void act_mband_prev_ofr(GtkAction *action, gpointer data)
 {
     GtkTreeView *ofr_list = g_object_get_data (G_OBJECT(data), "ofr_list");
-   if (ofr_list == NULL) return;
+    if (ofr_list == NULL) return;
 
-    GtkTreeSelection *selection = tree_view_get_selection (ofr_list, SELECT_PATH_PREV);
-//    ofr_selection_cb (selection, data);
+    tree_view_get_selection (ofr_list, SELECT_PATH_PREV);
+    act_mband_display_ofr_frame(action, data);
 }
 
+
+
+
 /* rebuild star list in stars tab based on the first frame in the current selection */
-static void ofr_selection_cb(GtkWidget *selection, gpointer mband_dialog)
+static void ofr_selection_cb(GtkWidget *ofr_selection, gpointer mband_dialog)
 {
     GtkTreeModel *ofr_store;
-    GList *ofr_list = gtk_tree_selection_get_selected_rows (GTK_TREE_SELECTION(selection), &ofr_store);
+    GList *selected_ofr = gtk_tree_selection_get_selected_rows (GTK_TREE_SELECTION(ofr_selection), &ofr_store);
 
     char buf[100];
     snprintf(buf, sizeof(buf) - 1, "no frame");
 
     struct o_frame *ofr = NULL;
-    if (ofr_list) {
-        GtkTreePath *path = ofr_list->data;
+    if (selected_ofr) {
         GtkTreeIter iter;
-        gtk_tree_model_get_iter (ofr_store, &iter, path);
+        gtk_tree_model_get_iter (ofr_store, &iter, selected_ofr->data);
 
         gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
-        if (ofr && ofr->skip) ofr = NULL;
+        if (ofr->skip) ofr = NULL;
     }
 
     if (ofr) {
-        mb_rebuild_sob_list (mband_dialog, ofr->sol);
 
-        if (ofr->fr_name) snprintf(buf, sizeof(buf) - 1, " MJD : %.5f   %s", ofr->mjd, basename(ofr->fr_name));
+        GtkWidget *sob_list = dialog_get_sob_list(mband_dialog);
+        if (sob_list != NULL) {
+            GtkListStore *sob_store = GTK_LIST_STORE (gtk_tree_view_get_model (GTK_TREE_VIEW (sob_list)));
+            GtkTreeSelection *sob_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(sob_list));
+
+            GList *selected_gui_stars = g_object_get_data(G_OBJECT(sob_selection), "last_selected");
+
+            g_object_set_data(G_OBJECT(sob_selection), "selection_control", (gpointer) FRAME_CHANGE); // tell sob_selection_cb this is a frame change
+
+            gtk_tree_selection_unselect_all (sob_selection);            
+            gtk_list_store_clear(sob_store); // clear sob_store
+
+            if (ofr->sol) sobs_to_sob_list(sob_list, ofr->sol); // fill sob_store rows from ofr->sol
+
+            if (selected_gui_stars != NULL) { // select sob rows from last_selected_gui_stars
+
+                GtkTreeIter iter;
+                if (gtk_tree_model_get_iter_first (sob_store, &iter)) {
+                    do {
+                        struct star_obs *sob;
+                        gtk_tree_model_get (sob_store, &iter, 0, &sob, -1);
+                        if ( sob == NULL ) continue;
+
+                        struct cat_star *cat_s = sob->cats;
+                        g_return_if_fail(cat_s != NULL);
+
+                        struct gui_star *gs = cat_s->guis;
+
+                        if ( gui_star_in_selection (selected_gui_stars, gs) )
+                            gtk_tree_selection_select_iter (sob_selection, &iter); // calls sob_selection_cb for each sob
+
+                     } while (gtk_tree_model_iter_next (sob_store, &iter));
+                }
+            }
+
+            g_object_set_data(G_OBJECT(sob_selection), "selection_control", NULL);
+        }
+
+        if (ofr->fr_name) snprintf(buf, sizeof(buf) - 1, " JD : %.5f   %s", mjd_to_jd(ofr->mjd), basename(ofr->fr_name));
+// try this
+        ofr_to_stf_cats(ofr);
     }
 
     GtkWidget *mband_sob_header = g_object_get_data(G_OBJECT(mband_dialog), "mband_sob_header");
     gtk_label_set_text(GTK_LABEL(mband_sob_header), buf);
 
-    g_list_foreach (ofr_list, (GFunc) gtk_tree_path_free, NULL);
-    g_list_free (ofr_list);
+    g_list_foreach (selected_ofr, (GFunc) gtk_tree_path_free, NULL);
+    g_list_free (selected_ofr);
 }
 
-static int compare_pointers(gpointer a, gpointer b)
+static void sob_selection_cb(GtkWidget *sob_selection, gpointer mband_dialog)
 {
-    if (a < b) return -1;
-    if (a == b) return 0;
-    return 1;
-}
+    int selection_control = g_object_get_data(G_OBJECT(sob_selection), "selection_control");
+    if (selection_control == FRAME_CHANGE) return;
 
-static int gui_star_compare_pointers(gpointer a, gpointer b)
-{
-    if ( GUI_STAR(a)->s < GUI_STAR(b)->s ) return -1;
-    if ( GUI_STAR(a)->s == GUI_STAR(b)->s ) return 0;
-    return 1;
-}
-
-/* hilight selected stars in image window */
-static void sob_selection_cb(GtkWidget *selection, gpointer mband_dialog)
-{
     GtkTreeModel *sob_store;
-    GList *sob_sel = gtk_tree_selection_get_selected_rows (GTK_TREE_SELECTION(selection), &sob_store);
 
-    GtkWidget *window = g_object_get_data(G_OBJECT(mband_dialog), "im_window");
-    g_return_if_fail( window != NULL );
-
-    // make sob_list from the sob_store row selection
-    GSList *sob_list = NULL;
-    GList *ss = g_list_first(sob_sel);
-    int ns = 0;
-    while (ss) {
-        GtkTreePath *path = ss->data;
+    GList *selected_sob = gtk_tree_selection_get_selected_rows (GTK_TREE_SELECTION(sob_selection), &sob_store);
+    GList *ss;
+    GList *selected_gui_stars = NULL;
+    for(ss = selected_sob; ss != NULL; ss = g_list_next(ss)) {
         GtkTreeIter iter;
-        gtk_tree_model_get_iter (sob_store, &iter, path);
+        gtk_tree_model_get_iter (sob_store, &iter, ss->data);
 
         struct star_obs *sob;
         gtk_tree_model_get(sob_store, &iter, 0, &sob, -1);
         g_return_if_fail(sob != NULL);
 
-        sob_list = g_slist_prepend(sob_list, sob->cats);
-        ns++;
-        ss = g_list_next(ss);
-    }
-    g_list_foreach (sob_sel, (GFunc) gtk_tree_path_free, NULL);
-    g_list_free (sob_sel);
+        struct cat_star *cat_s = sob->cats;
+        g_return_if_fail(cat_s != NULL);
 
-    if (ns == 0) return; // no sob selection
-
-    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    g_return_if_fail( gsl != NULL );
-
-    int ng = g_slist_length(gsl->sl);
-    if (ng == 0) return; // no cat stars
-
-    // make copy of gsl marking each star as unselected
-    GSList *gsl_copy = NULL;
-    GSList *sl = gsl->sl;
-    struct cat_star *cats = NULL;
-    while (sl) {
-        struct gui_star *gs = GUI_STAR(sl->data);
-        gs->flags &= ~STAR_SELECTED;
-
-        // if nc or ng == 1 then we are already done
-        if (gs->s == sob_list->data) {
-            cats = gs->s;
-            gs->flags |= STAR_SELECTED;
-        }
-
-        gsl_copy = g_slist_prepend(gsl_copy, gs);
-        sl = g_slist_next(sl);
+        selected_gui_stars = g_list_insert_sorted(selected_gui_stars, cat_s->guis, (GCompareFunc)gui_star_compare);
     }
 
-    GList *selected = NULL;
-    if ( (ns == 1 || ng == 1) && cats ) selected = g_list_prepend(selected, cats);
+    g_list_foreach (selected_sob, (GFunc) gtk_tree_path_free, NULL);
+    g_list_free (selected_sob);
 
-    if (ns > 1 && ng > 1) {
-        gsl_copy = g_slist_sort(gsl_copy, (GCompareFunc) gui_star_compare_pointers);
-        sob_list = g_slist_sort(sob_list, (GCompareFunc) compare_pointers);
+    GList *old_selected = g_object_get_data(G_OBJECT(sob_selection), "last_selected");
+    GList *new_selected = selected_gui_stars;
+    while (old_selected || new_selected) {
+        while (old_selected && new_selected) {
+            struct gui_star *gs_old = GUI_STAR(old_selected->data);
+            struct gui_star *gs_new = GUI_STAR(new_selected->data);
 
-        // make gsl lookup table
-        gpointer *gsl_array = calloc(ng, sizeof (gpointer));
-
-        GSList *sl = gsl_copy;
-        gpointer *gsl = gsl_array;
-        while (sl) {
-            *(gsl++) = sl->data;
-            sl = g_slist_next(sl);
-        }
-
-        gsl = gsl_array;
-        GSList *sob = sob_list;
-
-        while (sob) {
-            gpointer b = sob->data;
-            int imin = 0;
-
-            struct gui_star *gs;
-
-            // binary search
-            int imax = ng - 1;
-            while (imin < imax) {
-                int imid = (imax + imin) / 2;
-
-                gs = GUI_STAR(gsl[imid]);
-                if (gs->s < b)
-                    imin = imid + 1;
-                else
-                    imax = imid;
+            if (gs_old->sort > gs_new->sort) {
+                gs_old->flags &= ~STAR_SELECTED;
+                old_selected = g_slist_next(old_selected);
+            } else if (gs_old->sort < gs_new->sort) {
+                gs_new->flags |= STAR_SELECTED;
+                new_selected = g_slist_next(new_selected);
+            } else {
+                if (selection_control == REFRESH_SELECTED)
+                    gs_new->flags |= STAR_SELECTED;
+                new_selected = g_slist_next(new_selected);
+                old_selected = g_slist_next(old_selected);
             }
-
-            // deferred test for equality
-            gs = GUI_STAR(gsl[imin]);
-            if ((imax == imin) && (gs->s == b)) {
-                gs->flags |= STAR_SELECTED;
-                selected = g_list_prepend(selected, gs->s);
-            }
-            sob = g_slist_next(sob);
         }
 
-        free(gsl_array);
+        if (old_selected && !new_selected) {
+            GUI_STAR(old_selected->data)->flags &= ~STAR_SELECTED;
+            old_selected = g_slist_next(old_selected);
+        } else if (!old_selected && new_selected) {
+            GUI_STAR(new_selected->data)->flags |= STAR_SELECTED;
+            new_selected = g_slist_next(new_selected);
+        }
     }
 
-    g_slist_free(gsl_copy);
-    g_slist_free(sob_list);
+    g_object_set_data_full(G_OBJECT(sob_selection), "last_selected", selected_gui_stars, (GDestroyNotify) g_list_free);
 
-    g_object_set_data_full(G_OBJECT(selection), "last_selected", selected, (GDestroyNotify) g_list_free);
+    GtkWidget *window = g_object_get_data(G_OBJECT(mband_dialog), "im_window");
+    g_return_if_fail( window != NULL );
 
     gtk_widget_queue_draw(window);
 }
@@ -1034,8 +1016,11 @@ static void sob_selection_cb(GtkWidget *selection, gpointer mband_dialog)
 void act_mband_hilight_stars(GtkAction *action, gpointer data)
 {
     GtkWidget *sob_list = g_object_get_data(G_OBJECT(data), "sob_list");
-    GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(sob_list));
-    sob_selection_cb(sel, data);
+    GtkTreeSelection *sob_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(sob_list));
+
+    g_object_set_data(G_OBJECT(sob_selection), "selection_control", (gpointer) REFRESH_SELECTED);
+    sob_selection_cb(sob_selection, data);
+    g_object_set_data(G_OBJECT(sob_selection), "selection_control", NULL);
 }
 
 
@@ -1050,8 +1035,8 @@ static void action_plot_star(GtkWidget *mband_dialog)
 
     GtkTreeModel *sob_store = gtk_tree_view_get_model(GTK_TREE_VIEW(sob_list));
 
-    GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(sob_list));
-    GList *glh = gtk_tree_selection_get_selected_rows(sel, NULL);
+    GtkTreeSelection *sob_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(sob_list));
+    GList *glh = gtk_tree_selection_get_selected_rows(sob_selection, NULL);
     if (glh == NULL) {
         error_beep();
         mbds_printf(mband_dialog, "No star selected\n");
@@ -1060,8 +1045,7 @@ static void action_plot_star(GtkWidget *mband_dialog)
 
     GList *sobs = NULL;
     GList *gl;
-    double mjdmin, mjdmax;
-    int first = TRUE;
+
     for (gl = g_list_first(glh); gl != NULL; gl = g_list_next(gl)) {
         GtkTreeIter iter;
         if (!gtk_tree_model_get_iter(sob_store, &iter, gl->data)) continue;
@@ -1071,15 +1055,6 @@ static void action_plot_star(GtkWidget *mband_dialog)
 
         struct o_frame *ofr = sob->ofr;
         if (ofr == NULL || ofr->skip || ZPSTATE(ofr) <= ZP_FIT_ERR)	continue;
-
-        double mjd = ofr->mjd;
-        if (first) {
-            mjdmin = mjdmax = mjd;
-            first = FALSE;
-        } else {
-            if (mjd < mjdmin) mjdmin = mjd;
-            if (mjd > mjdmax) mjdmax = mjd;
-        }
 
         sobs = g_list_prepend(sobs, sob);
     }
@@ -1110,8 +1085,8 @@ static void plot_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     GList *ofrs = NULL;
 
     GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
-    GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
-    GList *glh = gtk_tree_selection_get_selected_rows(sel, NULL);
+    GtkTreeSelection *ofr_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
+    GList *glh = gtk_tree_selection_get_selected_rows(ofr_selection, NULL);
 	if (glh != NULL) {
         GList *gl;
 		for (gl = g_list_first(glh); gl != NULL; gl = g_list_next(gl)) {
@@ -1243,98 +1218,102 @@ void act_mband_plot_magtime (GtkAction *action, gpointer data)
 // fit_cb and fit actions
 static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
 {
-    GtkWidget *ofr_list = g_object_get_data(G_OBJECT(mband_dialog), "ofr_list");
-	g_return_if_fail(ofr_list != NULL);
-
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
-	g_return_if_fail(mbds != NULL);
+    g_return_if_fail(mbds != NULL);
 
-    struct o_frame *ofr;
-    GList *ofrs = NULL;
+
     GList *gl;
 
-    GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
-    GList *glh = gtk_tree_selection_get_selected_rows(sel, NULL);
+    if (action != FIT_SET_AVS) {
+        int i = 0;
 
-    if (glh != NULL) { // build ofrs list from ofr of selected rows in tree-view
+        for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) { // build mbds sobs from ofrs
+            struct o_frame *ofr = O_FRAME(gl->data);
+            if (ofr->mbds == mbds) continue;
 
-        GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
+            ofr->mbds = mbds;
 
-        for (gl = g_list_first(glh); gl != NULL; gl = g_list_next(gl)) {
-            GtkTreeIter iter;
-            if (!gtk_tree_model_get_iter(ofr_store, &iter, gl->data)) continue;
+            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
+            i++;
+        }
+//        mb_rebuild_ofr_list(mband_dialog);
+//        mb_rebuild_bands_list(mband_dialog);
 
-            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1); // get ofr of selected row in tree-view
-            if (ofr == NULL) continue;
+    }
 
-            d3_printf("ofr = %08x\n", ofr);
-            ofrs = g_list_prepend(ofrs, ofr); // prepend to ofrs list
-		}
+    // make list of ofr's from mband gui selection
+    GtkWidget *ofr_list = g_object_get_data(G_OBJECT(mband_dialog), "ofr_list");
+    g_return_if_fail(ofr_list != NULL);
 
-		g_list_foreach(glh, (GFunc) gtk_tree_path_free, NULL);
-		g_list_free(glh);
+    GtkTreeSelection *ofr_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
+    GList *selected_ofr = gtk_tree_selection_get_selected_rows(ofr_selection, NULL); // check why this does not work with sorting - duplicate paths?
 
-    } else { // no tree-view selected row, build ofrs list as copy of mbds->ofrs list (with skip)
-		for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
-			ofr = O_FRAME(gl->data);
-            if (ofr->skip) continue;
+    GList *ofrs = NULL;
 
-			ofrs = g_list_prepend(ofrs, ofr);
-		}
-//		ofrs = g_list_copy(mbds->ofrs);
-	}
+    GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
 
+//    GList *gl = (selected_ofr == NULL) ? mbds->ofrs : selected_ofr;
+
+    for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
+
+        struct o_frame *ofr;
+
+//        if (selected_ofr) {
+//            GtkTreeIter iter;
+//            if (!gtk_tree_model_get_iter(ofr_store, &iter, gl->data)) continue; // gl->data is a path
+
+//            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1); // get ofr from store
+//        } else
+            ofr = O_FRAME(gl->data);
+
+        if (ofr->sol == NULL) continue;
+        if (ofr->skip) continue;
+
+        ofr->as_zp_valid = 0; // clear all-sky zero point
+        d3_printf("ofr = %08x\n", ofr);
+        ofrs = g_list_prepend(ofrs, ofr); // prepend to ofrs list
+    }
+
+    // do the fitting
     GtkWidget *bands_list = g_object_get_data(G_OBJECT(mband_dialog), "bands_list");
+    char *message;
+    if (action == FIT_ZPOINTS)
+        message = "Fitting zero points with no color";
+    else if (action == FIT_ZP_WTRANS)
+        message = "Fitting zero points with current color coefficients";
+    else if (action == FIT_SET_AVS)
+        message = "Setting smags to average";
 
-    GList *sl;
+
     switch (action) {
-	case FIT_ZPOINTS:
-        fit_progress("Fitting zero points with no color", mband_dialog);
+    case FIT_ZPOINTS:
+    case FIT_ZP_WTRANS:
+        fit_progress(message, mband_dialog);
 
-		for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) {
-			ofr = O_FRAME(sl->data);
-            if (ofr->band < 0) continue;
+        for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
+            struct o_frame *ofr = O_FRAME(gl->data);
 
-			ofr->trans->k = 0.0;
-			ofr->trans->kerr = BIG_ERR;
-			ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
+            if (action != FIT_ZP_WTRANS) { // else default values from options or fitted values
+                ofr->trans->k = 0.0;
+                ofr->trans->kerr = BIG_ERR;
+            }
+            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
 		}
 
         fit_progress("Transforming stars", mband_dialog);
-		for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) {
-			ofr = O_FRAME(sl->data);
-            if (ofr->band < 0) continue;
 
-			ofr_transform_stars(ofr, mbds, 0, 0);
-		}
-        bands_list_update_vals(bands_list, mbds);
-        fit_progress("Done", mband_dialog);
-		break;
+        for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
+            struct o_frame *ofr = O_FRAME(gl->data);
+            ofr_transform_stars(ofr, mbds, 0, 0); // what does avg do?
+        }
 
-	case FIT_ZP_WTRANS:
-        fit_progress("Fitting zero points with current color coefficients", mband_dialog);
-		for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) {
-			ofr = O_FRAME(sl->data);
-            if (ofr->band < 0) continue;
-
-			ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
-		}
-        fit_progress("Transforming stars", mband_dialog);
-		for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) {
-			ofr = O_FRAME(sl->data);
-            if (ofr->band < 0) continue;
-
-			ofr_transform_stars(ofr, mbds, 0, 0);
-		}
-        fit_progress("Done", mband_dialog);
 		break;
 
 	case FIT_TRANS:
         mbds_fit_all(ofrs, fit_progress, mband_dialog);
+
         fit_progress("Transforming stars", mband_dialog);
 		mbds_transform_all(mbds, ofrs, 0);
-        bands_list_update_vals(bands_list, mbds);
-        fit_progress("Done", mband_dialog);
 		break;
 
 	case FIT_ALL_SKY:
@@ -1346,43 +1325,95 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
             bands_list_update_vals(bands_list, mbds);
 			break;
 		}
+
         fit_progress("Transforming stars", mband_dialog);
 		mbds_transform_all(mbds, ofrs, 0);
-        bands_list_update_vals(bands_list, mbds);
-        fit_progress("Done", mband_dialog);
 		break;
+
+    case FIT_SET_AVS: {
+        GtkWidget *im_window = g_object_get_data(G_OBJECT(mband_dialog), "im_window");
+        struct stf *recipe = g_object_get_data(G_OBJECT(im_window), "recipe");
+        GList *cats_list = stf_find_glist(recipe, 0, SYM_STARS);
+
+        GList *sl;
+        for (sl = cats_list; sl != NULL; sl = g_list_next(sl)) { // clear cats accums
+            struct cat_star *cats = CAT_STAR(sl->data);
+            cats->n = 0;
+            cats->m = 0;
+            cats->me = 0;
+            cats->m2 = 0;
+        }
+
+        for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
+            struct o_frame *ofr = O_FRAME(gl->data);
+            ofr_accum_avs(ofr);
+        }
+
+        for (sl = cats_list; sl != NULL; sl = sl->next) {
+            struct cat_star *cats = CAT_STAR(sl->data);
+            if (cats->n) {
+                double smag = cats->m / cats->n;
+                double serr = cats->me / cats->n;
+                double stddev = sqrt(cats->m2 / cats->n - sqr(cats->m / cats->n));
+                // cats->smags from smag, stddev
+
+printf("fit_cb %s %s %s %f %f : ", cats->name, cats->smags, cats->bname, smag, stddev);
+                if (update_band_by_name(&cats->smags, cats->bname, smag, stddev) != -1) {
+                    printf("%s", cats->smags);
+                }
+printf("\n");
+fflush(NULL);
+
+            }
+        }
+
+        break;
+    }
 
 	default:
 		return;
 	}
 
-    GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
-    glh  = gtk_tree_selection_get_selected_rows(sel, NULL);
-    if (glh != NULL) { // rewrite row values for selected rows of ofr_list
-		for (gl = g_list_first(glh); gl != NULL; gl = g_list_next(gl)) {
-            GtkTreeIter iter;
-            if (!gtk_tree_model_get_iter(ofr_store, &iter, gl->data)) continue; // get selected row
+    if (action != FIT_ZP_WTRANS)
+        bands_list_update_vals(bands_list, mbds);
 
-            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1); // get ofr of row
-            if (ofr == NULL) continue;
+    fit_progress("Done", mband_dialog);
 
-            ofr_store_set_row_vals(GTK_LIST_STORE(ofr_store), &iter, ofr); // rewrite the row values
-		}
+    // refresh mband gui with fitted values
+//    GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
 
-		g_list_foreach(glh, (GFunc) gtk_tree_path_free, NULL);
-		g_list_free(glh);
-    } else { // no selected rows, rewrite row values for each row of ofr_list
-		gboolean valid;
+//    gl = (selected_ofr == NULL) ? mbds->ofrs : selected_ofr;
+
+//    if (! selected_ofr)
+        gtk_list_store_clear(ofr_store);
+
+
+    int i = 1000;
+    for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) { // update ofr_store
         GtkTreeIter iter;
-		valid = gtk_tree_model_get_iter_first (ofr_store, &iter);
-		while (valid) {
-            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
+        struct o_frame *ofr;
 
-            if (ofr != NULL) ofr_store_set_row_vals(GTK_LIST_STORE(ofr_store), &iter, ofr);
+//        if (selected_ofr) {
+//            if (!gtk_tree_model_get_iter(ofr_store, &iter, gl->data)) // gl->data is a path
+//                continue;
 
-			valid = gtk_tree_model_iter_next (ofr_store, &iter);
-		}
-	}
+//            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1); // get ofr from store
+
+//        } else {
+        {
+            ofr = O_FRAME(gl->data);
+            if (ofr->skip) continue;
+
+            gtk_list_store_prepend(GTK_LIST_STORE(ofr_store), &iter);
+        }
+
+        i = ofr_store_set_row_vals(i, GTK_LIST_STORE(ofr_store), &iter, ofr); // update the row
+    }
+
+    if (selected_ofr != NULL) {
+        g_list_foreach(selected_ofr, (GFunc) gtk_tree_path_free, NULL);
+        g_list_free(selected_ofr);
+    }
 
     GtkWidget *sob_list = g_object_get_data(G_OBJECT(mband_dialog), "sob_list");
 
@@ -1393,7 +1424,7 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
 
 void act_mband_fit_zp_null (GtkAction *action, gpointer data)
 {
-	fit_cb (data, FIT_ZPOINTS, NULL);
+    fit_cb (data, FIT_ZPOINTS, NULL);
 }
 
 void act_mband_fit_zp_current (GtkAction *action, gpointer data)
@@ -1411,7 +1442,10 @@ void act_mband_fit_allsky (GtkAction *action, gpointer data)
 	fit_cb (data, FIT_ALL_SKY, NULL);
 }
 
-
+void act_mband_dataset_avgs_to_smags (GtkAction *action, gpointer data)
+{
+    fit_cb (data, FIT_SET_AVS, NULL);
+}
 
 // build mband dialog from stf file
 void add_to_mband(gpointer mband_dialog, char *fn)
@@ -1428,16 +1462,21 @@ void add_to_mband(gpointer mband_dialog, char *fn)
 
     int n = 0;
     struct stf *stf;
-	while (	(stf = stf_read_frame(inf)) != NULL ) {
-//		d3_printf("----------------------------------read stf\n");
-//stf_fprint(stderr, stf, 0, 0);
 
-        if ( mband_dataset_add_stf (mbds, stf) >= 0 ) n++;
+    while (	(stf = stf_read_frame(inf)) != NULL ) {
+        // create ofr and prepend to mbds->ofrs
+        // add sobs for target and std stars to mbds
+//        fprintf(stdout, "--------------------------------------------- %d \n", n);
+//        stf_fprint(stdout, stf, 0, 0); fflush(stdout);
+        struct o_frame *ofr = NULL;
+        if ( ofr = mband_dataset_add_stf (mbds, stf) ) {
+            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
+            n++;
+        }
+    }
 
-        mbds_printf(mband_dialog, "%d frames read", n);
 
-        while (gtk_events_pending ()) gtk_main_iteration ();
-	}
+    mbds_printf(mband_dialog, "%d frames read", n);
 
 	if (n == 0) {
 		error_beep();
@@ -1446,7 +1485,6 @@ void add_to_mband(gpointer mband_dialog, char *fn)
     }
 
     mbds_print_summary(mband_dialog);
-
     mb_rebuild_ofr_list(mband_dialog);
     mb_rebuild_bands_list(mband_dialog);
 }
@@ -1458,21 +1496,19 @@ void stf_to_mband(gpointer mband_dialog, struct stf *stf, gpointer fr)
 {
     struct mband_dataset *mbds = dialog_get_mbds(mband_dialog);
 
-    int ret = mband_dataset_add_stf(mbds, stf);
-	if (ret == 0) {
+    struct o_frame *ofr = mband_dataset_add_stf(mbds, stf);
+    if (ofr == NULL) {
 		error_beep();
         mbds_printf(mband_dialog, "%s", last_err());
-		return;
+        return;
     }
+//    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
 
     /* link frame for access by gui */
-    get_frame(fr);
-    struct o_frame *ofr = mbds->ofrs->data;
-    ofr->ccd_frame = fr;
-    ofr->fr_name = strdup(((struct ccd_frame *)fr)->name);
+    if (! P_INT(FILE_SAVE_MEM))
+        ofr_link_frame(ofr, fr);
 
     mbds_print_summary(mband_dialog);
-
     mb_rebuild_ofr_list(mband_dialog);
     mb_rebuild_bands_list(mband_dialog);
 }
@@ -1486,7 +1522,6 @@ void mbds_to_mband(gpointer mband_dialog, struct mband_dataset *mbds)
     g_object_set_data_full(G_OBJECT(mband_dialog), "mbds", mbds, (GDestroyNotify)(mband_dataset_release));
 
     mbds_print_summary(mband_dialog);
-
     mb_rebuild_ofr_list(mband_dialog);
     mb_rebuild_bands_list(mband_dialog);
 }
@@ -1508,7 +1543,7 @@ void act_mband_close_window (GtkAction *action, gpointer data)
 static GtkActionEntry mband_menu_actions[] = { // name, stock id, label, accel, tooltip, callback
         /* File */
 	{ "file-menu",    NULL, "_File" },
-    { "file-add",     NULL, "_Add to Dataset",                  "<control>O", NULL, G_CALLBACK (act_mband_add_file) },
+    { "file-add",     NULL, "L_oad Dataset",                  "<control>O", NULL, G_CALLBACK (act_mband_add_file) },
     { "file-save",    NULL, "_Save Dataset",                    "<control>S", NULL, G_CALLBACK (act_mband_save_dataset) },
     { "file-close",   NULL, "_Close Dataset",                   "<control>W", NULL, G_CALLBACK (act_mband_close_dataset) },
     { "report-aavso", NULL, "Report _Targets in AAVSO Format",      NULL,     NULL, G_CALLBACK (act_mband_report) },
@@ -1534,6 +1569,7 @@ static GtkActionEntry mband_menu_actions[] = { // name, stock id, label, accel, 
 	{ "reduce-fit-zp-wtrans", NULL, "Fit Zero Points with _Current Coefficients",       NULL, NULL, G_CALLBACK (act_mband_fit_zp_current) },
 	{ "reduce-fit-trans",     NULL, "Fit Zero Points and _Transformation Coefficients", NULL, NULL, G_CALLBACK (act_mband_fit_zp_trans) },
 	{ "reduce-fit-allsky",    NULL, "Fit Extinction and All-Sky Zero Points",           NULL, NULL, G_CALLBACK (act_mband_fit_allsky) },
+    { "reduce-Smags-from-dataset-averages",    NULL, "Set Smags from Dataset Averages",           NULL, NULL, G_CALLBACK (act_mband_dataset_avgs_to_smags) },
 
 	/* Plot */
 	{ "plot-menu",   NULL, "_Plot" },
@@ -1576,12 +1612,13 @@ static GtkWidget *get_main_menu_bar(GtkWidget *window)
 		"    <menuitem name='edit-unhide-all' action='edit-unhide-all'/>"
 		"  </menu>"
 		"  <!-- Reduce -->"
-		"  <menu name='reduce' action='reduce-menu'>"
-		"    <menuitem name='reduce-fit-zpoints' action='reduce-fit-zpoints'/>"
-		"    <menuitem name='reduce-fit-zp-wtrans' action='reduce-fit-zp-wtrans'/>"
+        "  <menu name='reduce' action='reduce-menu'>"
+        "    <menuitem name='reduce-fit-zpoints' action='reduce-fit-zpoints'/>"
+        "    <menuitem name='reduce-fit-zp-wtrans' action='reduce-fit-zp-wtrans'/>"
 		"    <menuitem name='reduce-fit-trans' action='reduce-fit-trans'/>"
-		"    <menuitem name='reduce-fit-allsky' action='reduce-fit-allsky'/>"
-		"  </menu>"
+        "    <menuitem name='reduce-fit-allsky' action='reduce-fit-allsky'/>"
+        "    <menuitem name='reduce-Smags-from-dataset-averages' action='reduce-Smags-from-dataset-averages'/>"
+        "  </menu>"
 		"  <!-- Plot -->"
 		"  <menu name='plot' action='plot-menu'>"
 		"    <menuitem name='plot-residuals-magnitude' action='plot-residuals-magnitude'/>"
@@ -1654,5 +1691,4 @@ void act_control_mband(GtkAction *action, gpointer window)
         gtk_widget_show(mband_dialog);
         gdk_window_raise(mband_dialog->window);
     }
-
 }

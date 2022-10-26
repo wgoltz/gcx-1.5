@@ -246,14 +246,14 @@ static int do_get_cmd (char *args, GtkWidget *dialog)
 		return OBS_CMD_ERROR;
 	}
 
-    set_named_checkb_val(dialog, "img_run_button", 0);
+    set_named_checkb_val(dialog, "exp_run_button", 0);
 	set_named_checkb_val(dialog, "img_dark_checkb", 0);
 	if (capture_image(dialog)) {
 		err_printf("Failed to capture frame\n");
 		return OBS_CMD_ERROR;
 	}
 
-	INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, obs_list_cmd_done, dialog);
+    INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, obs_list_cmd_done, dialog, "obs_list_cmd_done");
 	return OBS_CMD_RUNNING;
 }
 
@@ -285,8 +285,7 @@ static int do_filter_cmd (char *args, GtkWidget *dialog)
 		if (!strcasecmp(*filters, args)) {
 			combo = g_object_get_data(G_OBJECT(dialog), "obs_filter_combo");
 			gtk_combo_box_set_active (GTK_COMBO_BOX(combo), i);
-			INDI_set_callback(INDI_COMMON (fwheel), FWHEEL_CALLBACK_DONE,
-			                  obs_list_cmd_done, dialog);
+            INDI_set_callback(INDI_COMMON (fwheel), FWHEEL_CALLBACK_DONE, obs_list_cmd_done, dialog, "obs_list_cmd_done");
 			return OBS_CMD_RUNNING;
 		}
 		filters ++;
@@ -307,7 +306,7 @@ static int do_exp_cmd (char *args, GtkWidget *dialog)
 		return OBS_CMD_ERROR;
 	}
 
-	named_spin_set(dialog, "img_exp_spin", nexp);
+	named_spin_set(dialog, "exp_spin", nexp);
 	return OBS_NEXT_COMMAND;
 }
 
@@ -320,13 +319,13 @@ static int do_dark_cmd (char *args, GtkWidget *dialog)
 		return OBS_CMD_ERROR;
 	}
 
-    set_named_checkb_val(dialog, "img_run_button", 0);
+    set_named_checkb_val(dialog, "exp_run_button", 0);
 	set_named_checkb_val(dialog, "img_dark_checkb", 1);
 	if (capture_image(dialog)) {
 		err_printf("Failed to capture frame\n");
 		return OBS_CMD_ERROR;
 	}
-	INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, obs_list_cmd_done, dialog);
+    INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, obs_list_cmd_done, dialog, "obs_list_cmd_done");
 	return OBS_CMD_RUNNING;
 }
 
@@ -444,7 +443,7 @@ static int do_match_cmd (char *args, GtkWidget *dialog)
 	}
 	if ( center_matched_field(dialog))
 		return OBS_CMD_ERROR;
-	INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_cmd_done, dialog);
+    INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_cmd_done, dialog, "obs_list_cmd_done");
 	return OBS_CMD_RUNNING;
 }
 
@@ -467,15 +466,15 @@ static int do_mget_cmd (char *args, GtkWidget *dialog)
 	if (token == TOK_NUMBER) {
 		n = strtol(start, NULL, 10);
 		d3_printf("do_mget_cmd: setting frame count to %d\n", n);
-		named_spin_set(dialog, "img_number_spin", 1.0 * n);
+		named_spin_set(dialog, "exp_number_spin", 1.0 * n);
 	}
-    set_named_checkb_val(dialog, "img_run_button", 1);
+    set_named_checkb_val(dialog, "exp_run_button", 1);
 	set_named_checkb_val(dialog, "img_dark_checkb", 0);
 	if (capture_image(dialog)) {
 		err_printf("Failed to capture frame\n");
 		return OBS_CMD_ERROR;
 	}
-	INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, obs_list_cmd_done, dialog);
+    INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, obs_list_cmd_done, dialog, "obs_list_cmd_done");
 	return OBS_CMD_RUNNING;
 }
 
@@ -541,7 +540,7 @@ static int do_ckpoint_cmd (char *args, GtkWidget *dialog)
 		return OBS_NEXT_COMMAND;
 	if (center_matched_field(dialog))
 		return OBS_CMD_ERROR;
-	INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_ckpoint_move_done, dialog);
+    INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_ckpoint_move_done, dialog, "obs_list_ckpoint_move_done");
 	return OBS_CMD_RUNNING;
 }
 
@@ -632,7 +631,7 @@ static int lx_sync_to_obs(gpointer dialog)
 	tele = tele_find(main_window);
 	if (! tele)
 		return -1;
-	ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra, obs->dec, obs->equinox);
+    ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
 	return ret;
 }
 

@@ -19,7 +19,7 @@ enum {
 GtkWidget* create_pstar (void);
 GtkWidget* create_wcs_edit (void);
 GtkWidget* create_show_text (void);
-GtkWidget* create_create_recipe (void);
+GtkWidget* create_recipe_dialog (void);
 GtkWidget* create_yes_no (void);
 GtkWidget* create_par_edit (void);
 GtkWidget* create_image_processing (void);

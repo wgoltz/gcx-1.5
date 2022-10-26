@@ -8,7 +8,7 @@ struct image_file {
 	int ref_count;
     int flags;
 	char *filename;
-    struct wcs *fim;
+//    struct wcs *fim; // duplicate of fr->fim ?
 	struct ccd_frame *fr;
 };
 
@@ -38,6 +38,7 @@ struct image_file {
 
 /* not using 40_0000 and 80_0000 */
 #define IMG_OP_DEMOSAIC 0x200000
+#define IMG_IN_MEMORY_ONLY 0x400000 /* image is new frame (in memory only) */
 
 #define IMG_BAYER_MASK 0xf000000
 #define IMG_BAYER_SHIFT 24
@@ -79,8 +80,9 @@ struct image_file_list {
 };
 
 struct bad_pix_map *bad_pix_map_new(void);
-void bad_pix_map_release(struct bad_pix_map *map);
+struct bad_pix_map *bad_pix_map_release(struct bad_pix_map *map);
 struct image_file *add_image_file_to_list(struct image_file_list *imfl, char *filename, int flags);
+struct image_file *add_image_frame_to_list(struct image_file_list *imfl, struct ccd_frame *fr, int flags);
 struct image_file_list * image_file_list_new(void);
 void image_file_list_ref(struct image_file_list *imfl);
 void image_file_list_release(struct image_file_list *imfl);
@@ -112,6 +114,7 @@ void refresh_wcs(gpointer window, struct ccd_frame *fr);
 /* from reducegui.h */
 
 void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_list *imfl);
-void add_files(GSList *files, gpointer window);
+void window_add_files(GSList *files, gpointer window); /* add list of file names */
+void window_add_frames(GSList *frames, gpointer window); /* add list of frame pointers */
 
 #endif

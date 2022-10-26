@@ -45,6 +45,8 @@
 #include "wcs.h"
 #include "psf.h"
 #include "filegui.h"
+#include "multiband.h"
+
 
 /* star popup action codes */
 #define STARP_UNMARK_STAR 1
@@ -132,10 +134,26 @@ void auto_adjust_photometry_rings_for_binning(struct ap_params *ap, struct ccd_f
     }
 }
 
+// sort by gui_star->sort, highest first
+int gui_star_compare(struct gui_star *a, struct gui_star *b)
+{
+    if (a->sort > b->sort) return -1;
+    if (a->sort < b->sort) return 1;
+    return 0;
+}
+
+// sort by cats->guis->sort, highest first
+int cats_guis_compare(struct cat_star *a, struct cat_star *b)
+{
+    if (a->guis->sort > b->guis->sort) return -1;
+    if (a->guis->sort < b->guis->sort) return 1;
+    return 0;
+}
+
 void attach_star_list(struct gui_star_list *gsl, GtkWidget *window)
 {
-	g_object_set_data_full(G_OBJECT(window), "gui_star_list",
-				 gsl, (GDestroyNotify)gui_star_list_release);
+    g_slist_sort(gsl->sl, (GCompareFunc)gui_star_compare);
+    g_object_set_data_full(G_OBJECT(window), "gui_star_list", gsl, (GDestroyNotify)gui_star_list_release);
 }
 
 /* we draw stars that are this much outside the requested
@@ -284,11 +302,9 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 		set_foreground_color (cr, gsl->selected_color);
 	else
 		set_foreground_color (cr, gsl->color[type]);
-
-//	ix = (gs->x + 0.5) * zoom;
-//	iy = (gs->y + 0.5) * zoom;
-    ix = gs->x * zoom;
-    iy = gs->y * zoom;
+// try this
+    ix = (gs->x + 1) * zoom;
+    iy = (gs->y + 1) * zoom;
 
 	if (gsl->shape[type] == STAR_SHAPE_APHOT) {
         isz = 2 * zoom / gsl->binning;
@@ -308,13 +324,11 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 	if (gs->flags & STAR_HIDDEN)
 		return;
 
-	/* FIXME: cairo_set_line_width here, according to zoom */
     double lw = 0.5 + 0.7 * zoom;
     if (lw < 1) lw = 1;
     cairo_set_line_width (cr, lw);
 
-	draw_a_star(cr, ix, iy, isz, gsl->shape[type],
-		    gs->label.label, gs->label.ox, gs->label.oy);
+    draw_a_star(cr, ix, iy, isz, gsl->shape[type], gs->label.label, gs->label.ox, gs->label.oy);
 
 	if ((gs->pair != NULL) && (gs->pair->flags & STAR_HAS_PAIR)) {
 		int pix, piy;
@@ -599,9 +613,10 @@ void find_stars_cb(gpointer window, guint action)
 		}
 		info_printf_sb2(window, "Searching for stars...");
 //		d3_printf("Star det SNR: %f(%d)\n", P_DBL(SD_SNR), SD_SNR);
-/* give the mainloop a change to redraw under the popup */
-		while (gtk_events_pending ())
-			gtk_main_iteration ();
+
+        /* give the mainloop a chance to redraw under the popup */
+//        while (gtk_events_pending ()) gtk_main_iteration ();
+
 		extract_stars(i_ch->fr, NULL, 0, P_DBL(SD_SNR), src);
 		remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
 /* now add to the list */
@@ -626,6 +641,9 @@ void find_stars_cb(gpointer window, guint action)
 				gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 			}
 			gs->flags = STAR_TYPE_SIMPLE;
+            if (gsl->sl != NULL)
+                gs->sort = GUI_STAR(gsl->sl->data)->sort;
+            gs->sort++;
 			gsl->sl = g_slist_prepend(gsl->sl, gs);
 			nstars++;
 		}
@@ -882,6 +900,7 @@ void redraw_cat_stars(GtkWidget *window)
 
 	cat_change_wcs(gsl->sl, wcs);
 
+    star_list_update_editstar(window);
 	star_list_update_size(window);
 	star_list_update_labels(window);
 }
@@ -1528,6 +1547,10 @@ static void detect_add_star(GtkWidget *window, double x, double y)
 		gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 
 		gs->flags = STAR_TYPE_USEL;
+
+        if (gsl->sl != NULL)
+            gs->sort = GUI_STAR(gsl->sl->data)->sort;
+        gs->sort++;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
 
 		gsl->display_mask |= TYPE_MASK(STAR_TYPE_USEL);
@@ -1571,6 +1594,82 @@ static void sprint_star(char *buf, int len, struct gui_star *gs, struct wcs *wcs
 	return;
 }
 
+struct cat_star *cats_from_current_frame_sob(gpointer main_window, struct gui_star *gs)
+{
+    if (gs == NULL) return NULL;
+
+    struct image_channel *i_chan = g_object_get_data(main_window, "i_channel");
+    if (i_chan == NULL || i_chan->fr == NULL) {
+        err_printf_sb2(main_window, "No frame - load a frame\n");
+        return NULL;
+    }
+
+    struct ccd_frame *fr = i_chan->fr;
+
+    GtkWidget *mband_window = g_object_get_data(main_window, "mband_window");
+    if (mband_window == NULL) return NULL;
+
+    GtkWidget *ofr_list = g_object_get_data(G_OBJECT(mband_window), "ofr_list");
+    g_return_val_if_fail(ofr_list != NULL, NULL);
+
+    // find ofr (in ofr_list) that points to current frame
+
+    GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
+    GtkTreeIter iter;
+
+    int valid = gtk_tree_model_get_iter_first (ofr_store, &iter);
+    struct o_frame *ofr = NULL;
+
+    while (valid)
+    {
+        struct o_frame *p = NULL;
+        gtk_tree_model_get (ofr_store, &iter, 0, &p, -1);
+        if (p) {
+            if (p->ccd_frame == fr) {
+                ofr = p;
+                break;
+            }
+        }
+
+        valid = gtk_tree_model_iter_next (ofr_store, &iter);
+    }
+
+    if (ofr == NULL) return NULL;
+
+    struct cat_star *cats = NULL;
+    GList *sl;
+//    sl = g_list_reverse(ofr->sol);
+//    for (sl; sl != NULL; sl = g_list_next(sl)) {
+//        struct star_obs *sob = STAR_OBS(sl->data);
+//        printf("%s %d\n", sob->cats->name, sob->cats->guis->sort);
+//    }
+
+
+    int sort = gs->sort;
+    char *last_name = NULL;
+    for (sl = ofr->sol; sl != NULL; sl = g_list_next(sl)) { // sobs sorted by cat->guis->sort first low
+        struct star_obs *sob = STAR_OBS(sl->data);
+        if (sob->cats) {
+            if (sob->cats->guis->sort < sort) {
+                last_name = sob->cats->name;
+                continue;
+            }
+
+            if (sob->cats->guis->sort > sort) {
+                char *name = (gs->s) ? CAT_STAR(gs->s)->name : "";
+                printf("gui star %s not found in sob_list. last sob-<cats name %s\n", name, last_name); fflush(NULL);
+            } else {
+                cats = sob->cats;
+printf ("frame %s sob->cats: %08x %s\n", ofr->fr_name, cats, cats->name); fflush(NULL);
+
+            }
+            break;
+        }
+    }
+
+    return cats;
+}
+
 /* if the star edit dialog is open, pust the selected star into it */
 static void edit_star_hook(struct gui_star *gs, GtkWidget *window)
 {
@@ -1579,10 +1678,14 @@ static void edit_star_hook(struct gui_star *gs, GtkWidget *window)
 	dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
 	if (dialog == NULL || gs->s == NULL)
 		return;
-    struct cat_star *cats = CAT_STAR(gs->s);
-    if (cats->pos[POS_X] == 0 && cats->pos[POS_Y] == 0) {
-        cats->pos[POS_X] = gs->x;
-        cats->pos[POS_Y] = gs->y;
+printf("edit_star_hook ");
+    struct cat_star *cats = cats_from_current_frame_sob(window, gs);
+    if (! cats) {
+        cats = CAT_STAR(gs->s);
+        if (cats->pos[POS_X] == 0 && cats->pos[POS_Y] == 0) {
+            cats->pos[POS_X] = gs->x;
+            cats->pos[POS_Y] = gs->y;
+        }
     }
     star_edit_star(window, cats);
 }
@@ -1712,7 +1815,7 @@ void act_stars_edit (GtkAction *action, gpointer window)
 		err_printf_sb2(window, "No stars selected");
 		return;
 	}
-	do_edit_star(window, sl, 0);
+    do_edit_star(window, sl, 0);
 	g_slist_free(sl);
 }
 

@@ -18,7 +18,7 @@ struct fwheel_t {
 };
 
 char **fwheel_get_filters(struct fwheel_t *fwheel);
-void fwheel_set_ready_callback(void * window, void *func, void *data);
+void fwheel_set_ready_callback(void * window, void *func, void *data, char *msg);
 struct fwheel_t *fwheel_find(void *window);
 
 #endif

@@ -65,7 +65,7 @@ int err_printf(const char *fmt, ...)
 	ret = vsnprintf(lasterr_string, ERR_BUF_SIZE-1, fmt, ap2);
 	if (ret > 0 && lasterr_string[ret-1] == '\n')
 		lasterr_string[ret-1] = 0;
-	ret = vfprintf(stderr, fmt, ap);
+    ret = vfprintf(stderr, fmt, ap); fflush(NULL);
 	va_end(ap);
 	return ret;
 }

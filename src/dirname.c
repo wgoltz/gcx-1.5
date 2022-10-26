@@ -22,7 +22,7 @@
 
 
 #ifndef HAVE_DIRNAME
-
+/*
 #ifdef __cplusplus
 extern "C"
 {
@@ -39,22 +39,22 @@ dirname(const char *path)
 	static char bname[MAXPATHLEN];
 	register const char *endp;
 
-	/* Empty or NULL string gets treated as "." */
+    // Empty or NULL string gets treated as "."
 	if (path == NULL || *path == '\0') {
 		(void)strlcpy(bname, ".", sizeof bname);
 		return(bname);
 	}
 
-	/* Strip trailing slashes */
+    // Strip trailing slashes
 	endp = path + strlen(path) - 1;
 	while (endp > path && *endp == '/')
 		endp--;
 
-	/* Find the start of the dir */
+    // Find the start of the dir
 	while (endp > path && *endp != '/')
 		endp--;
 
-	/* Either the dir is "/" or there are no slashes */
+    // Either the dir is "/" or there are no slashes
 	if (endp == path) {
 		(void)strlcpy(bname, *endp == '/' ? "/" : ".", sizeof bname);
 		return(bname);
@@ -75,5 +75,5 @@ dirname(const char *path)
 #ifdef __cplusplus
 }
 #endif
-
+*/
 #endif /* HAVE_DIRNAME */

@@ -31,6 +31,7 @@
 #include "catalogs.h"
 #include "gui.h"
 #include "obsdata.h"
+#include "params.h"
 
 /* preset contrast values in sigmas */
 #define CONTRAST_STEP 1.4
@@ -430,10 +431,13 @@ void stats_cb(gpointer data, guint action)
 
     if (! i_channel->fr->stats.statsok) frame_stats(i_channel->fr);
 
-    info_printf_sb2(data, "JD %.6f  Frame: %d x %d (avg:%.1f sig:%.1f) avg:%.1f sigma:%.1f min:%.1f max:%.1f",
+    double exptime;
+    fits_get_double (i_channel->fr, P_STR(FN_EXPTIME), &exptime);
+
+    info_printf_sb2(data, "JDcenter %.6f Exp: %.3g Size: %d x %d cavg:%.1f csigma:%.1f min:%.1f max:%.1f",
         frame_jdate(i_channel->fr),
+        exptime,
         i_channel->fr->w, i_channel->fr->h,
-        i_channel->fr->stats.avg, i_channel->fr->stats.sigma,
 		i_channel->fr->stats.cavg, i_channel->fr->stats.csigma,
 		i_channel->fr->stats.min, i_channel->fr->stats.max );
 }

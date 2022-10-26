@@ -45,11 +45,13 @@
 #include "obsdata.h"
 #include "sourcesdraw.h"
 #include "params.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "filegui.h"
 #include "reduce.h"
+#include "multiband.h"
 #include "wcs.h"
 #include "symbols.h"
+#include "misc.h"
 
 #define FILE_FILTER_SZ 255
 
@@ -286,11 +288,7 @@ static void save_fits(GtkWidget *chooser, gpointer user_data)
 	d3_printf("Saving fits file: %s\n", fn);
 	ich = fa->data;
 	if (file_is_zipped(fn)) {
-		for (i = strlen(fn); i > 0; i--)
-			if (fn[i] == '.') {
-				fn[i] = 0;
-				break;
-			}
+        drop_dot_extension(fn);
 		write_gz_fits_frame(ich->fr, fn, P_STR(FILE_COMPRESS));
 	} else {
 		write_fits_frame(ich->fr, fn);
@@ -315,11 +313,7 @@ static void save_area_fits(GtkWidget *chooser, gpointer user_data)
     d3_printf("Saving fits file: %s\n", fn);
     ich = fa->data;
     if (file_is_zipped(fn)) {
-        for (i = strlen(fn); i > 0; i--)
-            if (fn[i] == '.') {
-                fn[i] = 0;
-                break;
-            }
+        drop_dot_extension(fn);
         write_gz_fits_frame(ich->fr, fn, P_STR(FILE_COMPRESS));
     } else {
         write_fits_frame(ich->fr, fn);
@@ -327,6 +321,7 @@ static void save_area_fits(GtkWidget *chooser, gpointer user_data)
 
     g_free(fn);
 }
+
 
 /* open a fits file and display it */
 static void open_fits(GtkWidget *chooser, gpointer user_data)
@@ -340,7 +335,7 @@ static void open_fits(GtkWidget *chooser, gpointer user_data)
     fl = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(chooser));
 
     set_last_open(fa->window, "last_open_fits", fn);
-    add_files(fl, fa->window);
+    window_add_files(fl, fa->window);
 
     g_slist_free(fl);
 //printf("filegui.open_fits return\n");
@@ -349,16 +344,6 @@ static void open_fits(GtkWidget *chooser, gpointer user_data)
 /* load stars from a rcp file into the given windows's gsl */
 int load_rcp_to_window(gpointer window, char *name, char *object)
 {
-	struct stf *stf = NULL;
-	GList *rsl;
-	int p=0;
-	FILE *rfn = NULL;
-
-	char *text, *file=NULL;
-	double v;
-	char obj[81];
-	char objf[81];
-
     if (name == NULL) return -1;
 //printf("file_gui.load_recipe_to_window looking for '%s'\n", name);
 
@@ -368,11 +353,15 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         return -1;
     }
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (wcs == NULL) {
-        wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
+    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    if (window_wcs == NULL) {
+        window_wcs = wcs_new();
+        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
+
+    char *file=NULL;
+    char obj[81];
+    char objf[81];
 
     if (!strcmp(name, "_OBJECT_") || !strcmp(name, "_AUTO_") || !strcmp(name, "_TYCHO_")) {
 		if (object && object[0])
@@ -396,31 +385,35 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 				}
 			} else {
 				name = file;
-				d1_printf("recipy file from object name: %s\n", name);
+				d1_printf("recipe file from object name: %s\n", name);
 			}
 		}
 	}
+
+    struct stf *stf = NULL;
 	if (!strcmp(name, "_TYCHO_")) {
-		if ((wcs == NULL) || (wcs->wcsset < WCS_INITIAL)) {
+        if ((window_wcs == NULL) || (window_wcs->wcsset < WCS_INITIAL)) {
 			stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w / 1800), 20);
 		} else {
-			stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w * wcs->xinc), 20);
+            stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w * window_wcs->xinc), 20);
 		}
 	} else {
 		/* just load the specified file */
-		if (file_is_zipped(name)) {
+        gboolean zipped = file_is_zipped(name);
+        FILE *rfn = NULL;
+
+        if (zipped) {
             char *cmd;
-			if (-1 != asprintf(&cmd, "%s %s ", P_STR(FILE_UNCOMPRESS), name)) {
+            if (-1 != asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), name)) {
 				rfn = popen(cmd, "r");
 				free(cmd);
 			}
             if (rfn == NULL) { // try bzcat
-                if (-1 != asprintf(&cmd, "b%s %s ", P_STR(FILE_UNCOMPRESS), name)) {
+                if (-1 != asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), name)) {
                     rfn = popen(cmd, "r");
                     free(cmd);
                 }
             }
-			p=1;
 		} else {
 			rfn = fopen(name, "r");
 		}
@@ -433,7 +426,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         if (file) free(file);
 		stf = stf_read_frame(rfn);
 
-		if (p) {
+        if (zipped) {
 			pclose(rfn);
 		} else {
 			fclose(rfn);
@@ -442,26 +435,36 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 
     if (stf == NULL) return -1;
 
-    if (wcs && ((wcs->wcsset <= WCS_INITIAL) || ((wcs->wcsset <= WCS_FITTED) && (wcs->flags & WCS_HINTED)))) {
+    // update window_wcs from recipe file
+    if (window_wcs && ((window_wcs->wcsset < WCS_VALID) || (window_wcs->flags & WCS_HINTED))) {
 //printf("filegui.load_rcp_to_window try wcs from rcp\n");
-        wcs->xrefpix = channel->fr->w / 2;
-        wcs->yrefpix = channel->fr->h / 2;
+        window_wcs->xrefpix = channel->fr->w / 2;
+        window_wcs->yrefpix = channel->fr->h / 2;
 
         gboolean foundit, havera, havedec, havescale;
 
-        wcs->equinox = 2000.0;
-        foundit = ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 );
-        if (foundit) wcs->equinox = v;
+        window_wcs->equinox = 2000.0;
+        double v;
 
-        foundit = ( (text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA)) != NULL );
-        havera = ( foundit && (dms_to_degrees (text, &v) == 0) );
-        if (havera)	wcs->xref = 15.0 * v;
+        foundit = ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 );
+        if (foundit) window_wcs->equinox = v;
+
+        char *text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA);
+        foundit = (text != NULL);
+
+        int degrees;
+        havera = ( foundit && ((degrees = dms_to_degrees (text, &v)) >= 0) );
+        if (havera)	{
+            if (!degrees)
+                v *= 15;
+            window_wcs->xref = v;
+        }
 
         foundit = ( (text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC)) != NULL );
-        havedec = ( foundit && (dms_to_degrees(text, &v) == 0) );
-        if (havedec) wcs->yref = v;
+        havedec = ( foundit && (dms_to_degrees(text, &v) >= 0) );
+        if (havedec) window_wcs->yref = v;
 
-        if (wcs->wcsset < WCS_INITIAL) {
+        if (window_wcs->wcsset < WCS_INITIAL) {
             double scale;
 
             havescale = (fits_get_double(channel->fr, P_STR(FN_SECPIX), &scale) > 0);
@@ -473,21 +476,36 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
             if ((channel->fr->exp.bin_x > 1) && (channel->fr->exp.bin_y == channel->fr->exp.bin_x))
                 scale *= channel->fr->exp.bin_x;
 
-            wcs->xinc = - scale / 3600.0;
-            wcs->yinc = - scale / 3600.0;
-            if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+            window_wcs->xinc = - scale / 3600.0;
+            window_wcs->yinc = - scale / 3600.0;
+            if (P_INT(OBS_FLIPPED))	window_wcs->yinc = -window_wcs->yinc;
 
-            wcs->rot = 0;
+            window_wcs->rot = 0;
         }
-        if (havera && havedec && havescale) wcs->wcsset = WCS_INITIAL;
+        if (havera && havedec && havescale) {
+            printf("load_recipe_to_window wcsset = WCS_INITIAL\n"); fflush(NULL);
+            window_wcs->wcsset = WCS_INITIAL;
+        }
 	}
 
-	rsl = stf_find_glist(stf, 0, SYM_STARS);
+    GList *rsl = stf_find_glist(stf, 0, SYM_STARS);
     if (rsl == NULL) return -1;
 
-    g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all);
-	merge_cat_star_list_to_window(window, rsl);
+// check what happens when replacing old recipe
+
+    gpointer old_recipe = g_object_get_data(G_OBJECT(window), "recipe");
+    if (old_recipe) { // need to ref cat_stars in recipe as frames are phot'd so they don't get deleted
+
+//        gpointer *mbd = g_object_get_data(G_OBJECT(window), "mband_window");
+
+//        g_object_set_data(G_OBJECT(mbd), "mbds", NULL);
+//        g_object_set_data(G_OBJECT(window), "gui_star_list", NULL);
+    } else
+        g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all);
+
+    merge_cat_star_list_to_window(window, rsl);
     wcsedit_refresh(window);
+    // wcsset == initial
 
     return g_list_length(rsl);
 }
@@ -506,7 +524,7 @@ int load_gsc2_to_window(gpointer window, char *name)
 	d3_printf("read_gsc2: looking for %s\n", name);
 
 	if (file_is_zipped(name)) {
-		if (-1 != asprintf(&cmd, "%s %s ", P_STR(FILE_UNCOMPRESS), name)) {
+        if (-1 != asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), name)) {
 			rfn = popen(cmd, "r");
 			free(cmd);
 		}
@@ -540,72 +558,62 @@ int load_gsc2_to_window(gpointer window, char *name)
 /* open a rcp file and load stars; */
 static void open_rcp(GtkWidget *chooser, gpointer user_data)
 {
-	char *fn, *fnd;
 	struct file_action *fa = user_data;
 
-	fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
-	g_return_if_fail(fn != NULL);
+    char *recipe = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    g_return_if_fail(recipe != NULL);
 
-	load_rcp_to_window(fa->window, fn, NULL);
+    load_rcp_to_window(fa->window, recipe, NULL);
 
-    set_last_open(fa->window, "last_open_rcp", fn);
-    d3_printf("last_open_rcp set to %s\n", fn);
+    set_last_open(fa->window, "last_open_rcp", recipe);
+    d3_printf("last_open_rcp set to %s\n", recipe);
 	gtk_widget_queue_draw(fa->window);
-
-//	g_free(fn);
 }
 
 /* open a report file */
 static void open_mband(GtkWidget *chooser, gpointer user_data)
-{
-	char *fn, *fnd;
+{	
 	struct file_action *fa = user_data;
 	gpointer mwin;
 
-	fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
-	g_return_if_fail(fn != NULL);
+    char *mband = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    g_return_if_fail(mband != NULL);
 
-	add_to_mband(fa->window, fn);
+    add_to_mband(fa->window, mband);
 
 	mwin = g_object_get_data(G_OBJECT(fa->window), "im_window");
 	if (mwin != NULL)
-        set_last_open(mwin, "last_open_mband", fn);
+        set_last_open(mwin, "last_open_mband", mband);
 	else
-        set_last_open(fa->window, "last_open_mband", fn);
-    d3_printf("last_open_mband set to %s\n", fn);
+        set_last_open(fa->window, "last_open_mband", mband);
+    d3_printf("last_open_mband set to %s\n", mband);
 	gtk_widget_queue_draw(fa->window);
-
-//	g_free(fn);
 }
 
 
 /* open a gsc2 file and load stars; star that have v photometry are
  * marked as object, while the other are made field stars */
 static void open_gsc2(GtkWidget *chooser, gpointer user_data)
-{
-	char *fn, *fnd;
+{	
 	struct file_action *fa = user_data;
 
-	fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
-	g_return_if_fail(fn != NULL);
+    char *gsc2 = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    g_return_if_fail(gsc2 != NULL);
 
-	load_gsc2_to_window(fa->window, fn);
+    load_gsc2_to_window(fa->window, gsc2);
 
-    set_last_open(fa->window, "last_open_etc", fn);
-    d3_printf("last_open_etc set to %s\n", fn);
+    set_last_open(fa->window, "last_open_etc", gsc2);
+    d3_printf("last_open_etc set to %s\n", gsc2);
 	gtk_widget_queue_draw(fa->window);
-
-//	g_free(fn);
 }
 
 
 /* set the entry with the file name */
 static void set_entry(GtkWidget *chooser, gpointer user_data)
 {
-	char *fn, *fnd;
 	struct file_action *fa = user_data;
 
-	fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    char *fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
 	g_return_if_fail(fn != NULL);
 
 	gtk_entry_set_text(GTK_ENTRY(fa->data), fn);
@@ -614,8 +622,6 @@ static void set_entry(GtkWidget *chooser, gpointer user_data)
 
     set_last_open(fa->window, "last_open_fits", fn);
 d3_printf("last_open_fits set to %s\n", fn);
-
-//	g_free(fn);
 }
 
 
@@ -650,15 +656,13 @@ d3_printf("last_open_fits set to %s\n", fn);
 /* get the file name and call the callback in fa->data */
 static void get_file(GtkWidget *chooser, gpointer user_data)
 {
-	char *fn, *fnd;
 	struct file_action *fa = user_data;
 	get_file_type cb;
 	gpointer mwin;
 
-	fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+    char *fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
 	g_return_if_fail(fn != NULL);
 
-	fnd = strdup(fn);
 	cb = fa->data;
 	if (cb)
 		(* cb)(fn, fa->window, fa->arg1);
@@ -669,8 +673,6 @@ static void get_file(GtkWidget *chooser, gpointer user_data)
 	else
         set_last_open(fa->window, "last_open_etc", fn);
     d3_printf("last_open_etc set to %s\n", fn);
-
-//	g_free(fn);
 }
 
 
@@ -869,13 +871,16 @@ static void file_popup_cb(gpointer window, guint action)
 		}
 
 		fa->data = channel;
-//		wcs_to_fits_header(channel->fr); do this on validation
-        fn = strdup(channel->fr->name);
+
+        char *fn = "empty";
+        if(channel->fr->name)
+            fn = strdup(channel->fr->name);
 
         chooser = create_file_chooser("Select output file name", F_SAVE, fa);
 
 		gtk_file_chooser_set_filename (GTK_FILE_CHOOSER(chooser), fn);
-        free(fn);
+        if(channel->fr->name)
+            free(fn);
 
 		break;
 

@@ -201,7 +201,7 @@ char help_rep_conv_page[] =
 "                   the estimated error\n\n"
 "Fields for which data is not available are left blank\n"
 "\n\n"
-"When converting recipies to AAVSO database format, some fields are obtained\n"
+"When converting recipes to AAVSO database format, some fields are obtained\n"
 "from the recipe and star comments. Tokens of the form <token>=<value> are\n"
 "searched for. The value is taken for the database field, with underscores and\n"
 "minus signs converted to spaces. The following tokens are used:\n"

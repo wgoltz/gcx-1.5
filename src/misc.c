@@ -47,7 +47,7 @@
 #include "gcx.h"
 #include "misc.h"
 #include "sidereal_time.h"
-#include "getline.h"
+//#include "getline.h"
 
 /* set the entry named name under dialog to the given text */
 void named_entry_set(GtkWidget *dialog, char *name, char *text)
@@ -243,6 +243,17 @@ double angular_dist(double a, double b)
 	return d;
 }
 
+
+void drop_dot_extension(char *fn)
+{
+    int i;
+    for (i = strlen(fn); i > 0; i--)
+        if (fn[i] == '.') {
+            fn[i] = 0;
+            break;
+        }
+}
+
 /* general interval timer functions */
 void update_timer(struct timeval *tv_old)
 {				/* init timer */
@@ -297,7 +308,7 @@ General Public License for more details.  */
    terminator), or -1 on error or EOF.  On a -1 return, the caller
    should check feof(), if not then errno has been set to indicate the
    error.  */
-
+/*
 int
 getstr (lineptr, n, stream, terminator, offset, limit)
      char **lineptr;
@@ -307,8 +318,8 @@ getstr (lineptr, n, stream, terminator, offset, limit)
      int offset;
      int limit;
 {
-  int nchars_avail;		/* Allocated but unused chars in *LINEPTR.  */
-  char *read_pos;		/* Where we're reading into *LINEPTR. */
+  int nchars_avail;		// Allocated but unused chars in *LINEPTR.
+  char *read_pos;		// Where we're reading into *LINEPTR.
   int ret;
 
   if (!lineptr || !n || !stream)
@@ -343,17 +354,16 @@ getstr (lineptr, n, stream, terminator, offset, limit)
       {
           c = getc (stream);
 
-          /* If limit is negative, then we shouldn't pay attention to
-             it, so decrement only if positive. */
+          // If limit is negative, then we shouldn't pay attention to it, so decrement only if positive.
           if (limit > 0)
               limit--;
       }
 
       save_errno = errno;
 
-      /* We always want at least one char left in the buffer, since we
-	 always (unless we get an error while reading the first char)
-	 NUL-terminate the line buffer.  */
+      // We always want at least one char left in the buffer, since we
+      // always (unless we get an error while reading the first char)
+      // NUL-terminate the line buffer.
 
       assert((*lineptr + *n) == (read_pos + nchars_avail));
       if (nchars_avail < 2)
@@ -376,16 +386,16 @@ getstr (lineptr, n, stream, terminator, offset, limit)
 
       if (ferror (stream))
 	{
-	  /* Might like to return partial line, but there is no
-	     place for us to store errno.  And we don't want to just
-	     lose errno.  */
+      // Might like to return partial line, but there is no
+      // place for us to store errno.  And we don't want to just
+      // lose errno.
 	  errno = save_errno;
 	  return -1;
 	}
 
       if (c == EOF)
 	{
-	  /* Return partial line, if any.  */
+      // Return partial line, if any.
 	  if (read_pos == *lineptr)
 	    return -1;
 	  else
@@ -396,11 +406,11 @@ getstr (lineptr, n, stream, terminator, offset, limit)
       nchars_avail--;
 
       if (c == terminator)
-	/* Return the line.  */
+    // Return the line.
 	break;
     }
 
-  /* Done - NUL terminate and return the number of chars read.  */
+  // Done - NUL terminate and return the number of chars read.
   *read_pos = '\0';
 
   ret = read_pos - (*lineptr + offset);
@@ -425,7 +435,7 @@ getline_safe (lineptr, n, stream, limit)
 {
   return getstr (lineptr, n, stream, '\n', 0, limit);
 }
-
+*/
 #endif
 
 

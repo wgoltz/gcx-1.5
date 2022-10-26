@@ -85,7 +85,7 @@ char **fwheel_get_filters(struct fwheel_t *fwheel)
 	return fnames;
 }
 
-void fwheel_set_ready_callback(void * window, void *func, void *data)
+void fwheel_set_ready_callback(void * window, void *func, void *data, char *msg)
 {
 	struct fwheel_t *fwheel;
 	fwheel = (struct fwheel_t *)g_object_get_data(G_OBJECT(window), "fwheel");
@@ -93,7 +93,7 @@ void fwheel_set_ready_callback(void * window, void *func, void *data)
 		err_printf("Filter wheel wasn't found\n");
 		return;
 	}
-	INDI_set_callback(INDI_COMMON (fwheel), FWHEEL_CALLBACK_READY, func, data);
+    INDI_set_callback(INDI_COMMON (fwheel), FWHEEL_CALLBACK_READY, func, data,  msg);
 
 }
 
@@ -115,7 +115,7 @@ struct fwheel_t *fwheel_find(void *window)
 		return NULL;
 	fwheel = g_new0(struct fwheel_t, 1);
 	INDI_common_init(INDI_COMMON (fwheel), "filter wheel", fwheel_check_state, FWHEEL_CALLBACK_MAX);
-	indi_device_add_cb(indi, P_STR(INDI_FWHEEL_NAME), (IndiDevCB)fwheel_connect, fwheel);
+    indi_device_add_cb(indi, P_STR(INDI_FWHEEL_NAME), (IndiDevCB)fwheel_connect, fwheel, "fwheel_connect");
 	g_object_set_data(G_OBJECT(window), "fwheel", fwheel);
 	if (fwheel->ready)
 		return fwheel;

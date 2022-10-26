@@ -4,18 +4,18 @@
 /* implement text entry with history */
 void set_combo_text_with_history(GtkWidget *widget, char *val)
 {
+//    GtkWidget *entry = gtk_bin_get_child(GTK_BIN (widget));
     GtkEntry *entry = g_object_get_data(G_OBJECT (widget), "entry");
     gtk_entry_set_text(entry, val);
 
-    // update history
     GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (widget));
 
     GtkTreeIter iter;
     if (gtk_tree_model_get_iter_first(history, &iter)) {
-        for (;;) {
-            gchar *str;
+        for (;;) { // remove any old ref
+            gchar *str = NULL;
             gtk_tree_model_get(history, &iter, 0, &str, -1);
-            if (! str && ! str[0]) break;
+            if (! (str && str[0])) break;
 
             gboolean in_history = (strcmp(str, val) == 0);
             g_free(str);
@@ -29,12 +29,13 @@ void set_combo_text_with_history(GtkWidget *widget, char *val)
         }
     }
 
-    gtk_list_store_prepend(GTK_LIST_STORE (history), &iter);
-    gtk_list_store_set(GTK_LIST_STORE (history), &iter, 0, val, -1);
+    gtk_list_store_prepend(GTK_LIST_STORE (history), &iter); // add to history
+    gtk_list_store_set(GTK_LIST_STORE (history), &iter, 0, val, -1);       
 }
 
 GtkWidget *create_combo_text_with_history(char *val)
 {
+/*
     GtkListStore *history = gtk_list_store_new(1, G_TYPE_STRING);
 
     GtkWidget *widget = gtk_combo_box_new_with_model_and_entry(GTK_TREE_MODEL (history));
@@ -56,6 +57,16 @@ GtkWidget *create_combo_text_with_history(char *val)
     GtkTreeIter iter;
     gtk_list_store_prepend(history, &iter);
     gtk_list_store_set(history, &iter, 0, val, -1);
+
+    return widget;
+*/
+    GtkWidget *widget = gtk_combo_box_text_new_with_entry();
+    // entry is the displayed value
+    GtkWidget *entry = gtk_bin_get_child(GTK_BIN (widget));
+    g_object_ref(entry);
+    g_object_set_data_full(G_OBJECT (widget), "entry", entry, (GDestroyNotify)g_object_unref); // quick access to entry widget
+
+    gtk_combo_box_text_prepend_text(widget, val);
 
     return widget;
 }

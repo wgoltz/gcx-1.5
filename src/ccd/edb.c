@@ -105,21 +105,18 @@ void precess_fast(double mjd1, double mjd2, double *ra, double *dec)
 
 
 
-CATALOG_ENTRY locate_in_edb(char *nm, char *catname, char *edbdir)
+CATALOG_ENTRY locate_in_edb(char *name, char *catname, char *edbdir)
 {
 
 	FILE *caf;
 	char cn[200];
-	char ln[300];
 	CATALOG_ENTRY r;
-	int l, lines = 0;
+    int lines = 0;
 	char rst[100];
-	float rag = 0.0, ram = 0.0, decg = 0.0, decm = 0.0, epo;
-	float ras = 0.0, decs = 0.0, magg = 0.0;
-	int off;
+
 	char *e;
 
-	l = strlen(nm);
+    int name_len = strlen(name);
 	r.filled = 0;
 	if (edbdir == NULL) {
 		e = getenv("CX_EDB_DIR");
@@ -144,32 +141,42 @@ CATALOG_ENTRY locate_in_edb(char *nm, char *catname, char *edbdir)
 		d3_printf("%s opened\n", cn);
 	}
 	while (!feof(caf)) {
+        char ln[300];
 		if (! fgets(ln, 200, caf))
 			continue;
 		lines ++;
-		if (!strncasecmp(ln, nm, l) && ln[l] == ',') {
-			if (list_edb_search_f)
-				d1_printf("Found %s\n", ln);
-			for (off = l + 1; ln[off] != ','; off++);	// over name and descriptor
-			if (ln[off + 1] == '-') {
-				sscanf(ln + off + 2, "%f:%f:%f,", &rag, &ram, &ras);
-				r.ra = -(rag * 15.0 + (ram / 4.0) + (ras / 240.0));
-			} else {
-				sscanf(ln + off + 1, "%f:%f:%f,", &rag, &ram, &ras);
-				r.ra = rag * 15.0 + (ram / 4.0) + (ras / 240.0);
-			}
+        if (!strncasecmp(ln, name, name_len) && ((ln[name_len] == '|') || (ln[name_len] == ','))) {
+            int off = name_len;
+            if (ln[off] != ',') // got alternate names
+                for (; ln[off++] != ',';) { } // scan over alternate names (ignore)
+            else
+            off++;
 
-			for (off++; ln[off] != ','; off++);	// over ra
-			if (ln[off + 1] == '-') {
-				sscanf(ln + off + 2, "%f:%f:%f,", &decg, &decm, &decs);
-				r.dec = -(decg + (decm / 60.0) + (decs / 3600.0));
-			} else {
-				sscanf(ln + off + 1, "%f:%f:%f,", &decg, &decm, &decs);
-				r.dec = decg + (decm / 60.0) + (decs / 3600.0);
-			}
+            for (; ln[off++] != ',';) { } // scan over type (ignore)
 
-			for (off++; ln[off] != ','; off++);	// over dec
-			sscanf(ln + off + 1, "%f,%f,%s", &magg, &epo, rst);
+            float rag = 0.0, ram = 0.0, ras = 0.0;
+
+            sscanf(ln + off, "%f:%f:%f,", &rag, &ram, &ras); // ra
+            r.ra = rag * 15.0 + (ram / 4.0) + (ras / 240.0);
+
+            for (; ln[off++] != ',';) { } // scan over ra
+
+            float decg = 0.0, decm = 0.0, decs = 0.0;
+
+            int neg_dec = (ln[off] == '-');
+            if (neg_dec) off++;
+
+            sscanf(ln + off, "%f:%f:%f,", &decg, &decm, &decs);
+
+            r.dec = decg + (decm / 60.0) + (decs / 3600.0);
+            if (neg_dec)
+                r.dec = -r.dec;
+
+            for (; ln[off++] != ',';) { } // scan over dec
+
+
+            float epo = 2000, magg = 0.0;
+            sscanf(ln + off, "%f,%f,%s", &magg, &epo, rst);
 
 			if (list_edb_search_f)
 				d1_printf("ra: %f, dec:  %f, mag: %f, epoch: %f\n",
@@ -179,7 +186,7 @@ CATALOG_ENTRY locate_in_edb(char *nm, char *catname, char *edbdir)
 
 			// if epoch != 2000 convert to epoch 2000 to keep in sync with gsc
 
-			if (epo != 1900) {
+            if (epo != 2000) {
 //				double ce;
 //				double fra, fdec;
 //				fra = r.ra;
@@ -198,11 +205,12 @@ CATALOG_ENTRY locate_in_edb(char *nm, char *catname, char *edbdir)
 					d2_printf("ra: %f, dec:  %f, for epoch 2000\n", r.ra, r.dec);
 			}
 			r.filled = 1;
+            break;
 		}
 	}
 	fclose(caf);
 	if (r.filled == 0) {
-		d3_printf("%s not found in %d catalog lines\n", nm, lines);
+        d3_printf("%s not found in %d catalog lines\n", name, lines);
 	}
 	return r;
 }

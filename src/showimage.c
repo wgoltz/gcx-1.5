@@ -1102,6 +1102,7 @@ d2_printf("frame to channel\n");
 
     if (fr->stats.statsok && fr->pix_format != PIX_BYTE) channel->davg = fr->stats.cavg;
 
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
     refresh_wcs(window, fr);
 
     channel->channel_changed = 1;
@@ -1115,11 +1116,14 @@ d2_printf("frame to channel\n");
 	}
 
 	gtk_window_set_title (GTK_WINDOW (window), fr->name);
-	remove_stars(window, TYPE_MASK_FRSTAR, 0);
-//    redraw_cat_stars(window);
+    remove_stars(window, TYPE_MASK_FRSTAR, 0); // frame stars linked to but not reffed?
+
+    redraw_cat_stars(window);
 
 	stats_cb(window, 0);
 	show_zoom_cuts(window);
+
+    update_fits_header_display(window);
 
 // update gsl binning from this frame
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");

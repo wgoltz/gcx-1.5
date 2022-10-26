@@ -60,6 +60,7 @@ typedef enum {
     SYM_NAME,
     SYM_TYPE,
     SYM_MAG,
+    SYM_CMAGS,
     SYM_SMAGS,
     SYM_IMAGS,
     SYM_FLAGS,
@@ -95,6 +96,7 @@ typedef enum {
     SYM_AIRMASS,
     SYM_DRA,
     SYM_DDEC,
+    SYM_CMAG,
     SYM_SMAG,
     SYM_IMAG,
     SYM_SERR,
@@ -137,11 +139,11 @@ typedef enum {
     SYM_LAST
 } RcpSymbol;
 
-extern char *symname[]; // declared in recipy.c : char *symname[SYM_LAST] = SYM_NAMES_INIT;
+extern char *symname[]; // declared in recipe.c : char *symname[SYM_LAST] = SYM_NAMES_INIT;
 
 #define SYM_NAMES_INIT {\
     "null",\
-    "recipy",\
+    "recipe",\
     "stars",\
     "observation",\
     "ap_par",\
@@ -159,6 +161,7 @@ extern char *symname[]; // declared in recipy.c : char *symname[SYM_LAST] = SYM_
     "name",\
     "type",\
     "mag",\
+    "cmags",\
     "smags",\
     "imags",\
     "flags",\
@@ -194,6 +197,7 @@ extern char *symname[]; // declared in recipy.c : char *symname[SYM_LAST] = SYM_
     "airmass",\
     "dra", \
     "ddec",\
+    "cmag",\
     "smag",\
     "imag",\
     "serr",\

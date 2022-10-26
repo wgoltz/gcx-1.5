@@ -51,7 +51,7 @@
 #include "filegui.h"
 
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 
 
 /* skip until we get a closing brace */
@@ -653,12 +653,13 @@ static int tab_snprint_star(char *line, int len, struct cat_star *cats,
 				cfmt[i].width = 2 + cfmt[i].precision;
 			if (cats == NULL)
 				break;
+            struct col_format cf = cfmt[i];
 			if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD)) {
-				ret = snprintf(line+p, len - p, "%-*.*g ", 
+                ret = snprintf(line+p, len - p, "%*.*f ", //"%-*.*g "
 					       cfmt[i].width, cfmt[i].precision,
 					       mjd_to_jd(v));
 			} else if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_JDATE)) {
-				ret = snprintf(line+p, len - p, "%-*.*g ", 
+                ret = snprintf(line+p, len - p, "%*.*f ",
 					       cfmt[i].width, cfmt[i].precision,
 					       v);
 			} else {

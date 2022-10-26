@@ -188,22 +188,34 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 				continue;
 
 			nring ++; 
-            float *f = (float *)fr->dat + iy * fr->w + ix;
+//            float *f = (float *)fr->dat + iy * fr->w + ix;
             v = get_pixel_luminence(fr, ix, iy);
             if (isnan(v)) {
                 err_printf("ring stats: not a number at %d %d\n", ix, iy);
                 nskipped ++;
                 continue;
             }
-			if (v < H_START || v >= H_START+H_SIZE) {
-				nskipped ++;
-				continue;
-			}
+//			if (v < H_START || v >= H_START+H_SIZE) {
+//				nskipped ++;
+//				continue;
+//			}
 			if (v < min || v > max) {
 				nskipped ++;
 				continue;
 			}
-			rs->h[(int)floor(v) - H_START] ++;
+            int hp = (int)floor(v) - H_START; // check this stuff
+//            if (hp < H_START)
+//                hp = H_START;
+//            else if (hp >= H_START+H_SIZE)
+//                hp = H_START+H_SIZE - 1;
+            if (hp < 0) {
+                nskipped ++;
+                continue;
+            } else if (hp >= H_SIZE) {
+                nskipped ++;
+                continue;
+            }
+            rs->h[hp] ++;
 			sum += v;
 			sumsq += v*v;
 			if (v < rs->min) 
@@ -273,7 +285,7 @@ static int ap_get_sky(struct ccd_frame *fr, struct star *s,
 		break;
 	default:
 		err_printf("ap_get_sky: unknown method %d\n", p->sky_method);
-//		free(rs.h);
+
 		return ERR_FATAL;
 	}
 
@@ -290,9 +302,9 @@ static int ap_get_sky(struct ccd_frame *fr, struct star *s,
     double phnsq = fabs(s->aph.sky - fr->exp.bias) / fr->exp.scale; // sky+dark photon shot noise / pixel
     double flnsq = sqr(fr->exp.flat_noise) * rs.sumsq;
     double rdnsq = sqr(fr->exp.rdnoise);
-//    flnsq *= 20; // try this
-
     s->aph.sky_err = sqrt((rdnsq + phnsq + flnsq) / s->aph.sky_used);
+
+printf("sky_err photon %f read %f flat %f : %f\n", phnsq, rdnsq, flnsq, s->aph.sky_err); fflush(NULL);
 
 	return 0;
 }
@@ -477,7 +489,8 @@ static int ap_get_star(struct ccd_frame *fr, struct star *s,
 //    s->aph.flux_err = sqrt(sqr(fr->exp.rdnoise) * s->aph.star_all + phnsq + flnsq);
 //    s->aph.rd_noise = fr->exp.rdnoise * sqrt(s->aph.star_all);
 
-    s->aph.flux_err = sqrt(phnsq + rdnsq + flnsq); // try this
+    s->aph.flux_err = sqrt(phnsq + rdnsq + flnsq);
+
     s->aph.pshot_noise = sqrt(phnsq);
     s->aph.rd_noise = sqrt(rdnsq);
 
@@ -496,6 +509,7 @@ static int ap_get_star(struct ccd_frame *fr, struct star *s,
 // do aperture photometry for star s; star image coordinates are taken from s. The function
 // fills up the results in s. If an error (!= 0) is returned, the values in s are undefined.
 // the bad pix map is used for flagging possible data errors due to the presence of bad pixels
+// (does not calculate scintillation noise which must be added afterwards)
 int aperture_photometry(struct ccd_frame *fr, struct star *s, 
 			struct ap_params *p, struct bad_pix_map *bp)
 {
@@ -573,6 +587,7 @@ int aperture_photometry(struct ccd_frame *fr, struct star *s,
 // magerr without scintillation
     s->aph.magerr = fabs(flux_to_absmag(s->aph.star + s->aph.star_err) - flux_to_absmag(s->aph.star));
 
+
 //            s.aph.magerr = 1.08 * fabs(s.aph.star_err / s.aph.star);  // from psf.c
 
     // compute limiting magnitude as the magnitude at which the SNR = 1
@@ -611,7 +626,7 @@ static void print_star_results(struct ph_star *s)
 */
 
 // get scintillation noise parameters
-int get_scint_pars(struct ccd_frame *fr, struct vs_recipy *vs, double *t, double *d, double *am)
+int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double *d, double *am)
 {
 
 	FITS_row * cp;
@@ -619,13 +634,13 @@ int get_scint_pars(struct ccd_frame *fr, struct vs_recipy *vs, double *t, double
 
 // determine exposure time
 
-	if (fits_get_double(fr, "EXPTIME", t) <= 0 ) {
+    if (fits_get_double(fr, "EXPTIME", t) <= 0 ) { // use FN_EXPTIME?
         err_printf("bad exposure time\n");
         return 1;
 	}
 // telescope aperture
-	cp = fits_keyword_lookup(fr, "APERT");
-	if (vs->aperture > 1.0 && vs->aperture < 1000) { // look in recipy
+    cp = fits_keyword_lookup(fr, "APERT"); // use FN_APERT?
+	if (vs->aperture > 1.0 && vs->aperture < 1000) { // look in recipe
 		*d = vs->aperture;
 	} else if (cp != NULL && (sscanf((char *)cp, "%*s = %f", &r) )) {
 		*d = r;
@@ -673,7 +688,7 @@ double scintillation(double t, double d, double am)
 }
 
 // compute 1-sigma scintillation noise
-double scint_noise(struct ccd_frame *fr, struct vs_recipy *vs)
+double scint_noise(struct ccd_frame *fr, struct vs_recipe *vs)
 {
 	double t, d, am;
 
@@ -684,8 +699,8 @@ double scint_noise(struct ccd_frame *fr, struct vs_recipy *vs)
 
 // max shift of a star from the std position 
 #define MAX_SHIFT 3
-// measure the stars in a recipy; return 0 if no error occured
-int measure_stars(struct ccd_frame *fr, struct vs_recipy *vs)
+// measure the stars in a recipe; return 0 if no error occured
+int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs)
 {
 	int i;
 	struct star *s;
@@ -715,18 +730,19 @@ int measure_stars(struct ccd_frame *fr, struct vs_recipy *vs)
 				s->y = st.y;
 			}
 		}
-		ret |= aperture_photometry(fr, s, &(vs->p), NULL);
+        ret |= aperture_photometry(fr, s, &(vs->p), NULL);
 //		print_star_results(s);
 //		d3_printf("magerr before scint: %.4f\n", s->magerr);
-		s->aph.magerr = sqrt(sqr(s->aph.magerr) + snsq);
+//        if (USE_GCX_SCINTILLATION)
+//            s->aph.magerr = sqrt(sqr(s->aph.magerr) + snsq); // add scintillation
 //		info_printf("after scint err:%8.3f\n", s->magerr);
 	}
 	return ret;
 
 }
 
-// compute a photometry solution for the given recipy
-void get_ph_solution(struct vs_recipy *vs)
+// compute a photometry solution for the given recipe
+void get_ph_solution(struct vs_recipe *vs)
 {
 	int i;
 	double std_cal;

@@ -21,7 +21,7 @@
 #endif
 
 #ifndef HAVE_BASENAME
-
+/*
 #ifdef __cplusplus
 extern "C"
 {
@@ -38,24 +38,24 @@ basename(const char *path)
 	static char bname[MAXPATHLEN];
 	register const char *endp, *startp;
 
-	/* Empty or NULL string gets treated as "." */
+    // Empty or NULL string gets treated as "."
 	if (path == NULL || *path == '\0') {
 		(void)strlcpy(bname, ".", sizeof bname);
 		return(bname);
 	}
 
-	/* Strip trailing slashes */
+    // Strip trailing slashes
 	endp = path + strlen(path) - 1;
 	while (endp > path && *endp == '/')
 		endp--;
 
-	/* All slashes become "/" */
+    // All slashes become "/"
 	if (endp == path && *endp == '/') {
 		(void)strlcpy(bname, "/", sizeof bname);
 		return(bname);
 	}
 
-	/* Find the start of the base */
+    // Find the start of the base
 	startp = endp;
 	while (startp > path && *(startp - 1) != '/')
 		startp--;
@@ -71,5 +71,5 @@ basename(const char *path)
 #ifdef __cplusplus
 }
 #endif
-
+*/
 #endif /* HAVE_BASENAME */

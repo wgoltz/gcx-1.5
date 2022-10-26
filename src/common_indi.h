@@ -8,6 +8,7 @@ struct INDI_callback_t {
 	struct INDI_common_t *device;
 	void *func;
 	void *data;
+    char *msg;
 };
 
 #define INDI_COMMON (struct INDI_common_t *)
@@ -32,7 +33,7 @@ void INDI_common_init(struct INDI_common_t *device, const char *name, void *chec
 struct indi_t *INDI_get_indi(void *window);
 void INDI_try_dev_connect(struct indi_prop_t *iprop, struct INDI_common_t *device, const char *portname);
 int INDI_update_elem_if_changed(struct indi_prop_t *iprop, const char *elemname, double newval);
-void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *func, void *data);
+void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *func, void *data, char *msg);
 void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void *func);
 void INDI_exec_callbacks(struct INDI_common_t *device, int type);
 #endif

@@ -37,6 +37,7 @@ struct image_channel {
 	int channel_changed; /* when anyhting is changed in the map, setting this */
 			 /* flag will ask for the map cache to be redrawn */
 	struct ccd_frame *fr; /* the actual image of the channel */
+    struct image_file *imf;
 	struct map_cache *cache; /* image cache */
 	int color;		/* display a color image */
     int x, y, width, height; /* pixel values for displayed area */
@@ -87,14 +88,18 @@ extern void image_box_to_cache(struct map_cache *cache, struct image_channel *ch
 			double zoom, int x, int y, int w, int h);
 
 /* from abort.c */
-//extern int user_abort(void); // control-c polling
-//extern void set_abort_flag();
+extern int user_abort(void); // control-c polling
+extern void set_abort_flag();
 
 /* from gui.c */
 extern void error_beep(void);
 extern void warning_beep(void);
 
 extern int modal_yes_no(char *text, char *title);
+
+enum APPEND_OVERWRITE_CANCEL_RESPONSE { AOC_APPEND, AOC_OVERWRITE, AOC_CANCEL };
+extern int append_overwrite_cancel(char *text, char *title);
+
 extern int modal_entry_prompt(char *text, char *title, char *initial, char **value);
 
 extern int err_printf_sb2(gpointer window, const char *fmt, ...);
@@ -105,7 +110,7 @@ extern int window_auto_pairs(gpointer window);
 
 extern void act_user_quit (GtkAction *action, gpointer window);
 extern void act_user_abort(GtkAction *action, gpointer window);
-extern void act_file_new (GtkAction *action, gpointer window);
+extern void act_frame_new (GtkAction *action, gpointer window);
 extern void act_about_cx (GtkAction *action, gpointer window);
 
 extern void act_stars_auto_pairs(GtkAction *action, gpointer window);
@@ -115,6 +120,11 @@ extern void act_stars_rm_user(GtkAction *action, gpointer window);
 extern void act_stars_rm_field(GtkAction *action, gpointer window);
 extern void act_stars_rm_catalog(GtkAction *action, gpointer window);
 extern void act_stars_rm_off_frame(GtkAction *action, gpointer window);
+extern void act_stars_toggle_detected(GtkAction *action, gpointer window);
+extern void act_stars_toggle_user(GtkAction *action, gpointer window);
+extern void act_stars_toggle_field(GtkAction *action, gpointer window);
+extern void act_stars_toggle_catalog(GtkAction *action, gpointer window);
+extern void act_stars_toggle_off_frame(GtkAction *action, gpointer window);
 extern void act_stars_rm_all(GtkAction *action, gpointer window);
 extern void act_stars_rm_pairs_all(GtkAction *action, gpointer window);
 extern void act_stars_rm_pairs_selected(GtkAction *action, gpointer window);
@@ -193,6 +203,9 @@ extern void act_control_options(GtkAction *action, gpointer window);
 /* cameragui.c */
 extern void act_control_camera (GtkAction *action, gpointer window);
 
+/* from guidegui.c */
+extern void act_indi_settings (GtkAction *action, gpointer window);
+
 /* staredit.c */
 extern void star_edit_dialog(GtkWidget *window, GSList *found);
 extern void star_edit_star(GtkWidget *window, struct cat_star *cats);
@@ -233,7 +246,7 @@ extern void act_wcs_reload (GtkAction *action, gpointer window);
 
 extern void act_control_wcs (GtkAction *action, gpointer window);
 
-/* recipygui.c */
+/* recipegui.c */
 extern void act_recipe_create (GtkAction *action, gpointer window);
 
 /* reducegui.c */
@@ -265,6 +278,7 @@ extern void act_mband_fit_zp_null (GtkAction *action, gpointer data);
 extern void act_mband_fit_zp_current (GtkAction *action, gpointer data);
 extern void act_mband_fit_trans (GtkAction *action, gpointer data);
 extern void act_mband_fit_allsky (GtkAction *action, gpointer data);
+extern void act_mband_dataset_avgs_to_smags (GtkAction *action, gpointer data);
 extern void act_mband_plot_resmag (GtkAction *action, gpointer data);
 extern void act_mband_plot_rescol (GtkAction *action, gpointer data);
 extern void act_mband_plot_errmag (GtkAction *action, gpointer data);

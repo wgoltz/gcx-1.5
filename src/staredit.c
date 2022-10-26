@@ -104,10 +104,25 @@ void update_star_edit(GtkWidget *dialog)
 {
 	char buf[256];
 	int n;
-	struct cat_star *cats;
+// which cat star to update? gs->s or current frame cats
+// here
+    struct cat_star *last_cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
+    if (last_cats == NULL) return;
 
-	cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
-    if (cats == NULL) return;
+    struct cat_star *cats = last_cats;
+
+//    gpointer main_window = g_object_get_data(G_OBJECT(dialog), "im_window");
+
+//    struct gui_star *gs;
+
+//    if (gs = last_cats->guis)
+//        cats = CAT_STAR(gs->s); // base cats
+//    if (cats == NULL) return;
+//printf("update_star_edit ");
+//    struct cat_star *current_cats;
+//    if (current_cats = cats_from_current_frame_sob(main_window, gs))
+//        cats = current_cats;
+
 
 //	d3_printf("comments: %s\n", cats->comments);
 
@@ -132,6 +147,12 @@ void update_star_edit(GtkWidget *dialog)
 	} else {
         star_edit_update_entry(dialog, "pstar_comments_entry", "");
 	}
+
+    if (cats->cmags != NULL) {
+        star_edit_update_entry(dialog, "pstar_cat_mag_entry", cats->cmags);
+    } else {
+        star_edit_update_entry(dialog, "pstar_cat_mag_entry", "");
+    }
 
 	if (cats->smags != NULL) {
         star_edit_update_entry(dialog, "pstar_std_mag_entry", cats->smags);
@@ -161,7 +182,8 @@ void update_star_edit(GtkWidget *dialog)
 	}
 	if (cats->flags & (INFO_RESIDUAL | INFO_STDERR)) {
         if (n > 0) n += snprintf(buf+n, 255-n, "\n");
-
+// cats->residual should be updated with each frame (stf_aphot)
+// ofr_to_stf_cats(ofr) does this in ofr_selection_cb but also pushes smag
         if (cats->flags & (INFO_RESIDUAL)) n += snprintf(buf+n, 255-n, "residual:%.3f  ", cats->residual);
         if (cats->flags & (INFO_STDERR)) n += snprintf(buf+n, 255-n, "stderr:%.3f ", cats->std_err);
 	}
@@ -203,7 +225,7 @@ void star_append_comments(struct cat_star *cats, char *ncom)
 	return;
 }
 
-/* place a copy of src into dest; in desc is non-null, free it first
+/* place a copy of src into dest; if desc is non-null, free it first
  */
 static void update_dynamic_string(char **dest, char *src)
 {
@@ -268,17 +290,22 @@ static int get_ra_from_editable(GtkWidget *widget, double *v)
 {
 	double val;
 	char *text;
-	int ret;
 
 	text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
-	ret = dms_to_degrees(text, &val);
-	if (ret < 0) {
+    int degrees;
+
+    if ((degrees = dms_to_degrees(text, &val)) < 0) {
 		g_free(text);
 		return -1;
 	} else {
 		g_free(text);
-        clamp_double(&val, 0, 24);
-		*v = val * 15;
+        if (degrees) {
+            clamp_double(&val, 0, 360);
+            *v = val;
+        } else {
+            clamp_double(&val, 0, 24);
+            *v = val * 15;
+        }
 		return 0;
 	}
 }
@@ -293,7 +320,7 @@ static int get_dec_from_editable(GtkWidget *widget, double *v)
 
 	text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
 	ret = dms_to_degrees(text, &val);
-	if (ret < 0) {
+    if (ret < 0) {
 		g_free(text);
 		return -1;
 	} else {
@@ -373,6 +400,11 @@ static void entry_changed_cb( GtkWidget *widget, gpointer dialog)
 		}
 		update_star_edit(dialog);
 	}
+    if (widget == g_object_get_data(G_OBJECT(dialog), "pstar_cat_mag_entry")) {
+        char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
+        update_dynamic_string(&cats->cmags, text);
+        g_free(text);
+    }
     if (widget == g_object_get_data(G_OBJECT(dialog), "pstar_std_mag_entry")) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
 		update_dynamic_string(&cats->smags, text);
@@ -619,6 +651,7 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
         set_named_callback (dialog, "pstar_dec_entry", "activate", G_CALLBACK (activate_cb));
         set_named_callback (dialog, "pstar_equinox_entry", "activate", G_CALLBACK (activate_cb));
         set_named_callback (dialog, "pstar_mag_entry", "activate", G_CALLBACK (activate_cb));
+        set_named_callback (dialog, "pstar_cat_mag_entry", "activate", G_CALLBACK (activate_cb));
         set_named_callback (dialog, "pstar_std_mag_entry", "activate", G_CALLBACK (activate_cb));
         set_named_callback (dialog, "pstar_inst_mag_entry", "activate", G_CALLBACK (activate_cb));
 
@@ -628,6 +661,7 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
         set_named_callback (dialog, "pstar_dec_entry", "focus-out-event", G_CALLBACK (focus_out_cb));
         set_named_callback (dialog, "pstar_equinox_entry", "focus-out-event", G_CALLBACK (focus_out_cb));
         set_named_callback (dialog, "pstar_mag_entry", "focus-out-event", G_CALLBACK (focus_out_cb));
+        set_named_callback (dialog, "pstar_cat_mag_entry", "focus-out-event", G_CALLBACK (focus_out_cb));
         set_named_callback (dialog, "pstar_std_mag_entry", "focus-out-event", G_CALLBACK (focus_out_cb));
         set_named_callback (dialog, "pstar_inst_mag_entry", "focus-out-event", G_CALLBACK (focus_out_cb));
 
@@ -669,22 +703,25 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 }
 
 /* do the actual work for star_edit_dialog and star_edit_make_std */
+// handle all stars in found?
 void do_edit_star(GtkWidget *window, GSList *found, int make_std)
 {
 	struct cat_star *cats;
-	struct gui_star *gs;
+    struct gui_star *gs;
 	struct wcs *wcs;
 	double ra, dec;
 
 	g_return_if_fail(window != NULL);
-	g_return_if_fail(found != NULL);
+    g_return_if_fail(found != NULL);
 
 	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
-	gs = GUI_STAR(found->data);
+    gs = GUI_STAR(found->data);
     cats = CAT_STAR(gs->s);
 	if (cats == NULL) {
-        if ( wcs && wcs->wcsset == WCS_VALID ) {
+//        if ( wcs && wcs->wcsset == WCS_VALID ) {
+        if ( wcs && wcs->wcsset > WCS_INVALID ) {
+
 /* we create a cat star here */
 d3_printf("making cats\n");
             wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
@@ -728,9 +765,10 @@ void star_edit_dialog(GtkWidget *window, GSList *found)
 	GSList *sel;
 	sel = filter_selection(found, TYPE_MASK_CATREF, 0, 0);
 	if (sel == NULL) {
-        if (modal_yes_no("This star type cannot be edited.\nConvert to field star?", NULL))	do_edit_star(window, found, 0);
+        if (modal_yes_no("This star type cannot be edited.\nConvert to field star?", NULL))
+            do_edit_star(window, found, 0);
 	} else {
-		do_edit_star(window, sel, 0);
+        do_edit_star(window, sel, 0);
 		g_slist_free(sel);
 	}
 }
@@ -785,19 +823,24 @@ void add_star_from_catalog(gpointer window)
                    "(and remove all stars)?", "New Wcs?") <= 0) {
                 cat_star_release(cats);
 
-                if (newframe) wcs_clone(& fr->fim, wcs);
-
+                if (newframe) {
+printf("wcs_clone 5\n"); fflush(NULL);
+                    wcs_clone(& fr->fim, wcs);
+                }
                 return;
             }
             remove_stars(window, TYPE_MASK_ALL, 0);
         }
     }
 d2_printf("staredit.add_star_from_catalog after remove_stars, set wcsset to WCS_INITIAL\n");
+printf("add_star_from_catalog wcsset = WCS_INITIAL\n"); fflush(NULL);
+
     wcs->wcsset = WCS_INITIAL;
     wcs->xref = cats->ra;
     wcs->yref = cats->dec;
     wcs->xrefpix = fr->w / 2;
     wcs->yrefpix = fr->h / 2;
+
     wcs->equinox = cats->equinox;
     wcs->rot = 0.0;
 
@@ -807,7 +850,10 @@ d2_printf("staredit.add_star_from_catalog after remove_stars, set wcsset to WCS_
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
     }
 
-    if (newframe) wcs_clone(& fr->fim, wcs);
+    if (newframe) {
+printf("wcs_clone 6\n"); fflush(NULL);
+        wcs_clone(& fr->fim, wcs);
+    }
 
 	add_cat_stars_to_window(window, &cats, 1);
 }

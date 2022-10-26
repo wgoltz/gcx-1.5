@@ -167,6 +167,7 @@ int worldpos(double xpix, double ypix, double xref, double yref, double xrefpix,
   double geo1, geo2, geo3;
   double cond2r=1.745329252e-2;
   double twopi = 6.28318530717959, deps = 1.0e-5;
+  double pi = twopi/2.0;
   int   i, itype;
   static char ctypes[8][5] ={"-SIN","-TAN","-ARC","-NCP", "-GLS", "-MER",
       "-AIT", "-STG"};
@@ -185,7 +186,10 @@ int worldpos(double xpix, double ypix, double xref, double yref, double xrefpix,
   for (i=0;i<8;i++) if (!strncmp(type, ctypes[i], 4)) itype = i+1;
 /* default, linear result for error return  */
   *xpos = xref + dx;
-  *ypos = yref + dy;
+  *ypos = yref + dy; // at poles this may go past +/- 90: clip to 90?
+  if (fabs(*ypos) > pi)
+      *ypos = (*ypos < 0) ? -pi : pi;
+
 /* convert to radians  */
   ra0 = xref * cond2r;
   dec0 = yref * cond2r;
@@ -220,7 +224,7 @@ int worldpos(double xpix, double ypix, double xref, double yref, double xrefpix,
       dect = atan (cos(rat-ra0) * (m * cos0 + sin0) / dect);
       break;
     case 3:   /* -ARC Arc*/
-      if (sins>=twopi*twopi/4.0) return 1;
+      if (sins>=pi*pi) return 1;
       sins = sqrt(sins);
       coss = cos (sins);
       if (sins!=0.0) sins = sin (sins) / sins;
@@ -247,9 +251,9 @@ int worldpos(double xpix, double ypix, double xref, double yref, double xrefpix,
       break;
     case 5:   /* -GLS global sinusoid */
       dect = dec0 + m;
-      if (fabs(dect)>twopi/4.0) return 1;
+      if (fabs(dect)>pi/2.0) return 1;
       coss = cos (dect);
-      if (fabs(l)>twopi*coss/2.0) return 1;
+      if (fabs(l)>pi*coss) return 1;
       rat = ra0;
       if (coss>deps) rat = rat + l / coss;
       break;
@@ -269,7 +273,7 @@ int worldpos(double xpix, double ypix, double xref, double yref, double xrefpix,
       dt = 0.0;
       if (geo2!=0.0) dt = (m + geo3) / geo2;
       dt = exp (dt);
-      dect = 2.0 * atan (dt) - twopi / 4.0;
+      dect = 2.0 * atan (dt) - pi / 2.0;
       break;
     case 7:   /* -AIT Aitoff*/
       dt = yinc*cosr + xinc*sinr;
@@ -317,16 +321,26 @@ int worldpos(double xpix, double ypix, double xref, double yref, double xrefpix,
       mg = 1.0 + sin(dect) * sin0 + cos(dect) * cos0 * cos(rat);
       if (fabs(mg)<deps) return 1;
       mg = 2.0 * (sin(dect) * cos0 - cos(dect) * sin0 * cos(rat)) / mg;
-      if (fabs(mg-m)>deps) rat = twopi/2.0 - rat;
+      if (fabs(mg-m)>deps) rat = pi - rat;
       rat = ra0 + rat;
       break;
   }
-/*  return ra in range  */
+
+  /*  return ra in range  */
   raout = rat;
-  decout = dect;
-  if (raout-ra0>twopi/2.0) raout = raout - twopi;
-  if (raout-ra0<-twopi/2.0) raout = raout + twopi;
+  double s, c;
+  sincos(raout, &s, &c);
+  raout = atan2(s, c);
+//  if (raout-ra0>pi) raout = raout - twopi;
+//  if (raout-ra0<-pi) raout = raout + twopi;
   if (raout < 0.0) raout += twopi; /* added by DCW 10/12/94 */
+
+  /*  try this: return dec in range  */
+  decout = dect;
+  sincos(decout, &s, &c);
+  decout = atan2(s, c);
+//  if (decout-dec0>pi/2.0) decout = decout - pi;
+//  if (decout-dec0<-pi/2.0) decout = decout + pi;
 
 /*  correct units back to degrees  */
   *xpos  = raout  / cond2r;
@@ -710,7 +724,7 @@ int degrees_to_hms_pr(char *lb, double deg, int prec)
 
 
 // transform a string d:m:s coordinate to a float angle (in degrees)
-int dms_to_degrees(char *decs, double *dec)
+int old_dms_to_degrees(char *decs, double *dec)
 {
 	char *endp;
 	double d = 0.0, m= 0.0, s = 0.0;
@@ -745,4 +759,50 @@ int dms_to_degrees(char *decs, double *dec)
 	
 	*dec = (d + m / 60.0 + s / 3600.0) * sign;
 	return 0;
+}
+
+// transform a string d:m:s coordinate to a float angle (in degrees)
+// if already decimal (assumed) degrees return 1, return 0 otherwise or -1 for error
+int dms_to_degrees(char *decs, double *dec)
+{
+    char *endp;
+    int i;
+    double sign = 1.0;
+
+    for (i=0; decs[i] == ' ' && decs[i] != 0; i++)
+        ;
+    if (decs[i] == '-') {
+        sign = -1.0;
+        i++;
+    }
+
+    long d = strtol(decs+i, &endp, 10);
+    if (endp == decs+i) {
+        return -1;
+    }
+    if (*endp == '.') { // already decimal (assume it is in degrees)
+        for (i = endp - decs; decs[i] && isdigit(decs[i]); i++);
+        double dlo = strtod(decs+i, &endp);
+        //check it is in [0 to 1) ?
+        *dec = (d + dlo) * sign;
+        return 1;
+        // ignore any remainder
+    }
+
+    for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
+    long m = strtol(decs+i, &endp, 10);
+    if (endp == decs+i) {
+        *dec = d * sign;
+        return 0;
+    }
+
+    for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
+    double s = strtod(decs+i, &endp);
+    if (endp == decs+i) {
+        *dec = (d + m / 60.0) * sign;
+        return 0;
+    }
+
+    *dec = (d + m / 60.0 + s / 3600.0) * sign;
+    return 0;
 }

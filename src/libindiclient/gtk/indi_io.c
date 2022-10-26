@@ -34,7 +34,6 @@ int io_indi_sock_read(void *_fh, void *data, int len)
 	GIOChannel *fh = (GIOChannel *)_fh;
 	size_t actual_len;
 	GIOStatus status;
-
 	status = g_io_channel_read_chars(fh, (char *)data, len, &actual_len, NULL);
 	//if (status != G_IO_STATUS_NORMAL)
 	//	return -1;
@@ -59,10 +58,10 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
 	void *opaque;
 	void (*cb)(void *fh, void *opaque);
 
-        cb = (void(*)(void *fh, void *opaque))g_object_get_data(G_OBJECT (obj), "callback");
-        opaque = g_object_get_data(G_OBJECT (obj), "data");
-	cb(source, opaque);
-	return TRUE;
+    cb = (void(*)(void *fh, void *opaque))g_object_get_data(G_OBJECT (obj), "callback");
+    opaque = g_object_get_data(G_OBJECT (obj), "data");
+    cb(source, opaque);
+    return TRUE;
 }
 
 void *io_indi_open_server(const char *host, int port, void (*cb)(void *fd, void *opaque), void *opaque)

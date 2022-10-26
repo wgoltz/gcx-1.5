@@ -22,6 +22,7 @@
 *******************************************************************************/
 
 /* Multiband reduction plot routines */
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@
 #include "obsdata.h"
 #include "multiband.h"
 #include "catalogs.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "symbols.h"
 #include "sourcesdraw.h"
 #include "wcs.h"
@@ -44,6 +45,7 @@
 
 #define STD_ERR_CLAMP 30.0
 #define RESIDUAL_CLAMP 2.0
+#define TEMP_GNUPLOT "/tmp/gnuplot.txt"
 
 /* open a pipe to the plotting process, or a file to hold the plot
    commands. Return -1 for an error, 0 if a file was opened and 1 if a
@@ -55,12 +57,15 @@ int open_plot(FILE **fp, char *initial)
 	char qu[1024];
 
 	if (!P_INT(FILE_PLOT_TO_FILE)) {
-        plfp = popen(P_STR(FILE_GNUPLOT), "w");
+// replace writing to pipe and allow gnuplot can handle user interaction
+        plfp = fopen(TEMP_GNUPLOT, "w");
+//        plfp = popen(P_STR(FILE_GNUPLOT), "w");
         if (plfp != NULL && (long)plfp != -1) {
-			if (fp)
-				*fp = plfp;
-			return 1;
-		}
+            if (fp)
+                *fp = plfp;
+            return 1;
+        }
+
 		err_printf("Cannot run gnuplot, prompting for file\n");
 	}
 
@@ -99,8 +104,16 @@ int open_plot(FILE **fp, char *initial)
 /* close a plot pipe or file. Should be passed the value returned by open_plot */
 int close_plot(FILE *fp, int pop)
 {
-    if (pop) return pclose(fp);
-    if (fp)	return fclose(fp);
+    if (fp) {
+        fprintf(fp, "pause mouse close\n");
+        fclose(fp);
+
+        if (pop == 1) { // pclose(fp);
+            char *command[3] = { P_STR(FILE_GNUPLOT), TEMP_GNUPLOT, NULL };
+            g_spawn_async(NULL, command, NULL, G_SPAWN_LEAVE_DESCRIPTORS_OPEN, NULL, NULL, NULL, NULL);
+        }
+    }
+
     return 0;
 }
 
@@ -109,8 +122,10 @@ void plot_preamble(FILE *dfp)
 {
 	g_return_if_fail(dfp != NULL);
 	fprintf(dfp, "set key below\n");
-    fprintf(dfp, "set term wxt size 800,500\n");
+    fprintf(dfp, "set term qt size 800,500\n");
     fprintf(dfp, "set mouse\n");
+    fprintf(dfp, "set clip two\n");
+
 }
 
 /* create a plot of ofr residuals versus magnitude (as a gnuplot file) */
@@ -164,10 +179,12 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 			while(sl != NULL) {
 				sob = STAR_OBS(sl->data);
 				sl = g_list_next(sl);
-				if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD)
-					continue;
-				if (sob->weight <= 0.0001)
-					continue;
+
+                if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+                if (sob->weight <= 0.0001) continue;
+                if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
+                if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+
 				n++;
 				v = sob->residual * sqrt(sob->nweight);
 				u = sob->residual;
@@ -182,7 +199,7 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 		fprintf(dfp, "e\n");
 	}
 	g_list_free(bsl);
-//	fprintf(dfp, "pause -1\n");
+//    fprintf(dfp, "pause -1\n");
 	return n;
 }
 
@@ -340,7 +357,7 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 			if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR)
 				continue;
 			n++;
-            fprintf(dfp, "%.5f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
+            fprintf(dfp, "%.7f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
 				ofr->zpoint, ofr->zpointerr);
 			}	
 		fprintf(dfp, "e\n");
@@ -357,12 +374,12 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 				if (ofr->zpointerr >= BIG_ERR)
 					continue;
 				n++;
-                fprintf(dfp, "%.5f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
+                fprintf(dfp, "%.7f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
 					ofr->zpoint, ofr->zpointerr);
 			}	
 			fprintf(dfp, "e\n");
 		}
-//	fprintf(dfp, "pause -1\n");
+//    fprintf(dfp, "pause -1\n");
 	g_list_free(bsl);
 	g_list_free(asfl);
 	return n;
@@ -427,7 +444,7 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 			if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR)
 				continue;
 			n++;
-			fprintf(dfp, "%.5f %.5f %.5f\n", ofr->airmass,
+            fprintf(dfp, "%.7f %.5f %.5f\n", ofr->airmass,
 				ofr->zpoint, ofr->zpointerr);
 			}	
 		fprintf(dfp, "e\n");
@@ -444,12 +461,12 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 				if (ofr->zpointerr >= BIG_ERR)
 					continue;
 				n++;
-				fprintf(dfp, "%.5f %.5f %.5f\n", ofr->airmass,
+                fprintf(dfp, "%.7f %.5f %.5f\n", ofr->airmass,
 					ofr->zpoint, ofr->zpointerr);
 			}	
 			fprintf(dfp, "e\n");
 		}
-//	fprintf(dfp, "pause -1\n");
+//    fprintf(dfp, "pause -1\n");
 	g_list_free(bsl);
 	g_list_free(asfl);
 	return n;
@@ -517,32 +534,41 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 		while(sl != NULL) {
 			sob = STAR_OBS(sl->data);
 			sl = g_list_next(sl);
-			if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD)
-				continue;
-			if (sob->weight <= 0.00001)
-				continue;
+
+            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            if (sob->weight <= 0.00001) continue;
+            if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
+            if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+
 			n++;
-			if (sob->ost->smagerr[mbds->trans[band].c1] < 9 
-			    && sob->ost->smagerr[mbds->trans[band].c2] < 9) {
+
+            struct o_star *ost = sob->ost;
+            if (ost->smag[mbds->trans[band].c1] == MAG_UNSET) continue;
+            if (ost->smag[mbds->trans[band].c2] == MAG_UNSET) continue;
+
+            double smagerr_1 = DEFAULT_ERR(ost->smagerr[mbds->trans[band].c1]);
+            double smagerr_2 = DEFAULT_ERR(ost->smagerr[mbds->trans[band].c2]);
+
+            if (smagerr_1 < 9 && smagerr_2 < 9) {
 				v = sob->residual * sqrt(sob->nweight);
 				u = sob->residual;
 				clamp_double(&v, -STD_ERR_CLAMP, STD_ERR_CLAMP);
 				clamp_double(&u, -RESIDUAL_CLAMP, RESIDUAL_CLAMP);
 				if (weighted) 
-					fprintf(dfp, "%.5f %.5f %.5f\n", 
-						sob->ost->smag[mbds->trans[band].c1] 
-						- sob->ost->smag[mbds->trans[band].c2],
+                    fprintf(dfp, "%.5f %.5f %.5f\n",
+                        ost->smag[mbds->trans[band].c1]
+                        - ost->smag[mbds->trans[band].c2],
 						v, sob->imagerr);
 				else 
-					fprintf(dfp, "%.5f %.5f %.5f\n", 
-						sob->ost->smag[mbds->trans[band].c1] 
-						- sob->ost->smag[mbds->trans[band].c2],
+                    fprintf(dfp, "%.5f %.5f %.5f\n",
+                        ost->smag[mbds->trans[band].c1]
+                        - ost->smag[mbds->trans[band].c2],
 						u, sob->imagerr);
 			}
 		}	
 		fprintf(dfp, "e\n");
 	}
-//	fprintf(dfp, "pause -1\n");
+//    fprintf(dfp, "pause -1\n");
 	return n;
 }
 
@@ -559,36 +585,27 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 	
     for (sl = sol; sl != NULL; sl = sl->next) {
         struct star_obs *sob = STAR_OBS(sl->data);
+        struct o_frame *ofr = O_FRAME(sob->ofr);
 
-        if (sob->ofr->band < 0)	continue;
-        if (sob->ofr->skip)	continue;
-        if (sob->ofr->band != band) continue;
+        if (ofr->skip)	continue;
+        if (ofr->zpstate <= ZP_FIT_ERR) continue;
         if (sob->imagerr >= BIG_ERR) continue;
-        if (sob->ofr->zpstate == ZP_FIT_ERR) continue;
         if (sob->flags & CPHOT_NOT_FOUND) continue;
 
-        if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR) {
-            if (sob->err < BIG_ERR) {
-                m = sob->mag;
-                me = sob->err;
-            } else { // check this
-                m = sob->imag;
-                me = sob->imagerr;
-            }
-        } else if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
-//			m = sob->ost->smag[band] + sob->residual;
-            if (sob->ofr->zpstate >= ZP_ALL_SKY && (sob->ost->smagerr[band] < BIG_ERR)) {
-                m = sob->ost->smag[band] - sob->residual;
-                // we want sob->err here but it is not calculated for std star
-//                me = sqrt(sqr(sob->imagerr) + sqr(sob->ost->smagerr[band]));
-                me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr)); // try this
+        if ((ofr->band == -1) || (ofr->band == band)) {
 
-            } else { // standard star but no standard mag
-                m = sob->mag;
-                me = sob->err;
-            }
-		} else 
-			continue;
+            m = sob->mag;
+            me = sob->err;
+
+            if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+
+                if (sob->ost->smag[band] == MAG_UNSET) continue;
+
+                m = sob->imag + sob->ofr->zpoint;
+                me = sob->imagerr; // sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
+
+            } else if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR) continue;
+        }
 
 		esum += me;
 		sum += m;
@@ -614,8 +631,6 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 	return n;
 }
 
-enum PLOT_STATES { PLOT_POSITIVE, PLOT_FAINTER_THAN, PLOT_FINISHED };
-
 struct plot_sol_data {
     struct o_frame *first_fr;
     int bands[MAX_MBANDS]; // array of band numbers terminated by -1
@@ -624,145 +639,161 @@ struct plot_sol_data {
 
     FILE *plfp;
     int pop;
-    int fainter_than_found;
     int n;
 
-    int pass;
     GList *sol;
+    char *pos;
+    char *neg;
     char *plot;
 };
 
-#define PLOTCMD(...) ({ \
+#define PLOTCMD(out_string, ...) ({ \
 char *s; \
 int n = asprintf(&s, __VA_ARGS__); \
 if (n >= 0) { \
-    if (! data->plot) { \
-        data->plot = s; \
+    if ((out_string) == NULL) { \
+        (out_string) = s; \
     } else { \
-        data->plot = realloc(data->plot, strlen(data->plot) + strlen(s) + 2); \
-        strcat(data->plot, s); \
+        (out_string) = realloc((out_string), strlen((out_string)) + strlen(s) + 2); \
+        strcat((out_string), s); \
         free(s); \
     } \
 } \
 })
 
-static int plot_sol_obs(struct plot_sol_data *data, GList *sol, int plot_state) {
 
-    int found_fainter_than = FALSE;
+static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
+{
+
+    int n_pos = 0;
+    int n_neg = 0;
+
+    data->pos = NULL;
+    data->neg = NULL;
 
     GList *sl;
     for (sl = sol; sl != NULL; sl = g_list_next(sl)) {
         struct star_obs *sob = STAR_OBS(sl->data);
 
-        if (((data->band == -1) || (sob->ofr->band == data->band))
-                && ! sob->ofr->skip
-                && (sob->imagerr < BIG_ERR)
-                && (sob->ofr->zpstate != ZP_FIT_ERR)) {
+        if (sob->ofr->skip) continue;
+        if (sob->ofr->zpstate <= ZP_FIT_ERR) continue;
 
-            data->n++; // got one
+        if ((data->band == -1) || (sob->ofr->band == data->band)) {
 
-            switch (plot_state) {
-            case PLOT_POSITIVE:
-                if ((CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR) && (sob->err < BIG_ERR)) {
-                    if (sob->flags & CPHOT_NOT_FOUND)
-                        found_fainter_than = TRUE;
-                    else {
-                        if (sob->flags & CPHOT_CENTERED)
-                            PLOTCMD("%.5f %.5f %.5f\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->mag, sob->err);
-                    }
-                } else if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
-                    if (sob->ofr->zpstate >= ZP_ALL_SKY) {
-                        double mag, err;
-                        if (sob->ost->smagerr[sob->ofr->band] < BIG_ERR) {
-                            mag = sob->ost->smag[sob->ofr->band] - sob->residual;
-//                            err = sqrt(sqr(sob->imagerr) + sqr(sob->ost->smagerr[sob->ofr->band]));
-                            err = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr)); // try this (sob->err)
-                        } else { // flagged as standard but standard mag not set
-                            mag = sob->mag;
-                            err = sob->err;
-                        }
+            double m = MAG_UNSET;
+            double me = BIG_ERR;
 
-                        PLOTCMD("%.5f %.5f %.5f\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, mag, err);
+            if ((CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR)) {
+                if (sob->mag != MAG_UNSET)
+                    m = sob->mag;
+                if (sob->err < BIG_ERR)
+                    me = sob->err;
 
-                    }
-//                    else
-// //                        PLOTCMD("%.5f %.5f %.5f\n", mjd_to_jd(sob->ofr->mjd) -data->jdi, sob->imag, sob->imagerr );
-//                        PLOTCMD("%.5f %.5f %.5f\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->imag,
-//                                sqrt(sqr(sob->imagerr) + sqr(sob->ost->smagerr[sob->ofr->band])));
+            } else if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+                if ((sob->imag != MAG_UNSET) && (sob->ofr->zpoint != MAG_UNSET))
+                    m = sob->imag + sob->ofr->zpoint;
+                if ((sob->imagerr < BIG_ERR) && (sob->ofr->zpointerr < BIG_ERR))
+                    me = sob->imagerr; //sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
+            }
 
-                } else
-                    data->n--; // well, maybe not
-                break;
-
-            case PLOT_FAINTER_THAN:
-                if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR && sob->err < BIG_ERR ) {
-                    if (sob->flags & CPHOT_NOT_FOUND)
-                        PLOTCMD("%.5f %.5f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->mag, "{/:Bold\\\\^}");
+            if ((m != MAG_UNSET) && (me < BIG_ERR)) {
+                if (sob->flags & CPHOT_CENTERED) {
+                    PLOTCMD(data->pos, "%.7f %.3f %.3f\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
+                    n_pos++;
+                } else if (sob->flags & CPHOT_FAINT) {
+                    PLOTCMD(data->neg, "%.4f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
+                    n_neg++;
                 }
-                break;
             }
         }
     }
 
-    PLOTCMD("e\n");
+    int result = 0;
+    if (n_pos + n_neg) {
+        if (n_pos) {
+            fprintf(data->plfp, "$POS%d << END\n", data->n);
+            fprintf(data->plfp, "%s", data->pos); // plot data to pipe
+            fprintf(data->plfp, "END\n");
+            free(data->pos);
+            result += 1;
+        }
 
-    return found_fainter_than;
+        if (n_neg) {
+            fprintf(data->plfp, "$NEG%d << END\n", data->n);
+            fprintf(data->plfp, "%s", data->neg); // plot data to pipe
+            fprintf(data->plfp, "END\n");
+            free(data->neg);
+            result += 2;
+        }
+    }
+    return result;
 }
 
-/* bands -1 terminated array of band numbers */
-static int plot_sol(struct plot_sol_data *data, GList *sol)
+static void plot_sol(struct plot_sol_data *data, GList *sol)
 {
-
-#define PLOTCMD(...) fprintf(data->plfp, __VA_ARGS__)
-
     if (sol != NULL) {
-        if (sol != data->sol) PLOTCMD( ", " ); // plot header to pipe
 
         double min, max, avg = 0.0, sigma = 0.0, merr = BIG_ERR;
         struct star_obs *sob = STAR_OBS(sol->data);
         struct o_frame *ofr = sob->ofr;
 
-//        int i = 0;
+        int ns = sol_stats(sob->ost->sol, ofr->band, &avg, &sigma, &min, &max, &merr);
 
-//        for (i = 0; i < MAX_MBANDS, data->bands[i] != -1; i++) {
+        if (ns == 0) {
+            if (data->n) PLOTCMD(data->plot, ", " );
+            PLOTCMD(data->plot, "'' title '%s(%s) not detected'", sob->cats->name, ofr->trans->bname);
 
-//            if ((data->band != -1) && (ofr->band != data->bands[i])) continue; // don't plot this band
-
-            int ns = sol_stats(sob->ost->sol, ofr->band, &avg, &sigma, &min, &max, &merr);
-
-            if (ns == 0)
-                PLOTCMD("'-' title '%s(%s)' with errorbars ", sob->cats->name, ofr->trans->bname);
-
-            else {
-                if (merr)
-                    PLOTCMD("'-' title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me:%4.1f n:%2d' with errorbars ",
-                        sob->cats->name, ofr->trans->bname, avg, sigma, min, max, merr, sigma/merr, ns);
-                else
-                    PLOTCMD("'-' title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me: - n:%2d' with errorbars ",
-                        sob->cats->name, ofr->trans->bname, avg, sigma, min, max, merr, ns);
+        } else {
+            int result = plot_sol_obs(data, sob->ost->sol);
+            if (result & 0x1) { // pos
+                if (data->n) PLOTCMD(data->plot, ", " );
+                PLOTCMD(data->plot, "$POS%d title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me:%4.1f n:%2d' with errorbars ",
+                        data->n, sob->cats->name, ofr->trans->bname, avg, sigma, min, max, merr, sigma/merr, ns);
             }
-
-            if (plot_sol_obs(data, sob->ost->sol, PLOT_POSITIVE)) { // plot positive data. returns true if fainter than found
-                PLOTCMD( ", '' notitle with labels ");
-                plot_sol_obs(data, sob->ost->sol, PLOT_FAINTER_THAN); // plot negative data
+            if (result & 0x2) { // neg
+                if (result & 0x1) PLOTCMD(data->plot, ", " );
+                PLOTCMD(data->plot, "$NEG%d title 'faint' with labels ", data->n);
             }
-//        }
+        }
+
+        data->n++;
 
         plot_sol(data, g_list_next(sol)); // next star
 
     } else {
-        PLOTCMD("\n"); // end of headers
+        if (data->plot) {
+            fprintf(data->plfp, "plot %s\n", data->plot);
 
-        fprintf(data->plfp, "%s", data->plot); // plot data to pipe
-        free(data->plot);
-        data->plot = NULL;
+            free(data->plot);
+            data->plot = NULL;
+        }
     }
 }
-
-int update_recipe_from_sobs(GList *sobs, char *recipe_file, char *ref_star_name) {
-
+#ifdef UPDATE_RECIPE
+static void update_star(star*, double *dif, gboolean *found_standard, struct stf *recipe, struct mband_dataset *mbds, char *standard_star)
+{
+//       lookup star in mbds
+//       if found
+//          sol stats(band, mean, err)
+//          if (!found_standard)
+//              found_standard = (strcmp(star->cats->name, standard_star) != -1);
+//              if (found_standard)
+//                  dif = star->smag[band] - mean
+//       if not finished
+//          next star from recipe
+//          update_star(star, dif, have_dif, recipe, mbds);
+//       else
+//          star mag = new mag + dif
 }
 
+int update_recipe(struct stf *recipe, struct mband_data_set *mbds, char *standard_star)
+{
+    gboolean have_dif = FALSE;
+    double dif;
+//    first star from recipe
+    update_star(star, &dif, &have_dif, recipe, mbds);
+}
+#endif
 
 int plot_star_mag_vs_time(GList *sobs)
 {
@@ -782,9 +813,7 @@ int plot_star_mag_vs_time(GList *sobs)
     data.jdi = jdmin;
     data.plfp = NULL;
     data.pop = 0;
-    data.fainter_than_found = FALSE;
     data.n = 0;
-    data.pass = PLOT_POSITIVE;
     data.sol = sobs;
     data.plot = NULL;
 
@@ -793,16 +822,12 @@ int plot_star_mag_vs_time(GList *sobs)
 
     plot_preamble(data.plfp);
 
-#define PLOTCMD(...) fprintf(data.plfp, __VA_ARGS__)
-
-    PLOTCMD( "set xlabel 'Days from JD %.1f'\n", data.jdi );
-    PLOTCMD( "set xtics autofreq\n" );
-//    PLOTCMD( "set x autoscale\n" );
-    PLOTCMD( "set yrange [:] reverse\n" );
-    PLOTCMD( "plot  " );
+    fprintf( data.plfp, "set xlabel 'Days from JD %.1f'\n", data.jdi );
+    fprintf( data.plfp, "set xtics autofreq\n" );
+//    fprintf( data.plfp,  "set x autoscale\n" );
+    fprintf( data.plfp,  "set yrange [:] reverse\n" );
 
     plot_sol(&data, sobs);
-
     close_plot(data.plfp, data.pop);
 
     return data.n;

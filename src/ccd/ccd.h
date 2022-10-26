@@ -21,6 +21,8 @@
 #endif
 
 #define BIG_ERR 90.0		/* an error value by which we flag invalid/unset data */
+#define MAG_UNSET -90.0     /* mag value  "          "            "               */
+#define DEFAULT_ERR(err) ((err) == BIG_ERR) ? P_DBL(AP_STD_DEFAULT_ERROR) : (err)
 
 #ifndef HUGE
 #define HUGE 1e20
@@ -123,8 +125,9 @@ struct im_stats {
 /* wcs states */
 #define WCS_INVALID 0x00 /* values are invalid */
 #define WCS_INITIAL 0x01 /* initial values for wcs are set */
-#define WCS_FITTED 0x02 /* values are fitted to field */
-#define WCS_VALID 0x04 /* wcs is valid */
+// #define WCS_FITTED 0x02 /* values are fitted to field - not used */
+#define WCS_VALID 0x02 /* wcs is valid */
+
 /* wcs flags */
 #define WCS_HINTED 0x01 /* we don't actually know that these values are correct */
 #define WCS_JD_VALID 0x02 	/* the jd value is valid for the target frame */
@@ -133,10 +136,12 @@ struct im_stats {
 				   to a "mean" value, but is _not_ actually used in the
 				   transformation. the xinc/yinc are however, according to the
 				   fits convention. */
+#define WCS_DATA_IS_FLIPPED 0x10 // wcs (as read) is flipped (xinc * yinc < 0)
+
 struct wcs{
 	int ref_count;
 	int wcsset;	/* non-zero when following are ok */
-	int flags;
+    unsigned int flags;
 	double xref;	/* x reference coordinate value (deg) */
 	double yref;	/* y reference coordinate value (deg) */
 	double xrefpix;	/* x reference pixel */
@@ -170,7 +175,9 @@ struct bad_pixel {
 	char type;	// type of bad pixel
 	int x;
 	int y;
-float v;
+    float v;
+    // bitmap of 8 neighboring pixels starting at x-1, y-1 going clockwise: bit set if bad
+    unsigned short bad_neighbors;
 };
 
 // bad pixel map
@@ -278,6 +285,8 @@ struct ccd_frame {
 	int active_plane;
     double weight; // stack weight
     void *alignment_mask; // pixels overlapping with alignment frame
+    int data_is_flipped; // 0 - data arranged as from file, 1 - data rows flipped top to bottom
+    void *ofr; // pointer to o_frame if mband active
 };
 
 // magic numbers for ccd frame
@@ -309,6 +318,7 @@ struct ccd_frame {
 // bad_pix types
 #define BAD_HOT	('h')
 #define BAD_DARK ('d')
+#define BAD_REGION ('r')
 #define BAD_COLUMN ('c')
 #define BAD_COLD_COLUMN ('C')
 
@@ -381,7 +391,7 @@ struct ph_star {
  * attached to: usually 2000 */
 #define SWCS_INVALID 0	/* wcs is not set */
 #define SWCS_CATALOG 1	/* wcs come from a catalog (e.g. GSC) */
-#define SWCS_RECIPY 2	/* wcs coords come from a recipy (user) file */
+#define SWCS_RECIPE 2	/* wcs coords come from a recipe (user) file */
 #define SWCS_FRAME 3	/* wcs coords are a result of transforming x/y positions
 			 * in the frame according to the frame wcs */
 
@@ -443,26 +453,26 @@ struct ap_params {
 #define APMET_SYMODE 3	// synthetic mode
 
 
-// length of text fields in the recipy structure
-#define RECIPY_TEXT 256
+// length of text fields in the recipe structure
+#define RECIPE_TEXT 256
 
 // structure defining a relative photometry problem
-struct vs_recipy {
-	int ref_count;		/* refcount for the recipy structure */
- 	char objname[RECIPY_TEXT+1];
-	char chart[RECIPY_TEXT+1];
-	char frame[RECIPY_TEXT+1];
-	char repstar[RECIPY_TEXT+1];	// format of star report
-	char repinfo[RECIPY_TEXT+1];	// format of file info report
+struct vs_recipe {
+    int ref_count;		/* refcount for the recipe structure */
+    char objname[RECIPE_TEXT+1];
+    char chart[RECIPE_TEXT+1];
+    char frame[RECIPE_TEXT+1];
+    char repstar[RECIPE_TEXT+1];	// format of star report
+    char repinfo[RECIPE_TEXT+1];	// format of file info report
 	double ra, dec;		// official coordinates of object
-	int usewcs;		// flag showing that the recipy params are relative to the wcs
+    int usewcs;		// flag showing that the recipe params are relative to the wcs
 	double scint_factor;	// scintillation noise factor
 	double aperture;	// aperture of telescope used (cm) (used if not found in frame header)
 	double airmass;		// airmass of observations (used if not found in frame header)
 	struct ap_params p;	// measurement parameters
-	int max_cnt;		/* max number of stars in recipy */
+    int max_cnt;		/* max number of stars in recipe */
 	int cnt;		// number of stars in structure
-	struct star *s;		/* malloced array of stars, freed when the recipy
+    struct star *s;		/* malloced array of stars, freed when the recipe
 				   is freed */
 };
 
@@ -538,7 +548,7 @@ static inline float get_pixel_luminence(struct ccd_frame *fr, int x, int y) {
 	float val;
 	int offset = y * fr->w + x;
 
-	if (fr->magic & FRAME_VALID_RGB) {
+    if (fr->magic & FRAME_VALID_RGB) {
 		switch (fr->active_plane) {
 		
 		case PLANE_RED : return *((float *)fr->rdat + offset);
@@ -558,7 +568,7 @@ static inline float get_pixel_luminence(struct ccd_frame *fr, int x, int y) {
 //////////// Function declarations
 
 
-/* from errlog.c */
+/* from ccd/errlog.c */
 void err_clear(void);
 char * last_err(void);
 int err_printf(char *format, ...);
@@ -566,7 +576,7 @@ extern int debug_level;
 int deb_printf(int level, const char *fmt, ...);
 
 
-// function declarations from ccd_frame.c
+// function declarations from ccd/ccd_frame.c
 
 extern void get_frame(struct ccd_frame *fr);
 extern struct ccd_frame *release_frame(struct ccd_frame *fr);
@@ -575,6 +585,7 @@ extern struct ccd_frame *new_frame_fr(struct ccd_frame* fr, unsigned size_x, uns
 extern struct ccd_frame *new_frame_head_fr(struct ccd_frame* cam, unsigned size_x, unsigned size_y);
 extern void free_frame(struct ccd_frame *fr);
 extern int alloc_frame_data(struct ccd_frame *fr);
+extern void free_frame_data(struct ccd_frame *fr);
 extern int frame_to_float(struct ccd_frame *fr);
 extern struct ccd_frame *clone_frame(struct ccd_frame *fr);
 extern int frame_stats(struct ccd_frame *fr);
@@ -612,13 +623,13 @@ extern int color_plane_iter(struct ccd_frame *fr, int plane_iter);
 extern int alloc_frame_rgb_data(struct ccd_frame *fr);
 extern int remove_bayer_info(struct ccd_frame *fr);
 
-// from dslr.c
+// from ccd/dslr.c
 extern int raw_filename(char *filename);
 extern struct ccd_frame *read_raw_file(char *filename);
 extern int parse_color_field(struct ccd_frame *fr, char *default_cfa);
 extern int set_color_field(struct ccd_frame *fr);
 
-// from badpix.c
+// from ccd/badpix.c
 extern int save_bad_pix(struct bad_pix_map *map);
 extern int load_bad_pix(struct bad_pix_map *map);
 extern int free_bad_pix(struct bad_pix_map *map);
@@ -626,7 +637,7 @@ extern int free_bad_pix(struct bad_pix_map *map);
 extern int find_bad_pixels(struct bad_pix_map *map, struct ccd_frame *fr, double sig);
 extern int fix_bad_pixels (struct ccd_frame *fr, struct bad_pix_map *map);
 
-// from aphot.c
+// from ccd/aphot.c
 
 extern int ring_stats(struct ccd_frame *fr, double x, double y,
 		      double r1, double r2, int quads, struct rstats *rs,
@@ -635,15 +646,15 @@ double hist_clip_avg(struct rstats *rs, double *median, double sigmas,
 		     double *lclip, double *hclip);
 extern int aperture_photometry(struct ccd_frame *fr, struct star *s,
 			struct ap_params *p, struct bad_pix_map *bp);
-extern int measure_stars(struct ccd_frame *fr, struct vs_recipy *vs);
-extern void get_ph_solution(struct vs_recipy *vs);
+extern int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs);
+extern void get_ph_solution(struct vs_recipe *vs);
 extern double flux_to_absmag(double flux);
 extern double absmag_to_flux(double mag);
-extern double scint_noise(struct ccd_frame *fr, struct vs_recipy *vs);
-extern int get_scint_pars(struct ccd_frame *fr, struct vs_recipy *vs, double *t, double *d, double *am);
+extern double scint_noise(struct ccd_frame *fr, struct vs_recipe *vs);
+extern int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double *d, double *am);
 extern double scintillation(double t, double d, double am);
 
-// from sources.c
+// from ccd/sources.c
 extern int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_flux,
 		       struct star *s);
 extern int get_star_near(struct ccd_frame *fr, int x, int y, double min_flux, struct star *s);
@@ -655,7 +666,7 @@ extern struct sources *new_sources(int n);
 #define free_sources(x) release_sources(x)
 extern void release_star(struct star *s);
 
-// from worldpos.c
+// from ccd/worldpos.c
 
 extern int xypix(double xpos, double ypos, double xref, double yref, double xrefpix,
 		 double yrefpix, double xinc, double yinc, double rot,
@@ -674,31 +685,31 @@ extern int dms_to_degrees(char *decs, double *deg);
 extern int degrees_to_dms_pr(char *lb, double deg, int prec);
 extern int degrees_to_hms_pr(char *lb, double deg, int prec);
 
-// from median.c
+// from ccd/median.c
 extern double dmedian(double a[], int n);
 extern float fmedian(float a[], int n);
 
 // macros
 #define sqr(x) ((x)*(x))
 
-// from recipy.c
-extern void fprint_recipy(FILE *fp, struct vs_recipy *vs, int verb);
-extern void fscan_recipy(FILE *fp, struct vs_recipy *vs);
-extern void report_stars(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr, int what);
+// from ccd/rcp.c
+extern void fprint_recipe(FILE *fp, struct vs_recipe *vs, int verb);
+extern void fscan_recipe(FILE *fp, struct vs_recipe *vs);
+extern void report_stars(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what);
 extern int string_has(char *str, char c);
-extern int add_pgm_star(struct vs_recipy *vs, double x, double y);
-extern int add_std_star(struct vs_recipy *vs, double x, double y, double mag);
-extern struct vs_recipy *new_vs_recipy(int n);
-extern void ref_vs_recipy(struct vs_recipy *vs);
-extern void release_vs_recipy(struct vs_recipy *vs);
-void report_event(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr, int what);
+extern int add_pgm_star(struct vs_recipe *vs, double x, double y);
+extern int add_std_star(struct vs_recipe *vs, double x, double y, double mag);
+extern struct vs_recipe *new_vs_recipe(int n);
+extern void ref_vs_recipe(struct vs_recipe *vs);
+extern void release_vs_recipe(struct vs_recipe *vs);
+void report_event(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what);
 
 
 // bits for report_star what
 #define REP_STARS 0	// print results
 #define REP_HEADER 1	// print data header
 
-// from warp.c
+// from ccd/warp.c
 extern struct blur_kern *new_blur_kern(struct blur_kern *kern, int size, double fwhm);
 extern void free_blur_kern(struct blur_kern *kern);
 extern int make_shift_ctrans(struct ctrans *ct, double dx, double dy);
@@ -711,8 +722,11 @@ extern int filter_frame_inplace(struct ccd_frame *fr, float *kern, int size);
 extern int make_gaussian(float sigma, int size, float *kern);
 extern int rotate_frame(struct ccd_frame *fr, double theta);
 //extern void warp_frame(struct ccd_frame *fr, double dx, double dy, double dt);
+extern void flip_frame(struct ccd_frame *fr);
+extern void rotate_frame_pi(struct ccd_frame *fr);
+extern void rotate_trame_pi_2(struct ccd_frame *fr, int direction);
 
-/* from edb.c */
+/* from ccd/edb.c */
 int locate_edb(char name[], double *ra, double *dec, double *mag, char *edbdir);
 
 int try_dcraw(char *filename);

@@ -37,7 +37,7 @@
 
 #include "ccd.h"
 //#include "x11ops.h"
-//#include "warpaffine.h"
+#include "warpaffine.h"
 
 float smooth3[9] = {0.25, 0.5, 0.25, 0.5, 1.0, 0.5, 0.25, 0.5, 0.25};
 
@@ -595,7 +595,7 @@ static void shift_down(float *dat, int w, int h, int dn, double a, double b, dou
 }
 
 
-static void rotate_data_by_pi(float *in, float *out, int width, int height)
+static void rotate_data_pi(float *in, float *out, int width, int height)
 {
     int all = width * height;
     float *pi = in;
@@ -632,13 +632,69 @@ static void rotate_data_by_pi(float *in, float *out, int width, int height)
     }
 }
 
+static void rotate_data_pi_2(float *in, float *out, int w, int h, int direction)
+{
+//    linear_x_shear_data(in, w, h, out, w, h, - direction, 1, filler);
+//    linear_y_shear_data(out, w, h, in, w, h, direction, 1, filler);
+//    linear_x_shear_data(in, w, h, out, w, h, - direction, 1, filler);
+// or
+    int all = w * h * sizeof(float);
+    float *temp = malloc(all);
+    float *pi = in;
 
+    int j;
+    for (j = 0; j < h; j++) {
+        float *po = temp + (h - 1 - j) * w;
+
+        int i;
+        for (i = 0; i < w; i++) {
+            *(po += h) = *(pi++);
+        }
+    }
+    if (out == NULL)
+        out = in;
+
+    memcpy(out, temp, all);
+}
+
+static void flip_data(float *in, float *out, int width, int height)
+{
+    int  w = width * sizeof(float);
+
+    float *pi = in;
+
+    int i;
+
+    if (out) {
+        float *po = out + width * (height - 1);
+
+        for (i = 0; i < height; i++) {
+            memcpy(po, pi, w);
+            pi += width;
+            po -= width;
+        }
+
+    } else { // inplace
+        float *po = in + width * (height - 1);
+        float *temp = malloc(w);
+
+        for (i = 0; i < height / 2; i++) {
+            memcpy(temp, pi, w);
+            memcpy(pi, po, w);
+            memcpy(po, temp, w);
+            pi += width;
+            po -= width;
+        }
+
+        free(temp);
+    }
+}
 
 static void rotate_data(float *in, float *out, int w, int h, double theta, double filler)
 {
 // assume theta in (-pi, pi)
     if (fabs(theta) > PI / 2) {
-        rotate_data_by_pi(in, NULL, w, h);
+        rotate_data_pi(in, NULL, w, h);
         theta = (theta > 0) ? theta - PI: theta + PI;
     }
 
@@ -706,38 +762,81 @@ int shift_frame(struct ccd_frame *fr, double dx, double dy)
             a = dx - floor(dx);
             b = 1 - a;
             dn = floor(dx);
-            shift_right(dat, w, h, dn, a, b, filler);
+            if (dn < w) {
+                shift_right(dat, w, h, dn, a, b, filler);
+            }
         } else if (dx < 0) { // shift left
             a = -dx - floor(-dx);
             b = 1 - a;
             dn = floor(-dx);
-            shift_left(dat, w, h, dn, a, b, filler);
+            if (dn > -w) {
+                shift_left(dat, w, h, dn, a, b, filler);
+            }
         }
 
         if (dy < 0.0) { // shift up
             a = -dy - floor(-dy);
             b = 1 - a;
             dn = floor(-dy);
-            shift_up(dat, w, h, dn, a, b, filler);
+            if (dn > -h) {
+                shift_up(dat, w, h, dn, a, b, filler);
+            }
 
         } else if (dy > 0.0) {
             a = dy - floor(dy);
             b = 1 - a;
             dn = floor(dy);
-            shift_down(dat, w, h, dn, a, b, filler);
+            if (dn < h) {
+                shift_down(dat, w, h, dn, a, b, filler);
+            }
         }
     }
 
     return 0;
 }
 
-static void rotate_frame_by_pi(struct ccd_frame *fr)
+void rotate_frame_pi(struct ccd_frame *fr)
 {
 // in and out are the same size (width, height, planes)
     int plane_iter = 0;
     while ((plane_iter = color_plane_iter(fr, plane_iter))) {
         float *in = get_color_plane(fr, plane_iter);
-        rotate_data_by_pi(in, NULL, fr->w, fr->h);
+        rotate_data_pi(in, NULL, fr->w, fr->h);
+    }
+}
+
+// direction = 1 : clockwise
+// direction = -1 : anticlockwise
+void rotate_trame_pi_2(struct ccd_frame *fr, int direction)
+{
+// in and out are the same size (width, height, planes), width and height swap
+    int plane_iter = 0;
+    int all = fr->w * fr->h;
+
+    if (!fr->stats.statsok) frame_stats(fr);
+    float filler = fr->stats.cavg;  // filler value for out-of-frame spots
+
+    float *out = malloc(all * sizeof(float));
+    while ((plane_iter = color_plane_iter(fr, plane_iter))) {
+        float *in = get_color_plane(fr, plane_iter);
+        rotate_data_pi_2(in, out, fr->w, fr->h, direction);
+        memcpy(in, out, all * sizeof(float));
+    }
+    free(out);
+
+//    int t = fr->w;
+//    fr->w = fr->h;
+//    fr->h = t;
+}
+
+// vertical flip
+void flip_frame(struct ccd_frame *fr)
+{
+// in and out are the same size (width, height, planes)
+    int plane_iter = 0;
+    while ((plane_iter = color_plane_iter(fr, plane_iter))) {
+        float *in = get_color_plane(fr, plane_iter);
+        flip_data(in, NULL, fr->w, fr->h);
     }
 }
 

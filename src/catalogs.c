@@ -44,7 +44,7 @@
 #include "wcs.h"
 #include "tycho2.h"
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "misc.h"
 
 #define GSC_NAME 0
@@ -430,7 +430,7 @@ int local_get(struct cat_star *cst[], struct catalog *cat,
 
 static void update_cat_star(struct cat_star *ocats, struct cat_star *cats)
 {
-	char *t;
+    char *t;
 
 	ocats->ra = cats->ra;
 	ocats->dec = cats->dec;
@@ -453,6 +453,19 @@ static void update_cat_star(struct cat_star *ocats, struct cat_star *cats)
 			ocats->comments = strdup(cats->comments);
 		}
 	}
+    if (cats->cmags != NULL) {
+        if (ocats->cmags != NULL) {
+            if (-1 == asprintf(&t, "%s %s", cats->cmags, ocats->cmags)) {
+                free(ocats->cmags);
+                ocats->cmags = NULL;
+            } else {
+                free(ocats->cmags);
+                ocats->cmags = t;
+            }
+        } else {
+            ocats->cmags = strdup(cats->cmags);
+        }
+    }
 	if (cats->smags != NULL) {
 		if (ocats->smags != NULL) {
 			if (-1 == asprintf(&t, "%s %s", cats->smags, ocats->smags)) {
@@ -662,31 +675,6 @@ struct cat_star *cat_star_new(void)
 	return cats;
 }
 
-/* create a copy of a cat_star */
-struct cat_star *cat_star_dup(struct cat_star *cats)
-{
-	struct cat_star *ncats;
-	ncats = cat_star_new();
-	if (ncats == NULL)
-		return NULL;
-	memcpy(ncats, cats, sizeof(struct cat_star));
-	if (cats->comments != NULL)
-		ncats->comments = strdup(cats->comments);
-	if (cats->smags != NULL)
-		ncats->smags = strdup(cats->smags);
-	if (cats->imags != NULL)
-		ncats->imags = strdup(cats->imags);
-	if (cats->astro != NULL) {
-		ncats->astro = calloc(1, sizeof(struct cats_astro));
-		g_assert(ncats->astro != NULL);
-		if (cats->astro->catalog != NULL)
-			ncats->astro->catalog = strdup(cats->astro->catalog);
-	}
-	ncats->ref_count = 1;
-	return ncats;
-}
-
-
 void cat_star_ref(struct cat_star *cats)
 {
 	if (cats == NULL)
@@ -694,19 +682,54 @@ void cat_star_ref(struct cat_star *cats)
 	cats->ref_count ++;
 }
 
+/* create duplicate of cat_star with ref_count 1 */
+struct cat_star *cat_star_dup(struct cat_star *cats)
+{
+//    printf("cats_star_duplicate %s %d\n", cats->name, cats->ref_count); fflush(NULL);
+    if (cats == NULL)
+        return NULL;
+
+    struct cat_star *new_cats = cat_star_new();
+    if (new_cats == NULL)
+        return NULL;
+
+    memcpy(new_cats, cats, sizeof(struct cat_star));
+    new_cats->ref_count = 1;
+
+    if (cats->comments) new_cats->comments = strdup(cats->comments);
+    if (cats->imags) new_cats->imags = strdup(cats->imags);
+    if (cats->cmags) new_cats->cmags = strdup(cats->cmags);
+    if (cats->smags) new_cats->smags = strdup(cats->smags);
+
+    if (cats->astro != NULL) {
+        new_cats->astro = malloc(sizeof(struct cats_astro));
+        if (new_cats->astro != NULL) {
+            memcpy(new_cats->astro, cats->astro, sizeof(struct cats_astro));
+            if (cats->astro->catalog) new_cats->astro->catalog = strdup(cats->astro->catalog);
+        }
+    }
+    new_cats->guis = NULL;
+
+    return new_cats;
+}
+
 void cat_star_release(struct cat_star *cats)
 {
-d3_printf("cats_star_release %s %d\n", cats->name, cats->ref_count);
 	if (cats == NULL)
 		return;
 
 	if (cats->ref_count < 1)
 		err_printf("cat_star has ref_count of %d on release\n", cats->ref_count);
 
-	if (cats->ref_count <= 1) {
+    if (cats->ref_count == 1) {
+        printf("cat_star_release %s\n", cats->name); fflush(NULL);
+
 		if (cats->comments != NULL) {
 			free(cats->comments);
 		}
+        if (cats->cmags != NULL) {
+            free(cats->cmags);
+        }
 		if (cats->smags != NULL) {
 			free(cats->smags);
 		}
@@ -717,8 +740,12 @@ d3_printf("cats_star_release %s %d\n", cats->name, cats->ref_count);
 			if (cats->astro->catalog != NULL)
 				free(cats->astro->catalog);
 			free(cats->astro);
-		}
-d3_printf("freeing cats\n");
+        }
+        if (cats->guis) {
+            gui_star_release(cats->guis);
+            cats->guis = NULL;
+        }
+
 		free(cats);
 	} else {
 		cats->ref_count --;
@@ -845,7 +872,7 @@ int get_band_by_name(char *mags, char *band, double *mag, double *err)
 	char *text = mags;
 	int btype, type;
 	double m, me;
-	double m1=BIG_ERR, me1=BIG_ERR, m2=BIG_ERR, me2=BIG_ERR;
+    double m1=MAG_UNSET, me1=BIG_ERR, m2=MAG_UNSET, me2=BIG_ERR;
 
 	char *endp, *bendp;
 	char *n1, *n2=NULL, *qual;
@@ -967,7 +994,6 @@ int get_band_by_name(char *mags, char *band, double *mag, double *err)
 int update_band_by_name(char **mags, char *band, double mag, double err)
 {
 	char *bs = NULL, *be = NULL;
-	char *text = *mags;
 	char *nb;
 	int btype, type;
 	char *endp, *bendp;
@@ -995,6 +1021,10 @@ int update_band_by_name(char **mags, char *band, double mag, double err)
 		return 0;
 	}
 
+    char *m = *mags;
+    while (*m == ' ') m++;
+    char *text = m;
+
 	btype = band_crack(band, &bn1, &bn1l, &bn2, &bn2l, 
 			   &bqual, &bquall, NULL, NULL, &bendp);
 
@@ -1004,11 +1034,13 @@ int update_band_by_name(char **mags, char *band, double mag, double err)
 
 		if ((type < 0))
 			break;
-		if ((type & (BAND_QUAL | BAND_INDEX)) == (btype & (BAND_QUAL | BAND_INDEX))
-		    && ((bn1l == n1l) && !strncmp(n1, bn1, n1l))
-		    && (!(type & BAND_QUAL) 
-			|| ((bn2l == n2l) && !strncmp(n2, bn2, n2l)))) {
-			bs = text;
+        int a = (type & (BAND_QUAL | BAND_INDEX)) == (btype & (BAND_QUAL | BAND_INDEX)) && ((bn1l == n1l) && (strncmp(n1, bn1, n1l) == 0));
+        int b = (!(type & BAND_QUAL) && ((bn2l == n2l) && (strncmp(n2, bn2, n2l) == 0)));
+//        if ((type & (BAND_QUAL | BAND_INDEX)) == (btype & (BAND_QUAL | BAND_INDEX))
+//                && ((bn1l == n1l) && !strncmp(n1, bn1, n1l))
+//                && (!(type & BAND_QUAL) || ((bn2l == n2l) && !strncmp(n2, bn2, n2l)))) {
+        if(a || b) {
+            bs = text; // existing record for this band
 			be = endp;
 //			break;
 		}
@@ -1016,30 +1048,34 @@ int update_band_by_name(char **mags, char *band, double mag, double err)
 
 	} while (type >= 0);
 
-	if (bs == NULL) {
+    if (bs == NULL) { // band not found - append it to mags
 		if (err == 0.0)
-			ret = asprintf(&nb, "%s %s=%.3f", *mags, band, mag);
+            ret = asprintf(&nb, "%s %s=%.3f", m, band, mag);
 		else 
-            ret = asprintf(&nb, "%s %s=%.4f/%.4f", *mags, band, mag, err);
-		if (*mags)
-			free(*mags);
-		if (ret == -1)
-			nb = NULL;
-		*mags = nb;
-		return 0;
-	}
-	if (err == 0.0)
-		ret = asprintf(&nb, "%s %s=%.3f", *mags, band, mag);
-	else 
-        ret = asprintf(&nb, "%s %s=%.4f/%.4f", *mags, band, mag, err);
-	if (ret != -1) {
-		do {
-			nb[(bs++) - *mags] = nb[be - *mags];
-		} while (nb[(be++) - *mags] != 0);
-	} else {
-		nb = NULL;
-	}
-	free(*mags);
+            ret = asprintf(&nb, "%s %s=%.4f/%.4f", m, band, mag, err);
+
+    } else { // band found append to mags
+        if (err == 0.0)
+            ret = asprintf(&nb, "%s %s=%.3f", m, band, mag);
+        else
+            ret = asprintf(&nb, "%s %s=%.4f/%.4f", m, band, mag, err);
+        if (ret != -1) { // move end back over old band replacing it
+            bs = &(nb[bs - m]);
+            be = &(nb[be - m]);
+            while (*be == ' ') be++;
+            for (;; bs++, be++) {
+                *bs = *be;
+                if (*be == 0x0) break;
+            }
+        }
+    }
+
+    if (*mags)
+        free(*mags);
+
+    if (ret == -1)
+        nb = NULL;
+
 	*mags = nb;
 	return 0;
 }
@@ -1150,7 +1186,7 @@ static struct cat_star *local_search_file(char *fn, char *name)
 
 	fseek(inf, nm - lbuf - ret + 1, SEEK_CUR);
 	
-	for (i = 0; i < 100000 && ftell(inf) > 0; i++) {
+    for (i = 0; (i < 100000) && (ftell(inf) > 0); i++) {
 		char c;
 		fseek(inf, -2, SEEK_CUR);
 		c = fgetc(inf);

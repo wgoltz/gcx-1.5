@@ -197,11 +197,10 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
 		}
 		memcpy(var, hd->var, hd->nvar * sizeof(FITS_row));
 		hd->var = var;
+    } else {
+        hd->var = NULL;
+        hd->nvar = 0;
     }
-//    else {
-//		hd->var = NULL;
-//		hd->nvar = 0;
-//	}
 
     hd->stats.hist.hdat = NULL;
     alloc_stats(& hd->stats);
@@ -259,15 +258,20 @@ d3_printf("freed %p '%s' frame_count %d \n", fr, fr->name, frame_count);
 }
 
 // free_frame_data frees the data array of a frame
-/*
-static void free_frame_data(struct ccd_frame *fr)
+
+void free_frame_data(struct ccd_frame *fr)
 {
-	free(fr->dat);
-	free(fr->stats.hist.hdat);
-	fr->stats.hist.hdat = NULL;
-	fr->dat = NULL;
-	fr->data_valid = 0;
-}*/
+    if (fr) {
+        if (fr->dat) free(fr->dat);
+        fr->dat = NULL;
+        if (fr->rdat) free(fr->rdat);
+        fr->rdat = NULL;
+        if (fr->gdat) free(fr->gdat);
+        fr->rdat = NULL;
+        if (fr->bdat) free(fr->bdat);
+        fr->rdat = NULL;
+    }
+}
 
 
 // functions should call get_frame to show
@@ -533,60 +537,6 @@ static int fits_filename(char *fn, int fnl)
 	return 1;
 }
 
-
-/* read the wcs fields from the fits header lines
-static void parse_fits_wcs(struct ccd_frame *fr, struct wcs *fim)
-{
-	fim->wcsset = WCS_INITIAL;
-
-	if (fits_get_double(fr, "CRPIX1", &fim->xrefpix) <= 0)
-		fim->wcsset = WCS_INVALID;
-	if (fits_get_double(fr, "CRPIX2", &fim->yrefpix) <= 0)
-		fim->wcsset = WCS_INVALID;
-	if (fits_get_double(fr, "CRVAL1", &fim->xref) <= 0)
-		fim->wcsset = WCS_INVALID;
-	if (fits_get_double(fr, "CRVAL2", &fim->yref) <= 0)
-		fim->wcsset = WCS_INVALID;
-	if (fits_get_double(fr, "CDELT1", &fim->xinc) <= 0)
-		fim->wcsset = WCS_INVALID;
-	if (fits_get_double(fr, "CDELT2", &fim->yinc) <= 0)
-		fim->wcsset = WCS_INVALID;
-	if (fits_get_double(fr, "CROTA1", &fim->rot) <= 0)
-		fim->rot = 0;
-	if (fits_get_int(fr, "EQUINOX", &fim->equinox) <= 0) {
-		fim->equinox = 2000;
-	}
-}
- */
-
-/* read the wcs fields from the fits header lines
-
-static void parse_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
-{
-
-	if (fits_get_int(fr, "CCDBIN1", &exp->bin_x) > 0)
-		exp->datavalid = 1;
-	if (fits_get_int(fr, "CCDBIN2", &exp->bin_y) > 0)
-		exp->datavalid = 1;
-	if (fits_get_double(fr, "ELADU", &exp->scale) <= 0) {
-		exp->scale = 1.0;
-//		err_printf("No ELADU, assuming 1\n");
-	}
-	if (fits_get_double(fr, "RDNOISE", &exp->rdnoise) <= 0) {
-		exp->rdnoise = 7.0;
-//		err_printf("No RDNOISE, assuming 7\n");
-	}
-	if (fits_get_double(fr, "FLNOISE", &exp->flat_noise) <= 0) {
-		exp->flat_noise = 0.0;
-//		err_printf("No FLNOISE, assuming 0\n");
-	}
-	if (fits_get_double(fr, "DCBIAS", &exp->bias) <= 0) {
-		exp->bias = 0.0;
-//		err_printf("No DCBIAS, assuming 0\n");
-	}
-}
- */
-
 struct memptr {
 	unsigned char *ptr;
 	unsigned char *data;
@@ -597,7 +547,7 @@ static int mem_count = 0;
 
 void *mem_open(unsigned char *data, unsigned int len)
 {
-printf("ccd_frame.mem_open %d\n", mem_count++);
+//printf("ccd_frame.mem_open %d\n", mem_count++);
     struct memptr *mem = (struct memptr *)malloc(sizeof(struct memptr));
 	mem->data = data;
 	mem->len = len;
@@ -633,7 +583,7 @@ int mem_getc(void *stream)
 
 int mem_close(void *stream)
 {
-printf("ccd_frame.mem_close %d\n", mem_count--);
+//printf("ccd_frame.mem_close %d\n", mem_count--);
     free(stream);
 	return 0;
 }
@@ -662,6 +612,7 @@ struct read_fn read_mem = {
 
  size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
 #define MAX_FILENAME 1024
+
 // read_fits_file reads a fits file from disk/memory and creates a new frame
 // holding the data from the file.
 static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_unsigned, char *default_cfa, struct read_fn *rd)
@@ -803,6 +754,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 
     hd->stats.zero = bz;
     hd->stats.scale = bs;
+printf("bzero %f bscale %f\n", bz, bs); fflush(NULL);
 
 // do the reading and calculate stats
 	frame = hd->w * hd->h;
@@ -886,6 +838,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
         free(hd->dat);
 		hd->dat = NULL;
 	}
+// if frame is flipped, flip frame and update wcs
 
 	hd->pix_size = sizeof (float);
 	hd->data_valid = 1;
@@ -960,12 +913,12 @@ struct ccd_frame *read_gz_fits_file(char *filename, char *ungz, int force_unsign
 	}
 	if (zipped) {
         char *cmd;
-		if (-1 != asprintf(&cmd, "%s %s ", ungz, fn)) {
+        if (-1 != asprintf(&cmd, "%s '%s' ", ungz, fn)) {
 			fp = popen(cmd, "r");
             free(cmd);
 		}
         if (fp == NULL) { // try bzcat
-            if (-1 != asprintf(&cmd, "b%s %s ", ungz, fn)) {
+            if (-1 != asprintf(&cmd, "b%s '%s' ", ungz, fn)) {
                 fp = popen(cmd, "r");
                 free(cmd);
             }
@@ -995,7 +948,9 @@ struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned
     struct ccd_frame *fr = NULL;
 d2_printf("ccd_frame.read_image_file: %s\n", filename);
 
-    if (raw_filename(filename) <= 0) fr = read_raw_file(filename);
+    if (raw_filename(filename) <= 0)
+        fr = read_raw_file(filename);
+
     if (fr) return fr;
 
     fr = read_jpeg_file(filename);
@@ -1137,11 +1092,11 @@ int pad;
 		dat_ptr[1] = (float *)fr->gdat;
 		dat_ptr[2] = (float *)fr->bdat;
 		dat_ptr[3] = NULL;
-		pad = 2880 - (all * 2 * naxis) % 2880;
+        pad = 2880 - (all * 2 * naxis) % 2880;
 	} else {
 		dat_ptr[0] = (float *)fr->dat;
 		dat_ptr[1] = NULL;
-		pad = 2880 - (all * 2 * 1) % 2880;
+        pad = 2880 - (all * 2 * 1) % 2880;
 	}
 	while (*datp) {
 		dp = (float *)(*datp);
@@ -1162,8 +1117,10 @@ int pad;
 
         /* pad the end of record */
 d3_printf("ccd_frame.write_fits_frame %d %d %d\n", all, naxis, pad); 
-	for (i = 0;  i < pad; i++)
-		putc(' ', fp);
+//	for (i = 0;  i < pad; i++)
+//		putc(' ', fp);
+    while(pad++ < 2880)
+        putc(' ', fp);
 
 	fflush(fp);
 	fsync(fileno(fp));
@@ -1181,11 +1138,11 @@ int write_gz_fits_frame(struct ccd_frame *fr, char *fn, char *gzcmd)
 		return write_fits_frame(fr, fn);
 
 	strncpy(lb, fn, MAX_FILENAME);
-//	fits_filename(lb, MAX_FILENAME);
+//    fits_filename(lb, MAX_FILENAME);
 
-	ret = write_fits_frame(fr, lb);
+    ret = write_fits_frame(fr, lb); // this tries to write file without .gz extension which can collide with directory names
 	if (!ret) {
-		if (-1 == asprintf(&text, "%s %s", gzcmd, lb))
+        if (-1 == asprintf(&text, "%s '%s'", gzcmd, lb)) // this replaces file and adds .gz extension
 			return ERR_ALLOC;
 		if (-1 == system(text))
 			ret = ERR_FILE;
@@ -1526,9 +1483,9 @@ FITS_row *fits_keyword_lookup(struct ccd_frame *fr, char *kwd)
 		return NULL;
 
 	var = fr->var;
-	for (i=0; i<fr->nvar; i++) {
-		if (!strncmp((char *)(var + i), kwd, strlen(kwd))) {
-			return (var + i);
+    for (i=0; i<fr->nvar; i++, var++) {
+        if (!strncmp((char *)var, kwd, strlen(kwd))) {
+            return var;
 		}
 	}
 	return NULL;
@@ -1824,7 +1781,7 @@ int fits_get_dms(struct ccd_frame *fr, char *kwd, double *v)
 	if (ret <= 0)
 		return ret;
 //	d3_printf("dms field is: %s\n", dms);
-	if (dms_to_degrees(dms, v)) {
+    if (dms_to_degrees(dms, v) < 0) {
 		return -1;
 	}
 	return 1;

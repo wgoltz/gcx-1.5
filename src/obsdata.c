@@ -203,6 +203,8 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
             fr->fim.yref = obs->dec;
             fr->fim.rot = obs->rot;
 d2_printf("obsdata.ccd_frame_add_obs_info setting wcsset to WCS_INITIAL\n");
+printf("ccd_frame_add_obs_info, no set wcsset = WCS_INITIAL\n"); fflush(NULL);
+
             fr->fim.wcsset = WCS_INITIAL;
 
             degrees_to_hms_pr(deg, obs->ra, 2);
@@ -267,46 +269,31 @@ d2_printf("obsdata.ccd_frame_add_obs_info setting wcsset to WCS_INITIAL\n");
 
 	sprintf(lb, "%20.1f / OBSERVING SITE ALTITUDE (M)", P_DBL(OBS_ALTITUDE));
 	fits_add_keyword(fr, P_STR(FN_ALTITUDE), lb);
-
 }
 
-/* look for CD_ keywords; return 1 if found (and update fim) */
+/* look for CD_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
 static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
 {
 	double cd[2][2];
-	int ret = 0;
-	double D, ra, rb, r;
+    int have_CD = 0;
 
-	if (fits_get_double(fr, "CD1_1", &cd[0][0]) > 0) {
-		ret = 1;
-	} else {
-		cd[0][0] = 0;
-	}
-	if (fits_get_double(fr, "CD1_2", &cd[0][1]) > 0) {
-		ret = 1;
-	} else {
-		cd[0][1] = 0;
-	}
-	if (fits_get_double(fr, "CD2_1", &cd[1][0]) > 0) {
-		ret = 1;
-	} else {
-		cd[1][0] = 0;
-	}
-	if (fits_get_double(fr, "CD2_2", &cd[1][1]) > 0) {
-		ret = 1;
-	} else {
-		cd[1][1] = 0;
-	}
+    if (fits_get_double(fr, "CD1_1", &cd[0][0]) > 0) have_CD += 1; else cd[0][0] = 1;
+    if (fits_get_double(fr, "CD1_2", &cd[0][1]) > 0) have_CD += 2; else cd[0][1] = 0;
+    if (fits_get_double(fr, "CD2_1", &cd[1][0]) > 0) have_CD += 4; else cd[1][0] = 0;
+    if (fits_get_double(fr, "CD2_2", &cd[1][1]) > 0) have_CD += 8; else cd[1][1] = 1;
 
-    if (!ret) return 0;
-
-	D = cd[0][0] * cd[1][1] - cd[1][0] * cd[0][1];
-	d4_printf("CD D=%8g\n", D);
-	if (fabs(D) < 1e-30) {
+    double det = cd[0][0] * cd[1][1] - cd[1][0] * cd[0][1];
+    d4_printf("CD det=%8g\n", det);
+    if (fabs(det) < 1e-30) {
 		err_printf("CD matrix is singular!\n");
 		return 0;
 	}
 
+    double ra, rb, r;
+
+    // atan2(cd[1][0]*cd[0][1])
+    // k * |1 0| | c    s|  -> kc    ks
+    //     |0 f| | -s   c|    -kfs   kfc
 	if (cd[1][0] > 0) {
 		ra = atan2(cd[1][0], cd[0][0]);
 	} else if (cd[1][0] < 0) {
@@ -327,143 +314,139 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
 
 	d4_printf("ra=%.8g, rb=%.8g, r=%.8g\n", raddeg(ra), raddeg(rb), raddeg(r));
 
-	if (fabs(cos(r)) < 1e-30) {
-		err_printf("90.000000 degrees rotation!\n");
+    if (fabs(cos(r)) < 1e-30) { // what is this?
+        err_printf("90.000000 degrees rotation!\n");
 		return 0;
 	}
 
-	D = sqrt((sqr(cd[0][0]) + sqr(cd[1][1])) / 2);
+    double norm = sqrt((sqr(cd[0][0]) + sqr(cd[1][1])) / 2);
 
-	fim->xinc = cd[0][0] > 0 ? D / cos(r) : -D / cos(r);
-	fim->yinc = cd[1][1] > 0 ? D / cos(r) : -D / cos(r);
+// fill in fim fields and pc from cd
+    fim->xinc = cd[0][0] > 0 ? norm / cos(r) : -norm / cos(r);
+    fim->yinc = cd[1][1] > 0 ? norm / cos(r) : -norm / cos(r);
+    fim->rot = raddeg(r);
 
 	fim->pc[0][0] = cd[0][0] / fim->xinc;
 	fim->pc[1][0] = cd[1][0] / fim->yinc;
 	fim->pc[0][1] = cd[0][1] / fim->xinc;
-	fim->pc[1][1] = cd[1][1] / fim->yinc;
-	fim->rot = raddeg(r);
-// if xinc * yinc < 0 r = r - pi ?
+	fim->pc[1][1] = cd[1][1] / fim->yinc;    
+
 	d4_printf("pc   %.8g %.8g\n", fim->pc[0][0], fim->pc[0][1]);
 	d4_printf("pc   %.8g %.8g\n", fim->pc[1][0], fim->pc[1][1]);
 
-	if (ret) {
-// ???		fim->flags |= WCS_USE_LIN;
-	}
+//    fim->flags |= WCS_USE_LIN;
 
-	return 1;
-
+    return have_CD == 15 ? 1 : 0; // valid (xinc, yinc, rot) or (1, 1, 0)
 }
 
-/* look for PC_ keywords; return 1 if found (and update fim) */
+/* look for PC_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
 static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
 {
-	double pc[2][2];
-	int ret = 0;
-	double D;
+    double d;
 
 //	d3_printf("scan_for_pc\n");
-	if (fits_get_double(fr, P_STR(FN_CROTA1), &fim->rot) <= 0)
-		fim->rot = 0;
+    gboolean have_rot = (fits_get_double(fr, P_STR(FN_CROTA1), &d) > 0); if (have_rot) fim->rot = d;
+    gboolean have_xinc = (fits_get_double(fr, P_STR(FN_CDELT1), &d) > 0); if (have_xinc) fim->xinc = d;
+    gboolean have_yinc = (fits_get_double(fr, P_STR(FN_CDELT2), &d) > 0); if (have_yinc) fim->yinc = d;
 
-	if ( (fits_get_double(fr, P_STR(FN_CDELT1), &fim->xinc) <= 0) ||
-	     (fits_get_double(fr, P_STR(FN_CDELT2), &fim->yinc) <= 0) ) {
+    double pc[2][2];
+    int have_PC = 0;
+
+    if (fits_get_double(fr, "PC1_1", &pc[0][0]) > 0) have_PC += 1; else pc[0][0] = 1;
+    if (fits_get_double(fr, "PC1_2", &pc[0][1]) > 0) have_PC += 2; else pc[0][1] = 0;
+    if (fits_get_double(fr, "PC2_1", &pc[1][0]) > 0) have_PC += 4; else pc[1][0] = 0;
+    if (fits_get_double(fr, "PC2_2", &pc[1][1]) > 0) have_PC += 8; else pc[1][1] = 1;
+
+    double det = pc[0][0] * pc[1][1] - pc[1][0] * pc[0][1];
+//	d4_printf("PC det=%8g\n",det);
+    if (fabs(det) < 1e-30) {
+        err_printf("PC matrix is singular!\n");
 		return 0;
 	}
 
-	if (fits_get_double(fr, "PC1_1", &pc[0][0]) > 0) {
-		ret = 1;
-	} else {
-		pc[0][0] = 1;
-	}
-	if (fits_get_double(fr, "PC1_2", &pc[0][1]) > 0) {
-		ret = 1;
-	} else {
-		pc[0][1] = 0;
-	}
-	if (fits_get_double(fr, "PC2_1", &pc[1][0]) > 0) {
-		ret = 1;
-	} else {
-		pc[1][0] = 0;
-	}
-	if (fits_get_double(fr, "PC2_2", &pc[1][1]) > 0) {
-		ret = 1;
-	} else {
-		pc[1][1] = 1;
-	}
-
-	
-
-	D = pc[0][0] * pc[1][1] - pc[1][0] * pc[0][1];
-//	d4_printf("PC D=%8g\n", D);
-	if (fabs(D) < 1e-30) {
-		err_printf("PC matrix is singular!\n");
-		return 0;
-	}
-
-//	if (ret) fim->flags |= WCS_USE_LIN;
+//    fim->flags |= WCS_USE_LIN;
 
 	fim->pc[0][0] = pc[0][0];
 	fim->pc[1][0] = pc[1][0];
 	fim->pc[0][1] = pc[0][1];
 	fim->pc[1][1] = pc[1][1];
-    if (ret) fim->rot = raddeg(atan2(pc[0][1], pc[0][0]));
 
-	return 1;
+// TODO:
+    if (have_PC == 15) // get xinc, yinc, rot from pc
+        fim->rot = raddeg(atan2(pc[0][1], pc[0][0]));
+
+// if (have_xinc && have_yinc && have_rot) get pc from xinc, yinc, rot
+// if (have_PC == 15) && (have_xinc && have_yinc && have_rot) find an average ?
+
+    if (! (have_xinc && have_yinc)) {
+        fim->xinc = 0;
+        fim->yinc = 0;
+    }
+
+    return (have_PC == 15) || (have_xinc && have_yinc) ? 1 : 0;
 }
 
 
 /* read the wcs fields from the fits header lines
  * using parametrised field names */
 
-void rescan_fits_wcs(struct ccd_frame *fr, struct wcs *fim)
+int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
 {
 	g_return_if_fail(fr != NULL);
-	g_return_if_fail(fim != NULL);
+    g_return_if_fail(wcs != NULL);
 
-d2_printf("obsdata.rescan_fits_wcs setting wcsset to WCS_INITIAL\n");
-	fim->wcsset = WCS_INITIAL;
-	fim->flags &= ~WCS_HINTED;
-	fim->flags &= ~WCS_USE_LIN;
+    double d;
+    gboolean ok = TRUE;
 
-    if (fits_get_double(fr, P_STR(FN_CRPIX1), &fim->xrefpix) <= 0) fim->wcsset = WCS_INVALID;
-    if (fits_get_double(fr, P_STR(FN_CRPIX2), &fim->yrefpix) <= 0) fim->wcsset = WCS_INVALID;
-    if (fits_get_double(fr, P_STR(FN_CRVAL1), &fim->xref) <= 0)	fim->wcsset = WCS_INVALID;
-    if (fits_get_double(fr, P_STR(FN_CRVAL2), &fim->yref) <= 0)	fim->wcsset = WCS_INVALID;
-    if (fits_get_double(fr, P_STR(FN_EQUINOX), &fim->equinox) <= 0) fim->equinox = 2000;
+    if (fits_get_double(fr, P_STR(FN_CRPIX1), &d) > 0) wcs->xrefpix = d; else wcs->xrefpix = fr->w / 2;
+    if (fits_get_double(fr, P_STR(FN_CRPIX2), &d) > 0) wcs->yrefpix = d; else wcs->yrefpix = fr->h / 2;
+    if (fits_get_double(fr, P_STR(FN_CRVAL1), &d) > 0) wcs->xref = d; // else ok = FALSE;
+    if (fits_get_double(fr, P_STR(FN_CRVAL2), &d) > 0) wcs->yref = d; // else ok = FALSE;
+    if (fits_get_double(fr, P_STR(FN_EQUINOX), &d) > 0) wcs->equinox = d; else wcs->equinox = 2000;
 
-	if (!scan_for_CD(fr, fim))
-        if (!scan_for_PC(fr, fim)) fim->wcsset = WCS_INVALID;
+    if (!scan_for_CD(fr, wcs)) // get xinc, yinc, rot, pc from cd
+        if (!scan_for_PC(fr, wcs)) // get xinc, yinc, rot, pc
+            ok = FALSE;
 
-// printf("obsdata.rescan_fits_wcs wcs status is: %d\n", fim->wcsset);
+    return ok ? 0 : 1;
 }
 
 /* read the exp fields from the fits header lines
  * using parametrised field names */
 void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
 {
-    int update = FALSE;
+//    int update = FALSE;
 	g_return_if_fail(fr != NULL);
 	g_return_if_fail(exp != NULL);
 
-    if (fits_get_int(fr, P_STR(FN_BINX), &exp->bin_x) > 0) exp->datavalid = 1;
-    if (fits_get_int(fr, P_STR(FN_BINY), &exp->bin_y) > 0) exp->datavalid = 1;
+//    if (fits_get_int(fr, P_STR(FN_BINX), &exp->bin_x) > 0) exp->datavalid = 1;
+//    if (fits_get_int(fr, P_STR(FN_BINY), &exp->bin_y) > 0) exp->datavalid = 1;
 
-    if (fits_get_double(fr, P_STR(FN_ELADU), &exp->scale) > 0) {
-		d1_printf("using eladu=%.1f from %s\n", exp->scale, P_STR(FN_ELADU));
-    } else {
-        exp->scale = P_DBL(OBS_DEFAULT_ELADU);
-        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
-            exp->scale = exp->scale / exp->bin_x;
-        update = TRUE;
+    double eladu = P_DBL(OBS_DEFAULT_ELADU);
+    if (! P_INT(OBS_FORCE_DEFAULT)) {
+        if (fits_get_double(fr, P_STR(FN_ELADU), &eladu) > 0)
+            d1_printf("using eladu=%.1f from %s\n", eladu, P_STR(FN_ELADU));
     }
-    if (fits_get_double(fr, P_STR(FN_RDNOISE), &exp->rdnoise) > 0) {
-		d1_printf("using rdnoise=%.1f from %s\n", exp->rdnoise, P_STR(FN_RDNOISE));
-    } else {
-        exp->rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
-        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
-            exp->rdnoise = exp->rdnoise / exp->bin_x;
-        update = TRUE;
+//        else {
+//            exp->scale = P_DBL(OBS_DEFAULT_ELADU);
+//            if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
+//                exp->scale = exp->scale / exp->bin_x;
+//            update = TRUE;
+//        }
+    exp->scale = eladu;
+
+    double rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
+    if (! P_INT(OBS_FORCE_DEFAULT)) {
+        if (fits_get_double(fr, P_STR(FN_RDNOISE), &rdnoise) > 0)
+            d1_printf("using rdnoise=%.1f from %s\n", rdnoise, P_STR(FN_RDNOISE));
     }
+//    else {
+//        exp->rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
+//        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
+//            exp->rdnoise = exp->rdnoise / exp->bin_x;
+//        update = TRUE;
+//    }
+    exp->rdnoise = rdnoise;
 
     exp->flat_noise = 0;
     if (fits_get_double(fr, P_STR(FN_FLNOISE), &exp->flat_noise) > 0)
@@ -474,15 +457,15 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
         d1_printf("using dcbias=%.1f from %s\n", exp->bias, P_STR(FN_DCBIAS));
 
 // temporary: catch wrong values
-    if ((fabs(exp->scale - 0.95) < 0.01) && (fabs(exp->rdnoise - 2.23) < 0.01)) {
-        exp->scale = P_DBL(OBS_DEFAULT_ELADU);
-        exp->rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
-        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
-            exp->scale = exp->scale / exp->bin_x;
-        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
-            exp->rdnoise = exp->rdnoise / exp->bin_x;
-        update = TRUE;
-    }
+//    if ((fabs(exp->scale - 0.95) < 0.01) && (fabs(exp->rdnoise - 2.23) < 0.01)) {
+//        exp->scale = P_DBL(OBS_DEFAULT_ELADU);
+//        exp->rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
+//        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
+//            exp->scale = exp->scale / exp->bin_x;
+//        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
+//            exp->rdnoise = exp->rdnoise / exp->bin_x;
+//        update = TRUE;
+//    }
 
 //    exp->airmass = 0;
 //    fits_get_double(fr, P_STR(FN_AIRMASS), &exp->airmass);
@@ -493,10 +476,10 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
     fr->y_skip = 0;
     fits_get_int(fr, P_STR(FN_SKIPY), &fr->y_skip);
 
-    if (update) {
-        info_printf("Warning: using default values for noise model\n");
-        noise_to_fits_header(fr, exp);
-    }
+//    if (update) {
+//        info_printf("Warning: using default values for noise model\n");
+//        noise_to_fits_header(fr, exp);
+//    }
 }
 
 /* push the noise data from exp into the header fields of fr */
@@ -541,82 +524,97 @@ double frame_jdate(struct ccd_frame *fr)
 	double v;
     char date_time[64];
 
-    double jd = 0.0;
+    double jd = 0;
 
     gboolean jd_valid = FALSE;
 
-    if (fits_get_string(fr, P_STR(FN_DATE_OBS), date_time, 63) <= 0) {
+    if (!jd_valid) {
         jd_valid = (fits_get_double(fr, P_STR(FN_MJD), &v) > 0);
         if (jd_valid) {
-			d1_printf("using mjd=%.14g from %s\n", v, P_STR(FN_MJD));
+            d1_printf("using mjd=%.14g from %s\n", v, P_STR(FN_MJD));
             jd = mjd_to_jd(v);
-        }
-
-        jd_valid = !jd_valid && (fits_get_double(fr, P_STR(FN_JDATE), &v) > 0);
-        if (jd_valid) {
-			d1_printf("using jdate=%.14g from %s\n", v, P_STR(FN_JDATE));
-            jd = v;
-        }
-
-        if (! jd_valid) d1_printf("no date/time found in %s, %s or %s\n", P_STR(FN_DATE_OBS), P_STR(FN_MJD), P_STR(FN_JDATE));
-
-    }  else {
-        int y, m, d;
-
-        gboolean time_valid = FALSE;
-        char ut_time[64];
-        char *time;
-
-        // look for date in date_time as YYYY-MM-DD or YYYY/MM/DD
-        gboolean date_valid = (sscanf(date_time, "%d-%d-%d", &y, &m, &d) == 3) || (sscanf(date_time, "%d/%d/%d", &y, &m, &d) == 3);
-
-        d1_printf("using %s='%s' for date/time\n", P_STR(FN_DATE_OBS), date_time);
-        if (! date_valid) err_printf("error parsing date\n");
-
-        double hours = 0.0;
-        if (date_valid) {
-
-            if (! time_valid) { // look for T in date_time
-
-                time = strstr(date_time, "T");
-                time_valid = (time != NULL && time[0] != 0);
-
-                if (time_valid) time = time + 1;
-            }
-
-            if (! time_valid) { // look for TIME_OBS
-
-                time_valid = (fits_get_string(fr, P_STR(FN_TIME_OBS), ut_time, 63) > 0);
-
-                if (time_valid) time = ut_time;
-            }
-
-            if (! time_valid) { // look for UT and reread date
-                time_valid = (fits_get_string(fr, P_STR(FN_UT), ut_time, 63) > 0);
-
-                if (time_valid) time = ut_time;
-
-                // re-read date in date_time as dd/mm/yy, add 1900 to yy
-                date_valid = ((sscanf(date_time, "%d-%d-%d", &d, &m, &y) == 3) || (sscanf(date_time, "%d/%d/%d", &d, &m, &y) == 3));
-                if (date_valid) y += 1900;
-            }
-        }
-
-        time_valid = time_valid && (dms_to_degrees(time, &hours) == 0);
-
-        jd = make_jdate(y, m, d, hours);
-
-        if (time_valid && date_valid) {
-            double tz = P_DBL(OBS_TIME_ZONE);
-
-            if (tz) {
-                d1_printf("subtracted time zone %.0f from date-time to get jd %.5f\n", tz, jd);
-                jd = jd - tz / 24;
-            }
         }
     }
 
-d1_printf("jd %.5f\n", jd);
+    if (!jd_valid) {
+        jd_valid = (fits_get_double(fr, P_STR(FN_JDATE), &v) > 0);
+        if (jd_valid) {
+            d1_printf("using jdate=%.14g from %s\n", v, P_STR(FN_JDATE));
+            jd = v;
+        }
+    }
+
+    if (! jd_valid) {
+        int found_date_time = fits_get_string(fr, P_STR(FN_DATE_OBS), date_time, 63) > 0;
+
+        if (! found_date_time) {
+//            err_printf("no jd found for frame!\n");
+
+        } else {
+            int y, m, d;
+            double dt_jd;
+
+            gboolean time_valid = FALSE;
+            char ut_time[64];
+            char *time;
+
+            // look for date in date_time as YYYY-MM-DD or YYYY/MM/DD
+            gboolean date_valid = (sscanf(date_time, "%d-%d-%d", &y, &m, &d) == 3) || (sscanf(date_time, "%d/%d/%d", &y, &m, &d) == 3);
+
+            d1_printf("using %s='%s' for date/time\n", P_STR(FN_DATE_OBS), date_time);
+            if (! date_valid) err_printf("error parsing date\n");
+
+            double hours = 0.0;
+            if (date_valid) {
+
+                if (! time_valid) { // look for T in date_time
+
+                    time = strstr(date_time, "T");
+                    time_valid = (time != NULL && time[0] != 0);
+
+                    if (time_valid) time = time + 1;
+                }
+
+                if (! time_valid) { // look for TIME_OBS
+
+                    time_valid = (fits_get_string(fr, P_STR(FN_TIME_OBS), ut_time, 63) > 0);
+
+                    if (time_valid) time = ut_time;
+                }
+
+                if (! time_valid) { // look for UT and reread date
+                    time_valid = (fits_get_string(fr, P_STR(FN_UT), ut_time, 63) > 0);
+
+                    if (time_valid) time = ut_time;
+
+                    // re-read date in date_time as dd/mm/yy, add 1900 to yy
+                    date_valid = ((sscanf(date_time, "%d-%d-%d", &d, &m, &y) == 3) || (sscanf(date_time, "%d/%d/%d", &d, &m, &y) == 3));
+                    if (date_valid) y += 1900;
+                }
+            }
+
+            time_valid = time_valid && (dms_to_degrees(time, &hours) == 0);
+
+            dt_jd = make_jdate(y, m, d, hours);
+
+            if (time_valid && date_valid) {
+                double exptime;
+                if (fits_get_double (fr, P_STR(FN_EXPTIME), &exptime) > 0) {
+                    double offset = P_DBL(OBS_TIME_OFFSET) * exptime / 60 / 60 / 24;
+                    dt_jd += offset;
+                }
+
+                double tz = P_DBL(OBS_TIME_ZONE);
+                if (tz) {
+                    d1_printf("subtracted time zone %.0f from date-time to get jd %.5f\n", tz, jd);
+                    dt_jd -= tz / 24;
+                }
+            }
+
+            jd = dt_jd;
+        }
+    }
+
     return jd;
 }
 
@@ -625,12 +623,14 @@ void date_time_from_jdate(double jd, char *date, int n)
 	struct timeval tv;
 	struct tm *t;
 
-	jdate_to_timeval(jd, &tv);
-	t = gmtime((time_t *)&((tv.tv_sec)));
+    if (! isnan(jd)) {
+        jdate_to_timeval(jd, &tv);
+        t = gmtime((time_t *)&((tv.tv_sec)));
 
-	snprintf(date, n, "'%d-%02d-%02dT%02d:%02d:%05.2f'", 1900 + t->tm_year, t->tm_mon + 1, 
-		t->tm_mday, t->tm_hour, t->tm_min, 1.0 * t->tm_sec +
-		1.0 * tv.tv_usec / 1000000);
+        snprintf(date, n, "'%d-%02d-%02dT%02d:%02d:%05.2f'", 1900 + t->tm_year, t->tm_mon + 1,
+            t->tm_mday, t->tm_hour, t->tm_min, 1.0 * t->tm_sec +
+            1.0 * tv.tv_usec / 1000000);
+    }
 	
 }
 
@@ -660,16 +660,16 @@ double frame_airmass(struct ccd_frame *fr, double ra, double dec)
 	}
 
     double zd;
-    if ( (fits_get_string(fr, P_STR(FN_ZD), dms, 63) > 0) && (dms_to_degrees(dms, &zd) == 0) ) {
+    if ( (fits_get_string(fr, P_STR(FN_ZD), dms, 63) > 0) && (dms_to_degrees(dms, &zd) >= 0) ) {
         return airmass(90.0 - zd);
     }
 
     double lat, lng, jd;
 
-    if (! ((fits_get_string(fr, P_STR(FN_LATITUDE), dms, 63) > 0) && (dms_to_degrees(dms, &lat) == 0)))
+    if (! ((fits_get_string(fr, P_STR(FN_LATITUDE), dms, 63) > 0) && (dms_to_degrees(dms, &lat) >= 0)))
         lat = P_DBL(OBS_LATITUDE);
 	
-    if (! ((fits_get_string(fr, P_STR(FN_LONGITUDE), dms, 63) > 0) && (dms_to_degrees(dms, &lng) == 0)))
+    if (! ((fits_get_string(fr, P_STR(FN_LONGITUDE), dms, 63) > 0) && (dms_to_degrees(dms, &lng) >= 0)))
 		lng = P_DBL(OBS_LONGITUDE);
 
     jd = frame_jdate(fr);

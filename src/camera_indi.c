@@ -36,26 +36,27 @@ static void camera_check_state(struct camera_t *camera)
 {
     if(camera->has_blob && camera->is_connected && camera->expose_prop) {
         camera->ready = 1;
-		d4_printf("Camera is ready\n");
+// printf("camera_check_state: Camera is ready\n"); fflush(NULL);
 		INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_READY);
-	}
+    }
 }
 
 static void camera_temp_change_cb(struct indi_prop_t *iprop, void *data)
 {
 	struct camera_t *camera = data;
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Can't get temperature\n");
-		return;
+//        err_printf("Camera isn't ready.  Can't get temperature\n");
+        return;
     }
-	INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE);
+// temperature_cb is not in camera->callbacks (deleted or never set?)
+    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE);
 }
 
 static void camera_filepath_cb(struct indi_prop_t *iprop, void *data)
 {
     struct camera_t *camera = data;
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Filename change inoperative\n");
+//        err_printf("Camera isn't ready.  Filename change inoperative\n");
         return;
     }
     INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_FILEPATH);
@@ -65,7 +66,7 @@ static void camera_exposure_change_cb(struct indi_prop_t *iprop, void *data)
 {
     struct camera_t *camera = data;
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Can't get temperature\n");
+//        err_printf("Camera isn't ready.  Can't change exposure\n");
         return;
     }
     INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSURE_CHANGE);
@@ -75,7 +76,7 @@ static void camera_stream_cb(struct indi_prop_t *iprop, void *data)
 {
     struct camera_t *camera = data;
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Can't stream images\n");
+//        err_printf("Camera isn't ready.  Can't stream images\n");
         return;
     }
 
@@ -111,11 +112,11 @@ void camera_get_binning(struct camera_t *camera, int *x, int *y)
 	*x = 1;
 	*y = 1;
     if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't get binning\n");
+//        err_printf("camera_get_binning: Camera isn't ready.  Can't get binning\n");
 		return;
 	}
     if (! camera->binning_prop) {
-		err_printf("Camera doesn't support binning\n");
+        err_printf("camera_get_binning: Camera doesn't support binning\n");
 		return;
 	}
 	if ((elem = indi_find_elem(camera->binning_prop, "HOR_BIN")))
@@ -128,11 +129,11 @@ void camera_set_binning(struct camera_t *camera, int x, int y)
 {
 	int changed = 0;
 	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't set binning\n");
+//        err_printf("camera_set_binning: Camera isn't ready.  Can't set binning\n");
 		return;
 	}
     if (! camera->binning_prop) {
-		err_printf("Camera doesn't support binning\n");
+        err_printf("camera_set_binning: Camera doesn't support binning\n");
 		return;
 	}
 	changed |= INDI_update_elem_if_changed(camera->binning_prop, "HOR_BIN", x);
@@ -149,11 +150,11 @@ void camera_get_size(struct camera_t *camera, const char *param, int *value, int
 	*min = 0;
 	*max = 99999;
 	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't get size\n");
+//        err_printf("camera_get_size: Camera isn't ready.  Can't get size\n");
 		return;
 	}
 	if (! camera->frame_prop) {
-		err_printf("Camera doesn't support size\n");
+        err_printf("camera_get_size: Camera doesn't support size\n");
 		return;
 	}
 	if (strcmp(param, "WIDTH") == 0)
@@ -179,12 +180,12 @@ void camera_set_size(struct camera_t *camera, int width, int height, int x_offse
 {
 	int changed = 0;
 	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't set image size\n");
+//        err_printf("camera_set_size: Camera isn't ready.  Can't set image size\n");
 		return;
 	}
 
 	if (! camera->frame_prop) {
-		err_printf("Camera doesn't support changing image_sIze\n");
+        err_printf("camera_set_size: Camera doesn't support changing image_sIze\n");
 		return;
 	}
 	changed |= INDI_update_elem_if_changed(camera->frame_prop, "WIDTH",  width);
@@ -203,15 +204,16 @@ void camera_get_temperature(struct camera_t *camera, float *value, float *min, f
 	*min = -273;
 	*max = 99999;
 	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't get temperature\n");
+//        err_printf("camera_get_temperature: Camera isn't ready.  Can't get temperature\n");
 		return;
 	}
 	if (! camera->temp_prop) {
-		err_printf("Camera doesn't support temperature control\n");
+        err_printf("camera_get_temperature: Camera doesn't support temperature control\n");
 		return;
 	}
-//	elem = indi_find_elem(camera->temp_prop, "CCD_TEMPERATURE_CURRENT_VALUE");
-    elem = indi_find_elem(camera->temp_prop, "CCD_TEMPERATURE_VALUE");
+    if (!(elem = indi_find_elem(camera->temp_prop, "CCD_TEMPERATURE_CURRENT_VALUE")))
+        elem = indi_find_elem(camera->temp_prop, "CCD_TEMPERATURE_VALUE");
+
     if (elem)
 	{
 		*value = elem->value.num.value;
@@ -223,12 +225,12 @@ d3_printf("camera_get_temperature %f\n", *value);
 
 void camera_set_temperature(struct camera_t *camera, float x)
 {
-	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't set temperature\n");
-		return;
-	}
+//	if (! camera->ready) {
+//        err_printf("camera_set_temperature: Camera isn't ready.  Can't set temperature\n");
+//		return;
+//	}
 	if (! camera->temp_prop) {
-		err_printf("Camera doesn't support temperature control\n");
+        err_printf("camera_set_temperature: Camera doesn't support temperature control\n");
 		return;
 	}
 	if (INDI_update_elem_if_changed(camera->temp_prop, "CCD_TEMPERATURE_VALUE", x)) {
@@ -244,11 +246,11 @@ void camera_get_exposure_settings(struct camera_t *camera, float *value, float *
 	*min = 0;
 	*max = 99999;
 	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Can't get exposure settings\n");
+//        err_printf("camera_get_exposure_settings: Camera isn't ready.  Can't get exposure settings\n");
 		return;
 	}
     if (! camera->expose_prop && ! camera->streaming_prop) {
-		err_printf("Camera doesn't support exposure settings!\n");
+        err_printf("camera_get_exposure_settings: Camera doesn't support exposure settings!\n");
 		return;
 	}
     if (camera->expose_prop) {
@@ -271,7 +273,7 @@ void camera_upload_mode(struct camera_t *camera, int mode)
     char *name[CAMERA_UPLOAD_MODE_COUNT] = { "UPLOAD_LOCAL", "UPLOAD_CLIENT", "UPLOAD_BOTH" };
 
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Abort set upload mode\n");
+//        err_printf("Camera isn't ready.  Abort set upload mode\n");
         return;
     }
 
@@ -286,7 +288,7 @@ void camera_upload_mode(struct camera_t *camera, int mode)
 void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix)
 {
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Abort set upload settings\n");
+//        err_printf("Camera isn't ready.  Abort set upload settings\n");
         return;
     }
 //    indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
@@ -310,7 +312,7 @@ void camera_abort_exposure(struct camera_t *camera)
 void camera_expose(struct camera_t *camera, double time)
 {
 	if (! camera->ready) {
-		err_printf("Camera isn't ready.  Aborting exposure\n");
+//		err_printf("Camera isn't ready.  Aborting exposure\n");
 		return;
 	}
 	indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
@@ -323,7 +325,7 @@ void camera_stream(struct camera_t *camera, double time, int number)
 {
     if (number <= 0) return;
     if (! camera->ready) {
-        err_printf("Camera isn't ready.  Aborting exposure\n");
+//        err_printf("Camera isn't ready.  Aborting streaming\n");
         return;
     }
 
@@ -337,7 +339,9 @@ void camera_stream(struct camera_t *camera, double time, int number)
 
 static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
 {
-	struct camera_t *camera = (struct camera_t *)callback_data;
+    struct camera_t *camera = (struct camera_t *)callback_data;
+// try this:
+//    camera_check_state(camera);
 
 	/* property to set exposure */
 	if (iprop->type == INDI_PROP_BLOB) {
@@ -348,8 +352,8 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
     else if (strcmp(iprop->name, "CCD_EXPOSURE") == 0) {
         d3_printf("Found CCD_EXPOSURE for camera %s\n", iprop->idev->name);
 		camera->expose_prop = iprop;
-//        indi_prop_add_cb(iprop, (IndiPropCB)camera_exposure_change_cb, camera);
-	}
+        indi_prop_add_cb(iprop, (IndiPropCB)camera_exposure_change_cb, camera);
+    }
     else if (strcmp(iprop->name, "CCD_STREAMING") == 0) {
         d3_printf("Found CCD_STREAMING for camera %s\n", iprop->idev->name);
         camera->streaming_prop = iprop;
@@ -377,73 +381,82 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
         d3_printf("Found CCD_FRAME_TYPE for camera %s\n", iprop->idev->name);
 		camera->frame_prop = iprop;
 	}
-	else if (strcmp(iprop->name, "CCD_FRAME_TYPE") == 0) {
-        d3_printf("Found CCD_FRAME_TYPE for camera %s\n", iprop->idev->name);
-		camera->frame_type_prop = iprop;
-	}
     else if (strcmp(iprop->name, "CCD_BINNING") == 0) {
         d3_printf("Found CCD_BINNING for camera %s\n", iprop->idev->name);
 		camera->binning_prop = iprop;
 	}
 	else if (strcmp(iprop->name, "CCD_TEMPERATURE") == 0) {
-        d3_printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name);
-		camera->temp_prop = iprop;
-		indi_prop_add_cb(iprop, (IndiPropCB)camera_temp_change_cb, camera);
+printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL);
+        camera->temp_prop = iprop;
+        indi_prop_add_cb(iprop, (IndiPropCB)camera_temp_change_cb, camera);
 	}
-	else
-		INDI_try_dev_connect(iprop, INDI_COMMON (camera), camera->portname);
+    else
+        INDI_try_dev_connect(iprop, INDI_COMMON (camera), camera->portname);
+
 	camera_check_state(camera);
 }
 
-void camera_set_ready_callback(void *window, int type, void *func, void *data)
+// this callback has to wait for CONNECTION before it will run correctly
+void camera_set_ready_callback(void *window, int type, void *indi_cb_func, void *indi_cb_data, char *msg)
 {
-	struct camera_t *camera;
-	if (type == CAMERA_MAIN) {
-		camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), "camera-main");
-	} else {
-		camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), "camera-guide");
-	}
-	if (! camera) {
+    char *widget_name = (type == CAMERA_MAIN) ? "camera-main" : "camera-guide";
+    struct camera_t *camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), widget_name);
+
+    if (camera == NULL) {
 		err_printf("Camera wasn't found\n");
 		return;
 	}
-	INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_READY, func, data);
+    INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_READY, indi_cb_func, indi_cb_data, msg);
 }
 
-struct camera_t *camera_find(void *window, int type)
+void camera_delete(struct camera_t *camera)
 {
-	struct camera_t *camera;
-	struct indi_t *indi;
+    if (! camera) return;
 
-	if (type == CAMERA_MAIN) {
-		camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), "camera-main");
-	} else {
-		camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), "camera-guide");
-	}
+    struct indi_t *indi = INDI_get_indi(camera->window);
+    if (! indi) return;
 
-	if (camera) {
-//		if (camera->ready) {
-			d4_printf("Found camera\n");
-			return camera;
-//		}
-		return NULL;
-	}
-	if (! (indi = INDI_get_indi(window)))
-		return NULL;
+    indi_device_remove_callbacks(indi, camera->name);
+    g_free(camera);
+}
 
-	camera = g_new0(struct camera_t, 1);
-	if (type == CAMERA_MAIN) {
-		INDI_common_init(INDI_COMMON (camera), "main camera", camera_check_state, CAMERA_CALLBACK_MAX);
-		camera->portname = P_STR(INDI_MAIN_CAMERA_PORT);
-		indi_device_add_cb(indi, P_STR(INDI_MAIN_CAMERA_NAME), (IndiDevCB)camera_connect, camera);
-		g_object_set_data(G_OBJECT(window), "camera-main", camera);
-	} else {
-		INDI_common_init(INDI_COMMON (camera), "guide camera", camera_check_state, CAMERA_CALLBACK_MAX);
-		camera->portname = P_STR(INDI_GUIDE_CAMERA_PORT);
-		indi_device_add_cb(indi, P_STR(INDI_GUIDE_CAMERA_NAME), (IndiDevCB)camera_connect, camera);
-		g_object_set_data(G_OBJECT(window), "camera-guide", camera);
-	}
-	if (camera->ready)
-		return camera;
-	return NULL;
+// create camera and return it if it is ready
+// ready state set up by incremental calls to camera_connect
+struct camera_t *camera_find(void *window, int type)
+{    
+    struct indi_t *indi = INDI_get_indi(window);
+    if (! indi)
+        return NULL;
+
+    char *widget_name = (type == CAMERA_MAIN) ? "camera-main" : "camera-guide";
+
+    struct camera_t *camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), widget_name);
+
+    if (camera == NULL) {
+
+        camera = g_new0(struct camera_t, 1);
+        if (camera) {
+            char *name;
+            char *device_name;
+            char *port_name;
+            if (type == CAMERA_MAIN) {
+                name = "main camera";
+                device_name = P_STR(INDI_MAIN_CAMERA_NAME);
+                port_name = P_STR(INDI_MAIN_CAMERA_PORT);
+            } else {
+                name =  "guide camera";
+                device_name = P_STR(INDI_GUIDE_CAMERA_NAME);
+                port_name = P_STR(INDI_GUIDE_CAMERA_PORT);
+            }
+
+            INDI_common_init(INDI_COMMON (camera), name, camera_check_state, CAMERA_CALLBACK_MAX);
+            camera->portname = port_name;
+            indi_device_add_cb(indi, device_name, (IndiDevCB)camera_connect, camera, "camera_connect");
+            g_object_set_data_full(G_OBJECT(window), widget_name, camera, (GDestroyNotify)camera_delete);
+            camera->window = window;
+        }
+    }
+
+//    return (camera && camera->ready) ? camera : NULL;
+    return camera;
 }

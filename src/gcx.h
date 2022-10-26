@@ -102,7 +102,7 @@ extern void command_loop(void);
 
 /* from gcx.c */
 
-int save_params_rc(void);
-int load_params_rc(void);
+int save_params_rc(void *window);
+int load_params_rc(void *window);
 
 #endif // _GCX_H

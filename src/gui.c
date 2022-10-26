@@ -68,6 +68,7 @@ static void close_yes_no( GtkWidget *widget, gpointer data )
  * display text as a bunch of labels. newlines inside the text
  * return 0/1 for n/y, or -1 for errors */
 /* title is the window title; if NULL, 'gcx question' is used */
+/*
 //int modal_yes_no(char *text, char *title)
 //{
 //	GtkWidget *dialog, *label, *vbox;
@@ -82,7 +83,9 @@ static void close_yes_no( GtkWidget *widget, gpointer data )
 //	if (title != NULL) {
 //		gtk_window_set_title(GTK_WINDOW(dialog), title);
 //	}
+*/
 //	if (text != NULL) { /* add the message */
+/*
 //		label = gtk_label_new (text);
 //		g_object_ref (label);
 //        g_object_set_data_full (G_OBJECT (dialog), "message", label, (GDestroyNotify) g_object_unref);
@@ -98,7 +101,7 @@ static void close_yes_no( GtkWidget *widget, gpointer data )
 ////    gtk_main();
 ////    return retval;
 //}
-
+*/
 int modal_yes_no(char *text, char *title)
 {
     const gchar *default_title = "gcx question";
@@ -131,6 +134,38 @@ int modal_yes_no(char *text, char *title)
     return ret;
 }
 
+int append_overwrite_cancel(char *text, char *title)
+{
+    const gchar *default_title = "append / overwrite / cancel";
+    if (title == NULL)
+        title = default_title;
+
+    GtkWidget *dialog = gtk_dialog_new_with_buttons (title, NULL, GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+                        "Append", AOC_APPEND, "Overwrite", AOC_OVERWRITE, "Cancel", AOC_CANCEL,
+                        NULL);
+
+    gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_CENTER);
+    gtk_window_set_modal (GTK_WINDOW (dialog), TRUE);
+
+    GtkWidget *content_area = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+    gtk_container_set_border_width (GTK_CONTAINER (content_area), 5);
+
+    if (text != NULL) { /* add the message */
+        GtkWidget *label = gtk_label_new (text);
+        gtk_box_pack_start (GTK_BOX (content_area), label, FALSE, FALSE, 0);
+        gtk_misc_set_alignment (GTK_MISC (label), 0.5, 0.5);
+    }
+
+    GtkWidget *action_area = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+//    g_object_set_property (G_OBJECT (action_area), "halign", GTK_ALIGN_CENTER); // GTK3 and get_action_area deprecated
+
+    gtk_widget_show_all(dialog);
+
+    int ret = gtk_dialog_run(GTK_DIALOG (dialog));
+    gtk_widget_destroy(dialog);
+
+    return ret;
+}
 
 static void entry_prompt_yes( GtkWidget *widget, gpointer data )
 {
@@ -281,15 +316,33 @@ void act_user_quit(GtkAction *action, gpointer window)
 	gtk_widget_destroy(GTK_WIDGET(window));
 }
 
-//void act_user_abort(GtkAction *action, gpointer window)
-//{
-//	d3_printf("user abort\n");
-//	set_abort_flag(); // check with user_abort()
-//}
+void act_user_abort(GtkAction *action, gpointer window)
+{
+	d3_printf("user abort\n");
+	set_abort_flag(); // check with user_abort()
+}
 
-void act_file_new (GtkAction *action, gpointer window)
+void act_frame_new (GtkAction *action, gpointer window)
 {
     struct ccd_frame *fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
+    char *fn = "New Frame";
+    fr->name = strdup(fn);
+    get_frame(fr);
+// set wcs from window
+
+    GSList *fl = NULL;
+    fl = g_slist_append(fl, fr);
+    window_add_frames(fl, window);
+    g_slist_free(fl);
+
+//    GtkWidget *dialog = g_object_get_data (G_OBJECT(window), "processing");
+//    struct image_file_list *imfl = g_object_get_data (G_OBJECT(dialog), "imfl");
+//    struct image_file *imf = add_image_file_to_list(imfl, fr->name, IMG_LOADED);
+//    imf->fr = fr;
+
+//    dialog_update_from_imfl (dialog, imfl);
+//    imf_display_cb (NULL, dialog);
+
 	frame_to_channel(fr, window, "i_channel");
     release_frame(fr);
 }
@@ -700,7 +753,7 @@ static GtkActionEntry image_actions[] = {
 //  name, stock id, label, accel, tooltip, callback
 	/* File */
 	{ "file-menu", NULL, "_File" },
-	{ "file-new",             NULL, "_New Frame",              "<control>N", NULL, G_CALLBACK (act_file_new) },
+    { "file-new",             NULL, "_New Frame",              "<control>N", NULL, G_CALLBACK (act_frame_new) },
 	{ "file-open",            NULL, "_Open Image...",          "<control>O", NULL, G_CALLBACK (act_file_open) },
 	{ "file-save",            NULL, "_Save Fits As...",        "<control>S", NULL, G_CALLBACK (act_file_save) },
 	{ "file-export",          NULL, "_Export Image" },
@@ -714,8 +767,9 @@ static GtkActionEntry image_actions[] = {
 	{ "edit-options",         NULL, "Edit O_ptions",           "O",          NULL, G_CALLBACK (act_control_options) },
     { "camera-scope-control", NULL, "Camera and Telescope...", "<shift>C",   NULL, G_CALLBACK (act_control_camera) },
 	{ "guide-control",        NULL, "Guiding...",              "<shift>T",   NULL, G_CALLBACK (act_control_guider) },
+    { "indi-settings",        NULL, "Indi...",                 "<shift>I",   NULL, G_CALLBACK (act_indi_settings) },
 	{ "user-quit",            NULL, "_Quit",                   "<control>Q", NULL, G_CALLBACK (act_user_quit) },
-//	{ "user-abort",           NULL, "Abort",                   "<control>C", NULL, G_CALLBACK (act_user_abort) },
+	{ "user-abort",           NULL, "Abort",                   "<control>C", NULL, G_CALLBACK (act_user_abort) },
 	/* Image */
 	{ "image-menu", NULL, "_Image" },
 	{ "image-set-contrast", NULL, "Set _Contrast" },
@@ -748,12 +802,12 @@ static GtkActionEntry image_actions[] = {
 	{ "stars-add-catalog", NULL, "Add From _Catalog",      "A",          NULL, G_CALLBACK (act_stars_add_catalog) },
 	{ "stars-synthetic",   NULL, "_Create Synthetic Stars", NULL,        NULL, G_CALLBACK (act_stars_add_synthetic)   },
 	{ "stars-edit",        NULL, "_Edit",                  "<control>E", NULL, G_CALLBACK (act_stars_edit)        },
-	{ "stars-rm-selected", NULL, "Remove Selecte_d",       "<control>D", NULL, G_CALLBACK (act_stars_rm_selected) },
-	{ "stars-rm-detected", NULL, "Remove Detected _Stars", "<shift>S",   NULL, G_CALLBACK (act_stars_rm_detected) },
-	{ "stars-rm-user",     NULL, "Remove _User Stars",     "<shift>U",   NULL, G_CALLBACK (act_stars_rm_user) },
-	{ "stars-rm-field",    NULL, "Remove _Field Stars",    "<shift>F",   NULL, G_CALLBACK (act_stars_rm_field) },
-	{ "stars-rm-cat",      NULL, "Remove Catalo_g Objects","<shift>G",   NULL, G_CALLBACK (act_stars_rm_catalog) },
-	{ "stars-rm-off",      NULL, "Remove _Off-Frame",      "<shift>O",   NULL, G_CALLBACK (act_stars_rm_off_frame) },
+    { "stars-rm-selected", NULL, "Remove Selecte_d",       "<control>D", NULL, G_CALLBACK (act_stars_rm_selected) },
+    { "stars-toggle-detected", NULL, "Toggle Detected _Stars", "<shift>S",   NULL, G_CALLBACK (act_stars_toggle_detected) },
+    { "stars-toggle-user",     NULL, "Toggle _User Stars",     "<shift>U",   NULL, G_CALLBACK (act_stars_toggle_user) },
+    { "stars-toggle-field",    NULL, "Toggle _Field Stars",    "<shift>F",   NULL, G_CALLBACK (act_stars_toggle_field) },
+    { "stars-toggle-cat",      NULL, "Toggle Catalo_g Objects","<shift>G",   NULL, G_CALLBACK (act_stars_toggle_catalog) },
+    { "stars-rm-off",      NULL, "Remove _Off-Frame",      "<shift>O",   NULL, G_CALLBACK (act_stars_rm_off_frame) },
 	{ "stars-rm-all",      NULL, "Remove _All",            "<shift>A",   NULL, G_CALLBACK (act_stars_rm_all) },
     { "stars-rm-pairs-all",NULL, "Remove All Pa_irs",      NULL,         NULL, G_CALLBACK (act_stars_rm_pairs_all)},
 	{ "stars-rm-pairs-sel",NULL, "Remove Selected _Pairs", NULL,         NULL, G_CALLBACK (act_stars_rm_pairs_selected)},
@@ -833,9 +887,10 @@ static char *image_common_ui =
 	"  <menuitem name='Edit Options' action='edit-options'/>"
 	"  <menuitem name='Camera/Scope' action='camera-scope-control'/>"
 	"  <menuitem name='Guiding'      action='guide-control'/>"
+    "  <menuitem name='Indi'         action='indi-settings'/>"
 	"  <separator name='separator3'/>"
 	"  <menuitem name='Quit'         action='user-quit'/>"
-//	"  <menuitem name='Abort'        action='user-abort'/>"
+	"  <menuitem name='Abort'        action='user-abort'/>"
 	"</menu>"
 	"<menu name='image' action='image-menu'>"
 	"  <menuitem name='image-curves' action='image-curves'/>"
@@ -876,11 +931,11 @@ static char *image_common_ui =
 	"  <menuitem name='stars-edit' action='stars-edit'/>"
 	"  <separator name='separator3'/>"
 	"  <menuitem name='stars-rm-selected' action='stars-rm-selected'/>"
-	"  <menuitem name='stars-rm-detected' action='stars-rm-detected'/>"
-	"  <menuitem name='stars-rm-user' action='stars-rm-user'/>"
-	"  <menuitem name='stars-rm-field' action='stars-rm-field'/>"
-	"  <menuitem name='stars-rm-cat' action='stars-rm-cat'/>"
-	"  <menuitem name='stars-rm-off' action='stars-rm-off'/>"
+    "  <menuitem name='stars-toggle-detected' action='stars-toggle-detected'/>"
+    "  <menuitem name='stars-toggle-user' action='stars-toggle-user'/>"
+    "  <menuitem name='stars-toggle-field' action='stars-toggle-field'/>"
+    "  <menuitem name='stars-toggle-cat' action='stars-toggle-cat'/>"
+    "  <menuitem name='stars-rm-off' action='stars-rm-off'/>"
 	"  <menuitem name='stars-rm-all' action='stars-rm-all'/>"
 	"  <separator name='separator4'/>"
 	"  <menuitem name='stars-rm-pairs-all' action='stars-rm-pairs-all'/>"
@@ -1032,13 +1087,13 @@ GtkWidget * create_image_window()
 
     GtkWidget *menubar = get_main_menu_bar(window);
     //gtk_menu_bar_set_shadow_type(GTK_MENU_BAR(menubar), GTK_SHADOW_NONE);
-    gtk_widget_show (menubar);
+//    gtk_widget_show (menubar);
 
     GtkWidget *zoom_and_cuts = gtk_label_new ("");
     g_object_ref (zoom_and_cuts);
     g_object_set_data_full (G_OBJECT (window), "zoom_and_cuts", zoom_and_cuts, (GDestroyNotify) g_object_unref);
     gtk_misc_set_padding (GTK_MISC (zoom_and_cuts), 6, 0);
-    gtk_widget_show (zoom_and_cuts);
+//    gtk_widget_show (zoom_and_cuts);
 
     GtkWidget *hbox = gtk_hbox_new(0, 0);
     gtk_box_pack_start(GTK_BOX(hbox), menubar, TRUE, TRUE, 0);
@@ -1046,20 +1101,21 @@ GtkWidget * create_image_window()
 
     GtkWidget *scw = gtk_scrolled_window_new (NULL, NULL);
     gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scw), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
     GtkWidget *alignment = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
-    gtk_widget_show (alignment);
+//    gtk_widget_show (alignment);
     gtk_scrolled_window_add_with_viewport (scw, alignment);
 
     GtkWidget *darea = gtk_drawing_area_new();
     gtk_container_add (GTK_CONTAINER(alignment), darea);
-    gtk_widget_show (darea);
+//    gtk_widget_show (darea);
 
     GtkWidget *main_window_status_label = gtk_label_new ("main_window_status_label");
     g_object_ref (main_window_status_label);
     g_object_set_data_full (G_OBJECT (window), "main_window_status_label", main_window_status_label, (GDestroyNotify) g_object_unref);
     gtk_misc_set_padding (GTK_MISC (main_window_status_label), 3, 3);
     gtk_misc_set_alignment (GTK_MISC (main_window_status_label), 0, 0.5);
-    gtk_widget_show (main_window_status_label);
+//    gtk_widget_show (main_window_status_label);
 
     GtkWidget *vbox = gtk_vbox_new(0, 0);
     gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, TRUE, 0);
@@ -1090,17 +1146,17 @@ GtkWidget * create_image_window()
     g_object_set_data(G_OBJECT(scw), "alignment", alignment);
 
   	gtk_window_set_default_size(GTK_WINDOW(window), 700, 500);
-    gtk_widget_show (vbox);
+//    gtk_widget_show (vbox);
 
     GtkWidget *image_popup = get_image_popup_menu(window);
-    gtk_widget_show(image_popup);
+//    gtk_widget_show(image_popup);
     g_object_set_data_full(G_OBJECT(window), "image_popup", image_popup, (GDestroyNotify) g_object_unref);
 
     GtkWidget *star_popup = get_star_popup_menu(window);
-    gtk_widget_show(star_popup);
+//    gtk_widget_show(star_popup);
     g_object_set_data_full(G_OBJECT(window), "star_popup", star_popup, (GDestroyNotify) g_object_unref);
 
-//	gtk_widget_show_all(window);
+//    gtk_widget_show_all(window);
 	return window;
 }
 
@@ -1311,9 +1367,34 @@ void act_stars_rm_selected (GtkAction *action, gpointer window)
 	remove_stars(window, TYPE_MASK_ALL, STAR_SELECTED);
 }
 
+void act_stars_toggle_detected (GtkAction *action, gpointer window)
+{
+    draw_stars_of_type_window(window, TYPE_MASK(STAR_TYPE_SIMPLE), toggle_draw);
+}
+
+void act_stars_toggle_user (GtkAction *action, gpointer window)
+{
+    draw_stars_of_type_window(window, TYPE_MASK(STAR_TYPE_USEL), toggle_draw);
+}
+
+void act_stars_toggle_field (GtkAction *action, gpointer window)
+{
+    draw_stars_of_type_window(window, TYPE_MASK(STAR_TYPE_SREF), toggle_draw);
+}
+
+void act_stars_toggle_catalog (GtkAction *action, gpointer window)
+{
+    draw_stars_of_type_window(window, TYPE_MASK_CATREF, toggle_draw);
+}
+
+void act_stars_rm_detected (GtkAction *action, gpointer window)
+{
+    remove_stars(window, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
+}
+
 void act_stars_rm_user (GtkAction *action, gpointer window)
 {
-	remove_stars(window, TYPE_MASK(STAR_TYPE_USEL), 0);
+    remove_stars(window, TYPE_MASK(STAR_TYPE_USEL), 0);
 }
 
 void act_stars_rm_field (GtkAction *action, gpointer window)
@@ -1336,11 +1417,6 @@ void act_stars_rm_off_frame (GtkAction *action, gpointer window)
 	}
 }
 
-void act_stars_rm_detected (GtkAction *action, gpointer window)
-{
-	remove_stars(window, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
-}
-
 void act_stars_rm_pairs_all (GtkAction *action, gpointer window)
 {
 	remove_pairs(window, 0);
@@ -1361,5 +1437,4 @@ void show_xy_status(GtkWidget *window, double x, double y)
 {
 	info_printf_sb2(window, "%.0f, %.0f", x, y);
 }
-
 

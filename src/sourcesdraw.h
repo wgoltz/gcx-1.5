@@ -5,6 +5,10 @@
 
 #include <gtk/gtk.h>
 
+typedef enum {
+    draw, dont_draw, toggle_draw
+} draw_type;
+
 /* a star label; shares the ref_count with it's star*/
 struct label {
 	int ox; /* position relative to the star */
@@ -14,6 +18,7 @@ struct label {
 
 /* the structure that holds the source markers we display */
 struct gui_star {
+    int sort; /* gui_star_list sorted by sort value, prepend new gs: sort(new gs) = sort(first gs) + 1 */
 	int ref_count;
 	double x;	/* on-screen position (in frame coordinates) */
 	double y;
@@ -83,8 +88,7 @@ struct gui_star_list {
 #define TYPE_MASK_GSTAR(gs) (1 << (((gs)->flags) & STAR_TYPE_MASK))
 
 /* type mask for catalog and reference stars */
-#define TYPE_MASK_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|\
-	TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
+#define TYPE_MASK_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
 /* type mask for stars that are specific to a particular frame */
 #define TYPE_MASK_FRSTAR (TYPE_MASK(STAR_TYPE_SIMPLE)|TYPE_MASK(STAR_TYPE_USEL))
 /* type mask for stars that paticipate in photometry */
@@ -133,13 +137,16 @@ void gui_star_list_update_colors(struct gui_star_list *gsl);
 void star_list_update_size(GtkWidget *window);
 void star_list_update_labels(GtkWidget *window);
 GSList *find_stars_window(gpointer window);
+void draw_stars_of_type(struct gui_star_list *gsl, int type_mask, draw_type d);
+int gui_star_compare(struct gui_star *a, struct gui_star *b);
+int cats_guis_compare(struct cat_star *a, struct cat_star *b);
 
 
 // handle binned frames
 void auto_adjust_photometry_rings_for_binning(struct ap_params *ap, struct ccd_frame *fr);
 void get_gsl_binning_from_frame(struct gui_star_list *gsl, struct ccd_frame *fr);
 
-
+struct cat_star * cats_from_current_frame_sob(gpointer main_window, struct gui_star *gs);
 
 /* starlist.c */
 
@@ -150,9 +157,10 @@ void remove_pair_from(struct gui_star *gs);
 void remove_star(struct gui_star_list *gsl, struct gui_star *gs);
 int remove_off_frame_stars(gpointer window);
 void remove_stars_of_type_window(GtkWidget *window, int type_mask, int flag_mask);
+void draw_stars_of_type_window(GtkWidget *window, int type_mask, draw_type d);
 int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, struct wcs *wcs);
 int merge_cat_star_list_to_window(gpointer window, GList *addsl);
-struct gui_star *find_window_gs_by_cats_name(GtkWidget *window, char *name);
+struct gui_star *window_find_gs_by_cats_name(GtkWidget *window, char *name);
 struct gui_star *find_gs_by_cats_name(struct gui_star_list *gsl, char *name);
 
 

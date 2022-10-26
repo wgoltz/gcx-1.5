@@ -17,9 +17,9 @@ struct obs_data {
 	int ref_count;
 	int flags;
     char *objname;  /* malloced designation of object */
-    double ra;      /* coordinates */
+    double ra;      /* coordinates in degrees */
 	double dec;
-    double rot;     /* rotation EofN, in degrees */
+    double rot;     /* rotation EofN */
 	double equinox;
 	double airmass;
 	double mjd;
@@ -39,7 +39,7 @@ void obs_data_release(struct obs_data *obs);
 void replace_strval(char **str, char *val);
 void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs);
 void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp);
-void rescan_fits_wcs(struct ccd_frame *fr, struct wcs *fim);
+int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *fim);
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) ;
 double obs_current_hour_angle(struct obs_data *obs);
 double obs_current_airmass(struct obs_data *obs);

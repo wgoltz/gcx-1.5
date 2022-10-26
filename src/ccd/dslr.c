@@ -37,6 +37,7 @@
 
 static struct ccd_frame *read_mrw_file(struct raw_file *raw);
 static struct ccd_frame *read_cr2_file(struct raw_file *raw);
+static struct ccd_frame *read_nef_file(struct raw_file *raw);
 
 static struct {
 	char *ext;
@@ -44,6 +45,7 @@ static struct {
 } raw_formats[] = {
 	{ ".mrw", read_mrw_file },
 	{ ".cr2", read_cr2_file },
+//    { ".nef", read_nef_file },
 	{ NULL, NULL }
 };
 
@@ -1064,7 +1066,8 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 	//info_printf("min=%.2f max=%.2f avg=%.2f sigma=%.2f\n",
 	//	    frame->stats.min, frame->stats.max, frame->stats.avg, frame->stats.sigma);
 
-	strncpy(frame->name, raw->filename, 255);
+    if (frame->name) free(frame->name);
+    frame->name = strdup(raw->filename);
 
 	if (endian_to_host_16(byteorder, mrw->prd->ccd_size_x) >
 	    endian_to_host_16(byteorder, mrw->prd->img_size_x)) {
@@ -1318,6 +1321,11 @@ static void canon_cr2_tag_callback(void *user, uint16_t tag, uint16_t type, uint
 	}
 }
 
+static struct ccd_frame *read_nef_file(struct raw_file *raw)
+{
+    return NULL;
+}
+
 static struct ccd_frame *read_cr2_file(struct raw_file *raw)
 {
 	struct ccd_frame *frame = NULL;
@@ -1479,7 +1487,8 @@ static struct ccd_frame *read_cr2_file(struct raw_file *raw)
 
 	frame_stats(frame);
 
-	strncpy(frame->name, raw->filename, 255);
+    if (frame->name) free(frame->name);
+    frame->name = strdup(raw->filename);
 
 #if 0
 	if (endian_to_host_16(byteorder, mrw->prd->ccd_size_x) >
@@ -1565,7 +1574,7 @@ struct ccd_frame *read_raw_file(char *filename)
 	raw_read_func reader;
 	struct stat statbuf;
 
-    reader = NULL; // raw_reader(filename);
+    reader = raw_reader(filename);
 	if (! reader) {
 		return read_file_from_dcraw(filename);
 	}

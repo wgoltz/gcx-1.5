@@ -44,14 +44,42 @@ static void tele_check_state(struct tele_t *tele)
 	}
 }
 
-static void tele_new_coords_cb(struct indi_prop_t *iprop, void *data)
+int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
+{
+    struct indi_elem_t *elem = NULL;
+
+    if (! tele->ready) {
+        err_printf("tele_get_tracking: Tele isn't ready.  Can't get tracking\n");
+        return;
+    }
+
+    *ra = tele->right_ascension;
+    *dec = tele->declination;
+    return tele->coord_prop->state;
+}
+
+static void tele_get_coords_cb(struct indi_prop_t *iprop, void *data)
 {
 	struct tele_t *tele = data;
 
-	if (iprop->state != INDI_STATE_IDLE && iprop->state != INDI_STATE_OK)
-		return;
+    if (!tele->ready) return;
+
 	tele->right_ascension = indi_prop_get_number(iprop, "RA");
 	tele->declination = indi_prop_get_number(iprop, "DEC");
+    tele->change_state = (tele->state != iprop->state);
+    tele->state = iprop->state;
+
+    INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_COORDS);
+}
+
+static void tele_track_state_cb(struct indi_prop_t *iprop, void *data)
+{
+    struct tele_t *tele = data;
+
+    char *result = indi_prop_get_comboswitch(tele->track_state_prop);
+    if (result) {
+
+    }
 }
 
 static void tele_move_cb(struct indi_prop_t *iprop, void *data)
@@ -108,19 +136,23 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 {
 	struct tele_t *tele = (struct tele_t *)callback_data;
 
-
-	if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD_REQUEST") == 0) {
-		tele->coord_set_prop = iprop;
-	}
-	else if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
+//    if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD_REQUEST") == 0) { // no
+//		tele->coord_set_prop = iprop;
+//	}
+//	else
+    if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
 		tele->coord_prop = iprop;
+        tele->coord_set_prop = iprop; // try this
+printf("Found EQUATORIAL_EOD_COORD for tele %s\n", iprop->idev->name); fflush(NULL);
+        indi_prop_add_cb(iprop, (IndiPropCB)tele_get_coords_cb, tele);
 	}
 	else if (strcmp(iprop->name, "ON_COORD_SET") == 0) {
 		tele->coord_set_type_prop = iprop;
 	}
-	else if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
-		indi_prop_add_cb(iprop, (IndiPropCB)tele_new_coords_cb, tele);
-	}
+//    else if (strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) { // might need this to monitor park state
+//        tele->track_state_prop = iprop;
+//        indi_prop_add_cb(iprop, (IndiPropCB)tele_track_state_cb, tele);
+//    }
 	else if (strcmp(iprop->name, "TELESCOPE_ABORT_MOTION") == 0) {
 		tele->abort_prop = iprop;
 	}
@@ -237,7 +269,7 @@ void tele_center_move(struct tele_t *tele, float dra, float ddec)
 	ra = tele_get_ra(tele) + dra;
 	dec = tele_get_dec(tele) + ddec;
 	tele_set_speed(tele, TELE_MOVE_CENTERING);
-	tele_set_coords(tele, TELE_COORDS_SLEW, ra, dec, 0.0);
+    tele_set_coords(tele, TELE_COORDS_SLEW, ra / 15.0, dec, 0.0);
 }
 
 double tele_get_ra(struct tele_t *tele)
@@ -305,20 +337,20 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 			elem = indi_prop_set_switch(tele->coord_set_type_prop, "SLEW", 1);
 			break;
 		}
-		if (elem) {
-			indi_send(tele->abort_prop, elem);
-		} else {
-			err_printf("Telescope failed to change mode\n");
-			return -1;
-		}
+//		if (elem) {
+//			indi_send(tele->abort_prop, elem);
+//		} else {
+//			err_printf("Telescope failed to change mode\n");
+//			return -1;
+//		}
 	}
-	indi_prop_set_number(tele->coord_set_prop, "RA", ra);
-	indi_prop_set_number(tele->coord_set_prop, "DEC", ra);
+    indi_prop_set_number(tele->coord_set_prop, "RA", ra); // ra in hours
+    indi_prop_set_number(tele->coord_set_prop, "DEC", dec);
 	indi_send(tele->coord_set_prop, NULL);
 	return 0;
 }
 
-void tele_set_ready_callback(void * window, void *func, void *data)
+void tele_set_ready_callback(void * window, void *func, void *data, char *msg)
 {
 	struct tele_t *tele;
 	tele = (struct tele_t *)g_object_get_data(G_OBJECT(window), "telescope");
@@ -326,29 +358,28 @@ void tele_set_ready_callback(void * window, void *func, void *data)
 		err_printf("Telescope wasn't found\n");
 		return;
 	}
-	INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_READY, func, data);
+    INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_READY, func, data, msg);
 
 }
 
 struct tele_t *tele_find(void *window)
 {
-	struct tele_t *tele;
-	struct indi_t *indi;
-	tele = (struct tele_t *)g_object_get_data(G_OBJECT(window), "telescope");
-	if (tele) {
-		if (tele->ready) {
-			d4_printf("Found telescope\n");
-			return tele;
-		}
-		return NULL;
-	}
-	if (! (indi = INDI_get_indi(window)))
-		return NULL;
-	tele = g_new0(struct tele_t, 1);
-	INDI_common_init(INDI_COMMON (tele), "telescope", tele_check_state, TELE_CALLBACK_MAX);
-	indi_device_add_cb(indi, P_STR(INDI_SCOPE_NAME), (IndiDevCB)tele_connect, tele);
-	g_object_set_data(G_OBJECT(window), "telescope", tele);
-	if (tele->ready)
-		return tele;
-	return NULL;
+    struct indi_t *indi	= INDI_get_indi(window);
+    if (!indi)
+        return NULL;
+
+    struct tele_t *tele = (struct tele_t *)g_object_get_data(G_OBJECT(window), "telescope");
+    if (tele == NULL) {
+        tele = g_new0(struct tele_t, 1);
+
+        if (tele) {
+            INDI_common_init(INDI_COMMON (tele), "telescope", tele_check_state, TELE_CALLBACK_MAX);
+            indi_device_add_cb(indi, P_STR(INDI_SCOPE_NAME), (IndiDevCB)tele_connect, tele, "tele_connect");
+            g_object_set_data(G_OBJECT(window), "telescope", tele);
+            tele->window = window;
+        }
+    }
+
+//    return (tele && tele->ready) ? tele : NULL;
+    return tele;
 }

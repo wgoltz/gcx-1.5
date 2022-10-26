@@ -45,12 +45,15 @@ indi_list *il_new()
 
 indi_list *il_prepend(indi_list *l, void *data)
 {
+    GSList *gsl = l;
 	return g_slist_prepend((GSList *)l, data);
 }
 
 indi_list *il_append(indi_list *l, void *data)
 {
-	return g_slist_append((GSList *)l, data);
+    GSList *gsl = l;
+    gsl = g_slist_append((GSList *)l, data);
+    return gsl;
 }
 
 

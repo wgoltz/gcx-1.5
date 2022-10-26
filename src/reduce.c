@@ -51,11 +51,12 @@
 #include "sourcesdraw.h"
 #include "wcs.h"
 #include "multiband.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "filegui.h"
 #include "demosaic.h"
 #include "match.h"
 #include "sourcesdraw.h"
+#include "misc.h"
 //#include "warpaffine.h"
 
 
@@ -201,16 +202,6 @@ static int is_zip_name(char *fn)
 	return 0;
 }
 
-static void drop_dot_extension(char *fn)
-{
-    int i;
-    for (i = strlen(fn); i > 0; i--)
-        if (fn[i] == '.') {
-            fn[i] = 0;
-            break;
-        }
-}
-
 static char *dot_extension(char *fn)
 {
     int i = strlen(fn);
@@ -236,8 +227,10 @@ static int save_image_file_inplace(struct image_file *imf, int (* progress)(char
 
     PROGRESS_MESSAGE( " saving %s\n", fn )
 
-	if (is_zip_name(fn)) {
-        drop_dot_extension(fn);
+    gboolean zipped = (is_zip_name(imf->filename) > 0);
+    drop_dot_extension(fn);
+
+    if (zipped) {
 		return write_gz_fits_frame(imf->fr, fn, P_STR(FILE_COMPRESS));
 
 	} else {
@@ -255,17 +248,18 @@ static int save_image_file_to_dir(struct image_file *imf, char *outf, int (* pro
 
     if (imf->flags & IMG_SKIP) return 0;
 
-    char ifn[16384];
-    strncpy(ifn, imf->filename, 16383);
-	ifn[16383] = 0;
+    gboolean zipped = (is_zip_name(imf->filename) > 0);
+
+    char *outf_copy = strdup(outf);
+    drop_dot_extension(outf_copy);
 
     char fn[16384];
-    snprintf(fn, 16383, "%s/%s", outf, basename(ifn));
+    snprintf(fn, 16383, "%s/%s", outf, basename(outf_copy));
+    free(outf_copy);
 
     PROGRESS_MESSAGE( " saving %s\n", fn )
 
-	if (is_zip_name(fn)) {
-        drop_dot_extension(fn);
+    if (zipped) {
 		return write_gz_fits_frame(imf->fr, fn, P_STR(FILE_COMPRESS));
 
 	} else {
@@ -288,28 +282,20 @@ static int save_image_file_to_stud(struct image_file *imf, char *outf, int *seq,
 
     if (imf->flags & IMG_SKIP) return 0;
 
-    gboolean zipped = (is_zip_name(imf->filename) > 0);
+//    gboolean zipped = (is_zip_name(imf->filename) > 0);
+    gboolean zipped = (is_zip_name(outf) > 0);
+
+    char *outf_copy = strdup(outf);
+    drop_dot_extension(outf_copy);
 
     char fn[16384];
-	if (seq != NULL) {
-        char *outf_copy = strdup(outf);
-
-        if (zipped) drop_dot_extension(outf_copy);
-
+    if (seq != NULL) {
         check_seq_number(outf_copy, seq);
-
-        if (zipped) {
-            snprintf(fn, 16383, "%s%03d%s", outf_copy, *seq, ".gz");
-            free(outf_copy);
-        } else
-            snprintf(fn, 16383, "%s%03d", outf, *seq);
-
-//        free(imf->filename);
-//        imf->filename = strdup(fn);
-
+        snprintf(fn, 16383, "%s%03d", outf_copy, *seq);
 	} else {
-		snprintf(fn, 16383, "%s", outf);
+        snprintf(fn, 16383, "%s", outf_copy);
 	}
+    free(outf_copy);
 
     PROGRESS_MESSAGE( " saving %s\n", fn )
 
@@ -387,9 +373,7 @@ int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, c
 			if (ccdr->ops & IMG_OP_INPLACE) {
 				save_image_file(imf, outf, 1, NULL, progress_print, NULL);
 			} else {
-				save_image_file(imf, outf, 0,
-						(nframes == 1 ? NULL : &seq),
-						progress_print, NULL);
+                save_image_file(imf, outf, 0, (nframes == 1 ? NULL : &seq),	progress_print, NULL);
 			}
 			imf->flags &= ~IMG_SKIP;
 		}
@@ -443,7 +427,8 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 
             if (reduce_one_frame(imf, ccdr, progress_print, NULL)) continue;
 
-            if (ccdr->ops & IMG_OP_INPLACE) save_image_file(imf, NULL, 1, NULL, progress_print, NULL);
+            if (ccdr->ops & IMG_OP_INPLACE)
+                save_image_file(imf, NULL, 1, NULL, progress_print, NULL);
 		}
 
     } else { // stack
@@ -460,7 +445,18 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
     return fr; // first frame or stack result
 }
 
+void imf_release_frame_data(struct image_file *imf)
+{
+    if (imf->flags & IMG_LOADED) {
+ //       release_frame_data(imf->fr);
+        imf->flags &= ~IMG_LOADED;
+    }
+}
 
+void imf_load_frame_data(struct image_file *imf)
+{
+
+}
 
 void imf_release_frame(struct image_file *imf)
 {
@@ -551,7 +547,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
 
 static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-#define PROGRESS_MESSAGE(s) { if ( (progress) && ((*progress)((s), data) != 0) ) return -1; }
+#define PROGRESS_MESSAGE(s) if ( (progress) && ((*progress)((s), data) != 0) ) return -1;
 
     char lb[81];
     g_return_val_if_fail(imf != NULL, -1);
@@ -665,9 +661,13 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
     if ( ccdr->ops & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
         if ( ccdr->ops & IMG_OP_BG_ALIGN_ADD )
+        {
             PROGRESS_MESSAGE( " bg_align" )
+        }
         else
+        {
             PROGRESS_MESSAGE( " bg_align_mul" )
+        }
 
         if (! imf->fr->stats.statsok) frame_stats(imf->fr);
 
@@ -692,7 +692,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         imf->flags |= (ccdr->ops & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) | IMG_DIRTY;
     }
 
-    noise_to_fits_header(imf->fr, &(imf->fr->exp));
+//    noise_to_fits_header(imf->fr, &(imf->fr->exp)); // only for camera exposures
 
     if ( ccdr->ops & IMG_OP_DEMOSAIC ) {
         PROGRESS_MESSAGE( " demosaic" )
@@ -744,7 +744,11 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         remove_bayer_info(imf->fr);
 
         if ( ! (imf->flags & IMG_OP_ALIGN) ) {
-            if (ccdr->alignref->fr && (align_imf(imf, ccdr, progress, data) == 0)) {
+            int result_ok = 0;
+            if (ccdr->alignref->fr)
+                result_ok = align_imf(imf, ccdr, progress, data) == 0;
+
+            if (result_ok) {
                 fits_add_history(imf->fr, "'ALIGNED'");
 //                imf->fim->wcsset = WCS_VALID;
                 imf->flags |= IMG_OP_ALIGN | IMG_DIRTY;
@@ -769,9 +773,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     }
 
     if ( (ccdr->ops & IMG_OP_PHOT) && ! (imf->flags & IMG_SKIP) ) {
-        PROGRESS_MESSAGE( " phot" )
 
-        if ( aphot_imf(imf, ccdr, progress, data) ) PROGRESS_MESSAGE( " (FAILED)" )
+        if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") != NULL || ccdr->recipe != NULL) { // recipe is loaded
+
+            PROGRESS_MESSAGE( " phot" )
+            if ( aphot_imf(imf, ccdr, progress, data) ) PROGRESS_MESSAGE( " (FAILED)" )
+        }
 
         // else PROGRESS_MESSAGE( " (already_done)" )
         // imf->flags |= IMG_OP_PHOT;
@@ -791,7 +798,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
 int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-    PROGRESS_MESSAGE( imf->filename )
+    PROGRESS_MESSAGE( imf->filename );
 
     if (imf_load_frame(imf) != 0) {
         err_printf("frame will be skipped\n");
@@ -799,7 +806,7 @@ int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, int (* prog
         return 1;
     }
 
-    PROGRESS_MESSAGE( " loaded" )
+    PROGRESS_MESSAGE( " loaded" );
 
     int ret = ccd_reduce_imf_body (imf, ccdr, progress, data);
 
@@ -820,6 +827,8 @@ int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, int (* pro
 
     if (imf->flags & IMG_SKIP) return 1;
 
+    load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
+
     return ccd_reduce_imf (imf, ccdr, progress, data);
 }
 
@@ -837,6 +846,8 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* 
     int ret = setup_for_ccd_reduce (ccdr, progress, data);
     if (ret == 0) {
         GList *gl = imfl->imlist;
+
+        load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 
         while (gl != NULL) {
 
@@ -932,7 +943,9 @@ static int get_unskipped_frames (struct image_file_list *imfl, struct ccd_frame 
 // return positive weight for frame
 static float get_weight(struct ccd_frame *fr)
 {
-    return sqrt(sqr(fr->exp.rdnoise) * fr->exp.scale + sqr(fr->exp.scale) * fr->exp.rdnoise);
+//    return sqrt(sqr(fr->exp.rdnoise) * fr->exp.scale + sqr(fr->exp.scale) * fr->exp.rdnoise);
+    return sqrt(fr->exp.rdnoise * fr->exp.scale * (fr->exp.scale + fr->exp.rdnoise));
+
 }
 
 /* the real work of avg-stacking frames
@@ -940,117 +953,119 @@ static float get_weight(struct ccd_frame *fr)
 static int do_stack_weighted_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
 			int (* progress)(char *msg, void *data), void *data)
 {
-//    struct ccd_frame **frames;
+    struct ccd_frame **frames;
 
-//    int n = get_unskipped_frames(imfl, &frames);
-//    if (n <= 0) return n;
+    int n = get_unskipped_frames(imfl, &frames);
+    if (n <= 0) return n;
 
-//    float *weights = NULL;
-//    float **p, **p0 = NULL;
+    float *weights = NULL;
+    float **p, **p0 = NULL;
 
-//    weights = malloc(n * sizeof(float));
+    weights = malloc(n * sizeof(float));
 
-//    p = malloc(n * sizeof(float *));
-//    p0 = malloc(n * sizeof(float *));
+    p = malloc(n * sizeof(float *));
+    p0 = malloc(n * sizeof(float *));
 
-//    if (! weights || ! p || ! p0) {
-//        free(frames);
-//        if (weights) free(weights);
-//        if (p) free(p);
-//        if (p0) free(p0);
-//        return -1;
-//    }
+    if (! weights || ! p || ! p0) {
+        free(frames);
+        if (weights) free(weights);
+        if (p) free(p);
+        if (p0) free(p0);
+        return -1;
+    }
 
-//    int use_weights = (n > 1);
-//    float sum_weights = 0.0;
+    int use_weights = (n > 1);
+    float sum_weights = 0.0;
 
-//    if (use_weights) {
-//        float min_weight, max_weight;
+    if (use_weights) {
+        float min_weight, max_weight;
 
-//        int i;
-//        for (i = 0; i < n; i++) {
-//            float weight = get_weight(frames[i]);
-//            if (i) {
-//                if (weight < min_weight)
-//                    min_weight = weight;
-//                if (weight > max_weight)
-//                    max_weight = weight;
-//            }
-//            else
-//                min_weight = max_weight = weight;
+        int i;
+        for (i = 0; i < n; i++) {
+            float weight = get_weight(frames[i]);
+            if (i) {
+                if (weight < min_weight)
+                    min_weight = weight;
+                if (weight > max_weight)
+                    max_weight = weight;
+            }
+            else
+                min_weight = max_weight = weight;
 
-//            weights[i] = weight;
-//            sum_weights += weight;
-//        }
-//        use_weights = (max_weight - min_weight > 0.03 * (max_weight + min_weight));
-//    }
+            weights[i] = weight;
+            sum_weights += weight;
+        }
+        use_weights = (max_weight - min_weight > 0.03 * (max_weight + min_weight));
+    }
 
-//    char lb[81];
-//    if (use_weights) {
-//        snprintf(lb, 80, "'WEIGHTED AVERAGE %d FRAMES'", n);
-//        fits_add_history(ofr, lb);
-//    } else {
-//        snprintf(lb, 80, "'AVERAGE STACK %d FRAMES'", n);
-//        fits_add_history(ofr, lb);
-//    }
+    char lb[81];
+    if (use_weights) {
+        snprintf(lb, 80, "'WEIGHTED AVERAGE %d FRAMES'", n);
+        fits_add_history(ofr, lb);
+    } else {
+        snprintf(lb, 80, "'AVERAGE STACK %d FRAMES'", n);
+        fits_add_history(ofr, lb);
+    }
 
-//    struct visible_bounds *bounds = frame_bounds(ofr, NULL, TRUE); // use full frame
+#ifdef USE_BOUNDS
+    struct visible_bounds *bounds = frame_bounds(ofr, NULL, TRUE); // use full frame
 
-//    int plane_iter = 0;
-//    while ((plane_iter = color_plane_iter(ofr, plane_iter))) {
+    int plane_iter = 0;
+    while ((plane_iter = color_plane_iter(ofr, plane_iter))) {
 
-///* not working yet */
-////        AND_frame_bounds(imfl, ofr);
-////        bounds = frame_bounds(ofr, NULL, FALSE);
+/* not working yet */
+//        AND_frame_bounds(imfl, ofr);
+//        bounds = frame_bounds(ofr, NULL, FALSE);
 
-//        int i;
+        int i;
 
-//        float **dp = p;
+        float **dp = p;
 
-//		for (i = 0; i < n; i++) {
-//            p0[i] = dp[i] = get_color_plane(frames[i], plane_iter);
-//		}
+		for (i = 0; i < n; i++) {
+            p0[i] = dp[i] = get_color_plane(frames[i], plane_iter);
+		}
 
-//        float *odp = get_color_plane(ofr, plane_iter);
-//        float *odp0 = odp;
+        float *odp = get_color_plane(ofr, plane_iter);
+        float *odp0 = odp;
 
-//        int y = bounds->first_row;
-//        int row;
-//        for (row = 0; row < bounds->num_rows; row++) {
-//            int i;
+        int y = bounds->first_row;
+        int row;
+        for (row = 0; row < bounds->num_rows; row++) {
+            int i;
 
-//            int x = bounds->row[row].first; // skip to first visible pixel
-//            for (i = 0; i < n; i++)
-//                dp[i] = p0[i] + y * frames[i]->w + x;
+            int x = bounds->row[row].first; // skip to first visible pixel
+            for (i = 0; i < n; i++)
+                dp[i] = p0[i] + y * frames[i]->w + x;
 
-//            odp = odp0 + y * ofr->w + bounds->row[row].first;
+            odp = odp0 + y * ofr->w + bounds->row[row].first;
 
-//            while (x < bounds->row[row].last) {
-//                if (! use_weights)
-//                    *odp = pix_average(dp, n, 0, 1);
-//                else
-//                    *odp = weighted_pix_sum(dp, weights, n) / sum_weights;
-//                int i;
-//                for (i = 0; i < n; i++) // next pixel
-//                    dp[i]++;
-//                odp++;
+            while (x < bounds->row[row].last) {
+                if (! use_weights)
+                    *odp = pix_average(dp, n, 0, 1);
+                else
+                    *odp = weighted_pix_sum(dp, weights, n) / sum_weights;
+                int i;
+                for (i = 0; i < n; i++) // next pixel
+                    dp[i]++;
+                odp++;
 
-//                x++;
-//            }
+                x++;
+            }
 
-//            y++;
-//        }
-//    }
-//    // find cavg
-//    // set out of bounds pixels to cavg
-//    free(bounds);
+            y++;
+        }
+    }
+    // find cavg
+    // set out of bounds pixels to cavg
+    free(bounds);
+#endif
 
-//// if use_weights maybe muck around with ofr stats?
+// if use_weights maybe muck around with ofr stats?
 
-//    free(frames);
-//    free(p);
-//    free(p0);
-//    free(weights);
+    free(frames);
+    free(p);
+    free(p0);
+    free(weights);
 
 	return 0;
 }
@@ -1383,6 +1398,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
 
     GList *gl = imfl->imlist;
     int i = 0, ami = 0;
+    double last_exptime = 0.0;
 
 	while (gl != NULL) {
         struct image_file *imf = gl->data;
@@ -1401,53 +1417,61 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
         }
 
 		i++;
-		jd = frame_jdate(imf->fr);
+        jd = frame_jdate(imf->fr);
 //printf("%s %20.5f\n", imf->filename, jd);
 		if (jd == 0) {
             if (progress)
-                (*progress)("stack_time: bad time, skipping frame\n", data);
+                (*progress)("stack_time: bad time\n", data);
 
-			continue;
+//			continue;
 		}
 
         double expv = 0;
         if (fits_get_double(imf->fr, P_STR(FN_EXPTIME), &expv) > 0) {
             d1_printf("stack time: using exptime = %.5f from %s\n", expv, P_STR(FN_EXPTIME));
+            if ((i != 1) && (last_exptime != expv))
+                if (progress)
+                    (*progress)("stack_time: exposures dont all have same exptime\n", data);
+
+            last_exptime = expv;
+
 		} else {
             if (progress)
-                (*progress)("stack_time: bad exptime, skipping frame\n", data);
+                (*progress)("stack_time: bad exptime\n", data);
 
-			continue;
+//			continue;
 		}
         expsum += expv;
-        exptime += (jd + expv / 2 / 24 / 3600) * expv;
+//        exptime += (jd + expv / 2 / 24 / 3600) * expv; // using frame start
+        exptime += jd * expv; // using frame center
 	}
-    if (expsum == 0) return 0;
+//    if (expsum == 0) return 0;
 
 	if (progress) {
-        snprintf (lb, 79, "eqivalent exp: %.5fs, center at jd:%.7f\n", expsum, exptime / expsum);
+        snprintf (lb, 79, "%d exposures: total exposure %.5fs, center at jd:%.7f\n", i, expsum, exptime / expsum);
 		(*progress)(lb, data);
 	}
     
-    sprintf (lb, "%20.5f / EXPOSURE TIME IN SECONDS (weighted mean)", expsum);
+    sprintf (lb, "%20.5f / MEAN EXPOSURE TIME IN SECONDS", expsum / i);
     fits_add_keyword (ofr, P_STR(FN_EXPTIME), lb);
 
-    sprintf (lb, "%20.8f / JULIAN DATE OF EXPOSURE START (weighted mean)", exptime / expsum - expsum / 2 / 24 / 3600);
+//    sprintf (lb, "%20.8f / JULIAN DATE OF EXPOSURE START", exptime / expsum - expsum / 2 / 24 / 3600);
+//    fits_add_keyword (ofr, P_STR(FN_JDATE), lb);
+
+    sprintf (lb, "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
     fits_add_keyword (ofr, P_STR(FN_JDATE), lb);
 
-    double tz = P_DBL(OBS_TIME_ZONE);
-//printf("in do_stack_time converting back to local time\n");
-//printf("%20.8f %20.8f\n", exptime, tz / 24 * expsum);
-    if (tz) exptime = exptime + tz / 24 * expsum;
+//    double tz = P_DBL(OBS_TIME_ZONE);
+//    if (tz) exptime = exptime + tz / 24 * expsum;
 
-    date_time_from_jdate (exptime / expsum - expsum / 2 / 24 / 3600, date, 63);
-    if (tz) {
-        sprintf (lb, "%s / !! LOCAL TIME : time zone is %3.0f (hours)", date, tz);
-        fits_add_keyword (ofr, P_STR(FN_DATE_OBS), lb);
-    } else {
-        fits_add_keyword (ofr, P_STR(FN_DATE_OBS), date);
-        printf("%s\n", date);
-    }
+//    date_time_from_jdate (exptime / expsum - expsum / 2 / 24 / 3600, date, 63);
+//    if (tz) {
+//        sprintf (lb, "%s / !! LOCAL TIME : time zone is %3.0f (hours)", date, tz);
+//        fits_add_keyword (ofr, P_STR(FN_DATE_OBS), lb);
+//    } else {
+//        fits_add_keyword (ofr, P_STR(FN_DATE_OBS), date);
+//        printf("%s\n", date);
+//    }
 
     if (ami) {
         sprintf (lb, "%20.3f / MEDIAN OF STACKED FRAMES", fmedian(am, ami));
@@ -1460,6 +1484,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
     fits_delete_keyword (ofr, P_STR(FN_MJD));
     fits_delete_keyword (ofr, P_STR(FN_TIME_OBS));
     fits_delete_keyword (ofr, P_STR(FN_OBJCTALT));
+    fits_delete_keyword (ofr, P_STR(FN_DATE_OBS));
 
 	return 0;
 }
@@ -1476,7 +1501,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		 int (* progress)(char *msg, void *data), void *data)
 {
 	int nf = 0;
-    double b = 0.0, rn = 0.0, fln = 0.0, sc = 0.0;
+    double b = 0.0, rdnsq = 0.0, fln = 0.0, sc = 0.0;
 
 //printf("reduce.stack_frames\n");
 /* calculate output w/h */
@@ -1490,6 +1515,11 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		if (imf->flags & IMG_SKIP)
 			continue;
 
+        if (!imf->fr) {
+            printf("frame not loaded %s, aborting stack frame\n", imf->filename);
+            return NULL;
+        }
+
         if (ow == 0 || imf->fr->w < ow)
 			ow = imf->fr->w;
 		if (oh == 0 || imf->fr->h < oh)
@@ -1497,7 +1527,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 
 		nf ++;
 		b += imf->fr->exp.bias;
-		rn += sqr(imf->fr->exp.rdnoise);
+        rdnsq += sqr(imf->fr->exp.rdnoise);
 		fln += imf->fr->exp.flat_noise;
 		sc += imf->fr->exp.scale;
 	}
@@ -1544,7 +1574,8 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             break;
         case PAR_STACK_METHOD_WEIGHTED_AVERAGE:
             eff = 1.0;
-            err = (do_stack_weighted_avg(imfl, ofr, progress, data) != 0);
+//            err = (do_stack_weighted_avg(imfl, ofr, progress, data) != 0);
+            err = 1;
             break;
         case PAR_STACK_METHOD_KAPPA_SIGMA:
             eff = 0.9;
@@ -1569,7 +1600,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 
         } else {
             do_stack_time(imfl, ofr, progress, data);
-            ofr->exp.rdnoise = sqrt(rn) / nf / eff;
+            ofr->exp.rdnoise = sqrt(rdnsq) / nf / eff;
             ofr->exp.flat_noise = fln / nf;
             ofr->exp.scale = sc;
             ofr->exp.bias = b / nf;
@@ -1611,17 +1642,10 @@ int imf_load_frame(struct image_file *imf)
 		return -1;
 	}
 
-	if (imf->flags & IMG_LOADED) {
-		if (imf->fr == NULL) {
-            err_printf("imf_load_frame: image flagged as loaded, but fr is NULL\n");
-			return -1;
-		}
-d2_printf("reduce.imf_load_frame %s is already loaded\n", imf->filename);
-//        rescan_fits_wcs(imf->fr, imf->fim); // is it necessary?
-
-    } else {
+    struct ccd_frame *fr = imf->fr;
+    if (! (imf->flags & IMG_LOADED)) {
 d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
-        struct ccd_frame *fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
+        fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
 
         if (fr == NULL) {
             err_printf("imf_load_frame: cannot load %s\n", imf->filename);
@@ -1629,21 +1653,22 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
         }
 
         imf->fr = fr;
-
-        rescan_fits_exp(fr, &(fr->exp));
-        if (! fr->stats.statsok) frame_stats(fr);
-
-//// check
-//        rescan_fits_wcs(fr, imf->fim);
-//        if (imf->fim->wcsset >= WCS_INITIAL) // ?
-//            wcs_clone(& fr->fim, imf->fim);
-////        else
-////            rescan_fits_wcs(fr, imf->fim);
-
         imf->flags |= IMG_LOADED;
     }
-
     get_frame(imf->fr);
+
+    rescan_fits_exp(fr, &(fr->exp));
+    if (! fr->stats.statsok) frame_stats(fr);
+
+    struct wcs *wcs = &(fr->fim);
+    if (wcs->wcsset < WCS_INITIAL) {
+        wcs->wcsset = WCS_INITIAL;
+        if (wcs_transform_from_frame(fr, wcs)) {
+            // failed
+            // xrefpix, yrefpix set
+            wcs->wcsset = WCS_INVALID;
+        }
+    }
 
 //printf("reduce.imf_load_frame return ok\n");
 	return 0;
@@ -1652,25 +1677,22 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
 /* unload all ccd_frames that are not marked dirty */
 void unload_clean_frames(struct image_file_list *imfl)
 {
-	GList *fl;
-	struct image_file *imf;
-
-	fl = imfl->imlist;
+    GList *fl = imfl->imlist;
 	while(fl != NULL) {
-		imf = fl->data;
+        struct image_file *imf = fl->data;
 		fl = g_list_next(fl);
-    if ( imf->flags & IMG_LOADED ) {
-d3_printf("image loaded '%s' ", imf->filename);
-        if ( imf->flags & ~IMG_DIRTY ) {
-            d3_printf("not dirty - release imf\n");
-            imf_release_frame(imf);
-        } else {
-            d3_printf("dirty - imf not released\n");
-        }
-    } else {
-d3_printf("image '%s' not loaded\n", imf->filename);
-    }
 
+        if ( imf->flags & IMG_LOADED ) {
+            d3_printf("image loaded '%s' ", imf->filename);
+            if ( imf->flags & ~IMG_DIRTY ) {
+//                d3_printf("not dirty - release imf\n");
+                imf_release_frame(imf);
+            } else {
+//                d3_printf("dirty - imf not released\n");
+            }
+        } else {
+//            d3_printf("image '%s' not loaded\n", imf->filename);
+        }
 	}
 }
 
@@ -1796,26 +1818,32 @@ d3_printf("load alignment stars");
 }
 
 void refresh_wcs(gpointer window, struct ccd_frame *fr) {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (wcs == NULL) {
-        wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
+    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    if (window_wcs == NULL) {
+        window_wcs = wcs_new();
+        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
 
- //   struct ccd_reduce *ccdr = g_object_get_data(G_OBJECT(window), "processing");
-//    struct wcs *align_wcs = ccdr->alignref ? ccdr->alignref->fim : NULL;
+    struct wcs *frame_wcs = & fr->fim;
+// frame xrefpix, yrefpix correct but no xref, yref - they are in window wcs
 
-    if (fr->fim.wcsset) { // copy frame wcs to window
-        wcs_clone (wcs, &fr->fim);
-        //        wcs->flags &= ~WCS_HINTED;
+    if (frame_wcs->wcsset) { // copy frame wcs to window
+
+        wcs_clone(window_wcs, frame_wcs);
+        window_wcs->flags &= ~WCS_HINTED;
 
     } else {
-        if (wcs->wcsset) { // use window wcs as first guess for frame
-            wcs_clone(&fr->fim, wcs);
-            fr->fim.flags |= WCS_HINTED;
-            fr->fim.wcsset = WCS_INITIAL;
+        wcs_from_frame(fr, window_wcs); // update window wcs from fits frame fields
+
+        if (window_wcs->wcsset) { // use window wcs as first guess for frame
+            unsigned int flags = frame_wcs->flags; // save and restore flags, xinc, yinc
+
+            window_wcs->wcsset = WCS_INITIAL;
+
+            wcs_clone(frame_wcs, window_wcs);
+
+            frame_wcs->flags = flags | WCS_HINTED;
         }
-        wcs_from_frame(fr, wcs); // update window wcs from frame
     }
 
     wcsedit_refresh(window);
@@ -1832,7 +1860,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
     if ( imf_load_frame(imf) ) return -1;
 
     GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
-    struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
+//    struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
 
     struct ccd_frame *fr = NULL;
     int smooth = get_named_checkb_val(ccdred, "align_smooth");
@@ -1924,6 +1952,36 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
     return 0;
 }
 
+int wcs_align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+{  
+    imf_load_frame(imf);
+    imf_load_frame(ccdr->alignref);
+    struct wcs *imf_wcs = &(imf->fr->fim);
+    struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
+printf("2\n"); fflush(NULL);
+    wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+
+    double d_rot = imf_wcs->rot - align_wcs->rot;
+
+    // assume TAN projection and xinc = yinc
+    double d_xref = (imf_wcs->xref - align_wcs->xref) / imf_wcs->xinc;
+    double d_yref = (imf_wcs->yref - align_wcs->yref) / imf_wcs->xinc * cos(degrad(imf_wcs->yref));
+
+    double s, c;
+    sincos(degrad(imf_wcs->rot), &s, &c);
+
+    double dx = c * d_xref + s * d_yref;
+    double dy = c * d_yref - s * d_xref;
+
+    shift_frame(imf->fr, dx, dy);
+    rotate_frame(imf->fr, degrad(d_rot));
+
+    imf_release_frame(imf);
+    imf_release_frame(ccdr->alignref);
+
+    return 0;
+}
+
 int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
 	g_return_val_if_fail(ccdr->align_stars != NULL, -1);
@@ -1971,108 +2029,138 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 #else
     {
         GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
-        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
+//        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
 
-        int pass = 0;
-        return_ok = pass == 0;
+        GtkWidget *align_combo = g_object_get_data(G_OBJECT(ccdred), "align_combo");
+        int active = gtk_combo_box_get_active(align_combo);
 
-        struct ccd_frame *fr = NULL;
+        if (active == 2) { // match WCS
+            imf_load_frame(ccdr->alignref);
 
-        int rotate = get_named_checkb_val(ccdred, "align_rotate");
-        int smooth = get_named_checkb_val(ccdred, "align_smooth");
+            struct wcs *imf_wcs = &(imf->fr->fim);
+            struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
+printf("3\n"); fflush(NULL);
+            wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
 
-        if (rotate || smooth) {
-            fr = clone_frame(imf->fr); // make a copy to work on
-            if (smooth) { // blur the copy
-                struct blur_kern blur_kn;
-                blur_kn.kern = NULL;
-                new_blur_kern(& blur_kn, 7, ccdr->blurv);
-                filter_frame_inplace(fr, blur_kn.kern, blur_kn.size);
+            double d_rot = imf_wcs->rot - align_wcs->rot;
+
+            // assume TAN projection and xinc = yinc
+            double d_xref = (imf_wcs->xref - align_wcs->xref) / imf_wcs->xinc;
+            double d_yref = (imf_wcs->yref - align_wcs->yref) / imf_wcs->xinc * cos(degrad(imf_wcs->yref));
+
+            double s, c;
+            sincos(degrad(imf_wcs->rot), &s, &c);
+
+            double dx = c * d_xref + s * d_yref;
+            double dy = c * d_yref - s * d_xref;
+
+            shift_frame(imf->fr, dx, dy);
+            rotate_frame(imf->fr, degrad(d_rot));
+
+            imf_release_frame(ccdr->alignref);
+
+        } else { // match stars
+            int pass = 0;
+            return_ok = pass == 0;
+
+            struct ccd_frame *fr = NULL;
+
+            int rotate = get_named_checkb_val(ccdred, "align_rotate");
+            int smooth = get_named_checkb_val(ccdred, "align_smooth");
+
+            if (rotate || smooth) {
+                fr = clone_frame(imf->fr); // make a copy to work on
+                if (smooth) { // blur the copy
+                    struct blur_kern blur_kn;
+                    blur_kn.kern = NULL;
+                    new_blur_kern(& blur_kn, 7, ccdr->blurv);
+                    filter_frame_inplace(fr, blur_kn.kern, blur_kn.size);
+                }
+            } else {
+                fr = imf->fr;
             }
-        } else {
-            fr = imf->fr;
-        }
 
-        if (! rotate) pass = 1; // skip rotation pass
+            if (! rotate) pass = 1; // skip rotation pass
 
-        double dx, dy, dtheta = 0, dt = 0;
-        while (pass < 2 && return_ok) { // need two passes because rotate_frame introduces a shift
-            GSList *fsl = NULL;
+            double dx, dy, dtheta = 0, dt = 0;
+            while (pass < 2 && return_ok) { // need two passes because rotate_frame introduces a shift
+                GSList *fsl = NULL;
 
-            // pass 0: if rotate:
-            //             find stars in copy of fr
-            //             rotate the copy
-            // pass 1: if rotate:
-            //             find stars in rotated copy
-            //         otherwise:
-            //             find stars in the actual fr
-            //         shift & rotate the actual fr
-            fsl = detect_frame_stars(fr);
+                // pass 0: if rotate:
+                //             find stars in copy of fr
+                //             rotate the copy
+                // pass 1: if rotate:
+                //             find stars in rotated copy
+                //         otherwise:
+                //             find stars in the actual fr
+                //         shift & rotate the actual fr
+                fsl = detect_frame_stars(fr);
 
-            if (return_ok = (fsl != NULL)) {
-                int n = fastmatch(fsl, ccdr->align_stars);
+                if (return_ok = (fsl != NULL)) {
+                    int n = fastmatch(fsl, ccdr->align_stars);
 
-                if (return_ok = (n != 0)) {
+                    if (return_ok = (n != 0)) {
 
-                    PROGRESS_MESSAGE( snprintf(msg, 255, " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars)) )
+                        PROGRESS_MESSAGE( snprintf(msg, 255, " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars)) )
 
-                    GSList *pairs = NULL;
+                                GSList *pairs = NULL;
+
+                        GSList *sl = fsl;
+                        while (sl) {
+                            struct gui_star *gs = GUI_STAR(sl->data);
+                            if (gs->flags & STAR_HAS_PAIR && gs->pair) pairs = g_slist_prepend(pairs, gs);
+
+                            sl = g_slist_next(sl);
+                        }
+
+                        if (pairs) {
+                            if (pass == 0) { // rotate copy of fr
+                                pairs_fit(pairs, &dx, &dy, NULL, &dtheta);
+
+                                PROGRESS_MESSAGE( snprintf(msg, 255, " (rotate)[%.2f]", dtheta) )
+
+                                        dt = degrad(dtheta);
+                                rotate_frame(fr, -dt);
+
+                            } else { // rotate and shift actual fr
+                                pairs_fit(pairs, &dx, &dy, NULL, NULL);
+
+                                PROGRESS_MESSAGE( snprintf(msg, 255, " (x,y)[%.1f, %.1f]", dx, dy) )
+
+                                        if (rotate)
+                                        rotate_frame(imf->fr, -dt);
+
+                                shift_frame(imf->fr, -dx, -dy);
+
+                                struct wcs *wcs = & imf->fr->fim;
+                                if (wcs->wcsset == WCS_VALID) {
+                                    adjust_wcs(wcs, 0, 0, 1, -dtheta);
+                                    adjust_wcs(wcs, -dx, -dy, 1, 0);
+                                    wcs_to_fits_header(imf->fr); // not quite correct
+                                }
+                            }
+
+                            g_slist_free(pairs);
+                        }
+
+                    }  else {
+                        PROGRESS_MESSAGE( snprintf(msg, 255, " no match") )
+                                return_ok = 0;
+                    }
 
                     GSList *sl = fsl;
                     while (sl) {
                         struct gui_star *gs = GUI_STAR(sl->data);
-                        if (gs->flags & STAR_HAS_PAIR && gs->pair) pairs = g_slist_prepend(pairs, gs);
-
+                        gui_star_release(gs);
                         sl = g_slist_next(sl);
                     }
-
-                    if (pairs) {                        
-                        if (pass == 0) { // rotate copy of fr
-                            pairs_fit(pairs, &dx, &dy, NULL, &dtheta);
-
-                            PROGRESS_MESSAGE( snprintf(msg, 255, " (rotate)[%.2f]", dtheta) )
-
-                            dt = degrad(dtheta);
-                            rotate_frame(fr, -dt);
-
-                        } else { // rotate and shift actual fr
-                            pairs_fit(pairs, &dx, &dy, NULL, NULL);
-
-                            PROGRESS_MESSAGE( snprintf(msg, 255, " (x,y)[%.1f, %.1f]", dx, dy) )
-
-                            if (rotate)
-                                rotate_frame(imf->fr, -dt);
-
-                            shift_frame(imf->fr, -dx, -dy);
-
-                            struct wcs *wcs = & imf->fr->fim;
-                            if (wcs->wcsset == WCS_VALID) {
-                                adjust_wcs(wcs, 0, 0, 1, -dtheta);
-                                adjust_wcs(wcs, -dx, -dy, 1, 0);
-                                wcs_to_fits_header(imf->fr); // not quite correct
-                            }
-                        }
-
-                        g_slist_free(pairs);
-                    }
-
-                }  else {
-                    PROGRESS_MESSAGE( snprintf(msg, 255, " no match") )
-                    return_ok = 0;
+                    g_slist_free(fsl);
                 }
-
-                GSList *sl = fsl;
-                while (sl) {
-                    struct gui_star *gs = GUI_STAR(sl->data);
-                    gui_star_release(gs);
-                    sl = g_slist_next(sl);
-                }
-                g_slist_free(fsl);
+                pass++;
             }
-            pass++;
-        }
 
-        if (rotate || smooth) release_frame(fr);
+            if (rotate || smooth) release_frame(fr);
+        }
     }
 
 #endif
@@ -2095,25 +2183,20 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
 int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-#define PROGRESS_MESSAGE(s) { if ( (progress) && ((*progress)((s), data) != 0) ) return -1; }
+#define PROGRESS_MESSAGE(s) if ( (progress) && ((*progress)((s), data) != 0) ) return -1;
 
     if (imf_load_frame(imf)) return -1;
 
     gpointer window = ccdr->window;
     g_return_val_if_fail (window != NULL, -1);
 
-    remove_off_frame_stars (window);
+ //   remove_off_frame_stars (window);
     if (ccdr->recipe) load_rcp_to_window (window, ccdr->recipe, NULL);
 
     struct wcs *wcs = NULL;
     if (ccdr->ops & IMG_OP_PHOT_REUSE_WCS) {
         wcs = ccdr->wcs;
-//        if (imf->fim) {
-//            wcs_clone(imf->fim, ccdr->wcs);
-//            imf->fim->flags |= WCS_VALID;
-//        }
-//    } else if (imf->fim && (imf->fim->wcsset & WCS_VALID)) {
-//        wcs = imf->fim;
+
     } else {
         match_field_in_window_quiet (window);
         wcs = g_object_get_data (G_OBJECT(window), "wcs_of_window");
@@ -2150,42 +2233,50 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
 
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-#define PROGRESS_MESSAGE(s) { if ( (progress) && ((*progress)((s), data) != 0) ) return -1; }
-
+#define PROGRESS_MESSAGE(s) if ( (progress) && ((*progress)((s), data) != 0) ) return -1;
+    
     if (imf_load_frame(imf)) return -1;
 
     gpointer window = ccdr->window;
     g_return_val_if_fail (window != NULL, -1);
-
-    // do we need this?
-//    remove_off_frame_stars (window);
-    if (ccdr->recipe) load_rcp_to_window (window, ccdr->recipe, NULL);
+    
+//    load_rcp_to_window (window, ccdr->recipe, NULL);
 
     struct wcs *wcs = NULL;
-	if (ccdr->ops & IMG_OP_PHOT_REUSE_WCS) {
+    if (ccdr->ops & IMG_OP_PHOT_REUSE_WCS) {
         wcs = ccdr->wcs;
     } else {
         wcs = g_object_get_data (G_OBJECT(window), "wcs_of_window");
-        if (imf->fr->fim.wcsset & WCS_VALID)
+
+        if (imf->fr->fim.wcsset == WCS_VALID) {
             wcs_clone(wcs, &imf->fr->fim);
-        else
+        } else {
             match_field_in_window_quiet (window);
+        }
 	}
 
-    gboolean result_ok = ( wcs && wcs->wcsset == WCS_VALID );
-    if ( ! result_ok ) PROGRESS_MESSAGE( " bad wcs" )
+    gboolean result_ok = ( wcs && (wcs->wcsset == WCS_VALID) );
+    for (;;) {
+        if ( ! result_ok ) {
+            PROGRESS_MESSAGE( " bad wcs" )
+            break;
+        }
 
-    struct gui_star_list *gsl = NULL;
-    if (result_ok) {
-        result_ok = (gsl = g_object_get_data (G_OBJECT(window), "gui_star_list"));
+        struct gui_star_list *gsl = g_object_get_data (G_OBJECT(window), "gui_star_list");
+        result_ok = (gsl != NULL);
+        if ( ! result_ok ) {
+            PROGRESS_MESSAGE( " no phot stars" )
+            break;
+        }
 
-        if ( ! result_ok ) PROGRESS_MESSAGE( " no phot stars" )
-    }
+        struct stf *stf = run_phot (window, wcs, gsl, imf->fr);
+        result_ok = (stf != NULL);
+        if ( ! result_ok ) {
+            PROGRESS_MESSAGE( " run_phot failed" )
+            break;
+        }
 
-    struct stf *stf = NULL;
-    if (result_ok) result_ok = (stf = run_phot (window, wcs, gsl, imf->fr));
-
-    if (result_ok) {
+// remove this bit? move to mband calls?
         if ( ccdr->multiband && ! (ccdr->ops & IMG_QUICKPHOT) ) {
 
             stf_to_mband (ccdr->multiband, stf, imf->fr);
@@ -2194,12 +2285,15 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
             struct mband_dataset *mbds = mband_dataset_new ();
 
             d3_printf ("mbds: %p\n", mbds);
-            mband_dataset_add_stf (mbds, stf);
-            d3_printf ("mbds has %d frames\n", g_list_length (mbds->ofrs));
-            ofr_fit_zpoint (O_FRAME(mbds->ofrs->data), P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
-            ofr_transform_stars (O_FRAME(mbds->ofrs->data), mbds, 0, 0);
 
-            if (3 * O_FRAME(mbds->ofrs->data)->outliers > O_FRAME(mbds->ofrs->data)->vstars)
+            struct o_frame *ofr = mband_dataset_add_stf (mbds, stf);
+            d3_printf ("mbds has %d frames\n", g_list_length (mbds->ofrs)); // should be 1
+            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
+
+            ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
+            ofr_transform_stars (ofr, mbds, 0, 0);
+
+            if (3 * ofr->outliers > ofr->vstars)
                 info_printf(
                 "\nWarning: Frame has a large number of outliers (more than 1/3\n"
                 "of the number of standard stars). The output of the robust\n"
@@ -2209,24 +2303,25 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
             d3_printf("mbds has %d frames\n", g_list_length (mbds->ofrs));
 
-            char *ret = NULL;
-            if (mbds->ofrs->data) ret = mbds_short_result (O_FRAME(mbds->ofrs->data));
+            char *ret = mbds_short_result (ofr); // report first target star
 
             if (ret) {
-                d1_printf ("%s\n", ret);
+                printf ("%s\n", ret); fflush(NULL);
                 info_printf_sb2 (window, ret);
                 free (ret);
             }
             mband_dataset_release (mbds);
         }
         PROGRESS_MESSAGE( " ok" )
+        break;
     }
 
     imf_release_frame(imf);
 
-    if ( ! result_ok ) return -1;
-
-    return 0;
+    if ( ! result_ok )
+        return -1;
+    else
+        return 0;
 }
 
 /* alloc/free functions for reduce-related objects */
@@ -2240,7 +2335,7 @@ struct image_file * image_file_new(void)
 	}
 	imf->ref_count = 1;
 
-    imf->fim = wcs_new();
+//    imf->fim = wcs_new();
 	return imf;
 }
 
@@ -2268,7 +2363,7 @@ d2_printf("imf release %d '%s'\n", imf->ref_count, imf->filename);
 	}
 d3_printf("imf freed '%s'\n", imf->filename);
     if (imf->filename) free(imf->filename);
-    if (imf->fim) free(imf->fim);
+//    if (imf->fim) free(imf->fim);
 
     free(imf);
 }
@@ -2286,6 +2381,25 @@ struct image_file* add_image_file_to_list(struct image_file_list *imfl, char *fi
     imf->flags = flags;
 
     imfl->imlist = g_list_append(imfl->imlist, imf);
+ //   image_file_ref(imf);
+//printf("reduce.add_image_file_to_list return\n");
+    return imf;
+}
+
+struct image_file* add_image_frame_to_list(struct image_file_list *imfl, struct ccd_frame *fr, int flags)
+{
+    struct image_file *imf;
+    g_return_val_if_fail(imfl != NULL, NULL);
+
+//printf("reduce.add_image_file_to_list %s\n", filename);
+    imf = image_file_new();
+
+    imf->filename = strdup(fr->name);
+    imf->fr = fr;
+    imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED;
+
+    imfl->imlist = g_list_append(imfl->imlist, imf);
+
  //   image_file_ref(imf);
 //printf("reduce.add_image_file_to_list return\n");
     return imf;
@@ -2394,7 +2508,7 @@ struct bad_pix_map *bad_pix_map_new(void)
     return map;
 }
 
-void bad_pix_map_release(struct bad_pix_map *map)
+struct bad_pix_map * bad_pix_map_release(struct bad_pix_map *map)
 {
     if (map == NULL) return;
 d2_printf("reduce.bad_pix_map_release %d\n", map->ref_count);
@@ -2402,8 +2516,10 @@ d2_printf("reduce.bad_pix_map_release %d\n", map->ref_count);
 
     if (map->ref_count > 1) {
         map->ref_count--;
-        return;
+        return map;
     }
     free_bad_pix(map);
+
+    return NULL;
 d2_printf("bad_pix_map freed\n");
 }
