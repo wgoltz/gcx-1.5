@@ -47,7 +47,7 @@
 #include "wcs.h"
 #include "misc.h"
 #include "filegui.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "symbols.h"
 
 
@@ -97,7 +97,7 @@ void act_recipe_create (GtkAction *action, gpointer window)
 
 	dialog = g_object_get_data(G_OBJECT(window), "mkrcp_dialog");
 	if (dialog == NULL) {
-		dialog = create_create_recipe();
+		dialog = create_recipe_dialog();
 		g_object_set_data(G_OBJECT(dialog), "im_window",
 					 window);
 		g_object_set_data_full(G_OBJECT(window), "mkrcp_dialog",

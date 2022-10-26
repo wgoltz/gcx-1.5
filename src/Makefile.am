@@ -1,7 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 
-AUTOMAKE_OPTIONS = subdir-objects
-
 SUBDIRS = ccd gsc
 
 AM_CPPFLAGS = @GTK_CFLAGS@
@@ -15,11 +13,11 @@ gcx_SOURCES = \
 	interface.c interface.h obsdata.c obsdata.h obslist.c \
 	obslist.h params.c paramsgui.c params.h photometry.c \
 	showimage.c sourcesdraw.c sourcesdraw.h staredit.c \
-	textgui.c wcs.c wcs.h  combo_text_with_history.h combo_text_with_history.c \
-	helpmsg.c helpmsg.h wcsedit.c recipy.c recipy.h recipygui.c symbols.h\
-	tycho2.c tycho2.h tiff.c report.c sidereal_time.c nutation.c nutation.h\
+	textgui.c wcs.c wcs.h \
+	helpmsg.c helpmsg.h wcsedit.c recipe.c recipe.h recipegui.c symbols.h\
+	tycho2.c tycho2.h report.c sidereal_time.c nutation.c nutation.h\
 	sidereal_time.h	reduce.c reduce.h misc.c misc.h reducegui.c\
-	initparams.c starlist.c	guidegui.c treemodel.c treemodel.h \
+	initparams.c starlist.c	guidegui.c \
 	guide.c guide.h multiband.c multiband.h mbandgui.c plots.c plots.h \
 	mbandrep.c starfile.c getline.h synth.c psf.c psf.h dsimplex.c dsimplex.h \
 	basename.c dirname.c libgen.h query.c query.h plate.c \
@@ -37,6 +35,6 @@ gcx_SOURCES = \
 	libindiclient/gtk/indisave.h libindiclient/gtk/indisave.c \
 	libindiclient/gtk/gtkled.h libindiclient/gtk/gtkled.c
 
-gcx_LDADD = @GTK_LIBS@ -ljpeg -lm -ltiff ccd/libccd.a gsc/libgsc.a 
+gcx_LDADD = @GTK_LIBS@ -ljpeg ccd/libccd.a gsc/libgsc.a 
 
 CLEANFILES = *~

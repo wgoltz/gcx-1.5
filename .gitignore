@@ -1,4 +1,5 @@
-aaa
+build-gcx-1.5-Desktop_Qt_6_3_1_GCC_64bit-Debug
+gcx-1.5.pro.user
 
 aclocal.m4
 autom4te.cache
@@ -19,28 +20,31 @@ Makefile
 src/.deps/
 src/Makefile
 src/*.o
+src/*~
 src/gcx
 
 src/ccd/.deps/
 src/ccd/Makefile
 src/ccd/*.o
+src/ccd/*~
 src/ccd/libccd.a
 
 src/gsc/.deps/
 src/gsc/Makefile
 src/gsc/*.o
+src/gsc/*~
 src/gsc/libgsc.a
 
 src/libindiclient/.deps/
 src/libindiclient/.dirstamp
 src/libindiclient/*.o
+src/libindiclient/*~
 
 src/libindiclient/gtk/.deps/
 src/libindiclient/gtk/.dirstamp
 src/libindiclient/gtk/*.o
-        
-build-gcx-1.5-Desktop_Qt_6_3_1_GCC_64bit-Debug
-gcx-1.5.pro.user
+src/libindiclient/gtk/*~
+
 
 
 

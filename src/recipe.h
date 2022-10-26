@@ -1,5 +1,5 @@
-#ifndef _RECIPY_H_
-#define _RECIPY_H_
+#ifndef _RECIPE_H_
+#define _RECIPE_H_
 
 #include "obsdata.h"
 #include "params.h"

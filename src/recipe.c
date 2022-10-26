@@ -51,7 +51,7 @@
 #include "filegui.h"
 
 #include "symbols.h"
-#include "recipy.h"
+#include "recipe.h"
 #include "misc.h"
 
 #define INDENT STF_PRINT_TAB
@@ -422,46 +422,7 @@ int convert_recipe_to_AAVSO_format(GSList gsl, FILE *outf)
 int convert_recipe(FILE *inf, FILE *outf) 
 {
 	return -1;
-/*
-	struct cat_star *csl[MAX_STARS_CONV];
-	int ret = 0, n, i;
-	double ra, dec;
-	struct wcs wcs; 
 
-	n = read_rcp(csl, inf, MAX_STARS_CONV, &ra, &dec);
-	if (n <= 0)
-		return n;
-
-	wcs.xref = ra;
-	wcs.yref = dec;
-	wcs.equinox = 2000.0;
-    .wcsset = WCS_INITIAL;
-
-	recipe_report_head(outf, &wcs, NULL);
-
-	for (i=0; i<n; i++) {
-		if (CATS_TYPE(csl[i]) == CATS_TYPE_APSTD)
-			ret += recipe_report_cat_star(outf, csl[i], 2, MKRCP_STD, 
-						      1.0 * wcs.equinox);
-	}
-	for (i=0; i<n; i++) {
-		if (CATS_TYPE(csl[i]) == CATS_TYPE_APSTAR)
-			ret += recipe_report_cat_star(outf, csl[i], 2, MKRCP_TGT, 
-						      1.0 * wcs.equinox);
-	}
-	for (i=0; i<n; i++) {
-		if (CATS_TYPE(csl[i]) == CATS_TYPE_SREF)
-			ret += recipe_report_cat_star(outf, csl[i], 2, MKRCP_FIELD, 
-						      1.0 * wcs.equinox);
-	}
-	for (i=0; i<n; i++) {
-		cat_star_release(csl[i]);
-	}
-	put_indent(1, 0, outf);
-	fprintf(outf, ")\n)\n");
-	fflush(outf);
-	return ret;
-*/
 } 
 
 static int mag_comp_fn (const void *a, const void *b)
@@ -545,7 +506,7 @@ int read_gsc2(struct cat_star *csl[], FILE *fp, int n, double *cra, double *cdec
 
 		cats->equinox = 2000.0;
 		if (vmag < 30) {
-			update_band_by_name(&cats->smags, "v(gsc2)", vmag, vmagerr);
+            update_band_by_name(&cats->cmags, "v(gsc2)", vmag, vmagerr);
 		}
 /*
 		if (fmag < 30) {
@@ -616,9 +577,13 @@ int read_landolt_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		if (ret != 6) 
 			continue;
 
-		if (dms_to_degrees(ras, &ra))
+        int degrees;
+        if ((degrees = dms_to_degrees(ras, &ra)) < 0)
 			continue;
-		if (dms_to_degrees(decs, &dec))
+        if (!degrees)
+            ra *= 15;
+
+        if (dms_to_degrees(decs, &dec) < 0)
 			continue;
 
 		cats = cat_star_new();
@@ -628,14 +593,15 @@ int read_landolt_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		}
 
 		strncpy(cats->name, id, CAT_STAR_NAME_SZ);
-		cats->ra = ra * 15.0;
+
+        cats->ra = ra;
 		cats->dec = dec;
 		cats->mag = vmag;
 		cats->equinox = 2000.0;
-		if (-1 == asprintf(&cats->smags, "v=%.3f/0.005 b=%.3f/0.005 "
+        if (-1 == asprintf(&cats->cmags, "v=%.3f/0.005 b=%.3f/0.005 "
 		                   "u=%.3f/0.005 r=%.3f/0.005 i=%.3f/0.005",
 		                   vmag, bmag, umag, rmag, imag))
-			cats->smags = NULL;
+            cats->cmags = NULL;
 		cats->flags = CATS_TYPE_APSTD | CATS_FLAG_ASTROMET;
 		if (-1 == asprintf(&cats->comments, "%s", nam))
 			cats->comments = NULL;
@@ -701,8 +667,12 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		if (field[1] == 0 || field[0] == 0)
 			continue;
 
-		if (dms_to_degrees(line+field[0], &ra))
+        int degrees;
+        if ((degrees = dms_to_degrees(line+field[0], &ra)) < 0)
 			continue;
+        if (!degrees)
+            ra *= 15;
+
 		if (dms_to_degrees(line+field[1], &dec))
 			continue;
 
@@ -723,7 +693,7 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 			cats->name[i] = tolower(*c++);
 		}
 		cats->name[i]=0;
-		cats->ra = ra * 15.0;
+        cats->ra = ra;
 		cats->dec = dec;
 		cats->mag = 0.0;
 		cats->equinox = 2000.0;
@@ -809,48 +779,48 @@ int read_henden_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 		cats->dec = dec;
 		cats->mag = vmag;
 		cats->equinox = 2000.0;
-		cats->smags = calloc(1, 256);
-		if (!cats->smags)
+        cats->cmags = calloc(1, 256);
+        if (!cats->cmags)
 			continue;
 		i = 0;
 		nc = 255;
 		if (vmag < 90.0 && verr < 9 && i < nc) {
-			i += snprintf(cats->smags + i, nc-i, 
+            i += snprintf(cats->cmags + i, nc-i,
 				      "v=%.3f/%.3f",
 				      vmag, verr);
 		}
 		if (bvmag < 90.0 && bverr < 9 && i < nc) {
-			i += snprintf(cats->smags + i, nc-i, 
+            i += snprintf(cats->cmags + i, nc-i,
 				      " b-v=%.3f/%.3f",
 				      bvmag, bverr);
 			if (vmag < 90.0 && verr < 9 && i < nc) {
-				i += snprintf(cats->smags + i, nc-i, 
+                i += snprintf(cats->cmags + i, nc-i,
 					      " b=%.3f/%.3f",
 					      vmag + bvmag, sqrt(sqr(verr)+sqr(bverr)));
 			}
 			
 		}
 		if (ubmag < 90.0 && uberr < 9 && i < nc) {
-			i += snprintf(cats->smags + i, nc-i, 
+            i += snprintf(cats->cmags + i, nc-i,
 				      " u-b=%.3f/%.3f",
 				      ubmag, uberr);
 		}
 		if (vrmag < 90.0 && vrerr < 9 && i < nc) {
-			i += snprintf(cats->smags + i, nc-i, 
+            i += snprintf(cats->cmags + i, nc-i,
 				      " v-r=%.3f/%.3f",
 				      vrmag, vrerr);
 			if (vmag < 90.0 && verr < 9 && i < nc) {
-				i += snprintf(cats->smags + i, nc-i, 
+                i += snprintf(cats->cmags + i, nc-i,
 					      " r=%.3f/%.3f",
 					      vmag - vrmag, sqrt(sqr(verr)+sqr(vrerr)));
 			}
 		}
 		if (rimag < 90.0 && rierr < 9 && i < nc) {
-			i += snprintf(cats->smags + i, nc-i, 
+            i += snprintf(cats->cmags + i, nc-i,
 				      " r-i=%.3f/%.3f",
 				      rimag, rierr);
 			if (vmag < 90.0 && verr < 9 && vrmag < 90.0 && vrerr < 9.0 && i < nc) {
-				i += snprintf(cats->smags + i, nc-i, 
+                i += snprintf(cats->cmags + i, nc-i,
 					      " i=%.3f/%.3f",
 					      vmag - vrmag - rimag, 
 					      sqrt(sqr(verr)+sqr(vrerr)+sqr(rierr)));
@@ -917,8 +887,11 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	if (strlen(line+i) < 14)
 		return -1;
 	d3_printf("ra+dec: |%s|\n", line+i);
-	if (dms_to_degrees(line+i, &ra))
+    int degrees;
+    if ((degrees = dms_to_degrees(line+i, &ra)) < 0)
 		return -1;
+    if (!degrees)
+        ra *= 15;
 	d3_printf("dec: |%s|\n", line+i+11);
 	if (dms_to_degrees(line+i+11, &dec))
 		return -1;
@@ -933,7 +906,7 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	cats = cat_star_new();
 	strncpy(cats->name, id, CAT_STAR_NAME_SZ);
 	cats->comments = strdup(comm);
-	cats->ra = ra*15;
+    cats->ra = ra;
 	cats->dec = dec;
 	cats->mag = vmag;
 	cats->equinox = 2000.0;
@@ -959,9 +932,9 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 			continue;
 		cats = cat_star_new();
 		snprintf(cats->name, CAT_STAR_NAME_SZ, "%s_%.0f", id, c1);
-		if (-1 == asprintf(&cats->smags, "v=%.3f/%.3f b=%.3f/%.3f",
+        if (-1 == asprintf(&cats->cmags, "v=%.3f/%.3f b=%.3f/%.3f",
 		                   c11, c12, c11+c13, sqrt(sqr(c12)+ sqr(c14))))
-			cats->smags = NULL;
+            cats->cmags = NULL;
 		cats->ra = 15 * c2 + 15 * c3 / 60 + 15 * c4 / 3600;
 		if (c5 < 0) 
 			cats->dec = -(c6 / 60 + c7 / 3600 - c5);
@@ -995,9 +968,9 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 			continue;
 		cats = cat_star_new();
 		snprintf(cats->name, CAT_STAR_NAME_SZ, "%s_%d", id, sn);
-		if (-1 == asprintf(&cats->smags, "v=%.3f/%.3f b=%.3f/%.3f",
+        if (-1 == asprintf(&cats->cmags, "v=%.3f/%.3f b=%.3f/%.3f",
 		                   c11, c12, c11+c13, sqrt(sqr(c12)+ sqr(c14))))
-			cats->smags = NULL;
+            cats->cmags = NULL;
 		cats->ra = 15 * c2 + 15 * c3 / 60 + 15 * c4 / 3600;
 		if (c5 < 0) 
 			cats->dec = -(c6 / 60 + c7 / 3600 - c5);
@@ -1261,8 +1234,11 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 		if (line[i] != 'y' && line[i] != 'Y')
 			continue;
 
-		if (dms_to_degrees(line + rai, &ra))
+        int degrees;
+        if ((degrees = dms_to_degrees(line + rai, &ra)) < 0)
 			continue;
+        if (!degrees)
+            ra *= 15;
 		if (dms_to_degrees(line + deci, &dec))
 			continue;
 		ra *= 15.0;
@@ -1277,7 +1253,8 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 			return -1;
 		}
 		strncpy(cats->name, id, CAT_STAR_NAME_SZ);
-		cats->ra = ra;
+//        cats->ra = ra; // is ra recorded as degrees for this format?
+        cats->ra = ra;
 		cats->dec = dec;
 		cats->mag = 0.0;
 		cats->equinox = 2000.0;
@@ -1442,16 +1419,13 @@ static GList * merge_star(GList *csl, struct cat_star *new_star)
                     sl->data = new_star;
 				}
 			} else if (CATS_TYPE(cats) == CATS_TYPE_CAT) {
-                if (CATS_TYPE(new_star) != CATS_TYPE_SREF
-                    && CATS_TYPE(new_star) != CATS_TYPE_ALIGN) {
+                if (CATS_TYPE(new_star) != CATS_TYPE_SREF && CATS_TYPE(new_star) != CATS_TYPE_ALIGN) {
 					cat_star_release(cats);
                     cat_star_ref(new_star);
                     sl->data = new_star;
 				}
-			} else if (CATS_TYPE(cats) == CATS_TYPE_APSTD 
-				   || CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
-                if (CATS_TYPE(new_star) == CATS_TYPE_APSTD
-                    || CATS_TYPE(new_star) == CATS_TYPE_APSTAR) {
+            } else if (CATS_TYPE(cats) == CATS_TYPE_APSTD || CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
+                if (CATS_TYPE(new_star) == CATS_TYPE_APSTD || CATS_TYPE(new_star) == CATS_TYPE_APSTAR) {
 					cat_star_release(cats);
                     cat_star_ref(new_star);
                     sl->data = new_star;

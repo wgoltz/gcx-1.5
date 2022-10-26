@@ -21,7 +21,7 @@
   Contact Information: radu@corlan.net
 *******************************************************************************/
 
-// recipy.c: handle photometry recipies
+// recipe.c: handle photometry recipes
 // $Revision: 1.18 $
 // $Date: 2005/02/12 20:29:47 $
 
@@ -141,7 +141,7 @@ void init_star(struct star *s)
 	s->aph.flags = 0;
 }
 
-static void init_vs_recipy(struct vs_recipy *vs)
+static void init_vs_recipe(struct vs_recipe *vs)
 {
 	int i;
  	vs->objname[0] = 0;
@@ -171,10 +171,10 @@ static void init_vs_recipy(struct vs_recipy *vs)
 #define v1_fprintf(fp, format, args...) if(verb&1) fprintf(fp, format, ## args)
 #define v2_fprintf(fp, format, args...) if(verb&2) fprintf(fp, format, ## args)
 
-// print a recipy file to fp; verb indicates the amount of verbosity
+// print a recipe file to fp; verb indicates the amount of verbosity
 // 0 will just print the data, 1 will also print comments
 // 2 will comment the data fields
-void fprint_recipy(FILE *fp, struct vs_recipy *vs, int verb)
+void fprint_recipe(FILE *fp, struct vs_recipe *vs, int verb)
 {
 	char ras[64];
 	char decs[64];
@@ -199,7 +199,7 @@ void fprint_recipy(FILE *fp, struct vs_recipy *vs, int verb)
 	v2_fprintf(fp, "# ");
 	fprintf(fp, "chart %s\n", vs->chart);
 
-	v1_fprintf(fp, "\n# Name of frame used to create the recipy\n");
+	v1_fprintf(fp, "\n# Name of frame used to create the recipe\n");
 	v2_fprintf(fp, "# ");
 	fprintf(fp, "frame %s\n", vs->frame);
 
@@ -272,7 +272,7 @@ void fprint_recipy(FILE *fp, struct vs_recipy *vs, int verb)
 	v1_fprintf(fp, "\n");
 
 	if (vs->usewcs) {
-	fprintf(fp, "# Recipy stars: type ra dec [smag]\n");
+    fprintf(fp, "# Recipe stars: type ra dec [smag]\n");
 		for (i = 0; i < vs->cnt; i++) {
             degrees_to_hms(ras, vs->s[i].ra);
 			degrees_to_dms(decs, vs->s[i].dec);
@@ -285,7 +285,7 @@ void fprint_recipy(FILE *fp, struct vs_recipy *vs, int verb)
 			}
 		}
 	} else {
-		fprintf(fp, "\n# Recipy stars: type x y [smag]\n");
+        fprintf(fp, "\n# Recipe stars: type x y [smag]\n");
 		for (i = 0; i < vs->cnt; i++) {
 			if (vs->s[i].aph.flags & AP_STD_STAR) {
 				v2_fprintf(fp, "# ");
@@ -349,12 +349,14 @@ int scan_int(int *d, char *val)
 // the value is unchanged and -1 is returned
 int scan_ra(double *d, char *val)
 {
-	int ret;
+    int degrees;
 	double v;
-	ret = dms_to_degrees(val, &v);
-	if (!ret) {
+
+    if ((degrees = dms_to_degrees(val, &v)) < 0) {
 		return -1;
 	}
+    if (degrees) // decimal value assumed to be in degrees - convert to hours
+        v /= 15;
 	if (v < 0) {
 		info_printf("RA value is negative, ignoring sign\n");
 		v = -v;
@@ -374,8 +376,8 @@ int scan_dec(double *d, char *val)
 {
 	int ret;
 	double v;
-	ret = dms_to_degrees(val, &v);
-	if (!ret) {
+
+    if (dms_to_degrees(val, &v < 0)) {
 		return -1;
 	}
 	if (v > 90.0 || v < -90.0) {
@@ -386,9 +388,9 @@ int scan_dec(double *d, char *val)
 	return 0;
 } 
 
-// add a standard star to the recipy table. Return 0 if added succesfully, 
+// add a standard star to the recipe table. Return 0 if added succesfully, 
 // -1 otherwise
-int radd_std_star(struct vs_recipy *vs, char *val)
+int radd_std_star(struct vs_recipe *vs, char *val)
 {
 	char ras[64];
 	char decs[64];
@@ -397,7 +399,7 @@ int radd_std_star(struct vs_recipy *vs, char *val)
 	int ret;
 
 	if (vs->cnt >= vs->max_cnt) {
-		err_printf("More than %d stars in recipy, ignoring\n", vs->max_cnt);
+		err_printf("More than %d stars in recipe, ignoring\n", vs->max_cnt);
 		return -1;
 	}
 
@@ -436,9 +438,9 @@ int radd_std_star(struct vs_recipy *vs, char *val)
 }
 
 
-// add a program star to the recipy table. Return 0 if added succesfully, 
+// add a program star to the recipe table. Return 0 if added succesfully, 
 // -1 otherwise
-int radd_pgm_star(struct vs_recipy *vs, char *val)
+int radd_pgm_star(struct vs_recipe *vs, char *val)
 {
 	char ras[64];
 	char decs[64];
@@ -447,7 +449,7 @@ int radd_pgm_star(struct vs_recipy *vs, char *val)
 	int ret;
 
 	if (vs->cnt >= vs->max_cnt) {
-		err_printf("More than %d stars in recipy, ignoring\n", vs->max_cnt);
+		err_printf("More than %d stars in recipe, ignoring\n", vs->max_cnt);
 		return -1;
 	}
 
@@ -482,34 +484,34 @@ int radd_pgm_star(struct vs_recipy *vs, char *val)
 }
 
 
-void fscan_recipy(FILE *fp, struct vs_recipy *vs)
+void fscan_recipe(FILE *fp, struct vs_recipe *vs)
 {
-	char lb[RECIPY_TEXT + RECSYM_SIZE + 1];
+	char lb[RECIPE_TEXT + RECSYM_SIZE + 1];
 	int ret;
 	char *r, *val;
 
 	if (fp == NULL)
 		return;
 
-	init_vs_recipy(vs);
+	init_vs_recipe(vs);
 
-	while ((r = fgets(lb, RECIPY_TEXT+16, fp)) != NULL) {
+	while ((r = fgets(lb, RECIPE_TEXT+16, fp)) != NULL) {
 		ret = sym_lookup (lb, res_syms, &val);
 		if (ret == -2) // commment, skip
 			continue;
 		if (ret == -1) {
-			info_printf("fscan recipy: bad line: %s\n", lb);
+			info_printf("fscan recipe: bad line: %s\n", lb);
 			continue;
 		}
 		switch (ret) {
 		case 1:
-			scan_string(vs->objname, val, RECIPY_TEXT);
+			scan_string(vs->objname, val, RECIPE_TEXT);
 			break;
 		case 2:
-			scan_string(vs->chart, val, RECIPY_TEXT);
+			scan_string(vs->chart, val, RECIPE_TEXT);
 			break;
 		case 3:
-			scan_string(vs->frame, val, RECIPY_TEXT);
+			scan_string(vs->frame, val, RECIPE_TEXT);
 			break;
 		case 4:
 			scan_double(&(vs->p.r1), val);
@@ -551,10 +553,10 @@ void fscan_recipy(FILE *fp, struct vs_recipy *vs)
 			scan_double(&(vs->p.sat_limit), val);
 			break;
 		case 17:
-			scan_string(vs->repstar, val, RECIPY_TEXT);
+			scan_string(vs->repstar, val, RECIPE_TEXT);
 			break;
 		case 18:
-			scan_string(vs->repinfo, val, RECIPY_TEXT);
+			scan_string(vs->repinfo, val, RECIPE_TEXT);
 			break;
 		case 19:
 			scan_double(&(vs->scint_factor), val);
@@ -582,7 +584,7 @@ int string_has(char *str, char c)
 #define MAG_FORMAT "%7.3f"
 #define FLUX_FORMAT "%7.0f"
 // output star results of one run
-static void print_star(FILE *fp, struct vs_recipy *vs, int i)
+static void print_star(FILE *fp, struct vs_recipe *vs, int i)
 {
 	int j;
 	char *rep;
@@ -652,7 +654,7 @@ static void print_star(FILE *fp, struct vs_recipy *vs, int i)
 }
 
 // print result header
-static void print_header(FILE *fp, struct vs_recipy *vs, int i)
+static void print_header(FILE *fp, struct vs_recipe *vs, int i)
 {
 	int j;
 	char *rep;
@@ -710,7 +712,7 @@ static void print_header(FILE *fp, struct vs_recipy *vs, int i)
 }
 
 // print frame information for run
-static void print_info(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr)
+static void print_info(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr)
 {
 	FITS_row *cp;
 	int ret;
@@ -762,7 +764,7 @@ static void print_info(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr)
 
 // report star photometric measurements
 // what tells what to print (see cx.h for field definitions)
-void report_stars(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr, int what)
+void report_stars(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what)
 {
 	int i;
 	int d;
@@ -820,7 +822,7 @@ void report_stars(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr, int what
 
 
 // report data in a format useful for occultation events (time/fluxdrop)
-void report_event(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr, int what)
+void report_event(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what)
 {
 	double flux;
 	FITS_row *cp;
@@ -866,8 +868,8 @@ void report_event(FILE *fp, struct vs_recipy *vs, struct ccd_frame *fr, int what
 
 }
 
-// add a standard star to recipy; return it's index if ok, -1 for error
-int add_std_star(struct vs_recipy *vs, double x, double y, double mag)
+// add a standard star to recipe; return it's index if ok, -1 for error
+int add_std_star(struct vs_recipe *vs, double x, double y, double mag)
 {
 	if (vs->cnt >= vs->max_cnt)
 		return -1;
@@ -879,8 +881,8 @@ int add_std_star(struct vs_recipy *vs, double x, double y, double mag)
 	return (vs->cnt) - 1;
 }
 
-// add a program star to recipy; return it's index if ok, -1 for error
-int add_pgm_star(struct vs_recipy *vs, double x, double y)
+// add a program star to recipe; return it's index if ok, -1 for error
+int add_pgm_star(struct vs_recipe *vs, double x, double y)
 {
 	if (vs->cnt >= vs->max_cnt)
 		return -1;
@@ -891,32 +893,32 @@ int add_pgm_star(struct vs_recipy *vs, double x, double y)
 }
 
 /*
- * create a new recipy with place for n stars
+ * create a new recipe with place for n stars
  */
-struct vs_recipy *new_vs_recipy(int n)
+struct vs_recipe *new_vs_recipe(int n)
 {
-	struct vs_recipy *vs;
+	struct vs_recipe *vs;
 	struct star *s;
 
-	vs = calloc(1, sizeof(struct vs_recipy));
+	vs = calloc(1, sizeof(struct vs_recipe));
 	if (vs == NULL) {
-		err_printf("new_vs_recipy: alloc error\n");
+		err_printf("new_vs_recipe: alloc error\n");
 		return NULL;
 	}
 	s = calloc(n, sizeof(struct star));
 	if (s == NULL) {
-		err_printf("new_vs_recipy: alloc error\n");
+		err_printf("new_vs_recipe: alloc error\n");
 		free(vs);
 		return NULL;
 	}
 	vs->s = s;
 	vs->ref_count = 1;
 	vs->max_cnt = 1;
-	init_vs_recipy(vs);
+	init_vs_recipe(vs);
 	return vs;
 }
 
-void release_vs_recipy(struct vs_recipy * vs)
+void release_vs_recipe(struct vs_recipe * vs)
 {
 	if (vs->ref_count > 1) {
 		vs->ref_count --;
@@ -927,7 +929,7 @@ void release_vs_recipy(struct vs_recipy * vs)
 	free(vs);
 }
 
-void ref_vs_recipy(struct vs_recipy * vs)
+void ref_vs_recipe(struct vs_recipe * vs)
 {
 	vs->ref_count ++;
 }
