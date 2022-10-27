@@ -13,7 +13,8 @@ gcx_SOURCES = \
 	interface.c interface.h obsdata.c obsdata.h obslist.c \
 	obslist.h params.c paramsgui.c params.h photometry.c \
 	showimage.c sourcesdraw.c sourcesdraw.h staredit.c \
-	textgui.c wcs.c wcs.h \
+	textgui.c wcs.c wcs.h treemodel.c treemodel.h \
+	combo_text_with_history.c combo_text_with_history.h \
 	helpmsg.c helpmsg.h wcsedit.c recipe.c recipe.h recipegui.c symbols.h\
 	tycho2.c tycho2.h report.c sidereal_time.c nutation.c nutation.h\
 	sidereal_time.h	reduce.c reduce.h misc.c misc.h reducegui.c\
@@ -21,10 +22,10 @@ gcx_SOURCES = \
 	guide.c guide.h multiband.c multiband.h mbandgui.c plots.c plots.h \
 	mbandrep.c starfile.c getline.h synth.c psf.c psf.h dsimplex.c dsimplex.h \
 	basename.c dirname.c libgen.h query.c query.h plate.c \
-	demosaic.c demosaic.h skyview.c jpeg.c \
+	demosaic.c demosaic.h skyview.c jpeg.c tiff.c \
 	tele_indi.c tele_indi.h camera_indi.c camera_indi.h \
 	fwheel_indi.c fwheel_indi.h common_indi.c common_indi.h \
-        \
+	\
 	libindiclient/lilxml.h libindiclient/lilxml.c \
 	libindiclient/base64.h libindiclient/base64.c \
 	libindiclient/indi.h libindiclient/indi.c \
@@ -35,6 +36,6 @@ gcx_SOURCES = \
 	libindiclient/gtk/indisave.h libindiclient/gtk/indisave.c \
 	libindiclient/gtk/gtkled.h libindiclient/gtk/gtkled.c
 
-gcx_LDADD = @GTK_LIBS@ -ljpeg ccd/libccd.a gsc/libgsc.a 
+gcx_LDADD = @GTK_LIBS@ -ljpeg -ltiff -lm ccd/libccd.a gsc/libgsc.a 
 
 CLEANFILES = *~

@@ -316,11 +316,11 @@ void act_user_quit(GtkAction *action, gpointer window)
 	gtk_widget_destroy(GTK_WIDGET(window));
 }
 
-void act_user_abort(GtkAction *action, gpointer window)
-{
-	d3_printf("user abort\n");
-	set_abort_flag(); // check with user_abort()
-}
+//void act_user_abort(GtkAction *action, gpointer window)
+//{
+//	d3_printf("user abort\n");
+//	set_abort_flag(); // check with user_abort()
+//}
 
 void act_frame_new (GtkAction *action, gpointer window)
 {
@@ -769,7 +769,7 @@ static GtkActionEntry image_actions[] = {
 	{ "guide-control",        NULL, "Guiding...",              "<shift>T",   NULL, G_CALLBACK (act_control_guider) },
     { "indi-settings",        NULL, "Indi...",                 "<shift>I",   NULL, G_CALLBACK (act_indi_settings) },
 	{ "user-quit",            NULL, "_Quit",                   "<control>Q", NULL, G_CALLBACK (act_user_quit) },
-	{ "user-abort",           NULL, "Abort",                   "<control>C", NULL, G_CALLBACK (act_user_abort) },
+//	{ "user-abort",           NULL, "Abort",                   "<control>C", NULL, G_CALLBACK (act_user_abort) },
 	/* Image */
 	{ "image-menu", NULL, "_Image" },
 	{ "image-set-contrast", NULL, "Set _Contrast" },
@@ -890,7 +890,7 @@ static char *image_common_ui =
     "  <menuitem name='Indi'         action='indi-settings'/>"
 	"  <separator name='separator3'/>"
 	"  <menuitem name='Quit'         action='user-quit'/>"
-	"  <menuitem name='Abort'        action='user-abort'/>"
+//	"  <menuitem name='Abort'        action='user-abort'/>"
 	"</menu>"
 	"<menu name='image' action='image-menu'>"
 	"  <menuitem name='image-curves' action='image-curves'/>"

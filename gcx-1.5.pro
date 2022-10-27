@@ -147,7 +147,6 @@ SOURCES = \
    $$PWD/src/ccd/errlog.c \
    $$PWD/src/ccd/median.c \
    $$PWD/src/ccd/rcp.c \
-   $$PWD/src/ccd/recipe.c \
    $$PWD/src/ccd/sources.c \
    $$PWD/src/ccd/use_dcraw.c \
    $$PWD/src/ccd/warp.c \

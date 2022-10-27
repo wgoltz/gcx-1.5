@@ -1,6 +1,6 @@
 
 AC_INIT([gcx], [1.5])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 AC_CONFIG_SRCDIR([src/gcx.c])
 
