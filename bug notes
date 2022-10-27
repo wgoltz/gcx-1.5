@@ -1,0 +1,9 @@
+1. GCX uses the GTK+2.0 software tool kit which is no longer maintained. More modern themes don't work well with it. 
+I am working on upgrading GCX to use GTK3 or later but its not there yet. For best results, launch GCX with a GTK2 theme something like this:
+
+GTK2_RC_FILES=/usr/share/themes/Greybird/gtk-2.0/gtkrc gcx
+
+2. INDI support is very old. To get "Camera and Telescope.." window working with a camera, open this window first then open "Indi.." options window,
+disconnect, then reconnect the camera.
+
+3. Photometry reporting is a work in progress and needs some more thought.
