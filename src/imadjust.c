@@ -549,8 +549,14 @@ void channel_set_lut_from_gamma(struct image_channel *channel)
 	d3_printf("set lut from gamma\n");
     double x0 = channel->toe;
     double x1 = channel->gamma * channel->toe;
+
+    if (channel->lut_clip == 0)
+        channel->invert = 0;
+    else if (channel->lut_clip == 1)
+        channel->invert = 1;
+
     if (channel->invert) {
-        double t = x1; x1 = x0; x0 = x1;
+        double t = x1; x1 = x0; x0 = t;
     }
     int i;
 	for (i=0; i<LUT_SIZE; i++) {
@@ -569,23 +575,14 @@ void channel_set_lut_from_gamma(struct image_channel *channel)
 		else
 			channel->lut[LUT_SIZE - i - 1] = y;
 	}
-    int lo = 0, hi = 65535;
-
-    // 0 : lo hi, invert hi lo
-    // 1 : hi lo, invert lo hi
-    // 2 : lo lo
-    // 3 : hi hi
-
-#define SWAP ( { int t = lo; lo = hi; hi = t; } )
+    int lo = 0, hi = 65535, t = lo;
 
     switch (channel->lut_clip) {
-    case 0 : if (channel->invert) SWAP; break;
-    case 1 : if (! channel->invert) SWAP; break;
+    case 0 : break;
+    case 1 : lo = hi; hi = t; break;
     case 2 : hi = lo; break;
     case 3 : lo = hi; break;
     }
-
-#undef SWAP
 
 	channel->lut[0] = lo;
 	channel->lut[LUT_SIZE - 1] = hi;
