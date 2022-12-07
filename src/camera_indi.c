@@ -393,7 +393,7 @@ printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL)
     else
         INDI_try_dev_connect(iprop, INDI_COMMON (camera), camera->portname);
 
-	camera_check_state(camera);
+    camera_check_state(camera);
 }
 
 // this callback has to wait for CONNECTION before it will run correctly
