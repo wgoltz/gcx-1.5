@@ -99,7 +99,8 @@ extern void delXMLEle (XMLEle *e);
     \param errmsg a buffer to store error messages if an error in parsing is encounterd.
     \return When the function parses a complete valid XML element, it will return a pointer to the XML element. A NULL is returned when parsing the element is still in progress, or if a parsing error occurs. Check errmsg for errors if NULL is returned. 
  */
-extern XMLEle *readXMLEle (LilXML *lp, int c, char errmsg[]);
+//extern XMLEle *readXMLEle (LilXML *lp, int c, char errmsg[]);
+extern XMLEle *readXMLEle (LilXML *lp, int c, char **errmsg);
 
 /* search functions */
 /** \brief Find an XML attribute within an XML element.
@@ -235,7 +236,8 @@ extern const char *findXMLAttValu (XMLEle *ep, const char *name);
     \param errmsg a buffer to store error messages on failure.
     \return root element else NULL with report in errmsg[].
 */
-extern XMLEle *readXMLFile (FILE *fp, LilXML *lp, char errmsg[]);
+//extern XMLEle *readXMLFile (FILE *fp, LilXML *lp, char errmsg[]);
+extern XMLEle *readXMLFile (FILE *fp, LilXML *lp, char **errmsg);
 
 /** \brief Print an XML element.
     \param fp a pointer to FILE where the print output is directed.

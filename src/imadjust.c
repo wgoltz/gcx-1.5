@@ -173,11 +173,11 @@ static void channel_cuts_action(struct image_channel *channel, int action)
 
 	switch(act) {
 	case CUTS_MINMAX:
-		if (!fr->stats.statsok) {
+        if (!fr->stats.statsok) {
 			frame_stats(fr);
 		}
-		channel->lcut = fr->stats.min;
-		channel->hcut = fr->stats.max;
+        channel->lcut = fr->stats.min;
+        channel->hcut = fr->stats.max;
 		break;
 	case CUTS_FLATTER:
 		span = span * CONTRAST_STEP;
@@ -221,11 +221,11 @@ d3_printf("invert is %d\n", channel->invert);
 	case CUTS_CONTRAST:
 		channel->avg_at = DEFAULT_AVG_AT;
 
-		if (!fr->stats.statsok) {
+        if (!fr->stats.statsok) {
 			frame_stats(fr);
 		}
-		channel->davg = fr->stats.cavg;
-		channel->dsigma = fr->stats.csigma * 2;
+        channel->davg = fr->stats.cavg;
+        channel->dsigma = fr->stats.csigma * 2;
 		if (val < 0)
 			val = 0;
 		if (val >= SIGMAS_VALS)
@@ -880,7 +880,7 @@ gboolean toggle_get_value(GtkWidget *dialog, char *name)
     GtkWidget *toggle = g_object_get_data(G_OBJECT(dialog), name);
     if (toggle == NULL) {
         g_warning("cannot find toggle button named %s\n", name);
-        return;
+        return FALSE;
     }
     return gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(toggle));
 }
@@ -900,7 +900,7 @@ int combo_get_value(GtkWidget *dialog, char *name)
     GtkWidget *combo = g_object_get_data(G_OBJECT(dialog), name);
     if (combo == NULL) {
         g_warning("cannot find combo box named %s\n", name);
-        return;
+        return FALSE;
     }
    return  gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
 }
@@ -912,11 +912,6 @@ void log_toggled (GtkWidget *togglebutton, gpointer dialog)
 
     channel->log_plot = toggle_get_value(dialog, "log_hist_check");
 	update_histogram(dialog);
-}
-
-void invert_toggled (GtkWidget *togglebutton, gpointer dialog)
-{
-    lut_updated(dialog);
 }
 
 void lut_updated (gpointer dialog)
@@ -939,6 +934,12 @@ void lut_updated (gpointer dialog)
 	update_histogram(dialog);
 	gtk_widget_queue_draw(window);
 }
+
+void invert_toggled (GtkWidget *togglebutton, gpointer dialog)
+{
+    lut_updated(dialog);
+}
+
 
 char *lut_clamp_choices[] = { "normal", "invert", "LO LO", "HI HI", NULL };
 

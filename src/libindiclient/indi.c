@@ -733,7 +733,7 @@ void indi_read_cb (void *fd, void *opaque)
 	struct indi_t *indi = (struct indi_t *)opaque;
 	int i, len;
 	char buf[4096];
-	char errmsg[1024];
+    char *errmsg;
 	XMLEle *root;
 	struct indi_device_t *idev;
 	LilXML *lillp = (LilXML *)indi->xml_parser;
@@ -742,7 +742,7 @@ void indi_read_cb (void *fd, void *opaque)
 	if(len > 0) {
 //        dbg_printf("Received (%d): %s\n", len, buf); fflush(NULL);
 		for(i = 0; i < len; i++) {
-            root = readXMLEle(lillp, buf[i], errmsg);
+            root = readXMLEle(lillp, buf[i], &errmsg);
             if (root) {
                 const char *dev = findXMLAttValu (root, "device");
                 if (! dev) {
