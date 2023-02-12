@@ -750,7 +750,7 @@ int fake_main(int ac, char **av)
     debug_level = 0;
 //    debug_level = 3;
 
-    char oc;
+    int oc;
 	while ((oc = getopt_long(ac, av, shortopts, longopts, NULL)) > 0) {
 		switch(oc) {
 
