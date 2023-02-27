@@ -9,6 +9,8 @@
 #ifndef _PARAMS_H_
 #define _PARAMS_H_
 
+#include <stdio.h>
+
 union pval {
 	int i;
 	unsigned int u;
@@ -92,7 +94,8 @@ extern struct param ptable[];
 #define PDEF_UINT(p) (ptable[p].defval.u)
 #define PDEF_DBL(p) (ptable[p].defval.d)
 #define PDEF_STR(p) ((ptable[p].defval.s))
-#define PAR(p) ((p)== 0 ? NULL : &(ptable[p]))
+//#define PAR(p) ((p)== 0 ? NULL : &(ptable[p]))
+#define PAR(p) (&(ptable[p]))
 #define PAR_TYPE(p) (ptable[p].flags & PAR_TYPE_MASK)
 #define PAR_FORMAT(p) (ptable[p].flags & PAR_FORMAT_FM)
 #define PAR_PREC(p) (ptable[p].flags & PAR_PREC_FM)
@@ -146,6 +149,7 @@ typedef enum {
 	FN_DATE_OBS ,
 	FN_TIME_OBS ,
     FN_UT ,
+    FN_DATE_TIME ,
 	FN_TELESCOP ,
 	FN_INSTRUME ,
 	FN_OBSERVER ,
@@ -314,7 +318,7 @@ typedef enum {
     AP_STD_DEFAULT_ERROR ,
     AP_STD_BRIGHT_LIMIT ,
     AP_STD_FAINT_LIMIT ,
-    AP_USE_CMAGS ,
+    AP_STD_SOURCE ,
     AP_ALPHA ,
 	AP_BETA ,
 //	AP_USE_STD_COLOR ,
@@ -502,7 +506,12 @@ enum {
 	PAR_WCSFIT_MODEL_ALL,
 };
 
-
+#define PAR_STD_SOURCE_OPTIONS {"smags", "cmags", NULL}
+enum {
+    PAR_STD_SOURCE_SMAGS,
+    PAR_STD_SOURCE_CMAGS,
+    PAR_STD_SOURCE_ALL,
+};
 
 extern char * guide_algorithms[];
 
@@ -530,13 +539,15 @@ extern char * ap_shapes[];
 
 extern char * wcsfit_models[];
 
+extern char * std_source_options[];
+
 
 /* function prototypes */
 /* params.c */
 void ptable_free(void);
 void init_ptable(void);
 char *status_string(GcxPar p);
-void make_value_string(GcxPar p, char *c, int len);
+char *make_value_string(GcxPar p);
 void make_defval_string(GcxPar p, char *c, int len);
 int try_parse_double(GcxPar p, char *text);
 int try_parse_int(GcxPar p, char *text);

@@ -250,7 +250,7 @@ void release_image_channel(struct image_channel *channel)
 			err_printf("release_image_channel: suspicious channel has ref_count of 0\n");
 		}
 		if (channel->ref_count == 1) {
-            if (channel->fr) release_frame(channel->fr);
+            if (channel->fr) release_frame(channel->fr, "release_image_channel");
             if (channel->cache)	release_map_cache(channel->cache);
 			free(channel);
 			return;
@@ -1011,7 +1011,8 @@ d3_printf("image expose, free cache %p\n", cache->dat);
 			paint_from_rgb_cache(widget, cache, &(event->area));
 	}
 
-	draw_sources_hook(widget, window, &(event->area));
+// sources are already drawn. do we need this?
+    draw_sources_hook(widget, window, &(event->area));
 //printf("showimage.image_expose return\n");
 	return TRUE;
 }
@@ -1022,7 +1023,7 @@ d3_printf("image expose, free cache %p\n", cache->dat);
 void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
 		       double zoom, int x, int y, int w, int h)
 {
-	struct map_geometry geom;
+    struct map_geometry geom = { 0 };
 	GdkRectangle area;
 	int zoom_in = 1;
 	int zoom_out = 1;
@@ -1033,7 +1034,6 @@ void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
 		zoom_out = floor(1.0 / zoom + 0.5);
 	}
 
-	memset(&geom, 0, sizeof(struct map_geometry));
 	geom.zoom = zoom;
 	area.x = x * zoom_in / zoom_out;
 	area.y = y * zoom_in / zoom_out;
@@ -1064,15 +1064,15 @@ d2_printf("showimage.frame_to_channel new channel |%s|\n", chname);
 		channel = new_image_channel();
         g_object_set_data_full(G_OBJECT(window), chname, channel, (GDestroyNotify)release_image_channel);
 
-        get_frame(fr);
+        get_frame(fr, "frame_to_channel");
         channel->fr = fr;
 
         if (fr->stats.statsok && fr->pix_format != PIX_BYTE) set_default_channel_cuts(channel);
 
 	} else { /* replace the frame in the current channel */
 d2_printf("frame to channel\n");
-        get_frame(fr);
-        release_frame(channel->fr);
+        get_frame(fr, "frame_to_channel");
+        release_frame(channel->fr, "frame_to_channel");
 
         channel->fr = fr;
 

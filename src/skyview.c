@@ -394,7 +394,6 @@ static int fetch_skyview_image(GtkWidget *window, const char *position, const ch
 //        err_printf_sb2(im_window, "Error opening %s", fn);
 //        goto err_out;
 //    }
-//printf("4\n"); fflush(NULL);
 //    wcs_transform_from_frame(fr, & fr->fim);
 //    rescan_fits_exp(fr, & fr->exp);
 //	frame_to_channel(fr, im_window, "i_channel"); // done by window add files above

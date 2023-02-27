@@ -138,7 +138,7 @@ void INDI_common_init(struct INDI_common_t *device, const char *name, void *chec
 {
 	device->check_state = check_state;
 	device->callback_max = max_cb;
-	strncpy(device->name, name, sizeof(device->name) - 1);
+    device->name = strdup(name);
 }
 
 static int INDI_callback(struct INDI_callback_t *cb)
@@ -159,7 +159,7 @@ printf("INDI_callback: \"%s\" removed callback \"%s\"\n", cb->device->name, (cb-
 	return FALSE;
 }
 
-void INDI_exec_callbacks(struct INDI_common_t *device, int type)
+void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
 {
 	GSList *gsl;
 	struct INDI_callback_t *cb;

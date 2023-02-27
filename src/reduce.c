@@ -42,7 +42,8 @@
 #endif
 
 #include "gcx.h"
-#include "catalogs.h"
+#include "ccd/ccd.h"
+//#include "catalogs.h"
 #include "gui.h"
 #include "params.h"
 #include "reduce.h"
@@ -54,7 +55,7 @@
 #include "recipe.h"
 #include "filegui.h"
 #include "demosaic.h"
-#include "match.h"
+//#include "match.h"
 #include "sourcesdraw.h"
 #include "misc.h"
 //#include "warpaffine.h"
@@ -192,27 +193,13 @@ static float pix_ks(float *dp[], int n, float sigmas, int iter)
 
 /* file save functions*/
 
-static int is_zip_name(char *fn)
-{
-    int len = strlen(fn);
-    if (len < 4) return 0;
-    if (strcasecmp(fn + len - 3, ".gz") == 0) return 2;
-    if (strcasecmp(fn + len - 2, ".z") == 0) return 1;
-    if (strcasecmp(fn + len - 4, ".zip") == 0) return 3;
-	return 0;
+#define PROGRESS_MESSAGE(s, ...) { \
+    if (progress) { \
+        char *msg = NULL; \
+        asprintf(&msg, (s), __VA_ARGS__); \
+        if (msg) (* progress)(msg, data), free(msg); \
+    } \
 }
-
-static char *dot_extension(char *fn)
-{
-    int i = strlen(fn);
-    char *s = fn + i;
-
-    for (; i > 0; i--) if (*s-- == '.') return strdup(s + 1);
-
-    return NULL;
-}
-
-#define PROGRESS_MESSAGE(s, ...) if (progress) { char msg[256]; snprintf(msg, 255, (s), __VA_ARGS__); (* progress)(msg, data); }
 
 /* overwrite the original file */
 static int save_image_file_inplace(struct image_file *imf, int (* progress)(char *msg, void *data), void *data)
@@ -222,49 +209,37 @@ static int save_image_file_inplace(struct image_file *imf, int (* progress)(char
 
     if (imf->flags & IMG_SKIP) return 0;
 
-    char fn[16384];
-    snprintf(fn, 16383, "%s", imf->filename);
+    char *fn = strdup(imf->filename);
 
-    PROGRESS_MESSAGE( " saving %s\n", fn )
+    PROGRESS_MESSAGE( "saving %s\n", fn )
 
-    gboolean zipped = (is_zip_name(imf->filename) > 0);
-    drop_dot_extension(fn);
-
-    if (zipped) {
-		return write_gz_fits_frame(imf->fr, fn, P_STR(FILE_COMPRESS));
-
-	} else {
-		return write_fits_frame(imf->fr, fn);
-	}
+    return write_fits_frame(imf->fr, fn);
 }
 
 
 /* outf is a dir name: use the original file names and this dir */
-static int save_image_file_to_dir(struct image_file *imf, char *outf, int (* progress)(char *msg, void *data), void *data)
+static int save_image_file_to_dir(struct image_file *imf, char *dir, int (* progress)(char *msg, void *data), void *data)
 {
 	g_return_val_if_fail(imf != NULL, -1);
 	g_return_val_if_fail(imf->fr != NULL, -1);
-	g_return_val_if_fail(outf != NULL, -1);
+    g_return_val_if_fail(dir != NULL, -1);
 
     if (imf->flags & IMG_SKIP) return 0;
 
-    gboolean zipped = (is_zip_name(imf->filename) > 0);
+    char *fn = strdup(imf->filename);
 
-    char *outf_copy = strdup(outf);
-    drop_dot_extension(outf_copy);
+    char *full_fn = NULL;
+    asprintf(&full_fn, "%s/%s", dir, basename(fn));
+    free(fn);
 
-    char fn[16384];
-    snprintf(fn, 16383, "%s/%s", outf, basename(outf_copy));
-    free(outf_copy);
+    int ret = -1;
+    if (full_fn) {
+        PROGRESS_MESSAGE( "saving %s\n", full_fn )
 
-    PROGRESS_MESSAGE( " saving %s\n", fn )
-
-    if (zipped) {
-		return write_gz_fits_frame(imf->fr, fn, P_STR(FILE_COMPRESS));
-
-	} else {
-		return write_fits_frame(imf->fr, fn);
-	}
+        ret = write_fits_frame(imf->fr, full_fn);
+        free(full_fn);
+    }
+    return ret;
 }
 
 /* outf is a "stud" to a file name; the function adds sequence numbers to it; files
@@ -282,28 +257,28 @@ static int save_image_file_to_stud(struct image_file *imf, char *outf, int *seq,
 
     if (imf->flags & IMG_SKIP) return 0;
 
-//    gboolean zipped = (is_zip_name(imf->filename) > 0);
-    gboolean zipped = (is_zip_name(outf) > 0);
+    gboolean zipped = (is_zip_name(imf->filename) > 0);
 
     char *outf_copy = strdup(outf);
-    drop_dot_extension(outf_copy);
 
-    char fn[16384];
+    char *fn = NULL;
     if (seq != NULL) {
         check_seq_number(outf_copy, seq);
-        snprintf(fn, 16383, "%s%03d", outf_copy, *seq);
+        asprintf(&fn, (zipped) ? "%s%03d.gz" : "%s%03d", outf_copy, *seq);
 	} else {
-        snprintf(fn, 16383, "%s", outf_copy);
+        asprintf(&fn, (zipped) ? "%s.gz" : "%s", outf_copy);
 	}
     free(outf_copy);
 
-    PROGRESS_MESSAGE( " saving %s\n", fn )
+    PROGRESS_MESSAGE( "saving %s\n", fn );
 
-    if (zipped) {
-		return write_gz_fits_frame(imf->fr, fn, P_STR(FILE_COMPRESS));
-	} else {
-		return write_fits_frame(imf->fr, fn);
-	}
+    int res = -1;
+    if (fn) {
+        res = write_fits_frame(imf->fr, fn);
+
+        free(fn);
+    }
+    return res;
 }
 
 
@@ -392,11 +367,86 @@ int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, c
 
         if (outf) write_fits_frame(fr, outf);
 
-        release_frame(fr);
+        release_frame(fr, "batch_reduce_frames");
 
     }
     return 0;
 }
+
+/* load the frame specififed in the image file struct into memory and
+ * compute it's stats; return a negative error code (and update the error string)
+ * if something goes wrong. Return 0 for success. If the file is already loaded, it's not
+ * read again */
+int imf_load_frame(struct image_file *imf)
+{
+    if (imf->filename == NULL) {
+        err_printf("imf_load_frame: null filename\n");
+        return -1;
+    }
+    if (imf->filename[0] == 0) { // photometry window needs to ref/unref frames
+        err_printf("imf_load_frame: empty filename\n");
+        return -1;
+    }
+
+    struct ccd_frame *fr = imf->fr;
+    if (! (imf->flags & IMG_LOADED)) {
+d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
+        fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
+
+        if (fr == NULL) {
+            err_printf("imf_load_frame: cannot load %s\n", imf->filename);
+            return -1;
+        }
+
+        imf->fr = fr;
+        fr->imf = imf;
+        imf->flags |= IMG_LOADED;
+    }
+    get_frame(imf->fr, "imf_load_frame");
+
+    rescan_fits_exp(fr, &(fr->exp));
+    if (! fr->stats.statsok) frame_stats(fr);
+
+    struct wcs *wcs = &(fr->fim);
+    if (imf->fim && (imf->fim->wcsset == WCS_VALID)) { // valid wcs
+        wcs_clone(wcs, imf->fim);
+    } else {
+        wcs->wcsset = WCS_INITIAL;
+        if (wcs_transform_from_frame(fr, wcs) != 0) {
+            wcs->wcsset = WCS_INVALID;
+        }
+    }
+
+//printf("reduce.imf_load_frame return ok\n");
+    return 0;
+}
+
+/* unload all ccd_frames that are not marked dirty */
+void unload_clean_frames(struct image_file_list *imfl)
+{
+    GList *fl = imfl->imlist;
+    while(fl != NULL) {
+        struct image_file *imf = fl->data;
+        fl = g_list_next(fl);
+
+        if ( imf->flags & IMG_LOADED )
+            if (!(imf->flags & IMG_DIRTY))
+                imf_release_frame(imf, "unload_clean_frames");
+    }
+}
+
+
+void imf_release_frame(struct image_file *imf, char *msg)
+{
+    imf->fr = release_frame(imf->fr, msg);
+    if (imf->fr == NULL) imf->flags &= IMG_SKIP; // we keep the skip flag
+}
+
+void imf_unload(struct image_file *imf)
+{
+    imf->flags &= ~IMG_LOADED;
+}
+
 
 
 /* call point from main; reduce the frames acording to ccdr.
@@ -433,40 +483,17 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 
     } else { // stack
 
-        if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA || P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_MEAN_MEDIAN ) {
+        if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA ||
+                P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_MEAN_MEDIAN ) {
             if (!(ccdr->ops & IMG_OP_BG_ALIGN_MUL))
                 ccdr->ops |= IMG_OP_BG_ALIGN_ADD;
         }
         if (reduce_frames(imfl, ccdr, progress_print, NULL)) return NULL; // reduce failed somehow
 
-        fr = stack_frames(imfl, ccdr, progress_print, NULL);
+        fr = stack_frames(imfl, ccdr, progress_print, NULL); // should return an imf
     }
 
     return fr; // first frame or stack result
-}
-
-void imf_release_frame_data(struct image_file *imf)
-{
-    if (imf->flags & IMG_LOADED) {
- //       release_frame_data(imf->fr);
-        imf->flags &= ~IMG_LOADED;
-    }
-}
-
-void imf_load_frame_data(struct image_file *imf)
-{
-
-}
-
-void imf_release_frame(struct image_file *imf)
-{
-    if (imf->flags & IMG_LOADED) imf->fr = release_frame(imf->fr);
-    if (! imf->fr) imf->flags &= ~IMG_LOADED;
-}
-
-void imf_unload(struct image_file *imf)
-{
-    imf->flags &= ~IMG_LOADED;
 }
 
 
@@ -484,7 +511,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
 
         if (ret) return ret;
 
-        imf_release_frame(ccdr->bias);
+        imf_release_frame(ccdr->bias, "setup_for_ccd_reduce: bias");
     }
     if (ccdr->ops & IMG_OP_DARK) {
         if (ccdr->dark == NULL) {
@@ -497,7 +524,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
 
         if (ret) return ret;
 
-        imf_release_frame(ccdr->dark);
+        imf_release_frame(ccdr->dark, "setup_for_ccd_reduce: dark");
     }
     if (ccdr->ops & IMG_OP_FLAT) {
 
@@ -511,7 +538,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
 
         if (ret) return ret;
 
-        imf_release_frame(ccdr->flat);
+        imf_release_frame(ccdr->flat, "setup_for_ccd_reduce: flat");
     }
     if (ccdr->ops & IMG_OP_BADPIX) {
 
@@ -540,6 +567,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
     return 0;
 }
 
+static int normalize_CFA(struct ccd_frame *fr);
 
 /* apply bias, dark, flat, badpix, add, mul, align and phot to a frame (as specified in the ccdr)
  * call progress with a short progress message from time to time. If progress returns
@@ -547,9 +575,10 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
 
 static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-#define PROGRESS_MESSAGE(s) if ( (progress) && ((*progress)((s), data) != 0) ) return -1;
 
-    char lb[81];
+#define REPORT(s) { if ( (progress) && ((*progress)((s), data) != 0) ) return -1; }
+
+    char *lb;
     g_return_val_if_fail(imf != NULL, -1);
     g_return_val_if_fail(imf->fr != NULL, -1);
 
@@ -562,7 +591,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     if ( ccdr->ops & IMG_OP_BIAS ) {
 //        g_return_val_if_fail(ccdr->bias->fr != NULL, -1);
 
-        PROGRESS_MESSAGE( " bias" )
+        REPORT( " bias" )
 
         if ( ! (imf->flags & IMG_OP_BIAS) ) {
 
@@ -571,9 +600,9 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 fits_add_history(imf->fr, "'BIASSUB'");
 
             else
-                PROGRESS_MESSAGE( " (FAILED)" )
+                REPORT( " (FAILED)" )
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_BIAS | IMG_DIRTY;
     }
@@ -581,7 +610,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     if ( ccdr->ops & IMG_OP_DARK ) {
 //        g_return_val_if_fail(ccdr->dark->fr != NULL, -1);
 
-        PROGRESS_MESSAGE( " dark" )
+        REPORT( " dark" )
 
         if ( ! (imf->flags & IMG_OP_DARK) ) {
 
@@ -589,9 +618,9 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                fits_add_history(imf->fr, "'DARK FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'DARKSUB'");
             else
-                PROGRESS_MESSAGE( " (FAILED)" )
+                REPORT( " (FAILED)" )
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_DARK | IMG_DIRTY;
     }
@@ -599,7 +628,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     if ( ccdr->ops & IMG_OP_FLAT ) {
 //        g_return_val_if_fail(ccdr->flat->fr != NULL, -1);
 
-        PROGRESS_MESSAGE( " flat" )
+        REPORT( " flat" )
 
         if (! (imf->flags & IMG_OP_FLAT) ) {
 
@@ -607,9 +636,9 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                fits_add_history(imf->fr, "'FLAT FIELDED'");
                 fits_add_history(imf->fr, "'FLATTED'");
             else
-                PROGRESS_MESSAGE( " (FAILED)" )
+                REPORT( " (FAILED)" )
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_FLAT | IMG_DIRTY;
     }
@@ -617,22 +646,22 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     if ( ccdr->ops & IMG_OP_BADPIX ) {
 //        g_return_val_if_fail(ccdr->bad_pix_map != NULL, -1);
 
-        PROGRESS_MESSAGE( " badpix" )
+        REPORT( " badpix" )
 
         if ( ! (imf->flags & IMG_OP_BADPIX) ) {
 
             if ( ccdr->bad_pix_map && (fix_bad_pixels(imf->fr, ccdr->bad_pix_map) == 0) )
                 fits_add_history(imf->fr, "'PIXEL DEFECTS REMOVED'");
             else
-                PROGRESS_MESSAGE( " (FAILED)" )
+                REPORT( " (FAILED)" )
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_BADPIX | IMG_DIRTY;
     }
 
     if ( ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD) ) {
-        PROGRESS_MESSAGE( " mul/add" )
+        REPORT( " mul/add" )
 
         if ( (ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD)) != (imf->flags & (IMG_OP_MUL | IMG_OP_ADD)) ) {
 
@@ -644,17 +673,17 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 if (m == 0) {
                     if (normalize_CFA(imf->fr))	return -1;
 
-                    snprintf(lb, 80, "'NORMALIZE CFA band levels'");
+                    fits_add_history(imf->fr, "'NORMALIZE CFA band levels'");
                 }
             }
             if ( (ccdr->ops & IMG_OP_ADD) && !(imf->flags & IMG_OP_ADD) ) a = ccdr->addv;
 
             scale_shift_frame(imf->fr, m, a);
 
-            snprintf(lb, 80, "'ARITHMETIC P <- P * %.3f + %.3f'", m, a);
-            fits_add_history(imf->fr, lb);
+            lb = NULL; asprintf(&lb, "'ARITHMETIC P <- P * %.3f + %.3f'", m, a);
+            if (lb) fits_add_history(imf->fr, lb), free(lb);
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= (ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD)) | IMG_DIRTY;
     }
@@ -662,11 +691,11 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     if ( ccdr->ops & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
         if ( ccdr->ops & IMG_OP_BG_ALIGN_ADD )
         {
-            PROGRESS_MESSAGE( " bg_align" )
+            REPORT( " bg_align" )
         }
         else
         {
-            PROGRESS_MESSAGE( " bg_align_mul" )
+            REPORT( " bg_align_mul" )
         }
 
         if (! imf->fr->stats.statsok) frame_stats(imf->fr);
@@ -675,7 +704,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
             if ( (ccdr->ops & IMG_OP_BG_ALIGN_MUL) && (imf->fr->stats.median < P_DBL(MIN_BG_SIGMAS) * imf->fr->stats.csigma) ) {
 
-                PROGRESS_MESSAGE( " (too low)" )
+                REPORT( " (too low)" )
                 imf->flags |= IMG_SKIP;
 
             } else {
@@ -687,7 +716,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                    scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.avg);
             }
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= (ccdr->ops & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) | IMG_DIRTY;
     }
@@ -695,19 +724,19 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //    noise_to_fits_header(imf->fr, &(imf->fr->exp)); // only for camera exposures
 
     if ( ccdr->ops & IMG_OP_DEMOSAIC ) {
-        PROGRESS_MESSAGE( " demosaic" )
+        REPORT( " demosaic" )
 
         if ( ! (imf->flags & IMG_OP_DEMOSAIC) ) {
             bayer_interpolate(imf->fr);
             fits_add_history(imf->fr, "'DEMOSAIC'");
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_DEMOSAIC | IMG_DIRTY;
     }
 
     if ( ccdr->ops & IMG_OP_BLUR ) {
-        PROGRESS_MESSAGE( " blur" )
+        REPORT( " blur" )
 
         remove_bayer_info(imf->fr);
         if ( ! (imf->flags & IMG_OP_BLUR) ) {
@@ -726,19 +755,19 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             if (filter_frame_inplace(imf->fr, ccdr->blur->kern, ccdr->blur->size))
 //            float lpv3[9] = {1/16.0, 1/8.0, 1/16.0, 1/8.0, 1/4.0, 1/8.0, 1/16.0, 1/8.0, 1/16.0};
 //            if (filter_frame_inplace(imf->fr, lpv3, 3))
-                PROGRESS_MESSAGE( " (FAILED)" )
+                REPORT( " (FAILED)" )
             else {
-                snprintf(lb, 80, "'GAUSSIAN BLUR (FWHM=%.1f)'", ccdr->blurv);
-                fits_add_history(imf->fr, lb);
+                lb = NULL; asprintf(&lb, "'GAUSSIAN BLUR (FWHM=%.1f)'", ccdr->blurv);
+                if (lb) fits_add_history(imf->fr, lb), free(lb);
             }
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_BLUR | IMG_DIRTY;
     }
 
     if ( ccdr->ops & IMG_OP_ALIGN ) {
-        PROGRESS_MESSAGE( " align" )
+        REPORT( " align" )
 
         // after alignment, it is no longer possible to use the raw frame
         remove_bayer_info(imf->fr);
@@ -754,20 +783,20 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 imf->flags |= IMG_OP_ALIGN | IMG_DIRTY;
 
             } else {
-                PROGRESS_MESSAGE( " (FAILED)" )
+                REPORT( " (FAILED)" )
                 imf->flags |= IMG_SKIP | IMG_DIRTY;
             }
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
     }
 
     if ( ccdr->ops & IMG_OP_WCS ) {
-        PROGRESS_MESSAGE( " wcs" )
+        REPORT( " wcs" )
 
         if ( ! (imf->flags & IMG_OP_WCS) ) {
 
-            if ( fit_wcs(imf, ccdr, progress, data) ) PROGRESS_MESSAGE( " (FAILED)" )
+            if ( fit_wcs(imf, ccdr, progress, data) ) REPORT( " (FAILED)" )
 
-        } else PROGRESS_MESSAGE( " (already_done)" )
+        } else REPORT( " (already_done)" )
 
         imf->flags |= IMG_OP_WCS;
     }
@@ -776,15 +805,15 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") != NULL || ccdr->recipe != NULL) { // recipe is loaded
 
-            PROGRESS_MESSAGE( " phot" )
-            if ( aphot_imf(imf, ccdr, progress, data) ) PROGRESS_MESSAGE( " (FAILED)" )
+            REPORT( " phot" )
+            if ( aphot_imf(imf, ccdr, progress, data) ) REPORT( " (FAILED)" )
         }
 
-        // else PROGRESS_MESSAGE( " (already_done)" )
+        // else REPORT( " (already_done)" )
         // imf->flags |= IMG_OP_PHOT;
     }
 
-    PROGRESS_MESSAGE( "\n" )
+    REPORT( "\n" )
 
 //	d4_printf("\nrdnoise: %.3f\n", imf->fr->exp.rdnoise);
 //	d4_printf("scale: %.3f\n", imf->fr->exp.scale);
@@ -798,19 +827,20 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
 int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-    PROGRESS_MESSAGE( imf->filename );
+    REPORT( imf->filename );
 
-    if (imf_load_frame(imf) != 0) {
+    if (imf_load_frame(imf) < 0) {
         err_printf("frame will be skipped\n");
         imf->flags |= IMG_SKIP;
+        REPORT( " SKIPPED\n");
         return 1;
     }
 
-    PROGRESS_MESSAGE( " loaded" );
+    REPORT( " loaded" );
 
     int ret = ccd_reduce_imf_body (imf, ccdr, progress, data);
 
-    imf_release_frame (imf);
+    imf_release_frame (imf, "ccd_reduce_imf");
 
     return ret;
 }
@@ -868,16 +898,18 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* 
 normalize CFA frame pixels to the max of the medians of R, G, or B from region
 (rw, rh) at center of frame
 */
-int normalize_CFA(struct ccd_frame *fr) {
+static int normalize_CFA(struct ccd_frame *fr) {
 	int rw = 100;
 	int rh = 100;
 	int rx = (fr->w + rw) / 2;
 	int ry = (fr->h + rh) / 2;
 
-    struct im_stats *st = alloc_stats(NULL);
-	if (st == NULL) return -1;
- 
-	region_stats(fr, rx, ry, rw, rh, st);
+    struct im_stats *st = calloc(1, sizeof(struct im_stats));
+    if (st == NULL) return -1;
+    if ((alloc_stats(st) == NULL) || (region_stats(fr, rx, ry, rw, rh, st) < 0)) {
+        free(st);
+        return -1;
+    }
 
 	double mp[3];
 	mp[0] = st->avgs[0];
@@ -900,6 +932,7 @@ int normalize_CFA(struct ccd_frame *fr) {
 	scale_shift_frame_CFA(fr, mp, sp);
 
 	free_stats(st);
+    free(st);
 	return 0;
 }
 
@@ -940,137 +973,10 @@ static int get_unskipped_frames (struct image_file_list *imfl, struct ccd_frame 
     return n;
 }
 
-// return positive weight for frame
-static float get_weight(struct ccd_frame *fr)
-{
-//    return sqrt(sqr(fr->exp.rdnoise) * fr->exp.scale + sqr(fr->exp.scale) * fr->exp.rdnoise);
-    return sqrt(fr->exp.rdnoise * fr->exp.scale * (fr->exp.scale + fr->exp.rdnoise));
-
-}
-
 /* the real work of avg-stacking frames
  * return -1 for errors */
-static int do_stack_weighted_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
-			int (* progress)(char *msg, void *data), void *data)
-{
-    struct ccd_frame **frames;
 
-    int n = get_unskipped_frames(imfl, &frames);
-    if (n <= 0) return n;
-
-    float *weights = NULL;
-    float **p, **p0 = NULL;
-
-    weights = malloc(n * sizeof(float));
-
-    p = malloc(n * sizeof(float *));
-    p0 = malloc(n * sizeof(float *));
-
-    if (! weights || ! p || ! p0) {
-        free(frames);
-        if (weights) free(weights);
-        if (p) free(p);
-        if (p0) free(p0);
-        return -1;
-    }
-
-    int use_weights = (n > 1);
-    float sum_weights = 0.0;
-
-    if (use_weights) {
-        float min_weight, max_weight;
-
-        int i;
-        for (i = 0; i < n; i++) {
-            float weight = get_weight(frames[i]);
-            if (i) {
-                if (weight < min_weight)
-                    min_weight = weight;
-                if (weight > max_weight)
-                    max_weight = weight;
-            }
-            else
-                min_weight = max_weight = weight;
-
-            weights[i] = weight;
-            sum_weights += weight;
-        }
-        use_weights = (max_weight - min_weight > 0.03 * (max_weight + min_weight));
-    }
-
-    char lb[81];
-    if (use_weights) {
-        snprintf(lb, 80, "'WEIGHTED AVERAGE %d FRAMES'", n);
-        fits_add_history(ofr, lb);
-    } else {
-        snprintf(lb, 80, "'AVERAGE STACK %d FRAMES'", n);
-        fits_add_history(ofr, lb);
-    }
-
-#ifdef USE_BOUNDS
-    struct visible_bounds *bounds = frame_bounds(ofr, NULL, TRUE); // use full frame
-
-    int plane_iter = 0;
-    while ((plane_iter = color_plane_iter(ofr, plane_iter))) {
-
-/* not working yet */
-//        AND_frame_bounds(imfl, ofr);
-//        bounds = frame_bounds(ofr, NULL, FALSE);
-
-        int i;
-
-        float **dp = p;
-
-		for (i = 0; i < n; i++) {
-            p0[i] = dp[i] = get_color_plane(frames[i], plane_iter);
-		}
-
-        float *odp = get_color_plane(ofr, plane_iter);
-        float *odp0 = odp;
-
-        int y = bounds->first_row;
-        int row;
-        for (row = 0; row < bounds->num_rows; row++) {
-            int i;
-
-            int x = bounds->row[row].first; // skip to first visible pixel
-            for (i = 0; i < n; i++)
-                dp[i] = p0[i] + y * frames[i]->w + x;
-
-            odp = odp0 + y * ofr->w + bounds->row[row].first;
-
-            while (x < bounds->row[row].last) {
-                if (! use_weights)
-                    *odp = pix_average(dp, n, 0, 1);
-                else
-                    *odp = weighted_pix_sum(dp, weights, n) / sum_weights;
-                int i;
-                for (i = 0; i < n; i++) // next pixel
-                    dp[i]++;
-                odp++;
-
-                x++;
-            }
-
-            y++;
-        }
-    }
-    // find cavg
-    // set out of bounds pixels to cavg
-    free(bounds);
-#endif
-
-// if use_weights maybe muck around with ofr stats?
-
-    free(frames);
-    free(p);
-    free(p0);
-    free(weights);
-
-	return 0;
-}
-
-static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
+static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
             int (* progress)(char *msg, void *data), void *data)
 {
     float *dp[COMB_MAX];
@@ -1085,12 +991,12 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
     float *odp;
     GList *gl;
     struct image_file *imf;
-    char lb[81];
+    char *lb;
 
     int plane_iter = 0;
 
-    w = ofr->w;
-    h = ofr->h;
+    w = fr->w;
+    h = fr->h;
 
     gl = imfl->imlist;
     i=0;
@@ -1116,14 +1022,14 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
         err_printf("no frames to stack (avg)\n");
         return -1;
     }
-    snprintf(lb, 80, "'AVERAGE STACK %d FRAMES'", i);
-    fits_add_history(ofr, lb);
+    lb = NULL; asprintf(&lb, "'AVERAGE STACK %d FRAMES'", i);
+    if (lb) fits_add_history(fr, lb), free(lb);
 
     while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
         for (i = 0; i < n; i++) {
             dp[i] = get_color_plane(frames[i], plane_iter);
         }
-        odp = get_color_plane(ofr, plane_iter);
+        odp = get_color_plane(fr, plane_iter);
         for (y = 0; y < h; y++) {
             for (x = 0; x < w; x++) {
                 *odp = pix_average(dp, n, 0, 1);
@@ -1141,57 +1047,56 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *ofr,
 
 /* the real work of median-stacking frames
  * return -1 for errors */
-static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *ofr,
+static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
 			   int (* progress)(char *msg, void *data), void *data)
 {
-	int w, h, i, y, x, n;
-	float *dp[COMB_MAX];
 	struct ccd_frame *frames[COMB_MAX];
-	float *odp;
-	int rs[COMB_MAX];
-	GList *gl;
-	struct image_file *imf;
-	char lb[80];
-	int plane_iter = 0;
+    float *dp[COMB_MAX];
+    int rs[COMB_MAX];
 
-	w = ofr->w;
-	h = ofr->h;
+    int w = fr->w;
+    int h = fr->h;
 
-	gl = imfl->imlist;
-	i=0;
+    GList *gl = imfl->imlist;
+    int i = 0;
 	while (gl != NULL) {
-		imf = gl->data;
+        struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
-		if (imf->flags & IMG_SKIP)
-			continue;
-		if ((imf->fr->w < w) || (imf->fr->h < h)) {
-			err_printf("bad frame size\n");
-			continue;
-		}
+
+        if (imf->flags & IMG_SKIP) continue;
+        if ((imf->fr->w < w) || (imf->fr->h < h)) { err_printf("bad frame size\n"); continue; }
+
 		frames[i] = imf->fr;
 		rs[i] = imf->fr->w - w;
 		i++;
-		if (i >= COMB_MAX)
-			break;
+
+        if (i >= COMB_MAX) break;
 	}
 //	n = i - 1;
-	n = i;
-	if (i == 0) {
-        err_printf("no frames to stack (med)\n");
-		return -1;
-	}
-	snprintf(lb, 80, "'MEDIAN STACK of %d FRAMES'", i);
-	fits_add_history(ofr, lb);
+
+    if (i == 0) { err_printf("no frames to stack (med)\n"); return -1; }
+
+    int n = i;
+
+    char *lb = NULL; asprintf(&lb, "'MEDIAN STACK of %d FRAMES'", i);
+    if (lb) fits_add_history(fr, lb), free(lb);
+
+    int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
+        int i;
 		for (i = 0; i < n; i++) {
 			dp[i] = get_color_plane(frames[i], plane_iter);
 		}
-		odp = get_color_plane(ofr, plane_iter);
+
+        float *odp = get_color_plane(fr, plane_iter);
+        int y;
 		for (y = 0; y < h; y++) {
+            int x;
 			for (x = 0; x < w; x++) {
 				*odp = pix_median(dp, n, 0, 1);
-				for (i = 0; i < n; i++)
-					dp[i]++;
+
+                for (i = 0; i < n; i++) dp[i]++;
+
 				odp++;
 			}
 			for (i = 0; i < n; i++) {
@@ -1204,83 +1109,77 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *ofr,
 
 /* the real work of k-s-stacking frames
  * return -1 for errors */
-static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *ofr,
+static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
 			int (* progress)(char *msg, void *data), void *data)
 {
-	int w, h, i, y, x, n, t;
 	float *dp[COMB_MAX];
 	struct ccd_frame *frames[COMB_MAX];
-	float *odp;
 	int rs[COMB_MAX];
-	GList *gl;
-	struct image_file *imf;
-	char lb[81];
-	int plane_iter = 0;
 
-	w = ofr->w;
-	h = ofr->h;
+    int w = fr->w;
+    int h = fr->h;
 
-	gl = imfl->imlist;
-	i=0;
+    GList *gl = imfl->imlist;
+    int i = 0;
 	while (gl != NULL) {
-		imf = gl->data;
+        struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
-		if (imf->flags & IMG_SKIP)
-			continue;
-		if ((imf->fr->w < w) || (imf->fr->h < h)) {
-			err_printf("bad frame size\n");
-			continue;
-		}
+
+        if (imf->flags & IMG_SKIP) continue;
+        if ((imf->fr->w < w) || (imf->fr->h < h)) {	err_printf("bad frame size\n");	continue; }
+
 		frames[i] = imf->fr;
 		rs[i] = imf->fr->w - w;
 		i++;
-		if (i >= COMB_MAX) {
-			d1_printf("reached stacking limit\n");
-			break;
-		}
+        if (i >= COMB_MAX) { d1_printf("reached stacking limit\n");	break; }
 	}
-//	n = i - 1;
-	n = i;
 	if (i == 0) {
         err_printf("no frames to stack (ks)\n");
 		return -1;
 	}
-	if (progress) {
+    int n = i;
+
+    if (progress) {
 		int ret;
-		char msg[64];
-		snprintf(msg, 63, "kappa-sigma s=%.1f iter=%d (%d frames) ",
-			 P_DBL(CCDRED_SIGMAS), P_INT(CCDRED_ITER), i);
-		ret = (* progress)(msg, data);
-		if (ret) {
-			d1_printf("aborted\n");
-			return -1;
+        char *msg = NULL;
+        asprintf(&msg, "kappa-sigma s=%.1f iter=%d (%d frames)", P_DBL(CCDRED_SIGMAS), P_INT(CCDRED_ITER), i);
+        if (msg) {
+            ret = (* progress)(msg, data);
+            free(msg);
+            if (ret) {
+                d1_printf("aborted\n");
+                return -1;
+            }
 		}
 	}
-	t = h / 16;
 
-	snprintf(lb, 80, "'KAPPA-SIGMA STACK (s=%.1f) of %d FRAMES'",
-		 P_DBL(CCDRED_SIGMAS), i);
-	fits_add_history(ofr, lb);
+    char *lb = NULL; asprintf(&lb, "'KAPPA-SIGMA STACK (s=%.1f) of %d FRAMES'", P_DBL(CCDRED_SIGMAS), i);
+    if (lb) fits_add_history(fr, lb), free(lb);
 
+    int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
+        int i;
 		for (i = 0; i < n; i++) {
 			dp[i] = get_color_plane(frames[i], plane_iter);
 		}
-		odp = get_color_plane(ofr, plane_iter);
+
+        float *odp = get_color_plane(fr, plane_iter);
+        int t = h / 16;
+
+        int y;
 		for (y = 0; y < h; y++) {
 			if (t-- == 0 && progress) {
-				int ret;
-				ret = (* progress)(".", data);
-				if (ret) {
-					d1_printf("aborted\n");
-						return -1;
-				}
+                int ret = (* progress)(".", data);
+                if (ret) { d1_printf("aborted\n"); return -1; }
+
 				t = h / 16;
 			}
+
+            int x;
 			for (x = 0; x < w; x++) {
 				*odp = pix_ks(dp, n, P_DBL(CCDRED_SIGMAS), P_INT(CCDRED_ITER));
-				for (i = 0; i < n; i++)
-					dp[i]++;
+                for (i = 0; i < n; i++)	dp[i]++;
+
 				odp++;
 			}
 			for (i = 0; i < n; i++) {
@@ -1297,81 +1196,73 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *ofr,
 
 /* the real work of mean-median-stacking frames
  * return -1 for errors */
-static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *ofr,
+static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
 			int (* progress)(char *msg, void *data), void *data)
 {
-	int w, h, i, y, x, n, t;
 	float *dp[COMB_MAX];
 	struct ccd_frame *frames[COMB_MAX];
-	float *odp;
 	int rs[COMB_MAX];
-	GList *gl;
-	struct image_file *imf;
-	char lb[81];
-	int plane_iter = 0;
 
-	w = ofr->w;
-	h = ofr->h;
+    int w = fr->w;
+    int h = fr->h;
 
-	gl = imfl->imlist;
-	i=0;
+    GList *gl = imfl->imlist;
+    int i = 0;
 	while (gl != NULL) {
-		imf = gl->data;
+        struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
-		if (imf->flags & IMG_SKIP)
-			continue;
-		if ((imf->fr->w < w) || (imf->fr->h < h)) {
-			err_printf("bad frame size\n");
-			continue;
-		}
+
+        if (imf->flags & IMG_SKIP) continue;
+        if ((imf->fr->w < w) || (imf->fr->h < h)) {	err_printf("bad frame size\n");	continue; }
+
 		frames[i] = imf->fr;
 		rs[i] = imf->fr->w - w;
 		i++;
-		if (i >= COMB_MAX) {
-			d1_printf("reached stacking limit\n");
-			break;
-		}
+
+        if (i >= COMB_MAX) { d1_printf("reached stacking limit\n");	break; }
 	}
 //	n = i - 1;
-	n = i;
 	if (i == 0) {
         err_printf("no frames to stack (mm)\n");
 		return -1;
 	}
+    int n = i;
+
 	if (progress) {
-		int ret;
-		char msg[64];
-		snprintf(msg, 63, "mean-median s=%.1f (%d frames) ", P_DBL(CCDRED_SIGMAS), i);
-		ret = (* progress)(msg, data);
-		if (ret) {
-			d1_printf("aborted\n");
-			return -1;
+        char *msg = NULL;
+        asprintf(&msg, "mean-median s=%.1f (%d frames)", P_DBL(CCDRED_SIGMAS), i);
+        if (msg) {
+            int ret = (* progress)(msg, data); free(msg);
+            if (ret) { d1_printf("aborted\n"); return -1; }
 		}
 	}
-	snprintf(lb, 80, "'MEAN_MEDIAN STACK (s=%.1f) of %d FRAMES'",
-		 P_DBL(CCDRED_SIGMAS), i);
-	fits_add_history(ofr, lb);
+    char *lb = NULL;
+    asprintf(&lb, "'MEAN_MEDIAN STACK (s=%.1f) of %d FRAMES'", P_DBL(CCDRED_SIGMAS), i);
+    if (lb) fits_add_history(fr, lb), free(lb);
 
+    int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
+        int i;
 		for (i = 0; i < n; i++) {
 			dp[i] = get_color_plane(frames[i], plane_iter);
 		}
-		odp = get_color_plane(ofr, plane_iter);
-		t = h / 16;
+
+        float *odp = get_color_plane(fr, plane_iter);
+        int t = h / 16;
+
+        int y;
 		for (y = 0; y < h; y++) {
-			if (t-- == 0 && progress) {
-				int ret;
-				ret = (* progress)(".", data);
-				if (ret) {
-					d1_printf("aborted\n");
-						return -1;
-				}
+            if ((t-- == 0) && progress) {
+                int ret = (* progress)(".", data);
+                if (ret) { d1_printf("aborted\n"); return -1; }
+
 				t = h / 16;
 			}
+
+            int x;
 			for (x = 0; x < w; x++) {
 				*odp = pix_mmedian(dp, n, P_DBL(CCDRED_SIGMAS), P_INT(CCDRED_ITER));
-				for (i = 0; i < n; i++)
-					dp[i]++;
+                for (i = 0; i < n; i++)	dp[i]++;
 				odp++;
 			}
 			for (i = 0; i < n; i++) {
@@ -1386,20 +1277,18 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *ofr,
 }
 
 /* add to output frame the equivalent integration time, frame time and median airmass */
-static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
+static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 			int (* progress)(char *msg, void *data), void *data)
 {
 	double expsum = 0.0;
 	double exptime = 0.0;
-    double jd;
-	char lb[128];
-	char date[64];
-    float am[COMB_MAX];
-
-    GList *gl = imfl->imlist;
-    int i = 0, ami = 0;
     double last_exptime = 0.0;
 
+    float am[COMB_MAX];
+
+    int i = 0, ami = 0;
+
+    GList *gl = imfl->imlist;
 	while (gl != NULL) {
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
@@ -1417,12 +1306,10 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
         }
 
 		i++;
-        jd = frame_jdate(imf->fr);
+        double jd = frame_jdate(imf->fr);
 //printf("%s %20.5f\n", imf->filename, jd);
 		if (jd == 0) {
-            if (progress)
-                (*progress)("stack_time: bad time\n", data);
-
+            if (progress) (*progress)("stack_time: bad time\n", data);
 //			continue;
 		}
 
@@ -1447,19 +1334,20 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
 	}
 //    if (expsum == 0) return 0;
 
+    char *lb;
 	if (progress) {
-        snprintf (lb, 79, "%d exposures: total exposure %.5fs, center at jd:%.7f\n", i, expsum, exptime / expsum);
-		(*progress)(lb, data);
+        lb = NULL; asprintf (&lb, "%d exposures: total exposure %.5fs, center at jd:%.7f\n", i, expsum, exptime / expsum);
+        if (lb) (*progress)(lb, data), free(lb);
 	}
     
-    sprintf (lb, "%20.5f / MEAN EXPOSURE TIME IN SECONDS", expsum / i);
-    fits_add_keyword (ofr, P_STR(FN_EXPTIME), lb);
+    lb = NULL; asprintf (&lb, "%20.5f / TOTAL EXPOSURE TIME IN SECONDS", expsum);
+    if (lb) fits_add_keyword (fr, P_STR(FN_EXPTIME), lb), free(lb);
 
 //    sprintf (lb, "%20.8f / JULIAN DATE OF EXPOSURE START", exptime / expsum - expsum / 2 / 24 / 3600);
-//    fits_add_keyword (ofr, P_STR(FN_JDATE), lb);
+//    fits_add_keyword (fr, P_STR(FN_JDATE), lb);
 
-    sprintf (lb, "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
-    fits_add_keyword (ofr, P_STR(FN_JDATE), lb);
+    lb = NULL; asprintf (&lb, "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
+    if (lb) fits_add_keyword (fr, P_STR(FN_JDATE), lb), free(lb);
 
 //    double tz = P_DBL(OBS_TIME_ZONE);
 //    if (tz) exptime = exptime + tz / 24 * expsum;
@@ -1467,24 +1355,24 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *ofr,
 //    date_time_from_jdate (exptime / expsum - expsum / 2 / 24 / 3600, date, 63);
 //    if (tz) {
 //        sprintf (lb, "%s / !! LOCAL TIME : time zone is %3.0f (hours)", date, tz);
-//        fits_add_keyword (ofr, P_STR(FN_DATE_OBS), lb);
+//        fits_add_keyword (fr, P_STR(FN_DATE_OBS), lb);
 //    } else {
-//        fits_add_keyword (ofr, P_STR(FN_DATE_OBS), date);
+//        fits_add_keyword (fr, P_STR(FN_DATE_OBS), date);
 //        printf("%s\n", date);
 //    }
 
     if (ami) {
-        sprintf (lb, "%20.3f / MEDIAN OF STACKED FRAMES", fmedian(am, ami));
-        fits_add_keyword (ofr, P_STR(FN_AIRMASS), lb);
+        lb = NULL; asprintf (&lb, "%20.3f / MEDIAN OF STACKED FRAMES", fmedian(am, ami));
+        if (lb) fits_add_keyword (fr, P_STR(FN_AIRMASS), lb), free(lb);
     }
 
 //printf("done stack time\n");
 
     //delete any conflicting keywords
-    fits_delete_keyword (ofr, P_STR(FN_MJD));
-    fits_delete_keyword (ofr, P_STR(FN_TIME_OBS));
-    fits_delete_keyword (ofr, P_STR(FN_OBJCTALT));
-    fits_delete_keyword (ofr, P_STR(FN_DATE_OBS));
+    fits_delete_keyword (fr, P_STR(FN_MJD));
+    fits_delete_keyword (fr, P_STR(FN_TIME_OBS));
+    fits_delete_keyword (fr, P_STR(FN_OBJCTALT));
+    fits_delete_keyword (fr, P_STR(FN_DATE_OBS));
 
 	return 0;
 }
@@ -1493,7 +1381,7 @@ void print_header(struct ccd_frame *fr) {
     int i;
     FITS_row *var = fr->var;
     for (i = 0; i < fr->nvar; i++)
-        printf("|%.80s|\n", var + i);
+        printf("|%.80s|\n", (char *) (var + i));
 }
 
 /* stack the frames; return a newly created frame, or NULL for an error */
@@ -1515,8 +1403,8 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		if (imf->flags & IMG_SKIP)
 			continue;
 
-        if (!imf->fr) {
-            printf("frame not loaded %s, aborting stack frame\n", imf->filename);
+        if (imf_load_frame(imf) < 0) {
+            printf("frame not loaded %s, aborting stack frame\n", imf->filename); fflush(NULL);
             return NULL;
         }
 
@@ -1537,7 +1425,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 	}
 
 /* create output frame - clone first (not skipped) frame */
-    struct ccd_frame *ofr = NULL;
+    struct ccd_frame *fr = NULL;
 
 	gl = imfl->imlist;
 	while (gl != NULL) {
@@ -1546,20 +1434,20 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		if (imf->flags & IMG_SKIP)
 			continue;
 
-		ofr = clone_frame(imf->fr);
-		if (ofr == NULL) {
+        fr = clone_frame(imf->fr);
+        if (fr == NULL) {
 			err_printf("Cannot create output frame\n");
             break;
 		}
-        crop_frame(ofr, 0, 0, ow, oh);
+        crop_frame(fr, 0, 0, ow, oh);
 		break;
 	}
 
-    if (ofr) {
+    if (fr) {
         if (progress) {
-            char msg[256];
-            snprintf(msg, 255, "Frame stack: output size %d x %d\n", ow, oh);
-            (*progress)(msg, data);
+            char *msg = NULL;
+            asprintf(&msg, "Frame stack: output size %d x %d\n", ow, oh);
+            if (msg) (*progress)(msg, data), free(msg);
         }
 
         /* do the actual stack */
@@ -1570,24 +1458,24 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
         switch(P_INT(CCDRED_STACK_METHOD)) {
         case PAR_STACK_METHOD_AVERAGE:
             eff = 1.0;
-            err = (do_stack_avg(imfl, ofr, progress, data) != 0);
+            err = (do_stack_avg(imfl, fr, progress, data) != 0);
             break;
         case PAR_STACK_METHOD_WEIGHTED_AVERAGE:
             eff = 1.0;
-//            err = (do_stack_weighted_avg(imfl, ofr, progress, data) != 0);
+//            err = (do_stack_weighted_avg(imfl, fr, progress, data) != 0);
             err = 1;
             break;
         case PAR_STACK_METHOD_KAPPA_SIGMA:
             eff = 0.9;
-            err = (do_stack_ks(imfl, ofr, progress, data) != 0);
+            err = (do_stack_ks(imfl, fr, progress, data) != 0);
             break;
         case PAR_STACK_METHOD_MEDIAN:
             eff = 0.65;
-            err = (do_stack_median(imfl, ofr, progress, data) != 0);
+            err = (do_stack_median(imfl, fr, progress, data) != 0);
             break;
         case PAR_STACK_METHOD_MEAN_MEDIAN:
             eff = 0.85;
-            err = (do_stack_mm(imfl, ofr, progress, data) != 0);
+            err = (do_stack_mm(imfl, fr, progress, data) != 0);
             break;
         default:
             err_printf("unknown/unsupported stacking method %d\n", P_INT(CCDRED_STACK_METHOD));
@@ -1595,21 +1483,21 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 
         if (err) {
             //printf("reduce.stack_frames\n");
-            release_frame(ofr);
-            ofr = NULL;
+            release_frame(fr, "stack_frames");
+            fr = NULL;
 
         } else {
-            do_stack_time(imfl, ofr, progress, data);
-            ofr->exp.rdnoise = sqrt(rdnsq) / nf / eff;
-            ofr->exp.flat_noise = fln / nf;
-            ofr->exp.scale = sc;
-            ofr->exp.bias = b / nf;
+            do_stack_time(imfl, fr, progress, data);
+            fr->exp.rdnoise = sqrt(rdnsq) / nf / eff;
+            fr->exp.flat_noise = fln / nf;
+            fr->exp.scale = sc;
+            fr->exp.bias = b / nf;
 
-            if (ofr->exp.bias != 0.0) scale_shift_frame(ofr, 1.0, -ofr->exp.bias);
-            noise_to_fits_header(ofr, &(ofr->exp));
+            if (fr->exp.bias != 0.0) scale_shift_frame(fr, 1.0, -fr->exp.bias);
+            noise_to_fits_header(fr, &(fr->exp));
 
-            if (ofr->name) free(ofr->name);
-            ofr->name = strdup("stack result");
+            if (fr->name) free(fr->name);
+            fr->name = strdup("stack result");
         }
     }
 
@@ -1617,84 +1505,26 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
     while(gl != NULL) {
         struct image_file *imf = gl->data;
         gl = g_list_next(gl);
-        if ( ! imf->flags & IMG_SKIP )
-            imf_release_frame(imf);
+        if ( ! (imf->flags & IMG_SKIP) )
+            imf_release_frame(imf, "stack_frames");
+    }
+
+    if (fr) {
+        struct image_file *imf = image_file_new();
+        imf->filename = strdup(fr->name);
+        wcs_clone(imf->fim, &fr->fim); // setup imf->fim from somewhere
+        imf->flags |= (IMG_LOADED & IMG_DIRTY);
+
+        fr->imf = imf;
+        imf->fr = fr;
     }
 
 d3_printf("ccd_frame.stack_frames return ok\n");
-	return ofr;
+    return fr;
 }
 
 
 
-/* load the frame specififed in the image file struct into memory and
- * compute it's stats; return a negative error code (and update the error string)
- * if something goes wrong. Return 0 for success. If the file is already loaded, it's not
- * read again */
-int imf_load_frame(struct image_file *imf)
-{
-	if (imf->filename == NULL) {
-        err_printf("imf_load_frame: null filename\n");
-		return -1;
-	}
-	if (imf->filename[0] == 0) {
-        err_printf("imf_load_frame: empty filename\n");
-		return -1;
-	}
-
-    struct ccd_frame *fr = imf->fr;
-    if (! (imf->flags & IMG_LOADED)) {
-d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
-        fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
-
-        if (fr == NULL) {
-            err_printf("imf_load_frame: cannot load %s\n", imf->filename);
-            return -1;
-        }
-
-        imf->fr = fr;
-        imf->flags |= IMG_LOADED;
-    }
-    get_frame(imf->fr);
-
-    rescan_fits_exp(fr, &(fr->exp));
-    if (! fr->stats.statsok) frame_stats(fr);
-
-    struct wcs *wcs = &(fr->fim);
-    if (wcs->wcsset < WCS_INITIAL) {
-        wcs->wcsset = WCS_INITIAL;
-        if (wcs_transform_from_frame(fr, wcs)) {
-            // failed
-            // xrefpix, yrefpix set
-            wcs->wcsset = WCS_INVALID;
-        }
-    }
-
-//printf("reduce.imf_load_frame return ok\n");
-	return 0;
-}
-
-/* unload all ccd_frames that are not marked dirty */
-void unload_clean_frames(struct image_file_list *imfl)
-{
-    GList *fl = imfl->imlist;
-	while(fl != NULL) {
-        struct image_file *imf = fl->data;
-		fl = g_list_next(fl);
-
-        if ( imf->flags & IMG_LOADED ) {
-            d3_printf("image loaded '%s' ", imf->filename);
-            if ( imf->flags & ~IMG_DIRTY ) {
-//                d3_printf("not dirty - release imf\n");
-                imf_release_frame(imf);
-            } else {
-//                d3_printf("dirty - imf not released\n");
-            }
-        } else {
-//            d3_printf("image '%s' not loaded\n", imf->filename);
-        }
-	}
-}
 
 static double star_size_flux(double flux, double ref_flux, double fwhm)
 {
@@ -1760,7 +1590,7 @@ void free_alignment_stars(struct ccd_reduce *ccdr)
 d3_printf("free alignment stars\n");
 	as = ccdr->align_stars;
 	while (as != NULL) {
-		gui_star_release(GUI_STAR(as->data));
+        gui_star_release(GUI_STAR(as->data), "");
 		as = g_slist_next(as);
 	}
 	g_slist_free(ccdr->align_stars);
@@ -1811,7 +1641,7 @@ d3_printf("load alignment stars");
 //            wcs->flags |= WCS_HINTED;
 //        }
 
-        imf_release_frame(ccdr->alignref);
+        imf_release_frame(ccdr->alignref, "load_alignment_stars");
     }
 
     return g_slist_length (ccdr->align_stars);
@@ -1828,28 +1658,19 @@ void refresh_wcs(gpointer window, struct ccd_frame *fr) {
 // frame xrefpix, yrefpix correct but no xref, yref - they are in window wcs
 
     if (frame_wcs->wcsset) { // copy frame wcs to window
-
         wcs_clone(window_wcs, frame_wcs);
         window_wcs->flags &= ~WCS_HINTED;
 
-    } else {
+    } else { // use window wcs as first guess for frame
         wcs_from_frame(fr, window_wcs); // update window wcs from fits frame fields
-
-        if (window_wcs->wcsset) { // use window wcs as first guess for frame
-            unsigned int flags = frame_wcs->flags; // save and restore flags, xinc, yinc
-
-            window_wcs->wcsset = WCS_INITIAL;
-
-            wcs_clone(frame_wcs, window_wcs);
-
-            frame_wcs->flags = flags | WCS_HINTED;
-        }
+        unsigned int flags = frame_wcs->flags;
+        window_wcs->wcsset = WCS_INITIAL;
+        wcs_clone(frame_wcs, window_wcs);
+        frame_wcs->flags = flags | WCS_HINTED;
     }
 
     wcsedit_refresh(window);
 }
-
-#define PROGRESS_MESSAGE(s) { if (progress) { char msg[256]; (s); (* progress)(msg, data); } }
 
 int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
@@ -1881,11 +1702,11 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
 
     fsl = detect_frame_stars(fr);
 
-    if (return_ok = (fsl != NULL)) {
+    if ((return_ok = (fsl != NULL))) {
         int n = fastmatch(fsl, ccdr->align_stars);
-        if (return_ok = (n > 0)) {
+        if ((return_ok = (n > 0))) {
 
-            PROGRESS_MESSAGE( snprintf(msg, 255, " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars)) )
+            PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );
 
             GSList *pairs = NULL;
             GSList *sl = fsl;
@@ -1901,12 +1722,12 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
                 if (rotate) {
                     pairs_fit(pairs, &dx, &dy, NULL, &dtheta);
 
-                    PROGRESS_MESSAGE( snprintf(msg, 255, " (x,y)[%.1f, %.1f] (rotate)[%.2f]", dx, dy, dtheta) )
+                    PROGRESS_MESSAGE( " (x,y)[%.1f, %.1f] (rotate)[%.2f]", dx, dy, dtheta );
 
                 } else {
                     pairs_fit(pairs, &dx, &dy, NULL, NULL);
 
-                    PROGRESS_MESSAGE( snprintf(msg, 255, " (x,y)[%.1f, %.1f]", dx, dy) )
+                    PROGRESS_MESSAGE( " (x,y)[%.1f, %.1f]", dx, dy );
 
                 }
 
@@ -1929,20 +1750,20 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
         }
 
     }  else {
-        PROGRESS_MESSAGE( snprintf(msg, 255, " no match") )
+        if (progress) (* progress)(" no match", data);
     }
 
     GSList *sl = fsl;
     while (sl) {
         struct gui_star *gs = GUI_STAR(sl->data);
-        gui_star_release(gs);
+        gui_star_release(gs, "");
         sl = g_slist_next(sl);
     }
     g_slist_free(fsl);
 
-    if (smooth) release_frame(fr); // free copy
+    if (smooth) release_frame(fr, "align_imf_new"); // free copy
 
-    imf_release_frame(imf);
+    imf_release_frame(imf, "align_imf_new");
 
     if ( ! return_ok ) {
         err_printf(" align_imf aborted\n");
@@ -1976,8 +1797,8 @@ printf("2\n"); fflush(NULL);
     shift_frame(imf->fr, dx, dy);
     rotate_frame(imf->fr, degrad(d_rot));
 
-    imf_release_frame(imf);
-    imf_release_frame(ccdr->alignref);
+    imf_release_frame(imf, "wcs_align_imf: imf");
+    imf_release_frame(ccdr->alignref, "wcs_align_imf: align");
 
     return 0;
 }
@@ -1986,7 +1807,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 {
 	g_return_val_if_fail(ccdr->align_stars != NULL, -1);
 
-    gboolean return_ok;
+    gboolean return_ok = FALSE;
 
     if ( imf_load_frame(imf) ) return -1;
 
@@ -2032,7 +1853,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 //        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
 
         GtkWidget *align_combo = g_object_get_data(G_OBJECT(ccdred), "align_combo");
-        int active = gtk_combo_box_get_active(align_combo);
+        int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
 
         if (active == 2) { // match WCS
             imf_load_frame(ccdr->alignref);
@@ -2057,11 +1878,11 @@ printf("3\n"); fflush(NULL);
             shift_frame(imf->fr, dx, dy);
             rotate_frame(imf->fr, degrad(d_rot));
 
-            imf_release_frame(ccdr->alignref);
+            imf_release_frame(ccdr->alignref, "align_imf");
 
         } else { // match stars
             int pass = 0;
-            return_ok = pass == 0;
+            return_ok = (pass == 0);
 
             struct ccd_frame *fr = NULL;
 
@@ -2083,7 +1904,7 @@ printf("3\n"); fflush(NULL);
             if (! rotate) pass = 1; // skip rotation pass
 
             double dx, dy, dtheta = 0, dt = 0;
-            while (pass < 2 && return_ok) { // need two passes because rotate_frame introduces a shift
+            while ((pass < 2) && return_ok) { // need two passes because rotate_frame introduces a shift
                 GSList *fsl = NULL;
 
                 // pass 0: if rotate:
@@ -2096,14 +1917,14 @@ printf("3\n"); fflush(NULL);
                 //         shift & rotate the actual fr
                 fsl = detect_frame_stars(fr);
 
-                if (return_ok = (fsl != NULL)) {
+                if ((return_ok = (fsl != NULL))) {
                     int n = fastmatch(fsl, ccdr->align_stars);
 
-                    if (return_ok = (n != 0)) {
+                    if ((return_ok = (n != 0))) {
 
-                        PROGRESS_MESSAGE( snprintf(msg, 255, " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars)) )
+                        PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );
 
-                                GSList *pairs = NULL;
+                        GSList *pairs = NULL;
 
                         GSList *sl = fsl;
                         while (sl) {
@@ -2117,18 +1938,17 @@ printf("3\n"); fflush(NULL);
                             if (pass == 0) { // rotate copy of fr
                                 pairs_fit(pairs, &dx, &dy, NULL, &dtheta);
 
-                                PROGRESS_MESSAGE( snprintf(msg, 255, " (rotate)[%.2f]", dtheta) )
+                                PROGRESS_MESSAGE( " (rotate)[%.2f]", dtheta );
 
-                                        dt = degrad(dtheta);
+                                dt = degrad(dtheta);
                                 rotate_frame(fr, -dt);
 
                             } else { // rotate and shift actual fr
                                 pairs_fit(pairs, &dx, &dy, NULL, NULL);
 
-                                PROGRESS_MESSAGE( snprintf(msg, 255, " (x,y)[%.1f, %.1f]", dx, dy) )
+                                PROGRESS_MESSAGE( " (x,y)[%.1f, %.1f]", dx, dy );
 
-                                        if (rotate)
-                                        rotate_frame(imf->fr, -dt);
+                                if (rotate) rotate_frame(imf->fr, -dt);
 
                                 shift_frame(imf->fr, -dx, -dy);
 
@@ -2144,14 +1964,14 @@ printf("3\n"); fflush(NULL);
                         }
 
                     }  else {
-                        PROGRESS_MESSAGE( snprintf(msg, 255, " no match") )
-                                return_ok = 0;
+                        if (progress) (* progress)(" no match", data);
+                        return_ok = 0;
                     }
 
                     GSList *sl = fsl;
                     while (sl) {
                         struct gui_star *gs = GUI_STAR(sl->data);
-                        gui_star_release(gs);
+                        gui_star_release(gs, "");
                         sl = g_slist_next(sl);
                     }
                     g_slist_free(fsl);
@@ -2159,7 +1979,7 @@ printf("3\n"); fflush(NULL);
                 pass++;
             }
 
-            if (rotate || smooth) release_frame(fr);
+            if (rotate || smooth) release_frame(fr, "align_imf rotate/smooth");
         }
     }
 
@@ -2170,7 +1990,7 @@ printf("3\n"); fflush(NULL);
 //        wcs_to_fits_header(imf->fr);
 //    }
 
-    imf_release_frame(imf);
+    imf_release_frame(imf, "wcs_align_imf end");
 
     if ( ! return_ok ) {
         err_printf(" align_imf aborted\n");
@@ -2183,8 +2003,6 @@ printf("3\n"); fflush(NULL);
 
 int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-#define PROGRESS_MESSAGE(s) if ( (progress) && ((*progress)((s), data) != 0) ) return -1;
-
     if (imf_load_frame(imf)) return -1;
 
     gpointer window = ccdr->window;
@@ -2203,17 +2021,12 @@ int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(ch
     }
 
     gboolean result_ok = ( wcs && wcs->wcsset == WCS_VALID );
-    if ( ! result_ok ) PROGRESS_MESSAGE( " bad wcs" )
 
-    else {
-        PROGRESS_MESSAGE( " ok" )
-    }
+    REPORT( result_ok ? " ok" : " bad wcs")
 
-    imf_release_frame(imf);
+    imf_release_frame(imf, "fit_wcs");
 
-    if ( ! result_ok ) return -1;
-
-    return 0;
+    return result_ok ? 0 : -1;
 }
 
 int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_reduce *ccdr)
@@ -2229,11 +2042,11 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
         remove_off_frame_stars (window);
         sl = sl->next;
     }
+    return 0;
 }
 
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-#define PROGRESS_MESSAGE(s) if ( (progress) && ((*progress)((s), data) != 0) ) return -1;
     
     if (imf_load_frame(imf)) return -1;
 
@@ -2258,28 +2071,29 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
     gboolean result_ok = ( wcs && (wcs->wcsset == WCS_VALID) );
     for (;;) {
         if ( ! result_ok ) {
-            PROGRESS_MESSAGE( " bad wcs" )
+            REPORT( " bad wcs" )
             break;
         }
 
         struct gui_star_list *gsl = g_object_get_data (G_OBJECT(window), "gui_star_list");
         result_ok = (gsl != NULL);
         if ( ! result_ok ) {
-            PROGRESS_MESSAGE( " no phot stars" )
+            REPORT( " no phot stars" )
             break;
         }
 
         struct stf *stf = run_phot (window, wcs, gsl, imf->fr);
         result_ok = (stf != NULL);
         if ( ! result_ok ) {
-            PROGRESS_MESSAGE( " run_phot failed" )
+            REPORT( " run_phot failed" )
             break;
         }
 
 // remove this bit? move to mband calls?
         if ( ccdr->multiband && ! (ccdr->ops & IMG_QUICKPHOT) ) {
 
-            stf_to_mband (ccdr->multiband, stf, imf->fr);
+            struct o_frame *ofr = stf_to_mband (ccdr->multiband, stf);
+            if (ofr) ofr_link_imf(ofr, imf);
 
         } else {
             struct mband_dataset *mbds = mband_dataset_new ();
@@ -2288,7 +2102,8 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
             struct o_frame *ofr = mband_dataset_add_stf (mbds, stf);
             d3_printf ("mbds has %d frames\n", g_list_length (mbds->ofrs)); // should be 1
-            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
+//            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
+            mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
             ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
             ofr_transform_stars (ofr, mbds, 0, 0);
@@ -2312,11 +2127,11 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
             }
             mband_dataset_release (mbds);
         }
-        PROGRESS_MESSAGE( " ok" )
+        REPORT( " ok" )
         break;
     }
 
-    imf_release_frame(imf);
+    imf_release_frame(imf, "aphot_imf");
 
     if ( ! result_ok )
         return -1;
@@ -2335,7 +2150,7 @@ struct image_file * image_file_new(void)
 	}
 	imf->ref_count = 1;
 
-//    imf->fim = wcs_new();
+    imf->fim = wcs_new();
 	return imf;
 }
 
@@ -2355,7 +2170,7 @@ d2_printf("imf release %d '%s'\n", imf->ref_count, imf->filename);
 
 	g_return_if_fail(imf->ref_count >= 1);
 
-    if (imf->flags & IMG_LOADED) imf_release_frame(imf);
+    imf_release_frame(imf, "image_file_release");
 
 	if (imf->ref_count > 1) {
 		imf->ref_count--;
@@ -2363,7 +2178,7 @@ d2_printf("imf release %d '%s'\n", imf->ref_count, imf->filename);
 	}
 d3_printf("imf freed '%s'\n", imf->filename);
     if (imf->filename) free(imf->filename);
-//    if (imf->fim) free(imf->fim);
+    if (imf->fim) wcs_release(imf->fim);
 
     free(imf);
 }
@@ -2510,9 +2325,9 @@ struct bad_pix_map *bad_pix_map_new(void)
 
 struct bad_pix_map * bad_pix_map_release(struct bad_pix_map *map)
 {
-    if (map == NULL) return;
+    if (map == NULL) return NULL;
 d2_printf("reduce.bad_pix_map_release %d\n", map->ref_count);
-    g_return_if_fail(map->ref_count >= 1);
+    g_return_val_if_fail(map->ref_count >= 1, NULL);
 
     if (map->ref_count > 1) {
         map->ref_count--;

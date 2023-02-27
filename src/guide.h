@@ -1,6 +1,9 @@
 #ifndef _GUIDE_H_
 #define _GUIDE_H_
 
+#include <sys/time.h>
+#include "ccd/ccd.h"
+
 /* a timed value (guide history piece) */
 struct timed_double {
 	double v;		/* that actual value */

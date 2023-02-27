@@ -1,6 +1,7 @@
 #ifndef _OBSDATA_H_
 #define _OBSDATA_H_
 
+#include "ccd/ccd.h"
 
 /* obs flag values */
 #define OBSDATA_RA_VALID 0x01
@@ -47,10 +48,10 @@ void noise_to_fits_header(struct ccd_frame *fr, struct exp_data *exp);
 char *extract_catname(char *text, char **oname);
 struct cat_star *get_object_by_name(char *name);
 void wcs_to_fits_header(struct ccd_frame *fr);
-void jdate_to_timeval(double jd, struct timeval *tv);
+//void jdate_to_timeval(double jd, struct timeval *tv);
 double timeval_to_jdate(struct timeval *tv);
 double frame_jdate(struct ccd_frame *fr);
-void date_time_from_jdate(double jd, char *date, int n);
+char *date_time_from_jdate(double jd);
 double calculate_airmass(double ra, double dec, double ast, double lat, double lng);
 
 

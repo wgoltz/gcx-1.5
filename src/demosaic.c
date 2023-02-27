@@ -109,7 +109,6 @@ static int demosaic_bilinear(struct ccd_frame *fr)
 	} code[16][16], *codep;
 
 	struct offset_t *ip;
-	int sum[4];
 
 	int i, x, y, row, col, color, c;
 	float *data, *r_data, *g_data, *b_data;
@@ -129,7 +128,9 @@ static int demosaic_bilinear(struct ccd_frame *fr)
 		for (col=0; col < 16; col++) {
 			codep = &code[row][col];
 			ip = codep->offset;
-			memset (sum, 0, sizeof(sum));
+
+            int sum[4] = { 0 };
+
 			c = FC(row, col);
 			for (y=-1; y <= 1; y++) {
 				for (x=-1; x <= 1; x++) {
@@ -245,7 +246,7 @@ static int demosaic_vng(struct ccd_frame *fr)
 		signed char x;
 	} octant[] = { {-1,-1}, {-1,0}, {-1,+1}, {0,+1}, {+1,+1}, {+1,0}, {+1,-1}, {0,-1} };
 
-	int prow=7, pcol=1, gval[8], gmin, gmax, sum[4];
+    int prow=7, pcol=1, gmin, gmax;
 	int row, col, t, color, diag;
 	int g, diff, thold, num, c, i;
 	int offset;
@@ -324,7 +325,8 @@ static int demosaic_vng(struct ccd_frame *fr)
 			offset = row * fr->w + col;
 			codep = code[row & prow][col & pcol];
 			ip = codep->gradient;
-			memset (gval, 0, sizeof gval);
+
+            int gval[8] = { 0 };
 
 			/* Calculate gradients */
 			while (ip->pixel1 != INT_MAX) {
@@ -349,7 +351,9 @@ static int demosaic_vng(struct ccd_frame *fr)
 				continue;
 			}
 			thold = gmin + (gmax >> 1);
-			memset (sum, 0, sizeof sum);
+
+            int sum[4] = { 0 };
+
 			color = FC(row,col);
 
 			/* Average the neighbors */
@@ -411,7 +415,7 @@ int bayer_interpolate(struct ccd_frame *fr)
     } else
         return 0; // or maybe dealloc and realloc ?
 
-	switch(P_INT(CCDRED_DEMOSAIC_METHOD)) {
+    switch(P_INT(CCDRED_DEMOSAIC_METHOD)) {
 	case PAR_DEMOSAIC_METHOD_BILINEAR:
 		d1_printf("demosaic: using bilinear interpolation for demosaicing\n");
 		ret = demosaic_bilinear(fr);

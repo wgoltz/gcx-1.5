@@ -14,6 +14,8 @@
 ** 		:Nov. 2000, swap bin files rather than recreate
 ** LIB          :pm.a; use cca to compile
 *=================================================================*/
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -385,11 +387,11 @@ int getgsc(float ra,         // ra of center (in degrees)
 
 
 	char *ptr; int centers;
-	char line[256], *s, region[256], path[256];
+    char line[256], *s, region[256];
 	int k,i,stat=0,id;
 	INT size,x1,x2,z1=0,z2,xx1,xx2,zz1,zz2;
 	INT alpha,hscale=1,hscad2=1,xr1=0,xr2=0;
-	int np,fz,f2,fr,n2,cc,nrec,tester;
+    int np,fr,n2,cc,nrec,tester;
 	INT da,dd,da1,da2,dd1,dd2,nout,tested;
 	double rar,der,a1,a2,d1,d2,a,phi,phi1=0.0,phi2=10.0;
 	double da0,dd0,dist;
@@ -425,9 +427,7 @@ int getgsc(float ra,         // ra of center (in degrees)
 	/* Get the GSCBIN environment variable */
 	GSCBIN = getenv("GSCBIN");
 	if (! GSCBIN) {
-		strcpy(path, GSCDAT);
-		strcat(path, "/bin");
-		GSCBIN = strdup(path);
+        asprintf(&GSCBIN, "%s/", GSCDAT);
 	}
 
 /* ------ parse command-line options ------------------------------------*/
@@ -449,20 +449,33 @@ int getgsc(float ra,         // ra of center (in degrees)
 
 	/* ------ open region list and read region index ------------------- */
 
-	strcpy(path, GSCBIN), strcat(path, REGBIN);
+    char *path = NULL;
+    asprintf(&path, "%s%s", GSCBIN, REGBIN);
 //	printf("path1 %s\n", path);
-	fz=open(path, O_BINARY);  
-	if(fz < 0) { /* printf("embgsc.getgsc perror 3 "); perror(path); */ goto err_ret; }
+    int fz = 0;
+    if (path) {
+        fz = open(path, O_BINARY), free(path);
+        if(fz < 0) /* printf("embgsc.getgsc perror 3 "); perror(path); */
+            goto err_ret;
+    }
 
-	strcpy(path, GSCBIN), strcat(path, REGIND);
+    path = NULL;
+    asprintf(&path, "%s%s", GSCBIN, REGIND);
 //	printf("path2 %s\n", path);
-	f2=open(path, O_BINARY);  
-	if(f2 < 0) { printf("embgsc.getgsc perror 4 "); perror(path); goto err_ret; }
+    int f2 = 0;
+    if (path) {
+        f2 = open(path, O_BINARY), free(path);
+        if(f2 < 0) /* printf("embgsc.getgsc perror 4 "); perror(path); */
+            goto err_ret;
+    }
+
 	size = lseek(f2,0L,2);
 	lseek(f2,0L,0);
 	ind2 = (INT *)malloc(size);
 	cc=read(f2,ind2,size);
-	if (cc < 0) { printf("embgsc.getgsc perror 5 "); perror(path); goto err_ret; }
+    if (cc < 0) /* printf("embgsc.getgsc perror 5 "); perror(path); */
+        goto err_ret;
+
 	n2 = size/sizeof(INT);
 	ind2[0] = 0;
 	close(f2);
@@ -500,7 +513,7 @@ int getgsc(float ra,         // ra of center (in degrees)
 
 		if(opt[Oh]) {
 			prtgsc(opt[Op],opt[Oe],(GSCREC *)0) ;
-			memset(&gscrec, 0, sizeof(gscrec));
+            gscrec = (GSCREC) { 0 };
 			if (!opt[Og]) {
 				gscrec.ra = da0;
 				gscrec.dec = dd0;
@@ -579,7 +592,7 @@ int getgsc(float ra,         // ra of center (in degrees)
 			cc=read(fz,rec,sizeof(rec));
 			if(cc < 1) break; 
 			nrec = cc/sizeof(tr_regions);
-			if (bin_swapped) swap(rec, cc/4) ;
+            if (bin_swapped) swap((int *) rec, cc/4) ;
       
 			Regions_LOOP :
 				for(i=0;(i<nrec) && (zz1<=z2) && (nout <= opt[On]); i++) {
@@ -625,8 +638,9 @@ int getgsc(float ra,         // ra of center (in degrees)
 					if(opt[Ov]) printf("!...Look in file: %s\n", region);
 					tester +=1 ;
 	  
-					s = get_header(fr,&header);
-					/* lseek(fr,header.len,0); */
+                    // s = get_header(fr,&header);
+                    get_header(fr,&header);
+                    /* lseek(fr,header.len,0); */
 					da1 = (a1-header.amin)*header.scale_ra+0.5;
 					da2 = (a2-header.amin)*header.scale_ra+0.5;
 					dd1 = (d1-header.dmin)*header.scale_dec+0.5;
@@ -669,8 +683,9 @@ int getgsc(float ra,         // ra of center (in degrees)
 							if (dd < dd1) continue ;
 							if (dd > dd2) continue ;
 						}
-						s = decode_c(c,&header,&gscrec);
-	    
+                        // s = decode_c(c,&header,&gscrec);
+                        decode_c(c,&header,&gscrec);
+
 						if (!opt[Og]) {
 							rar = gscrec.ra;
 							der = gscrec.dec;

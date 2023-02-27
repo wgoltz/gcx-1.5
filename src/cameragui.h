@@ -1,6 +1,9 @@
 #ifndef _CAMERAGUI_C_
 #define _CAMERAGUI_C_
 
+#include <gtk/gtk.h>
+#include "ccd/ccd.h"
+
 int goto_dialog_obs(GtkWidget *dialog);
 int set_obs_object(GtkWidget *dialog, char *objname);
 int center_matched_field(GtkWidget *dialog);

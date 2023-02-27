@@ -88,28 +88,31 @@ static void help_all(void) {
 
 static int load_par_file(char *fn, GcxPar p)
 {
-	FILE *fp;
-	int ret;
+    FILE *fp = NULL;
+    if (fn && fn[0]) {
+        fp = fopen(fn, "r");
+        if (fp == NULL) {
+            err_printf("load_par_file: cannot open %s\n", fn);
+            return 1;
+        }
+    }
 
-	fp = fopen(fn, "r");
-    if (fp == NULL) {
-		err_printf("load_par_file: cannot open %s\n", fn);
-		return -1;
-	}
-
-	ret = fscan_params(fp, p);
+    int ret = (fscan_params(fp, p) < 0) ? 1 : 0;
 	fclose(fp);
 	return ret;
 }
 
 static int save_par_file(char *fn, GcxPar p)
 {
-	FILE *fp;
-	fp = fopen(fn, "w");
-	if (fp == NULL) {
-		err_printf("save_par_file: cannot open %s\n", fn);
-		return -1;
+    FILE *fp = NULL;
+    if (fn && fn[0]) {
+        fp = fopen(fn, "w");
+        if (fp == NULL) {
+            err_printf("save_par_file: cannot open %s\n", fn);
+            return 1;
+        }
 	}
+
 	fprint_params(fp, p);
 	fclose(fp);
 	return 0;
@@ -117,59 +120,20 @@ static int save_par_file(char *fn, GcxPar p)
 
 int load_params_rc(void *window)
 {
-	uid_t my_uid;
-	struct passwd *passwd;
-    int ret = -1;
-
-	my_uid = getuid();
-	passwd = getpwuid(my_uid);
+    uid_t my_uid = getuid();
+    struct passwd *passwd = getpwuid(my_uid);
 
     if (passwd == NULL) {
         err_printf("load_params_rc: cannot determine home directory\n");
-
-    } else {
-        char *last_rc = NULL;
-        char *rcname = NULL;
-
-        if (window) {
-            last_rc = g_object_get_data(G_OBJECT(window), "rcname");
-        }
-
-        if (last_rc == NULL) {
-            rcname = strdup(".gcxrc");
-            if (window) {
-                g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
-            }
-        } else
-            rcname = last_rc;
-
-        char *fn = NULL;
-        if (-1 != asprintf(&fn, "%s/%s", passwd->pw_dir, rcname)) {
-            ret = load_par_file(fn, PAR_NULL);
-            free(fn);
-        }
+        return 1;
     }
-	return ret;
-}
 
-int save_params_rc(void *window)
-{
-	uid_t my_uid;
-	struct passwd *passwd;
-    int ret = -1;
-
-	my_uid = getuid();
-	passwd = getpwuid(my_uid);
-	if (passwd == NULL) {
-		err_printf("save_params_rc: cannot determine home directoy\n");
-		return -1;
-	}
-
-    char *last_rc = NULL;
     char *rcname = NULL;
+    char *last_rc = NULL;
 
-    if (window)
+    if (window) {
         last_rc = g_object_get_data(G_OBJECT(window), "rcname");
+    }
 
     if (last_rc == NULL) {
         rcname = strdup(".gcxrc");
@@ -179,35 +143,66 @@ int save_params_rc(void *window)
     } else
         rcname = last_rc;
 
-    char *fn = NULL;
-    if (-1 != asprintf(&fn, "%s/%s", passwd->pw_dir, rcname)) {
-        ret = save_par_file(fn, PAR_NULL);
-        free(fn);
+    int res = 1;
+    char *fn = NULL; asprintf(&fn, "%s/%s", passwd->pw_dir, rcname);
+
+    if (fn) res = (load_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
+
+    if (rcname) free(rcname);
+
+    return res;
+}
+
+int save_params_rc(void *window)
+{
+    uid_t my_uid = getuid();
+    struct passwd *passwd = getpwuid(my_uid);
+
+	if (passwd == NULL) {
+		err_printf("save_params_rc: cannot determine home directoy\n");
+        return 1;
 	}
-	return ret;
+
+    char *rcname = NULL;
+    if (window) {
+        char *last_rc = g_object_get_data(G_OBJECT(window), "rcname");
+
+        if (last_rc == NULL) {
+            rcname = strdup(".gcxrc");
+            g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
+        } else
+            rcname = last_rc;
+    }
+
+    int res = 1;
+    char *fn = NULL; asprintf(&fn, "%s/%s", passwd->pw_dir, rcname);
+
+    if (fn) res = (save_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
+
+    return res;
 }
 
 static int recipe_file_convert(char *rf, char *outf)
 {
 	FILE *infp = NULL, *outfp = NULL;
-	int nc;
-    if (rf[0] != 0) {
+
+    if (rf && rf[0]) {
         infp = fopen(rf, "r");
 		if (infp == NULL) {
-			err_printf("Cannot open file %s for reading\n%s\n",
-                   rf, strerror(errno));
+            err_printf("Cannot open file %s for reading\n%s\n", rf, strerror(errno));
             return 1;
 		}
 	}
-	if (outf[0] != 0) {
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
 		if (outfp == NULL) {
-			err_printf("Cannot open file %s for writing\n%s\n",
-				   outf, strerror(errno));
+            err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
 			fclose(infp);
             return 1;
 		}
 	}
+
+    int nc;
 	if (outfp && infp)
 		nc = convert_recipe(infp, outfp);
 	else if (outfp)
@@ -217,41 +212,33 @@ static int recipe_file_convert(char *rf, char *outf)
 	else
 		nc = convert_recipe(stdin, stdout);
 
-	if (nc < 0) {
-		err_printf("Error converting recipe\n");
-		if (infp)
-			fclose(infp);
-		if (outfp)
-			fclose(outfp);
-        return 1;
-	} else {
-		if (infp)
-			fclose(infp);
-		if (outfp) {
-			info_printf("%d star(s) written\n", nc);
-			fclose(outfp);
-		}
-        return 0;
-	}
+    if (infp) fclose(infp);
+    if (outfp) fclose(outfp);
+
+    int res = (nc < 0) ? 1 : 0;
+    if (res)
+        err_printf("Error converting recipe\n");
+    else
+        info_printf("%d star(s) written\n", nc);
+
+    return res;
 }
 
 static int recipe_aavso_convert(char *rf, char *outf)
 {
 	FILE *infp = NULL, *outfp = NULL;
 	int nc;
-    if (rf[0] != 0) {
+    if (rf && rf[0]) {
         infp = fopen(rf, "r");
 		if (infp == NULL) {
-			err_printf("Cannot open file %s for reading\n%s\n",
-                   rf, strerror(errno));
+            err_printf("Cannot open file %s for reading\n%s\n", rf, strerror(errno));
             return 1;
 		}
 	}
-	if (outf[0] != 0) {
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
 		if (outfp == NULL) {
-			err_printf("Cannot open file %s for writing\n%s\n",
-				   outf, strerror(errno));
+            err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
 			fclose(infp);
             return 1;
 		}
@@ -265,22 +252,16 @@ static int recipe_aavso_convert(char *rf, char *outf)
 	else
 		nc = recipe_to_aavso_db(stdin, stdout);
 
-	if (nc < 0) {
+    if (infp) fclose(infp);
+    if (outfp) fclose(outfp);
+
+    int res = (nc < 0) ? 1 : 0;
+    if (res)
 		err_printf("Error converting recipe\n");
-		if (infp)
-			fclose(infp);
-		if (outfp)
-			fclose(outfp);
-        return 1;
-	} else {
-		if (infp)
-			fclose(infp);
-		if (outfp) {
-			info_printf("%d star(s) written\n", nc);
-			fclose(outfp);
-		}
-        return 0;
-	}
+    else
+        info_printf("%d star(s) written\n", nc);
+
+    return res;
 }
 
 
@@ -288,21 +269,18 @@ static int report_convert(char *rf, char *outf)
 {
 	FILE *infp = NULL, *outfp = NULL;
 
-    if (rf[0] != 0) {
+    if (rf && rf[0]) {
         infp = fopen(rf, "r");
 		if (infp == NULL) {
-			err_printf("Cannot open file %s for reading\n%s\n",
-                   rf, strerror(errno));
+            err_printf("Cannot open file %s for reading\n%s\n", rf, strerror(errno));
             return 1;
 		}
 	}
-	if (outf[0] != 0) {
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
 		if (outfp == NULL) {
-			err_printf("Cannot open file %s for writing\n%s\n",
-				   outf, strerror(errno));
-			if (infp)
-				fclose(infp);
+            err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
+            fclose(infp);
             return 1;
 		}
 	}
@@ -314,10 +292,10 @@ static int report_convert(char *rf, char *outf)
 		report_to_table(stdin, outfp, NULL);
 	else
 		report_to_table(stdin, stdout, NULL);
-	if (infp)
-		fclose(infp);
-	if (outfp)
-		fclose(outfp);
+
+    if (infp) fclose(infp);
+    if (outfp) fclose(outfp);
+
     return 0;
 }
 
@@ -326,36 +304,38 @@ static int recipe_merge(char *rf, char *mergef, char *outf, double mag_limit)
 	FILE *infp = NULL, *outfp = NULL;
 	FILE *mfp = NULL;
 
-    if (rf[0] != '-' || rf[1] != 0) {
+    if (rf && !(rf[0] == '-' && rf[1] != 0)) {
         infp = fopen(rf, "r");
 		if (infp == NULL) {
-			err_printf("Cannot open file %s for reading\n%s\n",
-                   rf, strerror(errno));
+            err_printf("Cannot open file %s for reading\n%s\n", rf, strerror(errno));
             return 1;
 		}
 	} else {
 		infp = stdin;
 	}
-	if (mergef[0] != '-' || mergef[1] != 0) {
+
+    if (mergef && !(mergef[0] == '-' && mergef[1] == 0)) {
 		mfp = fopen(mergef, "r");
 		if (mfp == NULL) {
-			err_printf("Cannot open file %s for reading\n%s\n",
-				   mergef, strerror(errno));
+            err_printf("Cannot open file %s for reading\n%s\n", mergef, strerror(errno));
             return 1;
 		}
 	} else {
 		mfp = stdin;
 	}
-	if (outf[0] != 0) {
+
+//    if ((infp == stdin) && (outfp == stdin)) fail ?
+
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
 		if (outfp == NULL) {
-			err_printf("Cannot open file %s for writing\n%s\n",
-				   outf, strerror(errno));
+            err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
             return 1;
 		}
 	} else {
 		outfp = stdout;
 	}
+
 	if (merge_rcp(infp, mfp, outfp, mag_limit) >= 0)
         return 0;
 	else
@@ -366,7 +346,7 @@ static int recipe_set_tobj(char *rf, char *tobj, char *outf, double mag_limit)
 {
 	FILE *infp = NULL, *outfp = NULL;
 
-    if (rf[0] != '-' || rf[1] != 0) {
+    if (rf && !(rf[0] == '-' && rf[1] == 0)) {
         infp = fopen(rf, "r");
 		if (infp == NULL) {
             err_printf("Cannot open file %s for reading\n%s\n", rf, strerror(errno));
@@ -375,7 +355,8 @@ static int recipe_set_tobj(char *rf, char *tobj, char *outf, double mag_limit)
 	} else {
 		infp = stdin;
 	}
-	if (outf[0] != 0) {
+
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
 		if (outfp == NULL) {
             err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
@@ -384,6 +365,7 @@ static int recipe_set_tobj(char *rf, char *tobj, char *outf, double mag_limit)
 	} else {
 		outfp = stdout;
 	}
+
     if (rcp_set_target(infp, tobj, outfp, mag_limit) >= 0)
         return 0;
 	else
@@ -395,18 +377,23 @@ static int catalog_file_convert(char *rf, char *outf, double mag_limit)
 {
 	FILE *outfp = NULL;
 	int nc;
-	if (outf[0] != 0) {
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
-	}
-	if (outfp)
-        nc = convert_catalog(stdin, outfp, rf, mag_limit);
-	else
-        nc = convert_catalog(stdin, stdout, rf, mag_limit);
+        if (outfp == NULL) {
+            err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
+            return 1;
+        }
+    } else {
+        outfp = stdout;
+    }
+
+    nc = convert_catalog(stdin, outfp, rf, mag_limit);
+
 	if (nc < 0) {
 		err_printf("Error converting catalog table\n");
 		if (outfp) {
 			fclose(outfp);
-			unlink(outf);
+            if (outf) unlink(outf);
 		}
         return 1;
 	} else {
@@ -423,19 +410,17 @@ static int mb_reduce(char *mband, char *outf)
 	FILE *outfp = stdout;
 	FILE *infp;
 
-	if (outf[0] != 0) {
+    if (outf && outf[0]) {
 		outfp = fopen(outf, "w");
 		if (outfp == NULL) {
-			err_printf("Cannot open file %s for writing\n%s\n",
-				   outf, strerror(errno));
+            err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
             return 1;
 		}
 	}
-	if (mband[0] != '-' || mband[1] != 0) {
+    if (mband && !(mband[0] == '-' && mband[1] == 0)) {
 		infp = fopen(mband, "r");
 		if (infp == NULL) {
-			err_printf("Cannot open file %s for reading\n%s\n",
-				   mband, strerror(errno));
+            err_printf("Cannot open file %s for reading\n%s\n", mband, strerror(errno));
             return 1;
 		}
 	} else {
@@ -445,8 +430,6 @@ static int mb_reduce(char *mband, char *outf)
     return 0;
 }
 
-
-
 static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
 {   
     struct cat_star *cats = get_object_by_name(name);
@@ -454,14 +437,18 @@ static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
 
     gboolean havescale = (spp != 0);
 
-    if (! havescale) havescale = (fits_get_double(fr, P_STR(FN_SECPIX), &spp) > 0);
-    if (! havescale) havescale = ((spp = P_DBL(OBS_SECPIX)) != 0);
     if (! havescale)
-        if (havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0)))
+        havescale = (fits_get_double(fr, P_STR(FN_SECPIX), &spp) > 0);
+    if (! havescale)
+        havescale = ((spp = P_DBL(OBS_SECPIX)) != 0);
+    if (! havescale) {
+        havescale = (P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0);
+        if (havescale)
             spp = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
-//    if (! havescale) spp = 1.5; // give up
-//    if (fr->fim) {
-    printf("set_wcs_from_object wcsset = WCS_INITIAL\n"); fflush(NULL);
+    }
+    if (havescale) {
+
+        printf("set_wcs_from_object wcsset = WCS_INITIAL\n"); fflush(NULL);
 
         fr->fim.wcsset = WCS_INITIAL;
         fr->fim.xref = cats->ra;
@@ -475,52 +462,65 @@ static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
         fr->fim.xinc = - spp / 3600.0;
         fr->fim.yinc = - spp / 3600.0;
         if (P_INT(OBS_FLIPPED))	fr->fim.yinc = -fr->fim.yinc;
-//    }
 
-	cat_star_release(cats);
+    }
+    cat_star_release(cats, "set_wcs_from_object");
+
 	return 0;
-
 }
 
 static int make_tycho_rcp(char *obj, double tycrcp_box, char *outf, double mag_limit)
 {
-	FILE *of = NULL;
-	if (obj[0] == 0) {
+    if ((obj == NULL) || (*obj == 0)) {
 		err_printf("Please specify an object (with -j)\n");
         return 1;
 	}
-	if (outf[0] != 0)
+
+    FILE *of = NULL;
+
+    if (outf && outf[0])
 		of = fopen(outf, "w");
 	if (of == NULL)
 		of = stdout;
-	if (!make_tyc_rcp(obj, tycrcp_box, of, mag_limit))
-        return 0;
-    return 1;
+
+    int res = (make_tyc_rcp(obj, tycrcp_box, of, mag_limit) < 0) ? 1 : 0;
+
+    if (of) fclose(of);
+
+    return res;
 }
 
 static int cat_rcp(char *obj, unsigned int catalog, char *outf)
 {
-	FILE *of = NULL;
-	if (obj[0] == 0) {
+    if ((obj == NULL) || (*obj == 0)) {
 		err_printf("Please specify an object (with -j)\n");
         return 1;
 	}
-    if (outf[0] != 0) of = fopen(outf, "w");
-    if (of == NULL) of = stdout;
-    if (!make_cat_rcp(obj, catalog, of)) return 0;
 
-    return 1;
+    FILE *of = fopen(outf, "w");
+    if (of == NULL) of = stdout;
+
+    int res = (make_cat_rcp(obj, catalog, of) < 0) ? 1 : 0;
+
+    if (of) fclose(of);
+
+    return res;
 }
 
 
 
 int extract_bad_pixels(char *badpix, char *outf)
 {
-	struct image_file *imf;
+    if (outf == NULL) {
+        printf("extract_bad_pixels: no output file\n");
+        return -1;
+    }
+
 	struct bad_pix_map *map;
 
-	imf = image_file_new();
+    struct image_file *imf = image_file_new();
 	imf->filename = strdup(badpix);
+
 d3_printf("gcx.extract_bad_pixels %s\n", badpix);
     if (imf_load_frame(imf) == 0) {
 //        map = calloc(1, sizeof(struct bad_pix_map));
@@ -533,7 +533,7 @@ d3_printf("gcx.extract_bad_pixels %s\n", badpix);
         }
         free_bad_pix(map);
 
-        imf_release_frame(imf);
+//        imf_release_frame(imf, "extract_bad_pixels");
     }
     image_file_release(imf);
 
@@ -558,7 +558,7 @@ d3_printf("gcx.extract_sources %s\n", starf);
 	src = new_sources(P_INT(SD_MAX_STARS));
 	extract_stars(imf->fr, NULL, 0, P_DBL(SD_SNR), src);
 
-	if (outf[0] != 0)
+    if (outf && outf[0] != 0)
 		of = fopen(outf, "w");
 
 	if (of == NULL)
@@ -579,7 +579,7 @@ d3_printf("gcx.extract_sources %s\n", starf);
 
 	fclose(of);
     release_sources(src);
-    imf_release_frame(imf);
+//    imf_release_frame(imf, "extract_sources");
     image_file_release(imf);
     return 0;
 }
@@ -636,19 +636,20 @@ static int print_scint_table(char *apert)
 
 int fake_main(int ac, char **av)
 {
-	char repf[1024]=""; /* report file to be converted */
-    char rf[1024]=""; /* recipe file name */
-	char ldf[1024]=""; /* landolt table file to be converted */
-//	char rcf[1024]=""; /* rc (parameters) file */
-    char outf[1024]=""; /* outfile */
-	char of[1024]=""; /* obsfile */
-	char obj[1024] = ""; /* object */
-	char mband[1024] = ""; /* argument to mband */
-	char badpixf[1024] = ""; /* dark for badpix extraction */
-	char starf[1024] = ""; /* star list */
-    char extrf[1024]=""; 	/* frame we extract targets from */
-    char mergef[1024] = ""; /* rcp we merge stars from */
-    char tobj[1024] = ""; 	/* object we set as target in the rcp */
+//    char *repf = NULL; /* report file to be converted */
+//	char *ldf = NULL; /* landolt table file to be converted */
+//	char *rcf = NULL; /* rc (parameters) file */
+
+//    char *mband = NULL; /* argument to mband */
+//    char *badpixf = NULL; /* dark for badpix extraction */
+//    char *starf = NULL; /* star list */
+//    char *extrf = NULL; 	/* frame we extract targets from */
+    char *rf = NULL; /* recipe file name */
+    char *outf = NULL; /* outfile */
+    char *of = NULL; /* obsfile */
+    char *obj = NULL; /* object */
+    char *mergef = NULL; /* rcp we merge stars from */
+    char *tobj = NULL; 	/* object we set as target in the rcp */
     char *cwd = getcwd(NULL, 0);
     char *rcname = NULL;
 
@@ -752,378 +753,187 @@ int fake_main(int ac, char **av)
 
     int oc;
 	while ((oc = getopt_long(ac, av, shortopts, longopts, NULL)) > 0) {
+        main_ret = 0;
+
 		switch(oc) {
+// print help then finish options
+        case ')': goto exit_main; //	test_query();
 
-        case ')':
-//			test_query();
-            goto exit_main;
-
-        case '`':
-            doc_printf_par(stdout, PAR_FIRST, 0);
-            goto exit_main;
+        case '`': doc_printf_par(stdout, PAR_FIRST, 0); goto exit_main;
 
         case 'h':
-        case '?' :
-            show_usage();
-            goto exit_main;
+        case '?' : show_usage(); goto exit_main;
 
-        case '3':
-            help_all();
-            goto exit_main;
+        case '3': help_all(); goto exit_main;
 
-        case '(':
-            help_rep_conv();
-            goto exit_main;
+        case '(': help_rep_conv(); goto exit_main;
 
-        case 'v':
-            info_printf("GCX version %s\n", VERSION);
-            goto exit_main;
+        case 'v': info_printf("GCX version %s\n", VERSION); goto exit_main;
 
-//        case '?':
-//            err_printf("Try `gcx -h' for more information\n");
-//            main_ret = 1;
-//            goto exit_main;
+// set flag options
+        case 'N': op_no_reduce = TRUE; continue;
 
-        case 'e':
-            strncpy(starf, optarg, 1023);
-            main_ret = extract_sources(starf, outf);
-            goto exit_main;
+        case 'i': interactive = TRUE; continue;
 
-        case 'X':
-            strncpy(badpixf, optarg, 1023);
-            main_ret = extract_bad_pixels(badpixf, outf);
-            goto exit_main;
+        case 'n': op_to_pnm = TRUE; batch = TRUE; continue;
 
-        case '^':
-            strncpy(mband, optarg, 1023);
+        case 'w': op_fit_wcs = TRUE; batch = TRUE; continue;
 
+        case '7': op_save_internal_cat = TRUE; continue;
+
+        case '<': continue; //make_gpsf = 1;
+
+        default:
             main_ret = 1;
-            if (mband[0] != 0) main_ret = mb_reduce(mband, outf);
+            if (optarg) {
+                switch(oc) {
 
-            goto exit_main;
+                case 'e': main_ret = extract_sources(optarg, outf); goto exit_main;
 
-        case ']':
-        {
-            float tycrcp_box = 0.0;
-            sscanf(optarg, "%f", &tycrcp_box);
+                case 'X': main_ret = extract_bad_pixels(optarg, outf); goto exit_main;
 
-            main_ret = 1;
-            if (tycrcp_box > 0.0) main_ret = make_tycho_rcp(obj, tycrcp_box, outf, mag_limit);
-        }
+                case '^': main_ret = mb_reduce(optarg, outf); goto exit_main;
 
-            goto exit_main;
+                case 'C': main_ret = print_scint_table(optarg); goto exit_main;  // print scintillation table for aperture
 
-        case '>':
-        {
-            float cat_box = 0.0;
-            sscanf(optarg, "%f", &cat_box);
+                case '4': main_ret = catalog_file_convert(optarg, outf, mag_limit); goto exit_main;
 
-            main_ret = 1;
-            if (cat_box > 0.0) main_ret = cat_rcp(obj, QUERY_USNOB, outf);
-        }
+                case '2': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = recipe_file_convert(optarg, outf); goto exit_main;
 
-            goto exit_main;
+                case '6': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = recipe_aavso_convert(optarg, outf); goto exit_main;
 
-        case '2':
-            main_ret = 1;
-            if (optarg && ! (optarg[0] == '-' && optarg[1] == 0) ) {
-                strncpy(rf, optarg, 1023);
-                main_ret = recipe_file_convert(rf, outf);
+                case 'T': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = report_convert(optarg, outf); goto exit_main;
+
+                case ']':
+                case '>': {
+                    char *endp = optarg;
+                    float box = strtof(optarg, &endp);
+
+                    if (endp != optarg && box > 0) {
+                        if (oc == ']')
+                            main_ret = make_tycho_rcp(obj, box, outf, mag_limit);
+                        else
+                            main_ret = cat_rcp(obj, QUERY_USNOB, outf);
+                    }
+                    goto exit_main;
+                }
+// report then finish options
+                case '9': sscanf(optarg, "%f", &mag_limit); continue;
+
+//                case '8': extrf = strdup(optarg); batch = TRUE; continue;
+
+                case '0': if (!mergef) mergef = strdup(optarg); op_recipe_file = TRUE; continue;
+
+                case '_': if (!tobj) tobj = strdup(optarg); op_recipe_file = TRUE; continue; // set target object name
+
+                case 'D': sscanf(optarg, "%d", &debug_level); continue;
+
+                case 'O': if (!of) of = strdup(optarg); continue;
+
+                case 'o': if (!outf) outf = strdup(optarg); continue;
+
+                case 'j': if (!obj) obj = strdup(optarg); continue; // interactive = TRUE;
+
+                case 'S': if ( set_par_by_name(optarg) ) err_printf("error setting %s\n", optarg); continue;
+
+                case 'r': if (!rcname) rcname = strdup(optarg); load_par_file(rcname, PAR_NULL); continue; // load param file
+
+                default:
+                    if (ccdr == NULL) ccdr = ccd_reduce_new();
+// setup ccdr
+                    switch(oc) {
+
+                    case 'p': ccdr->recipe = strdup(optarg); continue;// batch = TRUE; // set recipe file, interactive
+
+                    case 'u': ccdr->ops |= IMG_OP_INPLACE; update_files = TRUE; continue;
+
+                    case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
+
+                    case 'F': ccdr->ops |= (IMG_OP_STACK & IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
+
+                    case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
+
+                    case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
+                        ccdr->alignref = image_file_new();
+                        ccdr->alignref->filename = strdup(optarg);
+                        continue;
+
+                    case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
+                        ccdr->bias = image_file_new();
+                        ccdr->bias->filename = strdup(optarg);
+                        continue;
+
+                    case 'f':
+                        ccdr->flat = image_file_new();
+                        ccdr->flat->filename = strdup(optarg);
+                        ccdr->ops |= IMG_OP_FLAT;
+                        batch = TRUE;
+                        continue;
+
+                    case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
+                        ccdr->dark = image_file_new();
+                        ccdr->dark->filename = strdup(optarg);
+                        continue;
+
+                    case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
+                        ccdr->bad_pix_map = bad_pix_map_new();
+                        ccdr->bad_pix_map->filename = strdup(optarg);
+                        continue;
+
+                    case 'P': run_phot = REP_STAR_ALL|REP_FMT_DATASET; batch = TRUE; // set recipe file, batch run
+                        ccdr->recipe = strdup(optarg);
+                        continue;
+
+                    case 'V': run_phot = REP_STAR_TGT|REP_FMT_AAVSO; batch = TRUE; // set recipe file, batch run aavso
+                        ccdr->recipe = strdup(optarg);
+                        continue;
+
+                    default:
+                        if (oc == 'G' || oc == 'M' || oc == 'A') {
+                            char *endp;
+                            double v = strtod(optarg, &endp);
+
+                            if (endp != optarg) {
+                                batch = TRUE;
+                                switch (oc) {
+
+                                case 'G': ccdr->blurv = v; ccdr->ops |= IMG_OP_BLUR; continue;
+
+                                case 'M': ccdr->mulv = v; ccdr->ops |= IMG_OP_MUL; continue;
+
+                                case 'A': ccdr->addv = v; ccdr->ops |= IMG_OP_ADD; continue;
+                                }
+                            }
+                        } else {
+                            printf("unrecognized option \'%c\'\n", oc); continue;
+                        }
+                    }
+                }
             }
-
-            goto exit_main;
-
-        case '6':
-            main_ret = 1;
-            if (optarg &&  ! (optarg[0] == '-' && optarg[1] == 0) ) {
-                strncpy(rf, optarg, 1023);
-                main_ret = recipe_aavso_convert(rf, outf);
-            }
-
-            goto exit_main;
-
-        case 'T':
-            main_ret = 1;
-            if (optarg &&  ! (optarg[0] == '-' && optarg[1] == 0) ) {
-                strncpy(repf, optarg, 1023);
-                main_ret = report_convert(repf, outf);
-            }
-
-            goto exit_main;
-
-        case 'C': // print scintillation table for aperture
-            main_ret = 1;
-            if (optarg)
-                main_ret = print_scint_table(optarg);
-
-            goto exit_main;
-
-        case '4':
-            main_ret = 1;
-            strncpy(ldf, optarg, 1023);
-
-            if (ldf[0] != 0) { /* import landolt or other table */
-                d3_printf("%s import\n", ldf);
-                main_ret = catalog_file_convert(ldf, outf, mag_limit);
-            }
-
-            goto exit_main;
-
-        case '9':
-			sscanf(optarg, "%f", &mag_limit);
-			break;
-
-		case '<':
-			//make_gpsf = 1;
-			break;
-
-		case '8':
-			strncpy(extrf, optarg, 1023);
-            batch = TRUE;
-			break;
-
-		case '0':
-			strncpy(mergef, optarg, 1023);
-            op_recipe_file = TRUE;
-			break;
-
-        case '_': // set target object name
-			strncpy(tobj, optarg, 1023);
-            op_recipe_file = TRUE;
-			break;
-
-		case 'D':
-			sscanf(optarg, "%d", &debug_level);
-			break;
-
-		case 'N':
-            op_no_reduce = TRUE;
-			break;
-
-		case 'i':
-			interactive = 1;
-			break;
-
-		case 'n':
-            op_to_pnm = TRUE;
-            batch = TRUE;
-			break;
-
-		case 'w':
-            op_fit_wcs = TRUE;
-            batch = TRUE;
-			break;
-
-        case '7':
-            op_save_internal_cat = TRUE;
-            break;
-
-		case 'O':
-			strncpy(of, optarg, 1023);
-			break;
-
-		case 'o':
-			strncpy(outf, optarg, 1023);
-			break;
-
-        case 'j':
-            strncpy(obj, optarg, 1023);
-//			interactive = 1;
-            break;
-
-        case 'S':
-            if ( (optarg) && set_par_by_name(optarg) ) err_printf("error setting %s\n", optarg);
-
-            break;
-
-        case 'r': // load param file
-            rcname = strdup(optarg);
-            load_par_file(rcname, PAR_NULL);
-            break;
-/*
-        case 'r': // load rc file
-            strncpy(rcf, optarg, 1023);
-            break;
-*/
-		case 'u':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->ops |= IMG_OP_INPLACE;
-            update_files = TRUE;
-			break;
-
-		case 's':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->ops |= IMG_OP_STACK;
-            batch = TRUE;
-			break;
-
-		case 'F':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->ops |= IMG_OP_STACK;
-			ccdr->ops |= IMG_OP_BG_ALIGN_MUL;
-            batch = TRUE;
-			break;
-
-		case 'a':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->ops |= IMG_OP_ALIGN;
-			ccdr->alignref = image_file_new();
-			ccdr->alignref->filename = strdup(optarg);
-            batch = TRUE;
-			break;
-
-		case 'b':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->bias = image_file_new();
-			ccdr->bias->filename = strdup(optarg);
-			ccdr->ops |= IMG_OP_BIAS;
-            batch = TRUE;
-			break;
-
-		case 'f':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->flat = image_file_new();
-			ccdr->flat->filename = strdup(optarg);
-			ccdr->ops |= IMG_OP_FLAT;
-            batch = TRUE;
-			break;
-
-		case 'd':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-			ccdr->dark = image_file_new();
-			ccdr->dark->filename = strdup(optarg);
-			ccdr->ops |= IMG_OP_DARK;
-            batch = TRUE;
-			break;
-
-        case 'B':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-            ccdr->bad_pix_map = bad_pix_map_new();
-            ccdr->bad_pix_map->filename = strdup(optarg);
-            ccdr->ops |= IMG_OP_BADPIX;
-            batch = TRUE;
-            break;
-
-        case 'c':
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-            ccdr->ops |= IMG_OP_DEMOSAIC;
-            batch = TRUE;
-            break;
-
-        case 'p': // set recipe file, interactive
-            strncpy(rf, optarg, 1023);
-
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-            ccdr->recipe = strdup(optarg);
-//            batch = TRUE;
-            break;
-
-        case 'P': // set recipe file, batch run
-            strncpy(rf, optarg, 1023);
-
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-            ccdr->recipe = strdup(optarg);
-            run_phot = REP_STAR_ALL|REP_FMT_DATASET;
-            batch = TRUE;
-            break;
-
-        case 'V': // set recipe file, batch run aavso
-            strncpy(rf, optarg, 1023);
-
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-            ccdr->recipe = strdup(optarg);
-            run_phot = REP_STAR_TGT|REP_FMT_AAVSO;
-            batch = TRUE;
-            break;
-
-		case 'G':
-        {
-            char *endp;
-            double v;
-
-			v = strtod(optarg, &endp);
-			if (endp != optarg) {
-                if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-                ccdr->blurv = v;
-                ccdr->ops |= IMG_OP_BLUR;
-			}
         }
-            batch = TRUE;
-			break;
-
-		case 'M':
-        {
-            char *endp;
-            double v;
-
-			v = strtod(optarg, &endp);
-			if (endp != optarg) {
-                if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-				ccdr->mulv = v;
-				ccdr->ops |= IMG_OP_MUL;
-			}
-        }
-            batch = TRUE;
-			break;
-
-		case 'A':
-        {
-            char *endp;
-            double v;
-
-			v = strtod(optarg, &endp);
-			if (endp != optarg) {
-                if (ccdr == NULL) ccdr = ccd_reduce_new();
-
-				ccdr->addv = v;
-				ccdr->ops |= IMG_OP_ADD;
-			}
-        }
-            batch = TRUE;
-			break;
-
-		}
-	}
+    }
 
 
 /* now run the various requested operations */
 
     if (op_recipe_file) {
         main_ret = 1;
-
-        if (rf[0] == 0) {
+        if (rf) {
+            if (mergef) {
+                main_ret = recipe_merge(rf, mergef, outf, mag_limit);
+            } else if (tobj) {
+                main_ret = recipe_set_tobj(rf, tobj, outf, mag_limit);
+            }
+        } else
             err_printf("Please specify a recipe file to merge to (with -r)\n");
 
-        } else {
-            if (mergef[0] != 0)
-                main_ret = recipe_merge(rf, mergef, outf, mag_limit);
-
-            else if (tobj[0] != 0)
-                main_ret = recipe_set_tobj(rf, tobj, outf, mag_limit);
-
-        }
         goto exit_main;
-
     }
 
     if (op_save_internal_cat) { /* save int catalog */
         main_ret = 1;
 
-        if (outf[0] != 0) {
+        if (outf && outf[0]) {
             FILE *outfp = fopen(outf, "w");
 			if (outfp == NULL) {
                 err_printf("Cannot open file %s for writing\n%s\n", outf, strerror(errno));
@@ -1140,14 +950,11 @@ int fake_main(int ac, char **av)
 
 // set up for image processing ...
 
-	if (of[0] != 0) { /* search path for obs file */
+    if (of && of[0]) { /* search path for obs file */
 		if ((strchr(of, '/') == NULL)) {
             char *file = find_file_in_path(of, P_STR(FILE_OBS_PATH));
-			if (file != NULL) {
-				strncpy(of, file, 1023);
-				of[1023] = 0;
-				free(file);
-			}
+            free(of);
+            of = file;
 		}
 		d3_printf("of is %s\n", of);
 	}
@@ -1176,7 +983,7 @@ int fake_main(int ac, char **av)
 		if (batch && !interactive) {
 //printf("gcx.main batch & !interactive\n");
 
-            if ((outf[0] != 0) || update_files) {
+            if ((outf && outf[0]) || update_files) {
                 if (imfl == NULL) {
                     err_printf("No frames to process, exiting\n");
                     main_ret = 1;
@@ -1186,13 +993,13 @@ int fake_main(int ac, char **av)
 
             } else {
                 info_printf("no output file name: going interactive\n");
-                interactive = 1;
+                interactive = TRUE;
             }
         }
 	}
 
     interactive = interactive || imfl;
-//    interactive = 1;
+//    interactive = TRUE;
 
     if (interactive) {
 
@@ -1206,7 +1013,7 @@ int fake_main(int ac, char **av)
                 g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
 
             g_object_set_data_full(G_OBJECT(window), "home_path", strdup(cwd), (GDestroyNotify) free);
-
+printf("home_path: %s\n", cwd); fflush(NULL);
             set_imfl_ccdr(window, ccdr, imfl);
 
             struct ccd_frame *fr = NULL;
@@ -1219,7 +1026,7 @@ int fake_main(int ac, char **av)
 
             if (fr) {
 //                get_frame(fr);
-                if (obj[0]) set_wcs_from_object(fr, obj, 0);
+                if (obj && obj[0]) set_wcs_from_object(fr, obj, 0);
 
                 //printf("gcx.main 2\n");
 
@@ -1258,12 +1065,8 @@ int fake_main(int ac, char **av)
                         char *fn = strdup(channel->fr->name);
                         wcs_to_fits_header(channel->fr);
 
-                        if (file_is_zipped(fn)) {
-                            drop_dot_extension(fn);
-                            main_ret = write_gz_fits_frame(channel->fr, fn, P_STR(FILE_COMPRESS));
-                        } else {
-                            main_ret = write_fits_frame(channel->fr, fn);
-                        }
+                        main_ret = write_fits_frame(channel->fr, fn);
+
                         if (main_ret) main_ret = 3;
                         free(fn);
                     }
@@ -1272,7 +1075,7 @@ int fake_main(int ac, char **av)
                     load_rcp_to_window(window, ccdr->recipe, obj);
 
                     FILE *output_file = NULL;
-                    if (outf[0]) {
+                    if (outf && outf[0]) {
                         output_file = fopen(outf, "a");
                         if (output_file == NULL)
                             err_printf("Cannot open file %s "
@@ -1291,12 +1094,12 @@ int fake_main(int ac, char **av)
                         if (imf->flags & IMG_SKIP) continue;
 
                         //printf("running photometry on %s\n", imf->filename);
-                        imf_load_frame(imf);
+                        if (imf_load_frame(imf) < 0) continue;
 
-                        if (!imf->fr) continue;
+//                        if (!imf->fr) continue;
 
                         frame_to_channel(imf->fr, window, "i_channel");
-                        release_frame(imf->fr);
+                        imf_release_frame(imf, "gcx 1");
 
                         match_field_in_window_quiet(window);
 
@@ -1306,7 +1109,7 @@ int fake_main(int ac, char **av)
                             phot_to_fd(window, output_file, run_phot);
                         }
 
-                        imf_release_frame(imf);
+//                        imf_release_frame(imf, "gcx in batch photometry");
                     }
 
                     if (output_file) fclose(output_file);
@@ -1314,10 +1117,10 @@ int fake_main(int ac, char **av)
                     interactive = TRUE;
                 }
             }
-            release_frame(fr);
+            release_frame(fr, "gcx 2");
 
             if (interactive) {
-                if (of[0]) main_ret = run_obs_file(window, of); /* run obs */
+                if (of && of[0]) main_ret = run_obs_file(window, of); /* run obs */
                 if (have_recipe) load_rcp_to_window(window, ccdr->recipe, obj);
                 gtk_main ();
             }
@@ -1330,6 +1133,14 @@ int fake_main(int ac, char **av)
 exit_main:
     ptable_free();
     free(cwd);
+
+    if (tobj) free(tobj);
+    if (of) free(of);
+    if (outf) free(outf);
+    if (obj) free(obj);
+    if (rcname) free(rcname);
+    if (mergef) free(mergef);
+
     return main_ret;
 }
 

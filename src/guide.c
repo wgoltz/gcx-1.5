@@ -277,7 +277,7 @@ void guider_set_target(struct guider *guider, struct ccd_frame *fr,
 
 	guider->state |= GUIDER_TARGET_SET;
 	if (guider->gs)
-		gui_star_release(guider->gs);
+        gui_star_release(guider->gs, "");
 	guider->gs = gs;
 	gui_star_ref(gs);
 	guider->xtgt = gs->x;

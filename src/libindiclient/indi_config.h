@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include "indi.h"
+
 void *ic_init(struct indi_t *indi, const char *config);
 void ic_prop_set(void *c, struct indi_prop_t *iprop);
 void ic_prop_def(void *c, struct indi_prop_t *iprop);

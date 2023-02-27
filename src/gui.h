@@ -2,6 +2,7 @@
 #define _GUI_H_
 
 #include <gtk/gtk.h>
+#include "catalogs.h"
 
 #define MAX_ZOOM 16
 
@@ -94,6 +95,8 @@ extern void set_abort_flag();
 /* from gui.c */
 extern void error_beep(void);
 extern void warning_beep(void);
+extern void step_zoom(struct map_geometry *geom, int step);
+extern int set_scrolls(GtkWidget *window, double xc, double yc);
 
 extern int modal_yes_no(char *text, char *title);
 

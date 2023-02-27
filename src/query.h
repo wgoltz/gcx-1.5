@@ -1,6 +1,8 @@
 #ifndef _QUERY_H_
 #define _QUERY_H_
 
+#include <stdio.h>
+
 #define CDS_MIRROR "cds"
 
 /* vizier catalogs to search */

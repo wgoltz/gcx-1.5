@@ -59,6 +59,7 @@ void ic_prop_set(void *c, struct indi_prop_t *iprop)
 	if (strcmp(iprop->name, "CONNECTION") != 0)
 		return;
 	if (! indi_prop_get_switch(iprop, "CONNECT")) {
+printf("ic_prop_set: setting cfg->connected 0 for %s\n", iprop->idev->name); fflush(NULL);
 		if (cfg)
 			cfg->connected = 0;
 		return;
@@ -81,6 +82,7 @@ void ic_prop_def(void *c, struct indi_prop_t *iprop)
 		if (strcmp(iprop->name, "CONNECTION") != 0 || ! indi_prop_get_switch(iprop, "CONNECT")) {
 			return;
 		}
+printf("ic_prop_def: setting cfg->connected 1 for %s\n", iprop->idev->name); fflush(NULL);
 		cfg->connected = 1;
 		for (isl = il_iter(iprop->idev->props); ! il_is_last(isl); isl = il_next(isl)) {
 			struct indi_prop_t *prop = (struct indi_prop_t *)il_item(isl);
@@ -153,7 +155,7 @@ static void ic_send_elems(struct indi_config_t *cfg, struct indi_prop_t *iprop)
 			// Found a match...
 			switch(iprop->type) {
 			case INDI_PROP_TEXT:
-				strncpy(ielem->value.str, value, sizeof(ielem->value.str));
+                ielem->value.str = strdup(value);
 				break;
 			case INDI_PROP_NUMBER:
 				ielem->value.num.value = strtod(value, NULL);

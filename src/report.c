@@ -49,6 +49,7 @@
 #include "wcs.h"
 #include "cameragui.h"
 #include "filegui.h"
+#include "misc.h"
 
 #include "symbols.h"
 #include "recipe.h"
@@ -260,19 +261,14 @@ static int parse_tab_format(char *format, struct col_format *cfmt, int n, int *o
 #define TABLE_MAX_FIELDS 128
 #define MAX_TBL_LINE 16384
 
-static int tab_snprint_star(char *line, int len, struct cat_star *cats, 
-			    struct stf *stf, int frno, 
-			    struct col_format *cfmt, int ncol);
-static int tab_snprint_head(char *line, int len, 
-			    struct col_format *cfmt, int ncol);
-static int tab_snprint_coldesc(char *line, int len, 
-			       struct col_format *cfmt, int start);
+static char *tab_snprint_star(struct cat_star *cats, struct stf *stf, int frno, struct col_format *cfmt, int ncol);
+static char *tab_snprint_head(struct col_format *cfmt, int ncol);
+static char *tab_snprint_coldesc(struct col_format *cfmt, int start);
 void stf_to_table(struct stf *stf, FILE *outf, struct col_format *cfmt, int ncol);
 
 void report_to_table(FILE *inf, FILE *outf, char *format)
 {
 	struct col_format cfmt[TABLE_MAX_FIELDS];
-	char line[MAX_TBL_LINE];
 	int i, n = 0, f = 0, ncol, opt, c;
 	struct stf *stf;
 	GList *stars, *sl;
@@ -292,18 +288,18 @@ void report_to_table(FILE *inf, FILE *outf, char *format)
 //	}
 
 	/* the header */
-	tab_snprint_star(line, MAX_TBL_LINE, NULL, NULL, 0, cfmt, ncol);
+//    char *line = tab_snprint_star(NULL, NULL, 0, cfmt, ncol);
 	if (opt & TAB_OPTION_COLLIST) {
 		c = 0;
 		for (i = 0; i < ncol; i++) {
-			c += tab_snprint_coldesc(line, MAX_TBL_LINE, cfmt+i, c);
-			fprintf(outf, "# %s\n", line);
+            char *coldesc = tab_snprint_coldesc(cfmt+i, c);
+            if (coldesc) fprintf(outf, "# %s\n", coldesc), free(coldesc);
 		}
 		fprintf(outf, "\n");
 	}
 	if (opt & TAB_OPTION_TABLEHEAD) {
-		tab_snprint_head(line, MAX_TBL_LINE, cfmt, ncol);
-		fprintf(outf, "%s\n\n", line);
+        char *head = tab_snprint_head(cfmt, ncol);
+        if (head) fprintf(outf, "%s\n\n", head), free(head);
 	}
 
 	do {
@@ -328,8 +324,8 @@ void report_to_table(FILE *inf, FILE *outf, char *format)
 				sumres += cats->residual;
 				sumsqres += sqr(cats->residual);
 			}
-			tab_snprint_star(line, MAX_TBL_LINE, cats, stf, f, cfmt, ncol);
-			fprintf(outf, "%s\n", line);
+            char *star = tab_snprint_star(cats, stf, f, cfmt, ncol);
+            if (star) fprintf(outf, "%s\n", star), free(star);
 			n++;
 		}
 		if (opt & TAB_OPTION_RESSTATS && nres > 0) {
@@ -342,32 +338,34 @@ void report_to_table(FILE *inf, FILE *outf, char *format)
 	} while (stf != NULL);
 }
 
-/* fill a width-wide field at buf and place a 0 terminator, without exceeding
- * len characters (including the terminator). Return the numbers of chars added 
- * to the buffer (excluding the term) */
-static int blank_field(char *buf, int len, int width)
+/* return str with width spaces */
+static char *blank_field(int width)
 {
-	int i;
-	for (i = 0; (i < width) && (i < (len - 1)); i++)
-		*buf++ = ' ';
-	*buf = 0;
-	return i;
+    char *str = calloc(width + 1, sizeof(char));
+    if (str == NULL) return NULL;
+
+    char *p = str;
+    while (p < str + width)
+        *p++ = ' ';
+    *p = 0;
+    return str;
 }
 
 /* a bit like snprintf with a %-width s argument, but it truncates the
  * string to fit the field length, and it places a trailing blank */
-static int string_field(char *buf, int len, int width, char *text)
+static char *string_field(int width, char *text)
 {
 	int i;
+    char *buf = calloc(width + 1, sizeof(char));
+    if (buf == NULL) return NULL;
 
-	for (i = 0; (i < width) && (i < (len - 1)); i++) {
-		if (*text == 0 || i == width -1)
+    for (i = 0; i < width; i++) {
+        if (*text == 0)
 			*buf++ = ' ';
 		else
 			*buf++ = *text++;
 	}
-	*buf = 0;
-	return i;
+    return buf;
 }
 
 
@@ -403,84 +401,83 @@ static int flags_field(char *buf, int len, int width, int flags, char **names)
 
 /* print the description for a column, assuming it starts at 
  * column start; return the full width of the column */
-static int tab_snprint_coldesc(char *line, int len, 
-			    struct col_format *cfmt, int start)
+static char *tab_snprint_coldesc(struct col_format *cfmt, int start)
 {
-	char buf[64];
+    char *buf = NULL;
+    char *line = NULL;
+
 	int p=0, k=0;
 
-	snprintf(buf, 64, "%d-%d", start+1, start + cfmt->width);
+    asprintf(&buf, "%d-%d", start+1, start + cfmt->width);
+    if (buf == NULL) return NULL;
+
 	if (cfmt->type == SYM_FLAGS) {
-		p += snprintf(line, len, "%-8s %s: type ", buf, symname[cfmt->type]);
-        if (p >= len) return cfmt->width + 1;
+        asprintf(&line, "%-8s %s: type ", buf, symname[cfmt->type]);
 
 		while(cat_flag_names[k] != NULL) {
 			if (*cat_flag_names[k] == 0) {
 				k++;
 				continue;
 			}
-			p += snprintf(line+p, len-p, "%s ", cat_flag_names[k]);
-            if (p >= len) return cfmt->width + 1;
+            str_join_str(&line, " %s", cat_flag_names[k]);
 
 			k++;
 		}
 	} else {
-        snprintf(line, len, "%-8s %s %s", buf, symname[cfmt->type], cfmt->data ? (char *)cfmt->data : "");
+        asprintf(&line, "%-8s %s %s", buf, symname[cfmt->type], cfmt->data ? (char *)cfmt->data : "");
 	}
-	return cfmt->width + 1;
+    free(buf);
+    return line;
 }
 
 
 /* print a table header */
-static int tab_snprint_head(char *line, int len, 
-			    struct col_format *cfmt, int ncol)
+static char *tab_snprint_head(struct col_format *cfmt, int ncol)
 {
 	int i;
 	int p = 0, ret = 0;
-	char buf[64];
+    char *buf;
 	int w;
+    char *line = NULL;
 
 	for (i=0; i<ncol; i++) {
 		w = cfmt[i].width;
-		if (i==0) {
-			w--;
-			p += string_field(line + p, len - 1, 2, "#");
-			if (p >= len)
-				break;
-		}
+//		if (i==0) { // what does it do?
+//			w--;
+//			append = string_field(2, "#");
+//		}
+        char *append = NULL;
 		switch(cfmt[i].type) {
 		case SYM_SMAG:
-			snprintf(buf, 63, "s(%s)", (char *)cfmt[i].data);
-			ret = string_field(line + p, len - p, w + 1, buf);
+            asprintf(&buf, "s(%s)", (char *)cfmt[i].data);
+            if (buf) append = string_field(w, buf), free(buf);
 			break;
+
 		case SYM_IMAG:
-			snprintf(buf, 63, "i(%s)", (char *)cfmt[i].data);
-			ret = string_field(line + p, len - p, w + 1, buf);
+            asprintf(&buf, "i(%s)", (char *)cfmt[i].data);
+            if (buf) append = string_field(w, buf), free(buf);
 			break;
+
 		case SYM_SERR:
-			snprintf(buf, 63, "se(%s)", (char *)cfmt[i].data);
-			ret = string_field(line + p, len - p, w + 1, buf);
+            asprintf(&buf, "se(%s)", (char *)cfmt[i].data);
+            if (buf) append = string_field(w, buf), free(buf);
 			break;
+
 		case SYM_IERR:
-			snprintf(buf, 63, "ie(%s)", (char *)cfmt[i].data);
-			ret = string_field(line + p, len - p, w + 1, buf);
+            asprintf(&buf, "ie(%s)", (char *)cfmt[i].data);
+            if (buf) append = string_field(w, buf), free(buf);
 			break;
+
 		default:
-			if (i >= 1)
-				ret = string_field(line + p, len - p, w + 1, 
-						   symname[cfmt[i].type]);
-			else 
-				ret = string_field(line + p, len - p, w, 
-						   symname[cfmt[i].type]);
+            append = string_field(w, symname[cfmt[i].type]);
 			break;
+
 		}
-		if (p > 4)
-			line[p-1]='|';
-		p += ret;
-		if (p >= len)
-			break;
+//		if (p > 4)
+//			line[p-1]='|';
+        if (append) str_join_str(&line, "%s", append), free(append);
 	}
-	return p;
+    return line;
 }
 
 
@@ -488,361 +485,291 @@ static int tab_snprint_head(char *line, int len,
  * return the number of char written 
  * cfmt width/precision fields are filled with defaults if 
  * they were -1 */
-static int tab_snprint_star(char *line, int len, struct cat_star *cats, 
-			    struct stf *stf, int f,
-			    struct col_format *cfmt, int ncol)
+static char *tab_snprint_star(struct cat_star *cats, struct stf *stf, int f, struct col_format *cfmt, int ncol)
 {
+    if (cats == NULL) return NULL;
+
 	int i;
 	int p = 0, ret = 0;
-	char dms[64];
 	double m, e;
 	char c;
 	char *t;
 	double v;
+    char *line = NULL;
 
-	for (i=0; i<ncol; i++) {
-		switch(cfmt[i].type) {
-		case SYM_SMAG:
+    for (i=0; i<ncol; i++) {
+        char *append = NULL;
+        char *dms = NULL;
+
+        switch (cfmt[i].type) {
+
+        case SYM_SMAG:
 //			d3_printf("looking for %s in %s\n", (char *)cfmt[i].data, cats->smags);
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 4 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (get_band_by_name(cats->smags, cfmt[i].data, &m, &e))
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			else
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, m);
-			break;
-		case SYM_IMAG:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 4 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (get_band_by_name(cats->imags, cfmt[i].data, &m, &e))
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			else
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, m);
-			break;
-		case SYM_SERR:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 4 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			e = BIG_ERR;
-			if ((!get_band_by_name(cats->smags, cfmt[i].data, &m, &e)) &&
-			    e < BIG_ERR)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, e);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_IERR:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 4 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			e = BIG_ERR;
-			if ((!get_band_by_name(cats->imags, cfmt[i].data, &m, &e)) &&
-			    e < BIG_ERR)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, e);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_RA:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 2;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 9 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-            degrees_to_hms_pr(dms, cats->ra, 2);
-			ret = string_field(line + p, len - p, cfmt[i].width + 1, dms);
-			break;
-		case SYM_DEC:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 1;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 10 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			degrees_to_dms_pr(dms, cats->dec, 1);
-			ret = string_field(line + p, len - p, cfmt[i].width + 1, dms);
-			break;
-		case SYM_DRA:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 4;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 4 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			ret = snprintf(line+p, len - p, "%*.*f ", 
-				       cfmt[i].width, cfmt[i].precision,
-				       cats->ra);
-			break;
-		case SYM_DDEC:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 4;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 4 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			ret = snprintf(line+p, len - p, "%*.*f ", 
-				       cfmt[i].width, cfmt[i].precision,
-				       cats->dec);
-			break;
-		case SYM_MJD:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 12;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 2 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (!stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD)) {
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			} else {
-				ret = snprintf(line+p, len - p, "%-*.*g ", 
-					       cfmt[i].width, cfmt[i].precision,
-					       v);
-			}
-			break;
-		case SYM_RESIDUAL:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 3 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (CATS_TYPE(cats) != CATS_TYPE_APSTD) {
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			} else {
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision,
-					       cats->residual);
-			}
-			break;
-		case SYM_STDERR:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 3 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (CATS_TYPE(cats) != CATS_TYPE_APSTD) {
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			} else {
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision,
-					       cats->std_err);
-			}
-			break;
-		case SYM_JDATE:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 12;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 2 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-            struct col_format cf = cfmt[i];
-			if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD)) {
-                ret = snprintf(line+p, len - p, "%*.*f ", //"%-*.*g "
-					       cfmt[i].width, cfmt[i].precision,
-					       mjd_to_jd(v));
-			} else if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_JDATE)) {
-                ret = snprintf(line+p, len - p, "%*.*f ",
-					       cfmt[i].width, cfmt[i].precision,
-					       v);
-			} else {
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			} 
-			break;
-		case SYM_AIRMASS:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 2;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 2 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_AIRMASS)) {
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision,
-					       v);
-			} else {
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			}
-			break;
-		case SYM_OBSERVATION:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 0;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 16;
-			if (cats == NULL)
-				break;
-			t = stf_find_string(stf, 1, SYM_OBSERVATION, SYM_OBJECT);
-			if (t != NULL) {
-				snprintf(dms, 63, "%s%d ", t, f);
-				ret = string_field(line + p, len - p, cfmt[i].width + 1, 
-						   dms);
-			} else {
-				snprintf(dms, 63, "%d ", f);
-				ret = string_field(line + p, len - p, cfmt[i].width + 1, 
-						   dms);
-			}
-			break;
-		case SYM_FILTER:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 0;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 6;
-			if (cats == NULL)
-				break;
-			t = stf_find_string(stf, 1, SYM_OBSERVATION, SYM_FILTER);
-			if (t != NULL) {
-				ret = string_field(line + p, len - p, cfmt[i].width + 1, 
-						   t);
-			} else {
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			} 
-			break;
-		case SYM_NAME:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 0;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 14;
-			if (cats == NULL)
-				break;
-			ret = string_field(line + p, len - p, cfmt[i].width + 1, 
-					   cats->name);
-			break;
-		case SYM_X:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 2;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 5 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (cats->flags & INFO_POS)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, 
-					       cats->pos[POS_X]);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_Y:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 2;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 5 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (cats->flags & INFO_POS)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, 
-					       cats->pos[POS_Y]);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_DX:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 2;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 5 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (cats->flags & INFO_POS)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, 
-					       cats->pos[POS_DX]);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_DY:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 2;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 5 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (cats->flags & INFO_POS)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, 
-					       cats->pos[POS_DY]);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_DIFFAM:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 3;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 3 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (cats->flags & INFO_DIFFAM)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, 
-					       cats->diffam);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_SKY:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 1;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 6 + cfmt[i].precision;
-			if (cats == NULL)
-				break;
-			if (cats->flags & INFO_SKY)
-				ret = snprintf(line+p, len - p, "%*.*f ", 
-					       cfmt[i].width, cfmt[i].precision, 
-					       cats->sky);
-			else
-				ret = blank_field(line+p, len - p, cfmt[i].width+1);
-			break;
-		case SYM_FLAGS:
-			if (cfmt[i].precision < 0)
-				cfmt[i].precision = 0;
-			if (cfmt[i].width <= 0)
-				cfmt[i].width = 9;
-			if (cats == NULL)
-				break;
-			switch (CATS_TYPE(cats)) {
-			case CATS_TYPE_CAT:
-				c = 'C';
-				break;
-			case CATS_TYPE_APSTD:
-				c = 'S';
-				break;
-			case CATS_TYPE_APSTAR:
-				c = 'T';
-				break;
-			case CATS_TYPE_SREF:
-			default:
-				c = 'F';
-				break;
-			}
-			if (cfmt[i].width > 2 && len-p > 2) {
-				*(line+p) = c;
-				*(line+p+1) = 0;
-				p++;
-			}
-            ret = flags_field(line + p, len - p, cfmt[i].width, cats->flags, cat_flag_names);
-			break;
-		}
-		p += ret;
-		if (p >= len)
-			break;
-	}
-	return p;
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 4 + cfmt[i].precision;
+
+            if (!get_band_by_name(cats->smags, cfmt[i].data, &m, &e))
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, m);
+
+            break;
+
+        case SYM_IMAG:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 4 + cfmt[i].precision;
+
+            if (!get_band_by_name(cats->imags, cfmt[i].data, &m, &e))
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, m);
+            break;
+
+        case SYM_SERR:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 4 + cfmt[i].precision;
+
+            e = BIG_ERR;
+            if ((!get_band_by_name(cats->smags, cfmt[i].data, &m, &e)) && e < BIG_ERR)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, e);
+            break;
+
+        case SYM_IERR:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 4 + cfmt[i].precision;
+
+            e = BIG_ERR;
+            if ((!get_band_by_name(cats->imags, cfmt[i].data, &m, &e)) && e < BIG_ERR)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, e);
+            break;
+
+        case SYM_RA:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 2;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 9 + cfmt[i].precision;
+
+            dms = degrees_to_hms_pr(cats->ra, 2);
+            if (dms) asprintf(&append, "%*.s", cfmt[i].width, dms), free(dms);
+            break;
+
+        case SYM_DEC:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 1;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 10 + cfmt[i].precision;
+
+            dms = degrees_to_dms_pr(cats->dec, 1);
+            if (dms) asprintf(&append, "%*.s", cfmt[i].width, dms), free(dms);
+            break;
+
+        case SYM_DRA:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 4;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 4 + cfmt[i].precision;
+
+            asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->ra);
+            break;
+
+        case SYM_DDEC:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 4;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 4 + cfmt[i].precision;
+
+            asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->dec);
+            break;
+
+        case SYM_MJD:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 12;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 2 + cfmt[i].precision;
+
+            if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD))
+                asprintf(&append, "%-*.*g", cfmt[i].width, cfmt[i].precision, v);
+            break;
+
+        case SYM_RESIDUAL:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 3 + cfmt[i].precision;
+
+            if (CATS_TYPE(cats) == CATS_TYPE_APSTD)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->residual);
+            break;
+
+        case SYM_STDERR:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 3 + cfmt[i].precision;
+
+            if (CATS_TYPE(cats) == CATS_TYPE_APSTD)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->std_err);
+            break;
+
+        case SYM_JDATE:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 12;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 2 + cfmt[i].precision;
+
+            if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD)) {
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, mjd_to_jd(v));
+            } else if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_JDATE))
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, v);
+            break;
+
+        case SYM_AIRMASS:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 2;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 2 + cfmt[i].precision;
+
+            if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_AIRMASS))
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, v);
+            break;
+
+        case SYM_OBSERVATION:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 0;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 16;
+
+            t = stf_find_string(stf, 1, SYM_OBSERVATION, SYM_OBJECT);
+            if (t != NULL) {
+                char *tmp = NULL;
+                asprintf(&tmp, "%s%d", t, f);
+                if (tmp) asprintf(&append, "%.*s", cfmt[i].width, tmp), free(tmp);
+            } else
+                asprintf(&append, "%.*d", cfmt[i].width, f);
+            break;
+
+        case SYM_FILTER:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 0;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 6;
+
+            t = stf_find_string(stf, 1, SYM_OBSERVATION, SYM_FILTER);
+            if (t != NULL)
+                asprintf(&append, "%.*s", cfmt[i].width,  t);
+            break;
+
+        case SYM_NAME:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 0;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 14;
+
+            asprintf(&append, "%.*s", cfmt[i].width, cats->name);
+            break;
+
+        case SYM_X:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 2;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 5 + cfmt[i].precision;
+
+            if (cats->flags & INFO_POS)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->pos[POS_X]);
+            break;
+
+        case SYM_Y:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 2;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 5 + cfmt[i].precision;
+
+            if (cats->flags & INFO_POS)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->pos[POS_Y]);
+            break;
+
+        case SYM_DX:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 2;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 5 + cfmt[i].precision;
+
+            if (cats->flags & INFO_POS)
+                asprintf(&append, "%*.*f ", cfmt[i].width, cfmt[i].precision, cats->pos[POS_DX]);
+            break;
+
+        case SYM_DY:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 2;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 5 + cfmt[i].precision;
+
+            if (cats->flags & INFO_POS)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->pos[POS_DY]);
+            break;
+
+        case SYM_DIFFAM:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 3;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 3 + cfmt[i].precision;
+
+            if (cats->flags & INFO_DIFFAM)
+                asprintf(&append, "%*.*f ", cfmt[i].width, cfmt[i].precision, cats->diffam);
+            break;
+
+        case SYM_SKY:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 1;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 6 + cfmt[i].precision;
+
+            if (cats->flags & INFO_SKY)
+                asprintf(&append, "%*.*f", cfmt[i].width, cfmt[i].precision, cats->sky);
+            break;
+
+        case SYM_FLAGS:
+            if (cfmt[i].precision < 0)
+                cfmt[i].precision = 0;
+            if (cfmt[i].width <= 0)
+                cfmt[i].width = 9;
+
+            switch (CATS_TYPE(cats)) {
+            case CATS_TYPE_CAT:
+                c = 'C';
+                break;
+            case CATS_TYPE_APSTD:
+                c = 'S';
+                break;
+            case CATS_TYPE_APSTAR:
+                c = 'T';
+                break;
+            case CATS_TYPE_SREF:
+            default:
+                c = 'F';
+                break;
+            }
+            if (cfmt[i].width > 2) {
+                append = blank_field(cfmt[i].width);
+                if (append) {
+                    *(append) = c;
+                    *(append + 1) = 0;
+
+                    flags_field(append + 1, cfmt[i].width - 1, cfmt[i].width - 1, cats->flags, cat_flag_names);
+                }
+            }
+            break;
+        }
+        if (append == NULL)
+            append = blank_field(cfmt[i].width);
+
+        if (append) str_join_str(&line, "%s", append), free(append);
+    }
+    return line;
 }
 
 
@@ -905,7 +832,7 @@ int recipe_to_aavso_db(FILE *inf, FILE *outf)
 	char si[DB_FIELD];
 	double m;
 	char *rcomm;
-	char coord[64];
+    char *coord;
 
 
 	d[0] = 0; s[0] = 0; t[0] = 0; n[0] = 0; w[0] = 0; p[0] = 0; //f[0] = 0;
@@ -942,16 +869,23 @@ int recipe_to_aavso_db(FILE *inf, FILE *outf)
 				get_band_by_name(cats->smags, "v(aavso)", &m, NULL);
 				snprintf(si, DB_FIELD, "%.0f", m*10);
 			}
-			fprintf(outf, "%s\t%s\t%s\t%s\t%s\t%s\t",
-				d, n, s, t, si, sn);
-            degrees_to_hms_pr(coord, cats->ra, 2);
-			coord[2] = ' ';
-			coord[5] = ' ';
-			fprintf(outf, "%s\t", coord);
-			degrees_to_dms_pr(coord, cats->dec, 1);
-			coord[2] = ' ';
-			coord[5] = ' ';
-			fprintf(outf, "%s\t", coord);
+            fprintf(outf, "%s\t%s\t%s\t%s\t%s\t%s\t", d, n, s, t, si, sn);
+
+            coord = degrees_to_hms_pr(cats->ra, 2);
+            if (coord) {
+                coord[2] = ' ';
+                coord[5] = ' ';
+                fprintf(outf, "%s\t", coord);
+                free(coord);
+            }
+
+            coord = degrees_to_dms_pr(cats->dec, 1);
+            if (coord) {
+                coord[2] = ' ';
+                coord[5] = ' ';
+                fprintf(outf, "%s\t", coord);
+                free(coord);
+            }
 			fprintf(outf, "%s\t%s\t%s\t\t%s\t%s\n",
 				sp, cats->name, w, p, sc);
 		}

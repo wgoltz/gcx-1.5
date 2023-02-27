@@ -38,9 +38,7 @@ int try_dcraw(char *filename)
 
 static void skip_line( FILE *fp )
 {
-	int ch;
-
-	while( (ch = fgetc( fp )) != '\n' )
+    while (fgetc( fp ) != '\n' )
 		;
 }
 
@@ -89,7 +87,7 @@ int read_ppm(struct ccd_frame *frame, FILE *handle)
 	prefix[1] = fgetc(handle);
 
     if (prefix[0] != 'P' || (prefix[1] != '6' && prefix[1] != '5')) {
-		err_printf("read_ppm: got unexpected prefix %x %x\n", prefix[0], prefix[1]);
+//		err_printf("read_ppm: got unexpected prefix %x %x\n", prefix[0], prefix[1]);
         return 1;
 	}
 
@@ -184,38 +182,30 @@ err_release:
 
 int dcraw_set_time(struct ccd_frame *frame, char *month, int day, int year, char *timestr)
 {
-	char mon_map[12][3] = {
-		"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-		};
-	int i;
-	int mon = 0;
-	char date[15], timestr1[15];
-	//char *month, *day, *year, *time, *date;
+    char *mon_map = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec";
 
-	// str format: 'Wed Jun 17 19:45:05 2009'
-	//if ((month = strchr(str, ' ')) == NULL)
-	//	return 1;
-	//*month++ = '\0';
-	for (i = 0; i < 12; i++) {
-		if(strncmp(month, mon_map[i], 3) == 0) {
-			mon = i+1;
-			break;
-		}
-	}
-	sprintf(date, "\"%04d/%02d/%02d\"", year, mon, day);
-	sprintf(timestr1, "\"%s\"", timestr);
-	fits_add_keyword(frame, "TIME-OBS", timestr1);
-	fits_add_keyword(frame, "DATE-OBS", date);
+    char *ix = strstr(mon_map, month);
+    if (ix == NULL) return -1;
+
+    int mon = (ix - mon_map) / 4 + 1;
+
+    char *date = NULL;
+    asprintf(&date, "\"%04d/%02d/%02d\"", year, mon, day);
+    if (date) fits_add_keyword(frame, "DATE-OBS", date), free(date);
+
+    char *timestr1 = NULL;
+    asprintf(&timestr1, "\"%s\"", timestr);
+    if (timestr1) fits_add_keyword(frame, "TIME-OBS", timestr1), free(timestr1);
+
 	return 0;
 }
 
 int dcraw_set_exposure(struct ccd_frame *frame, float exposure)
 {
-	char strbuf[64];
+    char *strbuf = NULL;
 	if (exposure != 0.0) {
-        snprintf(strbuf, 64, "%10.5f", exposure);
-		fits_add_keyword(frame, "EXPTIME", strbuf);
+        asprintf(&strbuf, "%10.5f", exposure);
+        if (strbuf) fits_add_keyword(frame, "EXPTIME", strbuf), free(strbuf);
 	}
 	return 0;
 }
@@ -274,7 +264,7 @@ int dcraw_parse_header_info(struct ccd_frame *frame, char *filename)
 
 struct ccd_frame *read_file_from_dcraw(char *filename)
 {
-	struct ccd_frame *frame;
+    struct ccd_frame *frame = NULL;
 	FILE *handle = NULL;
 	char *cmd;
 

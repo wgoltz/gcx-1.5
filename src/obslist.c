@@ -723,7 +723,7 @@ void obs_list_sm(GtkWidget *dialog)
 		while(index < all) {
 			cmd = get_cmd_line(list, index);
 			cl = cmd_head(cmd, &cmdh, NULL);
-			if (cl == clo && !strncasecmp(cmdh, cmdho, cl)) {
+            if (cmdh && cmdho && (cl == clo) && !strncasecmp(cmdh, cmdho, cl)) {
 				obs_list_set_state(dialog, OBS_NEXT_COMMAND);
 				free(cmd);
 				break;
@@ -809,21 +809,19 @@ void obs_list_callbacks(GtkWidget *dialog)
 void obs_list_fname_cb(GtkWidget *widget, gpointer data)
 {
 	GtkWidget *dialog = data;
-	char *fname, *file = NULL;
 
-	fname = named_entry_text(data, "obs_list_fname");
-//	d3_printf("Reusing old obs list\n");
-	if (fname == NULL)
-		return;
+    char *fname = named_entry_text(data, "obs_list_fname");
+    if (fname == NULL) return;
+
 	if ((strchr(fname, '/') == NULL)) {
-		file = find_file_in_path(fname, P_STR(FILE_OBS_PATH));
+        char *file = find_file_in_path(fname, P_STR(FILE_OBS_PATH));
 		if (file != NULL) {
-			free(fname);
-			fname = file;
+            free(fname);
+            fname = file;
 		}
 	}
 	obs_list_load_file(dialog, fname);
-	free(fname);
+    free(fname);
 }
 
 void obs_list_select_file_cb(GtkWidget *widget, gpointer data)

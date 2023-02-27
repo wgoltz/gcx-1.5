@@ -1,8 +1,10 @@
 #ifndef _RECIPE_H_
 #define _RECIPE_H_
 
+#include <gtk/gtk.h>
 #include "obsdata.h"
 #include "params.h"
+#include "wcs.h"
 
 /* an atom we use to hold star files in (except the stars themselves, which are kept in a g_list) */
 

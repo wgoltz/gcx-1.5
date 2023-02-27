@@ -45,10 +45,13 @@
 #include <errno.h>
 #include <glib.h>
 
-#include "ccd.h"
+#include "ccd/ccd.h"
 //#include "cpxcon_regs.h"
 
 #include "dslr.h"
+#include "wcs.h"
+#include "params.h"
+#include "misc.h"
 
 #define MAX_FLAT_GAIN 1.5	// max gain accepted when flatfielding
 #define FITS_HROWS 36	// number of fits header lines in a block
@@ -92,27 +95,11 @@ struct ccd_frame *clone_frame(struct ccd_frame *fr)
 
 static int frame_count = 0;
 
-// frame_stats fills the statistics buffer for the frame
-#define H_MIN (0) // leftmost bin value
-#define HIST_OFFSET (-H_START) // offset to accomodate small negative values in histogram
-#define H_MAX (H_SIZE) // rightmost bin value
-
-
 struct im_stats *alloc_stats(struct im_stats *st)
 {
-    if (st == NULL) {
-        st = calloc(1, sizeof(struct im_stats));
-        if (st == NULL) return NULL;
-        st->free = 1;
-    }
-    if (st->hist.hdat != NULL) free(st->hist.hdat);
-
-    st->hist.hsize = H_MAX - H_MIN;
-    st->hist.hdat = (unsigned *)calloc(st->hist.hsize, sizeof(unsigned));
-    if (st->hist.hdat == NULL) {
-        if (st->free) free(st);
-        return NULL;
-    }
+    st->hist.hsize = H_SIZE;
+    st->hist.hdat = (unsigned *)calloc(H_SIZE, sizeof(unsigned));
+    if (st->hist.hdat == NULL) return NULL;
 
     return st;
 }
@@ -120,7 +107,6 @@ struct im_stats *alloc_stats(struct im_stats *st)
 void free_stats(struct im_stats *st)
 {
     if (st->hist.hdat) free (st->hist.hdat);
-    if (st->free) free(st);
 }
 
 
@@ -130,9 +116,9 @@ void free_stats(struct im_stats *st)
 // magic is copied from the original
 struct ccd_frame *new_frame_fr(struct ccd_frame* fr, unsigned size_x, unsigned size_y)
 {
-    struct ccd_frame *new_fr;
+    if (size_x * size_y == 0) return NULL;
 
-    new_fr = new_frame_head_fr(fr, size_x, size_y);
+    struct ccd_frame *new_fr = new_frame_head_fr(fr, size_x, size_y);
     if (new_fr == NULL) goto err_exit;
 
     new_fr->dat = calloc(new_fr->w * new_fr->h, new_fr->pix_size);
@@ -147,7 +133,7 @@ struct ccd_frame *new_frame_fr(struct ccd_frame* fr, unsigned size_x, unsigned s
         new_fr->bdat = NULL;
 
         if (new_fr->magic & FRAME_VALID_RGB) {
-            if (new_fr->magic & FRAME_HAS_CFA == 0) {
+            if ((new_fr->magic & FRAME_HAS_CFA) == 0) {
                 free(new_fr->dat);
                 new_fr->dat = NULL;
 			}
@@ -177,14 +163,15 @@ err_exit:
 struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsigned size_y)
 {
 	struct ccd_frame *hd;
-	void *var;
+    void *var = NULL;
 
     hd = calloc(1, sizeof(struct ccd_frame) );
     if (hd == NULL)	return NULL;
 
-    if (fr != NULL) memcpy(hd, fr, sizeof(struct ccd_frame) );
+    if (fr != NULL)
+        *hd = *fr;
 
-	hd->pix_size = DEFAULT_PIX_SIZE;
+    hd->pix_size = DEFAULT_PIX_SIZE;
 
     if (size_x != 0) hd->w = size_x;
     if (size_y != 0) hd->h = size_y;
@@ -202,9 +189,11 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
         hd->nvar = 0;
     }
 
-    hd->stats.hist.hdat = NULL;
-    alloc_stats(& hd->stats);
-	hd->stats.statsok = 0;
+    if (alloc_stats(&hd->stats) == NULL) {
+        if (var) free(var);
+        free(hd);
+        return NULL;
+    }
 
 	hd->magic = UNDEF_FRAME;
     if (fr == NULL) {
@@ -232,7 +221,7 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
     if (fr && fr->name)
         hd->name = strdup(fr->name);
 
-	hd->active_plane = 0;
+    hd->active_plane = 0;
 frame_count++;
 	return hd;
 }
@@ -244,8 +233,8 @@ void free_frame(struct ccd_frame *fr)
 {
 	if (fr) {
         frame_count--;
-d3_printf("freed %p '%s' frame_count %d \n", fr, fr->name, frame_count);
-        free_stats(& fr->stats);
+printf("freed %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
+        free_stats(&fr->stats);
         if (fr->var) free(fr->var);
         if (fr->dat) free(fr->dat);
         if (fr->rdat) free(fr->rdat);
@@ -276,27 +265,30 @@ void free_frame_data(struct ccd_frame *fr)
 
 // functions should call get_frame to show
 // the frame will still be needed after they return
-void get_frame(struct ccd_frame *fr)
+void get_frame(struct ccd_frame *fr, char *msg)
 {
-d2_printf("get %p '%s'\n", fr, fr->name);
+//printf("get_frame     %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
+
 	fr->ref_count ++;
 }
 
 
 // decrement usage count and free frame if it reaches 0;
-struct ccd_frame *release_frame(struct ccd_frame *fr)
+struct ccd_frame *release_frame(struct ccd_frame *fr, char *msg)
 {
     if (fr) {
 d2_printf("release %p '%s'\n", fr, fr->name);
         if (fr->ref_count < 1) g_warning("frame has ref_count of %d on release\n", fr->ref_count);
-
         fr->ref_count --;
+//printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
+
         if (fr->ref_count < 1) {
             free_frame(fr);
             fr = NULL;
         }
+    } else {
+//        printf("release_frame NULL %s\n", msg); fflush(NULL);
     }
-
     return fr;
 }
 
@@ -337,77 +329,67 @@ int alloc_frame_rgb_data(struct ccd_frame *fr)
 
 int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im_stats *st)
 {
-	double sum, sumsq, min, max;
-    unsigned int i, is = 0;
-	int x, y;
-	unsigned all, s, e;
-	float v;
-	unsigned hsize;
-	double hmin, hstep;
-	unsigned binmax;
-	unsigned *hdata;
-    unsigned int b, n;
-	double median = 0.0, c, bv;
-	int ret;
+    if (st == NULL) return -1;
+    st->statsok = 0;
 
-	if (fr->pix_format != PIX_FLOAT) {
+    if (! (rw * rh > 1)) return -1;
+
+    if (fr->pix_format != PIX_FLOAT) {
 		d3_printf("frame_stats: converting frame to float format!\n");
-		ret = frame_to_float(fr);
+        int ret = frame_to_float(fr);
 		if (ret < 0) {
 			err_printf("error converting \n");
 			return ret;
 		}
 	}
-    if (st == NULL) return -1;
 
-    if (alloc_stats(st) == NULL) {
-		err_printf("frame_stats: histogram alloc failed\n");
-		return ERR_ALLOC;
-	}
+    unsigned *hdata = st->hist.hdat;
+    unsigned hsize = st->hist.hsize;
 
-	hdata = st->hist.hdat;
+    double hmin = H_MIN;
+    double hstep = (H_MAX - H_MIN) / hsize;
+    unsigned binmax = 0;
 
-	hsize = st->hist.hsize;
-	hmin = H_MIN;
-	hstep = (H_MAX - H_MIN) / hsize;
-	binmax = 0;
+    double sum = 0.0;
+    double sumsq = 0.0;
 
-	sum = 0.0;
-	sumsq = 0.0;
-
-	memset(st->avgs, 0, sizeof(st->avgs));
+    int aix;
+    for (aix = 0; aix < 4; aix++)
+        st->avgs[aix] = 0;
 
 // do the reading and calculate stats
-	all = rw * rh;
 
+    double min, max;
 	min = max = get_pixel_luminence(fr, rx, ry);
 
+    int y;
 	for (y = ry; y < ry + rh; y++) {
+        int x;
 		for (x = rx; x < rx + rw; x++) {
-			v = get_pixel_luminence(fr, x, y);
-			if (isnan(v))
-				d3_printf("found NaN at %d, %d", x, y);
+            float v = get_pixel_luminence(fr, x, y);
+if (isnan(v))
+    printf("found NaN at %d, %d", x, y);
 //			if (v < -HIST_OFFSET)
 //				v = -HIST_OFFSET;
 //			if (v > H_MAX)
 //				v = H_MAX;
+
+            unsigned b;
             if (HIST_OFFSET < floor((v - hmin) / hstep))
                 b = 0;
             else
                 b = HIST_OFFSET + floor((v - hmin) / hstep);
-			if (b >= hsize)
-				b = hsize - 1;
+
+            if (b >= hsize) b = hsize - 1;
+
 			hdata[b] ++;
-			if (hdata[b] > binmax)
-				binmax = hdata[b];
-			if (v > max) {
+            if (hdata[b] > binmax) binmax = hdata[b];
+
+            if (v > max)
 				max = v;
-//				d3_printf("max = %.1f", max);
-			}
-			else if (v < min) {
+            else if (v < min)
 				min = v;
-//				d3_printf("min = %.1f", min);
-			}
+
 			sum += v;
 			sumsq += v * v;
 
@@ -417,6 +399,8 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 
 	st->min = min;
 	st->max = max;
+
+    unsigned all = rw * rh;
 
 	st->avg = sum / (1.0 * all);
 
@@ -435,13 +419,19 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 
 	sum = 0.0;
 	sumsq = 0.0;
-	b = 0;
-	n = 0;
 
-	bv = hmin - HIST_OFFSET;
-	s = all / POP_CENTER;
-	e = all - all / POP_CENTER;
-	c = all / 2;
+    unsigned n = 0;
+
+    unsigned s = all / POP_CENTER;
+    unsigned e = all - all / POP_CENTER;
+
+    unsigned b = 0;
+    double bv = hmin - HIST_OFFSET;
+    double c = all / 2;
+
+    double median = 0.0;
+
+    unsigned i, is;
     for (i = 0; i < hsize; i++) {
         bv += hstep;
         b += hdata[i];
@@ -494,7 +484,7 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 }
 
 
-int frame_stats(struct ccd_frame *hd)
+void frame_stats(struct ccd_frame *hd)
 {
     hd->data_valid = hd->w * hd->h;
 /*
@@ -503,20 +493,19 @@ int rh = 50;
 int rx = (hd->w + rw) / 2;
 int ry = (hd->h + rh) / 2;
 */
-    return region_stats(hd, 0, 0, hd->w, hd->h, & hd->stats);
+    region_stats(hd, 0, 0, hd->w, hd->h, &hd->stats);
 }
 
 
 // check if a filename has a valid fits extension, or append one if it doesn't
 // do not exceed fnl string length
-// return 1 if the name was changed, -1 if the file is a .gz, .zip or .Z
+// return 1 format unrecognized from extension, 0 the file is fittish, -1 the file is zippish
 
-static int fits_filename(char *fn, int fnl)
+static int fits_filename(char *fn)
 {
 	int len;
 	len = strlen(fn);
-	if (len + 5 >= fnl)
-		return 0;
+
 	if (strcasecmp(fn + len - 5, ".fits") == 0)
 		return 0;
 	if (strcasecmp(fn + len - 4, ".fit") == 0)
@@ -533,7 +522,7 @@ static int fits_filename(char *fn, int fnl)
 		return -1;
 	if (strcasecmp(fn + len - 4, ".zip") == 0)
 		return -1;
-	strcat(fn, ".fits");
+//    strcat(fn, ".fits"); // dont do this
 	return 1;
 }
 
@@ -613,83 +602,119 @@ struct read_fn read_mem = {
  size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
 #define MAX_FILENAME 1024
 
+// look for 'keyword' then '=' in source. return pointer to next char after '='
+// source is guaranteed nul terminated at pos 81
+char *str_find_fits_key(char *str, char *key)
+{
+    gboolean equal = FALSE;
+    while (*key == *str) {
+        if (*key == 0) break;
+        if (*str == 0) break;
+
+        equal = TRUE;
+
+        key++;
+        str++;
+    }
+    if (equal) {
+        while (*str == ' ') str++;
+        if (*str == '=') {
+            while (*str == '=')
+                str++;
+            return str;
+        }
+    }
+
+    return NULL;
+}
+
+gboolean str_get_fits_key_double(char *str, char *key, double *d)
+{
+    char *rem = str_find_fits_key(str, key);
+    if (rem == NULL) return FALSE;
+
+    char *endp;
+    *d = strtod(rem, &endp);
+    if (endp == str) return FALSE;
+    if (*d == 0) { printf ("error reading double: %s\n", endp); fflush(NULL); }
+    return (*d == 0) ? FALSE : TRUE;
+}
+
 // read_fits_file reads a fits file from disk/memory and creates a new frame
 // holding the data from the file.
 static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_unsigned, char *default_cfa, struct read_fn *rd)
 {
-	char lb[FITS_HCOLS + 1];
-	short v[FITS_HCOLS * FITS_HROWS / 2];
-	unsigned int *fv = (unsigned int *) v;
-	int i, j, k, ef;
-	unsigned all, frame;
-	unsigned naxis;
+    struct ccd_frame *hd = NULL;
+
+    FITS_row *var = NULL;
+    int nvar = 0;
+
+    gboolean is_simple = FALSE;
+    unsigned naxis = 0;
 	unsigned naxis3 = 0;
-	struct ccd_frame* hd;
-	float *data, *r_data, *g_data, *b_data;
-	FITS_row *cp;
-	int nt = 10;
-	double bz, bs;
-	float bscale = 0.0, bzero = 0.0;
-	int bsset = 0;
-	int bitpix;
-	int bytes_per_pixel;
-	float d;
+    int width = -1;
+    int height = -1;
+    float bscale = NAN;
+    float bzero = NAN;
+    int bitpix = 0;
 
-	ef = 0;
-	lb[80] = 0;
+    gboolean ef = FALSE;
 
-//now allocate the header for the new frame
-	hd = new_frame_head_fr(NULL, 0, 0);
-	if (hd == NULL) {
-		err_printf("read_fits_file_generic: error creating header\n");
-		return NULL;
-	}
-	for (i = 0; i < 50; i++)	{// at most 50 header blocks
-		for (j = 0; j < FITS_HROWS; j++) {	// 36 cards per block
+    int hb;
+    for (hb = 0; hb < 50; hb++)	{// at most 50 header blocks
+
+        int cd;
+        for (cd = 0; cd < FITS_HROWS; cd++) {	// 36 cards per block
+
+            char lb[FITS_HCOLS + 1];
+
+            int k;
             for (k = 0; k < FITS_HCOLS; k++)	// chars per card
 				lb[k] = rd->fngetc(fp);
 
-            if (ef) continue;
+            if (ef) continue; // END found - keep reeding to end of block
+
+            lb[k] = 0;
 
             // now parse the fits header lines
-            if (strncmp(lb, "END", 3) == 0)
-				ef = 1;
-			else if (sscanf(lb, "NAXIS = %d", &naxis) )
-				;
-			else if (sscanf(lb, "NAXIS1 = %d", &hd->w) )
-				;
-			else if (sscanf(lb, "NAXIS2 = %d", &hd->h) )
-				;
-			else if (sscanf(lb, "NAXIS3 = %d", &naxis3) )
-				;
-			else if (sscanf(lb, "BITPIX = %d", &bitpix) )
-				;
-			else if (sscanf(lb, "BSCALE = %f", &d) ) {
-				bsset = 1;
+            if (strncmp(lb, "END", 3) == 0) {
+                ef = TRUE;
+                continue;
+            }
+
+            double d; // maybe use flag to control search
+            if (naxis == 0 && str_get_fits_key_double(lb, "NAXIS", &d))
+                naxis = d;
+            else if (width == -1 && str_get_fits_key_double(lb, "NAXIS1", &d))
+                width = d;
+            else if (height == -1 && str_get_fits_key_double(lb, "NAXIS2", &d))
+                height = d;
+            else if (naxis3 == 0 && str_get_fits_key_double(lb, "NAXIS3", &d))
+                naxis3 = d;
+            else if (bitpix == 0 && str_get_fits_key_double(lb, "BITPIX", &d))
+                bitpix = d;
+            else if (isnan(bscale) && str_get_fits_key_double(lb, "BSCALE", &d))
 				bscale = d;
-			}
-			else if (sscanf(lb, "BZERO = %f", &d) ) {
-				bsset = 1;
+            else if (isnan(bzero) && str_get_fits_key_double(lb, "BZERO", &d))
 				bzero = d;
-			}
-			else if (!strncmp(lb, "SIMPLE", 6) )
-				;
+            else if (!is_simple && !strncmp(lb, "SIMPLE", 6) )
+                is_simple = TRUE;
             else { //add the line to the unprocessed list
-                cp = realloc(hd->var, (hd->nvar + 1) * FITS_HCOLS);
+                FITS_row *cp = realloc(var, (nvar + 1) * FITS_HCOLS);
                 if (cp == NULL) {
                     err_printf("cannot alloc space for fits header line, skipping\n");
                 } else {
-                    hd->var = cp;
-                    memcpy(cp + hd->nvar, lb, FITS_HCOLS);
+                    var = cp;
+                    memcpy(cp + nvar, lb, FITS_HCOLS);
                     //					d3_printf("adding generic line:\n%80s\n", lb);
-                    hd->nvar ++;
+                    nvar ++;
                 }
             }
 		}
         if (ef) break;
 	}
 
-	if (ef == 0) {
+    if (!ef) {
 		err_printf("Bad FITS format; cannot find END keyword\n");
 		goto err_exit;
 	}
@@ -711,17 +736,40 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 		goto err_exit;
 	}
 
-	if (hd->w <= 0) {
-		err_printf("bad NAXIS1 = %d \n", hd->w);
+    if (width <= 0) {
+        err_printf("bad NAXIS1 = %d \n", width);
 		goto err_exit;
 	}
-	if (hd->h <= 0) {
-		err_printf("bad NAXIS2 = %d \n", hd->h);
+    if (height <= 0) {
+        err_printf("bad NAXIS2 = %d \n", height);
 		goto err_exit;
 	}
 
+    // check for any required scaling/shifting
+    double bz, bs;
+
+    bz = (isnan(bzero)) ? 0 : bzero;
+    bs = (isnan(bscale)) ? 1 : bscale;
+
+    //now allocate the header for the new frame
+    hd = new_frame_head_fr(NULL, 0, 0);
+    if (hd == NULL) {
+        err_printf("read_fits_file_generic: error creating header\n");
+        free(var);
+        goto err_exit;
+    }
+
+    // initialize hd
+    hd->var = var;
+    hd->nvar = nvar;
+    hd->w = width;
+    hd->h = height;
+    hd->stats.zero = bz;
+    hd->stats.scale = bs;
+
 	if (alloc_frame_data(hd)) {
 		err_printf("read_fits_file_generic: cannot allocate data for frame\n");
+        free_frame(hd);
 		goto err_exit;
 	}
 
@@ -732,62 +780,57 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 	if (naxis == 3 || hd->rmeta.color_matrix) {
 		if (alloc_frame_rgb_data(hd)) {
 			err_printf("read_fits_file_generic: cannot allocate RGB data for frame\n");
+            free_frame(hd);
 			goto err_exit;
 		}
 	}
 
-//printf("\nReading FITS file: %s %d x %d x %d\n",
-//		  fn, hd->w, hd->h, bitpix);
-
-// check for any required scaling/shifting
-	if (bsset) {
-		if (bscale == 0.0) {
-			err_printf("bad BSCALE (0) - using 1.0\n");
-			bscale = 1.0;
-		}
-		bz = bzero;
-		bs = bscale;
-	} else {
-		bz = 0;
-		bs = 1.0;
-	}
-
-    hd->stats.zero = bz;
-    hd->stats.scale = bs;
-printf("bzero %f bscale %f\n", bz, bs); fflush(NULL);
-
 // do the reading and calculate stats
-	frame = hd->w * hd->h;
-	all = frame * (naxis == 3 ? 3 : 1);
-	data = (float *)(hd->dat);
-	r_data = (float *)(hd->rdat);
-	g_data = (float *)(hd->gdat);
-	b_data = (float *)(hd->bdat);
-	bytes_per_pixel = abs(bitpix) / 16;
-	j=0;
+    unsigned frame = hd->w * hd->h;
+    unsigned all = frame * (naxis == 3 ? 3 : 1);
 
-	while(j < all) {
-		k = rd->fnread (v, 1, FITS_HCOLS * FITS_HROWS, fp);
-		if (k != FITS_HCOLS * FITS_HROWS) {
-			err_printf("data is short, got %d, expected %d!\n", k, FITS_HCOLS * FITS_HROWS);
+    float *data = (float *)(hd->dat);
+    float *r_data = (float *)(hd->rdat);
+    float *g_data = (float *)(hd->gdat);
+    float *b_data = (float *)(hd->bdat);
+
+    int block_size = FITS_HCOLS * FITS_HROWS;
+    int inbytes_per_pixel = abs(bitpix) / 8;
+    int out_size = block_size >> (inbytes_per_pixel / sizeof(short));
+
+    int nt = 10; // control printing of error messages for out of scale pixels
+
+    unsigned j = 0;
+    do {
+
+        short v[block_size / sizeof(short)];
+        unsigned int *fv = (unsigned int *) v;
+        unsigned char *cv = (unsigned char *) v;
+
+        int k = rd->fnread (v, 1, block_size, fp);
+        if (k != block_size) {
+            err_printf("data is short, got %d, expected %d!\n", k, block_size);
 			break;
 		}
-		for(i = 0; i < ((FITS_HCOLS * FITS_HROWS) >> bytes_per_pixel) && j < all; i++) {
+
+        int i;
+        for(i = 0; i < out_size; i++) { // convert block to floats
+            float f;
 			switch(bitpix) {
 			case 8:
 				if (bz == 0 ){
-					d = ((unsigned char *)v)[i] * bs;
+                    f = cv[i] * bs;
 				} else {
-					d = ((char *)v)[i] * bs + bz;
+                    f = ((char *)cv)[i] * bs + bz;
 				}
 				break;
 			case 16:
 				if (force_unsigned && bz == 0 ){
 				  //du = (((v[i] >> 8) & 0x0ff) | ((v[i] << 8) & 0xff00));
-					d = (unsigned short)ntohs(v[i]) * bs;
+                    f = (unsigned short)ntohs(v[i]) * bs;
 				} else {
 				  //ds = (((v[i] >> 8) & 0x0ff) | ((v[i] << 8) & 0xff00));
-                    d = (short)ntohs(v[i]) * bs + bz;
+                    f = (short)ntohs(v[i]) * bs + bz;
 				}
 				break;
 			case 32:
@@ -806,30 +849,29 @@ printf("bzero %f bscale %f\n", bz, bs); fflush(NULL);
 					int pos = j % frame;
 
 					if (nt && (fds < -65000.0 || fds > 100000.0)) {
-						d4_printf("pixv[%d,%d]=%8g [%08x]\n",
-							  pos % hd->w, pos / hd->w, fds, fv[i]);
+                        d4_printf("pixv[%d,%d]=%8g [%08x]\n", pos % hd->w, pos / hd->w, fds, fv[i]);
 						nt --;
 					}
 
-					d = bs * fds + bz;
+                    f = bs * fds + bz;
 				}
 				break;
 			}
 			if (naxis == 3) {
 				if (j < frame) {
-					*r_data++ = d;
+                    *r_data++ = f;
 				}
 				else if (j < 2 * frame) {
-					*g_data++ = d;
+                    *g_data++ = f;
 				} else {
-					*b_data++ = d;
+                    *b_data++ = f;
 				}
 			} else {
-				*data++ = d;
+                *data++ = f;
 			}
-			j++;
+            j++; if (j == all) break;
 		}
-	}
+    } while (j < all);
 
 //	d3_printf("B");
 	if (naxis == 3) {
@@ -848,7 +890,10 @@ printf("bzero %f bscale %f\n", bz, bs); fflush(NULL);
 //	info_printf("min=%.2f max=%.2f avg=%.2f sigma=%.2f\n",
 //		    hd->stats.min, hd->stats.max, hd->stats.avg, hd->stats.sigma);
 
+// fn could include some filetype extension
+// TODO check remove extension when saving
     hd->name = strdup(fn);
+
 //	parse_fits_wcs(hd, &hd->fim);
 //	parse_fits_exp(hd, &hd->exp);
 
@@ -858,41 +903,31 @@ printf("bzero %f bscale %f\n", bz, bs); fflush(NULL);
 	if (fits_get_int(hd, "CCDSKIP2", &hd->y_skip) <= 0)
 		hd->y_skip = 0;
 
+err_exit:
 	rd->fnclose(fp);
 
 //	d3_printf("C");
 	return hd;
-
-err_exit:
-    rd->fnclose(fp);
-	free_frame(hd);
-	return NULL;
 }
 
 /* entry points for read_fits. read_fits_file is provided for compatibility */
 struct ccd_frame *read_fits_file(char *filename, int force_unsigned, char *default_cfa)
 {
-	char fn[MAX_FILENAME + 1];
 	FILE *fp;
 	int zipped;
-	char *f;
 
-	strncpy(fn, filename, MAX_FILENAME);
-	zipped = (fits_filename(fn, MAX_FILENAME) < 0) ;
+    zipped = (fits_filename(filename) < 0) ;
 	if (zipped) {
 		err_printf("read_fits_file: cannot open non-fits file\n");
 		return NULL;
 	}
-	fp = fopen(f = filename, "r");
-	if (fp == NULL) {
-		fp = fopen(f = fn, "r");
-		if (fp == NULL) {
-			err_printf("\nread_fits_file: Cannot open file: %s or %s\n", filename, fn);
-			return NULL;
-		}
+    fp = fopen(filename, "r");
+    if (fp == NULL) {
+        err_printf("\nread_fits_file: Cannot open file %s\n", filename);
+        return NULL;
 	}
 
-    struct ccd_frame *fr = read_fits_file_generic(fp, f, force_unsigned, default_cfa, &read_FILE);
+    struct ccd_frame *fr = read_fits_file_generic(fp, filename, force_unsigned, default_cfa, &read_FILE);
 
     return fr;
 }
@@ -901,43 +936,37 @@ struct ccd_frame *read_fits_file(char *filename, int force_unsigned, char *defau
 /* a typical value for ungz would be 'zcat ' */
 struct ccd_frame *read_gz_fits_file(char *filename, char *ungz, int force_unsigned, char *default_cfa)
 {
-	char fn[MAX_FILENAME + 1];
 	FILE *fp = NULL;
-	int zipped;
 
-	strncpy(fn, filename, MAX_FILENAME);
-	zipped = (fits_filename(fn, MAX_FILENAME) < 0) ;
+    int zipped = (fits_filename(filename) < 0) ;
 	if (zipped && ungz == NULL) {
-		err_printf("read_gz_fits_file: cannot open non-fits file\n");
+        err_printf("read_gz_fits_file: no unzip command set\n");
 		return NULL;
 	}
 	if (zipped) {
         char *cmd;
-        if (-1 != asprintf(&cmd, "%s '%s' ", ungz, fn)) {
+        if (-1 != asprintf(&cmd, "%s '%s' ", ungz, filename)) {
 			fp = popen(cmd, "r");
             free(cmd);
 		}
         if (fp == NULL) { // try bzcat
-            if (-1 != asprintf(&cmd, "b%s '%s' ", ungz, fn)) {
+            if (-1 != asprintf(&cmd, "b%s '%s' ", ungz, filename)) {
                 fp = popen(cmd, "r");
                 free(cmd);
             }
         }
 		if (fp == NULL) {
-			err_printf("read_gz_fits_file: Cannot open/unzip file: %s with %s\n", fn, ungz);
+            err_printf("read_gz_fits_file: Cannot open file %s with %s\n", filename, ungz);
 			return NULL;
 		}
-	} else {
-		char *f;
-		fp = fopen(f = filename, "r");
-		if (fp == NULL) {
-			fp = fopen(f = fn, "r");
-			if (fp == NULL) {			
-				err_printf("read_gz_fits_file: Cannot open file: %s or %s\n", filename, fn);
-				return NULL;
-			}
-		}
+    } else {
+        fp = fopen(filename, "r");
+        if (fp == NULL) {
+            err_printf("read_gz_fits_file: Cannot open file %s\n", filename);
+            return NULL;
+        }
 	}
+
     struct ccd_frame *fr = read_fits_file_generic(fp, filename, force_unsigned, default_cfa, &read_FILE);
 
     return fr;
@@ -946,11 +975,9 @@ struct ccd_frame *read_gz_fits_file(char *filename, char *ungz, int force_unsign
 struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned, char *default_cfa)
 {
     struct ccd_frame *fr = NULL;
-d2_printf("ccd_frame.read_image_file: %s\n", filename);
 
-    if (raw_filename(filename) <= 0)
-        fr = read_raw_file(filename);
-
+//    if (raw_filename(filename) <= 0)
+    fr = read_raw_file(filename);
     if (fr) return fr;
 
     fr = read_jpeg_file(filename);
@@ -970,11 +997,12 @@ struct ccd_frame *read_fits_file_from_mem(const unsigned char *data, unsigned lo
 	return read_fits_file_generic(memFH, fn, force_unsigned, default_cfa, &read_mem);
 }
 
+
 // write a frame to disk as a fits file
 
-int write_fits_frame(struct ccd_frame *fr, char *filename)
+int write_fits_frame_unzipped(struct ccd_frame *fr, char *filename)
 {
-	char lb[MAX_FILENAME];
+//	char *lb = NULL;
 	FILE *fp;
 	int i, j, k, v;
 	unsigned all;
@@ -986,19 +1014,12 @@ int write_fits_frame(struct ccd_frame *fr, char *filename)
 	double bscale, bzero;
 	int naxis;
 
-	lb[80] = 0;
-char *cwd = getcwd(NULL, 100);
-printf("%s\n", cwd);
-free (cwd);
-d2_printf("Write FITS %s\n", filename);
-	strncpy(lb, filename, MAX_FILENAME);
-
 //	fits_filename(lb, MAX_FILENAME);
 
-	fp = fopen(lb, "w");
+    fp = fopen(filename, "w");
 	if (fp == NULL) {
-		err_printf("\nwrite_fits_frame: Cannot open file: %s for writing\n",
-			filename);
+        err_printf("\nwrite_fits_frame: Cannot open file: %s for writing\n", filename);
+
 		return (ERR_FILE);
 	}
 /*
@@ -1020,7 +1041,7 @@ d2_printf("Write FITS %s\n", filename);
 		(1000000.0 * 24.0 * 3600.0);
 */
 
-	if (fr->stats.statsok == 0)
+    if (fr->stats.statsok == 0)
 		frame_stats(fr);
 
 	if (fr->magic & FRAME_VALID_RGB) {
@@ -1082,6 +1103,7 @@ d2_printf("Write FITS %s\n", filename);
 
 	if (fr->pix_size != 4 || fr->pix_format != PIX_FLOAT) {
 		err_printf("\nwrite_fits_frame: I can only write float frames\n");
+
 		return ERR_FATAL;
 	}
 
@@ -1119,38 +1141,53 @@ int pad;
 d3_printf("ccd_frame.write_fits_frame %d %d %d\n", all, naxis, pad); 
 //	for (i = 0;  i < pad; i++)
 //		putc(' ', fp);
+
     while(pad++ < 2880)
         putc(' ', fp);
 
-	fflush(fp);
+    fflush(fp);
 	fsync(fileno(fp));
 	fclose(fp);
+
 	return 0;
 }
 
-int write_gz_fits_frame(struct ccd_frame *fr, char *fn, char *gzcmd)
+int write_gz_fits_frame(struct ccd_frame *fr, char *fn)
 {
-	char *text;
-	char lb[MAX_FILENAME];
-	int ret;
-
-	if (gzcmd == NULL)
-		return write_fits_frame(fr, fn);
-
-	strncpy(lb, fn, MAX_FILENAME);
+//	char *lb = NULL;    
+//	lb = strdup(fn);
 //    fits_filename(lb, MAX_FILENAME);
 
-    ret = write_fits_frame(fr, lb); // this tries to write file without .gz extension which can collide with directory names
-	if (!ret) {
-        if (-1 == asprintf(&text, "%s '%s'", gzcmd, lb)) // this replaces file and adds .gz extension
-			return ERR_ALLOC;
-		if (-1 == system(text))
-			ret = ERR_FILE;
-        free(text);
-	}
+// add a .fits extension?
+    int ret = write_fits_frame_unzipped(fr, fn); // first write file unzipped
+
+    char *gzcmd = P_STR(FILE_COMPRESS);
+
+    if ((ret == 0) && (gzcmd != NULL)) {
+        char *cmd = NULL;
+        asprintf(&cmd, "%s '%s'", gzcmd, fn);
+        if (cmd) {
+            ret = system(cmd); // zip file written previously
+            free(cmd);
+        }
+    }
+
 	return ret;
 }
 
+int write_fits_frame(struct ccd_frame *fr, char *filename)
+{
+// if zipped set or has zipped extension write zipped file, else unzipped
+// play with extension to make sense
+    char *fn = strdup(filename);
+    int zipped = is_zip_name(fn);
+    if (zipped) drop_dot_extension(fn);
+
+    if (zipped)
+        return write_gz_fits_frame(fr, fn);
+    else
+        return write_fits_frame_unzipped(fr, fn);
+}
 
 
 // flat_frame divides ff by (fr1 / cavg(fr1) ; the two frames are aligned according to their skips
@@ -1171,9 +1208,9 @@ int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1)
 		return -1;
 	}
 
-	if (!fr1->stats.statsok)
+    if (!fr1->stats.statsok)
 		frame_stats(fr1);
-	mu = fr1->stats.cavg;
+    mu = fr1->stats.cavg;
 	if (mu <= 0.0) {
 		err_printf("flat frame has negative avg: %.2f aborting\n", mu);
 		return -1;
@@ -1226,9 +1263,9 @@ int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1)
 				for (x = 0; x < xovlap; x++) {
 					int k = y % 2 * 2 + x % 2;
 					
-					ll = fr1->stats.avgs[k] / MAX_FLAT_GAIN;
+                    ll = fr1->stats.avgs[k] / MAX_FLAT_GAIN;
 					if (*dp1 > ll) 
-						*dp = *dp / *dp1 * fr->stats.avgs[k];
+                        *dp = *dp / *dp1 * fr->stats.avgs[k];
 					else 
 						*dp = *dp * MAX_FLAT_GAIN;
 
@@ -1255,7 +1292,7 @@ int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1)
 
 		}
 	}
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 
 //	fr->exp.flat_noise = sqrt( sqr(fr1->exp.rdnoise) + mu / sqrt(fr1->exp.scale) ) / mu;
     fr->exp.flat_noise = sqrt( sqr(fr1->exp.rdnoise) + mu / sqrt(fr1->exp.scale) ) / mu;
@@ -1321,7 +1358,7 @@ int add_frames (struct ccd_frame *fr, struct ccd_frame *fr1)
 // fit noise data
 	fr->exp.bias = fr->exp.bias + fr1->exp.bias;
 	fr->exp.rdnoise = sqrt(sqr(fr->exp.rdnoise) + sqr(fr1->exp.rdnoise));
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 	return 0;
 }
 
@@ -1389,7 +1426,7 @@ int sub_frames (struct ccd_frame *fr, struct ccd_frame *fr1)
 // compute noise data
 	fr->exp.bias = fr->exp.bias - fr1->exp.bias;
 	fr->exp.rdnoise = sqrt(sqr(fr->exp.rdnoise) + sqr(fr1->exp.rdnoise));
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 //	d3_printf("read noise is: %.1f %.1f\n", fr1->exp.rdnoise, fr->exp.rdnoise);
 	return 0;
 }
@@ -1414,7 +1451,7 @@ int scale_shift_frame(struct ccd_frame *fr, double m, double s)
 	fr->exp.bias = fr->exp.bias * m + s;
 	fr->exp.scale /= fabs(m);
 	fr->exp.rdnoise *= fabs(m);
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 
 	return 0;
 }
@@ -1465,7 +1502,7 @@ s = 0;
 	fr->exp.bias = fr->exp.bias * m + s;
 	fr->exp.scale /= fabs(m);
 	fr->exp.rdnoise *= fabs(m);
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 
 	return 0;
 }
@@ -1474,17 +1511,13 @@ s = 0;
 // line, or NULL if not found
 FITS_row *fits_keyword_lookup(struct ccd_frame *fr, char *kwd)
 {
-	FITS_row *var;
-	int i;
+    if (kwd == NULL) return NULL;
+    if (fr == NULL)	return NULL;
 
-	if (kwd == NULL)
-		return NULL;
-	if (fr == NULL)
-		return NULL;
-
-	var = fr->var;
-    for (i=0; i<fr->nvar; i++, var++) {
-        if (!strncmp((char *)var, kwd, strlen(kwd))) {
+    FITS_row *var = fr->var;
+    int i;
+    for (i=0; i < fr->nvar; i++, var++) {
+        if (strncmp((char *)var, kwd, strlen(kwd)) == 0) {
             return var;
 		}
 	}
@@ -1497,26 +1530,27 @@ FITS_row *fits_keyword_lookup(struct ccd_frame *fr, char *kwd)
 // return 0 if ok
 int fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val)
 {
-	char lb[81];
-	FITS_row *v1;
+    char *lb = NULL;
 
-	if (kwd == NULL)
-		return 0;
-	if (fr == NULL)
-		return -1;
-	if (val == NULL)
-		return 0;
+    if (kwd == NULL) return 0;
+    if (fr == NULL)	return -1;
+    if (val == NULL) return 0;
 
-	sprintf(lb, "%-8s= %-70s", kwd, val);
+    asprintf(&lb, "%-8s= %-70s", kwd, val);
+    if (!lb) return -1;
 
-	v1 = fits_keyword_lookup(fr, kwd);
+    FITS_row *v1 = fits_keyword_lookup(fr, kwd);
 
     if (v1 == NULL) { // alloc space for a new var
-        v1 = realloc(fr->var, (fr->nvar + 1) * FITS_HCOLS);
-		if (v1 == NULL) {
-			err_printf("cannot alloc mem for keyword %s\n", kwd);
-			return ERR_ALLOC;
-		}
+        if (fr->var == NULL) {
+            v1 = calloc(FITS_HCOLS, 1);
+        } else {
+            v1 = realloc(fr->var, (fr->nvar + 1) * FITS_HCOLS);
+        }
+        if (v1 == NULL) {
+            err_printf("cannot alloc mem for keyword %s\n", kwd);
+            return ERR_ALLOC;
+        }
 
         fr->var = v1;
         v1 = fr->var + fr->nvar; // point to the new space
@@ -1534,10 +1568,8 @@ int fits_delete_keyword(struct ccd_frame *fr, char *kwd)
 {
     FITS_row *v1;
 
-	if (kwd == NULL)
-		return 0;
-	if (fr == NULL)
-		return -1;
+    if (kwd == NULL) return 0;
+    if (fr == NULL)	return -1;
 
 	v1 = fits_keyword_lookup(fr, kwd);
     if (v1 == NULL) return 0;
@@ -1565,7 +1597,7 @@ int fits_delete_keyword(struct ccd_frame *fr, char *kwd)
 // return 0 if ok
 int fits_add_history(struct ccd_frame *fr, char *val)
 {
-	char lb[81];
+    char *lb = NULL;
 	FITS_row *v1;
 
 	if (val == NULL)
@@ -1573,7 +1605,9 @@ int fits_add_history(struct ccd_frame *fr, char *val)
 	if (fr == NULL)
 		return -1;
 
-	sprintf(lb, "HISTORY = %-70s", val);
+    asprintf(&lb, "HISTORY = %-70s", val);
+    if (lb == NULL) return -1;
+
 	// alloc space for a new one
     v1 = realloc(fr->var, (fr->nvar + 1) * FITS_HCOLS);
 	if (v1 == NULL) {
@@ -1630,7 +1664,7 @@ int crop_frame(struct ccd_frame *fr, int x, int y, int w, int h)
 	fr->y_skip += y;
 	fr->w = w;
 	fr->h = h;
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 	return 0;
 }
 
@@ -1641,7 +1675,7 @@ int frame_to_float(struct ccd_frame *fr)
 	void *ip;
 	float *op;
 
-d3_printf("ccd_frame.frame_to_float: format is %d\n", fr->pix_format);
+printf("ccd_frame.frame_to_float: format is %d\n", fr->pix_format); fflush(NULL);
 
 	if (fr->pix_format == PIX_FLOAT)
 		return 0;
@@ -1696,7 +1730,7 @@ d3_printf("ccd_frame.frame_to_float: format is %d\n", fr->pix_format);
 		return 0;
 #endif /* LITTLE_ENDIAN */
 		default:
-		err_printf("cannot convert unknown format %d to float\n");
+        err_printf("cannot convert unknown format %d to float\n", fr->pix_format);
 		return -1;
 	}
 
@@ -1707,22 +1741,26 @@ d3_printf("ccd_frame.frame_to_float: format is %d\n", fr->pix_format);
  * or -1 for an error */
 int fits_get_double(struct ccd_frame *fr, char *kwd, double *v)
 {
-	char vs[FITS_HCOLS+1];
-	FITS_row *row;
-	char * end;
-	double vv;
+    FITS_row *row = fits_keyword_lookup(fr, kwd);
+    if (row == NULL) return 0;
 
-	row = fits_keyword_lookup(fr, kwd);
-	if (row == NULL)
-		return 0;
-	memcpy(vs, row, FITS_HCOLS);
-	vs[FITS_HCOLS] = 0;
-//	d3_printf("double field is: %s\n", vs+9);
-	vv = strtod(vs+9, &end);
-	if (end == vs+9)
-		return -1;
-	*v = vv;
-	return 1;
+    char *vs = NULL;
+    asprintf(&vs, "%80s", (char *)row); //  memcpy(vs, row, FITS_HCOLS); vs[FITS_HCOLS] = 0;
+    if (vs) {
+        char *p = strstr(vs, "=");
+        if (p) {
+            p++;
+
+            char *end = p; double vv = strtod(p, &end); int ok = (end != p);
+            if (ok) {
+                *v = vv;
+                free(vs);
+                return 1;
+            }
+        }
+        free(vs);
+    }
+    return -1;
 }
 
 /* get a int field (or the integer part of a double field)
@@ -1731,41 +1769,40 @@ int fits_get_double(struct ccd_frame *fr, char *kwd, double *v)
 int fits_get_int(struct ccd_frame *fr, char *kwd, int *v)
 {
 	double vv;
-	int ret;
-
-	ret = fits_get_double(fr, kwd, &vv);
-	if (ret > 0)
-		*v = vv;
+    int ret = fits_get_double(fr, kwd, &vv);
+    if (ret > 0) *v = vv;
 	return ret;
 }
 
 
-/* get a string field containing at most n characters
- * return the number of chars read, 0 if the field was not found,
- * or -1 for an error */
-int fits_get_string(struct ccd_frame *fr, char *kwd, char *v, int n)
+/* get a string field
+ * return mallocd string */
+char *fits_get_string(struct ccd_frame *fr, char *kwd)
 {
-	char *row;
-    int i, j, k;
+    char *row = (char *)fits_keyword_lookup(fr, kwd);
+    if (row == NULL) return NULL;
 
-	row = (char *)fits_keyword_lookup(fr, kwd);
-    if (row == NULL) return 0;
+    char *v = calloc(sizeof(char), FITS_HCOLS + 1);
+    if (v == NULL) return NULL;
 
-	for (i=9; i < FITS_HCOLS; i++) {
+    int i;
+    for (i = 0; i < FITS_HCOLS; i++) {
+        if (row[i] == '"' || row[i] == '\'') { i++; break; }
+    }
+
+    char *p;
+    for (p = v; i < FITS_HCOLS; i++) {
         if (row[i] == '"' || row[i] == '\'') break;
+        if ((p == v) && (row[i] == ' ')) continue;
+        *p++ = row[i];
 	}
-    if (i++ >= FITS_HCOLS) return -1;
 
-//	d3_printf("first quote at %d\n", i);
-    for (j = 0, k = 0; i < FITS_HCOLS && j < n-1; i++, j++) {
-        if (row[i] == '"' || row[i] == '\'') break;
-        if ((k == 0) && (row[i] == ' ')) continue;
-        v[k++] = row[i];
-	}
-//	d3_printf("second quote at %d\n", i);
-    v[k] = 0;
-    if (i == FITS_HCOLS) return -1;
-    return k;
+    if (i == FITS_HCOLS) {
+        free(v);
+        return NULL;
+    }
+    *p = 0;
+    return v;
 }
 
 /* get a double (degrees) from a string field containing a
@@ -1774,17 +1811,12 @@ int fits_get_string(struct ccd_frame *fr, char *kwd, char *v, int n)
  * parsing error */
 int fits_get_dms(struct ccd_frame *fr, char *kwd, double *v)
 {
-	char dms[FITS_HCOLS];
-	int ret;
+    char *str = fits_get_string(fr, kwd);
+    if (str == NULL) return -1;
 
-	ret = fits_get_string(fr, kwd, dms, FITS_HCOLS - 1);
-	if (ret <= 0)
-		return ret;
-//	d3_printf("dms field is: %s\n", dms);
-    if (dms_to_degrees(dms, v) < 0) {
-		return -1;
-	}
-	return 1;
+    int res = (dms_to_degrees(str, v) < 0);
+    free(str);
+    return res;
 }
 
 float * get_color_plane(struct ccd_frame *fr, int plane_iter) {

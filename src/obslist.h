@@ -1,6 +1,7 @@
 #ifndef _OBSLIST_H_
 #define _OBSLIST_H_
 
+#include <gtk/gtk.h>
 #include "obsdata.h"
 
 void obs_list_fname_cb(GtkWidget *widget, gpointer data);

@@ -277,7 +277,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
         sl = gsl->sl;
         for (; sl != NULL; sl = sl->next) {
             gs = GUI_STAR(sl->data);
-            if (gs->s != NULL && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF))
+            if (gs->s && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF))
                 ssl = g_list_prepend(ssl, gs->s);
         }
     }
@@ -329,7 +329,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 
             *dat = offset_adu + signal_adu + residual_adu + noise_adu;
         }
-        release_frame(star_fr);
+        release_frame(star_fr, "act_stars_add_synthetic");
 
     } else {
         synth_stars_to_frame(fr, wcs, ssl);

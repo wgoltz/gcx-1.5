@@ -1570,7 +1570,7 @@ raw_read_func raw_reader(char *filename)
 struct ccd_frame *read_raw_file(char *filename)
 {
 	struct ccd_frame *frame;
-	struct raw_file raw;
+    struct raw_file raw = { 0 };
 	raw_read_func reader;
 	struct stat statbuf;
 
@@ -1580,7 +1580,7 @@ struct ccd_frame *read_raw_file(char *filename)
 	}
 
 	frame = NULL;
-	bzero(&raw, sizeof(raw));
+//bzero(&raw, sizeof(raw));
 
 	if (stat(filename, &statbuf)) {
 		err_printf("read_raw_file: stat %s: %s\n", filename, strerror(errno));
@@ -1605,30 +1605,35 @@ struct ccd_frame *read_raw_file(char *filename)
 
 int parse_color_field(struct ccd_frame *fr, char *default_cfa)
 {
-	char str[80];
-	float r, g, gp, b;
-
     if (! (fr->magic & FRAME_VALID_RGB)) {
 		/* Only process CFA attributes for RAW files */
 		return 0;
 	}
 
-	if(fits_get_string(fr, "CFA_FMT", str, 80) <= 0) {
+    char *cfa_fmt = fits_get_string(fr, "CFA_FMT");
+    if (cfa_fmt == NULL) {
         if(! default_cfa || strncmp(default_cfa, "none", 5) == 0) return -1;
 
-		strncpy(str, default_cfa, 80);
+        cfa_fmt = strdup(default_cfa);
 	}
-	if (strncmp(str, "RGGB", 4) == 0) {
+    if (strncmp(cfa_fmt, "RGGB", 4) == 0) {
 		fr->rmeta.color_matrix = FRAME_CFA_RGGB;
-    } else if (strncmp(str, "GRBG", 4) == 0) {
+    } else if (strncmp(cfa_fmt, "GRBG", 4) == 0) {
         fr->rmeta.color_matrix = FRAME_CFA_GRBG;
-    } else if (strncmp(str, "BGGR", 4) == 0) {
+    } else if (strncmp(cfa_fmt, "BGGR", 4) == 0) {
         fr->rmeta.color_matrix = FRAME_CFA_BGGR;
-    } else if (strncmp(str, "GBRG", 4) == 0) {
+    } else if (strncmp(cfa_fmt, "GBRG", 4) == 0) {
         fr->rmeta.color_matrix = FRAME_CFA_GBRG;
     }
-	if(fits_get_string(fr, "WHITEBAL", str, 80) > 0) {
-		sscanf(str, "%f,%f,%f,%f", &r, &g, &gp, &b);
+    free(cfa_fmt);
+
+    char *whitebal = (fits_get_string(fr, "WHITEBAL"));
+    if (whitebal) {
+        float r, g, gp, b;
+
+        sscanf(whitebal, "%f,%f,%f,%f", &r, &g, &gp, &b);
+        free(whitebal);
+
 		if(r <= 0.0)
 			err_printf("parse_color_field: found illegal red white-balance: %6.4f\n", r);
 		else
@@ -1650,7 +1655,7 @@ int parse_color_field(struct ccd_frame *fr, char *default_cfa)
 			fr->rmeta.wbb = b;
 
 		d4_printf("Read white-balance: r: %6.4f, g: %6.4f, gp: %6.4f, b:%6.4f\n",
-			  fr->rmeta.wbr, fr->rmeta.wbg, fr->rmeta.wbgp, fr->rmeta.wbb);
+			  fr->rmeta.wbr, fr->rmeta.wbg, fr->rmeta.wbgp, fr->rmeta.wbb);        
 	}
 
 	return 0;
@@ -1658,19 +1663,19 @@ int parse_color_field(struct ccd_frame *fr, char *default_cfa)
 
 int set_color_field(struct ccd_frame *fr)
 {
-	char str[80];
+    char *str;
 	switch (fr->rmeta.color_matrix) {
 	case FRAME_CFA_RGGB:
-		strcpy(str, "\"RGGB\"");
+        str = strdup("\"RGGB\"");
 		break;
     case FRAME_CFA_BGGR:
-        strcpy(str, "\"BGGR\"");
+        str = strdup("\"BGGR\"");
         break;
     case FRAME_CFA_GRBG:
-        strcpy(str, "\"GRBG\"");
+        str = strdup("\"GRBG\"");
         break;
     case FRAME_CFA_GBRG:
-        strcpy(str, "\"GBRG\"");
+        str = strdup("\"GBRG\"");
         break;
 	default:
 		return -1;

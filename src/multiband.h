@@ -17,11 +17,12 @@
 
 /* an object being observed */
 struct o_star {
-	GList *sol;		/* list of star observations of this object */
+    GList *sobs;		/* list of star observations of this object */
 	double smag[MAX_MBANDS];/* standard magnitudes */
 	double smagerr[MAX_MBANDS]; /* errors */
 	unsigned int data;	/* user data */
     int ref_count;
+    struct cat_star *cats; /* point back to cat_star */
 };
 
 
@@ -54,7 +55,7 @@ struct transform {
 /* an observation frame */
 struct o_frame {
     int skip;		        /* this frame is marked deleted, and should not be used for anything or saved */
-    GList *sol;		        /* list of star observations in this frame */
+    GList *sobs;		        /* list of star observations in this frame */
 //	struct obs_data *obs;	/* the obs_data for the frame */
     struct stf *stf;	    /* the stf made from the observation frame */
     long band;		        /* index for the observation's band -1 if the frame has an invalid band */
@@ -69,8 +70,9 @@ struct o_frame {
     /* copies of data from the obs header */
     double mjd;
 	double airmass;
-    gpointer ccd_frame; /* link back to ccd_frame (if gui active) */
+//    gpointer ccd_frame; /* link back to ccd_frame (if gui active) */
     char *fr_name;      /* strdup'd copy of frame name */
+    gpointer imf;
 
     /* a few useful statistics of the fit */
 	double tweight; 	/* total weight of obseravtions used for fit */
@@ -134,8 +136,9 @@ void mband_dataset_release(struct mband_dataset *mbds);
 double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res);
 void mband_dataset_set_ubvri(struct mband_dataset *mbds);
 void mband_dataset_set_bands_by_string(struct mband_dataset *mbds, char *bspec);
-void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, struct o_frame *ofr, int mag_source);
-int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr, int mag_source);
+void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, struct o_frame *ofr);
+int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr);
+int mband_dataset_set_mag_source(struct mband_dataset *mbds, int ms);
 void ofr_transform_stars(struct o_frame *ofr, struct mband_dataset *mbds, int trans, int avg);
 void ofr_accum_avs(struct o_frame *ofr);
 int solve_star(struct star_obs *sob, struct mband_dataset *mbds, int trans, int avg);
@@ -147,7 +150,8 @@ void ofr_transform_to_stf(struct mband_dataset *mbds, struct o_frame *ofr);
 void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data), void *data);
 void mbds_fit_all(GList *ofrs, int (* progress)(char *msg, void *data), void *data);
 void mbds_to_mband(gpointer dialog, struct mband_dataset *nmbds);
-void stf_to_mband(gpointer dialog, struct stf *stf, gpointer fr);
+void mbds_cats_smags_from_avgs(GList *ofrs);
+struct o_frame *stf_to_mband(gpointer dialog, struct stf *stf);
 struct mband_dataset *dialog_get_mbds(gpointer dialog);
 
 
@@ -164,8 +168,8 @@ struct mband_dataset *dialog_get_mbds(gpointer dialog);
 int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, int action);
 char * mbds_short_result(struct o_frame *ofr);
 
-void ofr_link_frame(struct o_frame *ofr, struct ccd_frame *fr);
-void ofr_unlink_frame(struct o_frame *ofr);
+void ofr_link_imf(struct o_frame *ofr, struct image_file *imf);
+void ofr_unlink_imf(struct o_frame *imf);
 
 /* from photometry.c */
 int stf_centering_stats(struct stf *stf, struct wcs *wcs, double *rms, double *max);

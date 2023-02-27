@@ -18,10 +18,12 @@
   Contact Information: gcx@phracturedblue.com <Geoffrey Hausheer>
 *******************************************************************************/
 //gcc -Wall -g -I. -o inditest indi.c indigui.c base64.c lilxml.c `pkg-config --cflags --libs gtk+-2.0 glib-2.0` -lz -DINDIMAIN
+
+#define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
 
 #include "../indi.h"
 #include "../indigui.h"
@@ -75,17 +77,9 @@ enum {
 int f_scansexa(const char *str0, /* input string */
                double *dp)       /* cracked value, if return 0 */
 {
-//    locale_char_t *orig = indi_locale_C_numeric_push();
-
-    double a = 0, b = 0, c = 0;
-    char str[128];
-    //char *neg;
-    uint8_t isNegative=0;
-    int r= 0;
-
     /* copy str0 so we can play with it */
-    strncpy(str, str0, sizeof(str) - 1);
-    str[sizeof(str) - 1] = '\0';
+    char *str = strdup(str0);
+    if (!str) return -1;
 
     /* remove any spaces */
     char* i = str;
@@ -98,30 +92,25 @@ int f_scansexa(const char *str0, /* input string */
     }
     *i = 0;
 
-    // This has problem process numbers in scientific notations e.g. 1e-06
-    /*neg = strchr(str, '-');
-     if (neg)
-         *neg = ' ';
-     */
-    if (str[0] == '-')
-    {
-        isNegative = 1;
-        str[0] = ' ';
-    }
+    uint8_t isNegative;
+    if ((isNegative = (str[0] == '-'))) str[0] = ' ';
 
-    r = sscanf(str, "%lf%*[^0-9]%lf%*[^0-9]%lf", &a, &b, &c);
+    double a = 0, b = 0, c = 0;
 
-//    indi_locale_C_numeric_pop(orig);
+    int r = sscanf(str, "%lf%*[^0-9]%lf%*[^0-9]%lf", &a, &b, &c);
 
-    if (r < 1)
-        return (-1);
+    free(str);
+
+    if (r < 1) return (-1);
+
     *dp = a + b / 60 + c / 3600;
     if (isNegative)
         *dp *= -1;
+
     return (0);
 }
 
-/* sprint the variable a in sexagesimal format into out[].
+/* sprint the variable a in sexagesimal format.
   * w is the number of spaces for the whole part.
   * fracbase is the number of pieces a whole is to broken into; valid options:
   *      360000: <w>:mm:ss.ss
@@ -129,11 +118,9 @@ int f_scansexa(const char *str0, /* input string */
   *      3600:   <w>:mm:ss
   *      600:    <w>:mm.m
   *      60:     <w>:mm
-  * return number of characters written to out, not counting final '\0'.
   */
-static int fs_sexa(char *out, double a, int w, int fracbase)
+static char *fs_sexa(double a, int w, int fracbase)
 {
-    char *out0 = out;
     unsigned long n;
     int d;
     int f;
@@ -152,49 +139,58 @@ static int fs_sexa(char *out, double a, int w, int fracbase)
     f = n % fracbase;
 
     /* form the whole part; "negative 0" is a special case */
+    char *sign = NULL;
     if (isneg && d == 0)
-        out += snprintf(out, MAXINDIFORMAT, "%*s-0", w - 2, "");
+        asprintf(&sign, "%*s-0", w - 2, "");
     else
-        out += snprintf(out, MAXINDIFORMAT, "%*d", w, isneg ? -d : d);
+        asprintf(&sign, "%*d", w, isneg ? -d : d);
 
     /* do the rest */
+    char *fracpart = NULL;
     switch (fracbase)
     {
     case 60: /* dd:mm */
         m = f / (fracbase / 60);
-        out += snprintf(out, MAXINDIFORMAT, ":%02d", m);
+        asprintf(&fracpart, ":%02d", m);
         break;
     case 600: /* dd:mm.m */
-        out += snprintf(out, MAXINDIFORMAT, ":%02d.%1d", f / 10, f % 10);
+        asprintf(&fracpart, ":%02d.%1d", f / 10, f % 10);
         break;
     case 3600: /* dd:mm:ss */
         m = f / (fracbase / 60);
         s = f % (fracbase / 60);
-        out += snprintf(out, MAXINDIFORMAT, ":%02d:%02d", m, s);
+        asprintf(&fracpart, ":%02d:%02d", m, s);
         break;
     case 36000: /* dd:mm:ss.s*/
         m = f / (fracbase / 60);
         s = f % (fracbase / 60);
-        out += snprintf(out, MAXINDIFORMAT, ":%02d:%02d.%1d", m, s / 10, s % 10);
+        asprintf(&fracpart, ":%02d:%02d.%1d", m, s / 10, s % 10);
         break;
     case 360000: /* dd:mm:ss.ss */
         m = f / (fracbase / 60);
         s = f % (fracbase / 60);
-        out += snprintf(out, MAXINDIFORMAT, ":%02d:%02d.%02d", m, s / 100, s % 100);
+        asprintf(&fracpart, ":%02d:%02d.%02d", m, s / 100, s % 100);
         break;
     default:
         printf("fs_sexa: unknown fracbase: %d\n", fracbase);
-        return -1;
     }
 
-    return (out - out0);
+    char *result = NULL;
+    if (sign && fracpart)
+        asprintf(&result, "%s%s", sign, fracpart);
+
+    if (sign) free(sign);
+    if (fracpart) free(fracpart);
+
+    return result;
 }
 
 /* fill buf with properly formatted INumber string. return length */
-static int numberFormat(char *buf, const char *format, double value)
+static char *numberFormat(const char *format, double value)
 {
     int w, f, s;
     char m;
+    char *buf = NULL;
 
     if (sscanf(format, "%%%d.%d%c", &w, &f, &m) == 3 && m == 'm')
     {
@@ -207,12 +203,13 @@ static int numberFormat(char *buf, const char *format, double value)
         case 5:  s = 600;     break;
         default: s = 60;      break;
         }
-        return (fs_sexa(buf, value, w - f, s));
+        return (fs_sexa(value, w - f, s));
     }
     else
     {
         /* normal printf format */
-        return (snprintf(buf, MAXINDIFORMAT, format, value));
+        asprintf(&buf, format, value);
+        return buf;
     }
 }
 
@@ -270,7 +267,7 @@ static int indigui_get_switch_type(struct indi_prop_t *iprop)
     if (num_props == 1)
         return SWITCH_BUTTON;
 
-	if (iprop->rule == INDI_RULE_ANYOFMANY)
+    if (iprop->rule == INDI_RULE_ANYOFMANY)
 		return SWITCH_CHECKBOX;
 
     if (! strcmp(iprop->name, "CONFIG_PROCESS")) // should be at most one
@@ -279,7 +276,7 @@ static int indigui_get_switch_type(struct indi_prop_t *iprop)
     if (iprop->rule == INDI_RULE_ATMOSTONE && num_props == 2)
         return SWITCH_BUTTON;
 
-	return SWITCH_COMBOBOX;
+    return SWITCH_COMBOBOX;
 }
 
 void indigui_update_widget(struct indi_prop_t *iprop)
@@ -290,7 +287,7 @@ void indigui_update_widget(struct indi_prop_t *iprop)
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
 
-        char val[MAXINDIFORMAT];
+        char *val = NULL;
         char *bold_text;
 
         GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
@@ -316,7 +313,7 @@ void indigui_update_widget(struct indi_prop_t *iprop)
 
             value = (GtkWidget *)g_object_get_data(G_OBJECT (element), "value");
 
-            numberFormat(val, elem->value.num.fmt, elem->value.num.value);
+            val = numberFormat(elem->value.num.fmt, elem->value.num.value);
 
 //            if (iprop->permission != INDI_RO) {
 
@@ -419,12 +416,12 @@ static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
         if (combo) {
             GtkWidget *entry = (GtkWidget *)g_object_get_data(G_OBJECT (combo), "entry");
 
-            char *valstr = gtk_entry_get_text(GTK_ENTRY (entry));
+            const char *valstr = gtk_entry_get_text(GTK_ENTRY (entry));
 
             switch (iprop->type) {
             case INDI_PROP_TEXT:
 
-                strncpy(elem->value.str, valstr, sizeof(elem->value.str));
+                elem->value.str = strdup(valstr);
                 set_combo_text_with_history(combo, elem->value.str);
 
                 break;
@@ -501,13 +498,12 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
         gtk_table_attach(GTK_TABLE (iprop->widget), element, x, x + 1, y, y + 1,
                          (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
 
-        char val[MAXINDIFORMAT];
-        char *text = &val;
+        char *text = NULL;
 
         if (iprop->type == INDI_PROP_TEXT)
-            text = &(elem->value.str);
+            text = strdup(elem->value.str);
         else
-            numberFormat(text, elem->value.num.fmt, elem->value.num.value);
+            text = numberFormat(elem->value.num.fmt, elem->value.num.value);
 
         if (iprop->permission != INDI_RO) { // user entry
             x++;

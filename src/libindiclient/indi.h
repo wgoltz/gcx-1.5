@@ -46,17 +46,17 @@ struct indi_t;
 
 struct indi_elem_t {
 	struct indi_prop_t *iprop;
-	char name[80];
-	char label[80];
+    char *name;
+    char *label;
 	union {
-		char str[80];
+        char *str;
 		int set;
 		struct {
 			double value;
 			double min;
 			double max;
 			double step;
-			char fmt[10];
+            char *fmt;
 		} num;
 		struct {
 			char *data;
@@ -68,7 +68,7 @@ struct indi_elem_t {
 			size_t orig_size;
 			char *tmp_data;
 			void *zstrm;
-			char fmt[40];
+            char *fmt;
 		} blob;
 	} value;
 };
@@ -87,8 +87,8 @@ struct indi_cb_t {
 struct indi_prop_t {
 	struct indi_device_t *idev;
 	void *root;
-	char name[80];
-	char message[256];
+    char *name;
+    char *message;
 	void *widget;
 	indi_list *elems;
 	indi_list *signals;
@@ -103,7 +103,7 @@ struct indi_prop_t {
 
 struct indi_device_t {
 	struct indi_t *indi;
-	char name[80];
+    char *name;
 	unsigned int type;
 	unsigned int capabilities;
 	indi_list *props;
@@ -112,7 +112,7 @@ struct indi_device_t {
 };
 
 struct indi_dev_cb_t {
-	char devname[80];
+    char *devname;
 	struct indi_cb_t cb;
 };
 

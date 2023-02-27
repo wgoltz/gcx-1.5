@@ -75,7 +75,7 @@ struct file_action {
 	void *data;
 	int arg1;
     const gchar *name;
-	char file_filter[FILE_FILTER_SZ+1];
+    char *file_filter;
 
 	void (*action)(GtkWidget *, gpointer user_data);
 };
@@ -132,15 +132,15 @@ GtkWidget *create_file_chooser(char *title, GtkFileChooserAction chooser_type, s
 
     //    gchar *last_path = "."; // getenv("HOME");
 
-    char *last_path = g_object_get_data(G_OBJECT(fa->window), "home_path");
-    if (last_path == NULL) {
-        g_object_set_data_full(G_OBJECT(fa->window), "home_path", strdup("."), (GDestroyNotify) free);
-    }
+//    char *last_path = g_object_get_data(G_OBJECT(fa->window), "home_path");
+//    if (last_path == NULL) {
+//        g_object_set_data_full(G_OBJECT(fa->window), "home_path", strdup("."), (GDestroyNotify) free);
+//    }
 
     fa->chooser = chooser;
 
     gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(chooser), (chooser_type == F_OPEN) ? TRUE : FALSE);
-    gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(chooser), last_path);
+//    gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(chooser), last_path);
 
     g_object_set_data(G_OBJECT(fa->window), fa->name, chooser);
     g_object_set_data_full(G_OBJECT(chooser), "file_action", fa, (GDestroyNotify) free);
@@ -150,67 +150,32 @@ GtkWidget *create_file_chooser(char *title, GtkFileChooserAction chooser_type, s
 	return chooser;
 }
 
-/* return a malloced string that contains the supplied
- * filename with ".ext" added (if it didn;t already end in '.ext')
- */
-char *add_extension(char *fn, char *ext)
-{
-	int ns, i;
-	char *fne;
-	i = strlen(fn);
-	ns = strlen(ext) + i + 1;
-
-	fne = calloc(1, ns+1);
-	if (fne == NULL) {
-		err_printf("add_extension: alloc error\n");
-		return NULL;
-	}
-	while (i > 0) {
-		if (fn[i] == '.' || fn[i] == '/')
-			break;
-		i--;
-	}
-	if (fn[i] == '.' && !strcasecmp(fn+i+1, ext)) {
-		strcpy(fne, fn);
-		return fne;
-	}
-	strcpy(fne, fn);
-	i = strlen(fn);
-	fne[i] = '.';
-	strcpy(fne+i+1, ext);
-	return fne;
-}
-
 
 /* return a malloced string that contains the supplied
  * filename with the extention (if any) replaced by ext
  */
-char *force_extension(char *fn, char *ext)
+char *add_extension(char *fn, char *ext)
 {
-	int ns, i;
-	char *fne;
-	i = strlen(fn);
-	ns = strlen(ext) + i + 5;
+    char *p = fn + strlen(fn);
 
-	fne = calloc(1, ns+1);
-	if (fne == NULL) {
-		err_printf("force_extension: alloc error\n");
-		return NULL;
-	}
-	while (i > 0) {
-		if (fn[i] == '.' || fn[i] == '/')
+    while (p > fn) {
+        if (*p == '.' || *p == '/')
 			break;
-		i--;
+        p--;
 	}
-	if (fn[i] == '.') {
-		memcpy(fne, fn, i+1);
-		strcpy(fne+i+1, ext);
-		return fne;
-	}
-	strcpy(fne, fn);
-	i = strlen(fn);
-	fne[i] = '.';
-	strcpy(fne+i+1, ext);
+    char *fne = NULL;
+    if (*p == '.') {
+        p++;
+        if (strcasecmp(p, ext) == 0) // maybe check for other equivalent exts ?
+            fne = strdup(fn);
+        else {
+            char c = *p; *p = 0;
+            asprintf(&fne, "%s%s", fn, ext);
+            *p = c;
+        }
+    } else {
+        asprintf(&fne, "%s.%s", fn, ext);
+    }
 	return fne;
 }
 
@@ -287,18 +252,14 @@ static void save_fits(GtkWidget *chooser, gpointer user_data)
 
 	d3_printf("Saving fits file: %s\n", fn);
 	ich = fa->data;
-	if (file_is_zipped(fn)) {
-        drop_dot_extension(fn);
-		write_gz_fits_frame(ich->fr, fn, P_STR(FILE_COMPRESS));
-	} else {
-		write_fits_frame(ich->fr, fn);
-	}
+
+    write_fits_frame(ich->fr, fn);
 
 	g_free(fn);
 }
 
 /*
- * save clipped to area to a fits file
+ * save clipped area to a fits file
  */
 static void save_area_fits(GtkWidget *chooser, gpointer user_data)
 {
@@ -312,12 +273,8 @@ static void save_area_fits(GtkWidget *chooser, gpointer user_data)
 
     d3_printf("Saving fits file: %s\n", fn);
     ich = fa->data;
-    if (file_is_zipped(fn)) {
-        drop_dot_extension(fn);
-        write_gz_fits_frame(ich->fr, fn, P_STR(FILE_COMPRESS));
-    } else {
-        write_fits_frame(ich->fr, fn);
-    }
+
+    write_fits_frame(ich->fr, fn);
 
     g_free(fn);
 }
@@ -359,36 +316,41 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
 
-    char *file=NULL;
-    char obj[81];
-    char objf[81];
+    char *obj = NULL;
+    char *name_copy = NULL;
 
     if (!strcmp(name, "_OBJECT_") || !strcmp(name, "_AUTO_") || !strcmp(name, "_TYCHO_")) {
 		if (object && object[0])
-			strncpy(obj, object, 70);
-		else if (fits_get_string(channel->fr, P_STR(FN_OBJECT), obj, 70) <= 0) {
+            obj = strdup(object);
+        else if ((obj = fits_get_string(channel->fr, P_STR(FN_OBJECT))) == NULL) {
 			err_printf("no object - cannot load/create dynamic recipe\n");
 			return -1;
 		}
 		if (strcmp(name, "_TYCHO_")) {
-			strcpy(objf, obj);
-			strcat(objf, ".rcp");
-			file = find_file_in_path(objf, P_STR(FILE_RCP_PATH));
-			if (file == NULL) {
-				if (!strcmp(name, "_AUTO_")) {
-					d1_printf("cannot find %s in rcp path, "
-						  "creating tycho recipe\n", objf);
-					name = "_TYCHO_";
-				} else {
-					err_printf("cannot find %s in rcp path\n", objf);
-					return -1;
-				}
-			} else {
-				name = file;
-				d1_printf("recipe file from object name: %s\n", name);
-			}
+            char *rcp = NULL;
+            asprintf(&rcp, "%s.rcp", obj);
+            if (rcp) {
+                char *file = NULL;
+                file = find_file_in_path(rcp, P_STR(FILE_RCP_PATH));
+                if (file == NULL) {
+                    if (!strcmp(name, "_AUTO_")) {
+                        d1_printf("cannot find %s in rcp path, creating tycho recipe\n", rcp);
+                        name_copy = strdup("_TYCHO_");
+                    } else {
+                        err_printf("cannot find %s in rcp path\n", rcp);
+                        free(rcp);
+                        return -1;
+                    }
+                } else {
+                    name_copy = strdup(file);
+                    d1_printf("recipe file from object name: %s\n", name);
+                }
+                free(file);
+                free(rcp);
+            }
 		}
 	}
+    if (name_copy) name = name_copy;
 
     struct stf *stf = NULL;
 	if (!strcmp(name, "_TYCHO_")) {
@@ -397,33 +359,31 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 		} else {
             stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w * window_wcs->xinc), 20);
 		}
+        if (name_copy) free(name_copy);
 	} else {
 		/* just load the specified file */
-        gboolean zipped = file_is_zipped(name);
+        gboolean zipped = is_zip_name(name);
         FILE *rfn = NULL;
 
         if (zipped) {
             char *cmd;
-            if (-1 != asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), name)) {
-				rfn = popen(cmd, "r");
-				free(cmd);
-			}
+            cmd = NULL; asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), name);
+            if (cmd) rfn = popen(cmd, "r"),	free(cmd);
+
             if (rfn == NULL) { // try bzcat
-                if (-1 != asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), name)) {
-                    rfn = popen(cmd, "r");
-                    free(cmd);
-                }
+                cmd = NULL; asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), name);
+                if (cmd) rfn = popen(cmd, "r"), free(cmd);
             }
 		} else {
 			rfn = fopen(name, "r");
 		}
 		if (rfn == NULL) {
 			err_printf("read_rcp: cannot open file %s\n", name);
-			if (file)
-				free(file);
+            if (name_copy) free(name_copy);
 			return -1;
 		}
-        if (file) free(file);
+        if (name_copy) free(name_copy);
+
 		stf = stf_read_frame(rfn);
 
         if (zipped) {
@@ -441,44 +401,52 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         window_wcs->xrefpix = channel->fr->w / 2;
         window_wcs->yrefpix = channel->fr->h / 2;
 
-        gboolean foundit, havera, havedec, havescale;
-
         window_wcs->equinox = 2000.0;
         double v;
 
-        foundit = ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 );
-        if (foundit) window_wcs->equinox = v;
+        if ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 )
+            window_wcs->equinox = v;
 
+        gboolean havera = FALSE;
         char *text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA);
-        foundit = (text != NULL);
-
-        int degrees;
-        havera = ( foundit && ((degrees = dms_to_degrees (text, &v)) >= 0) );
-        if (havera)	{
-            if (!degrees)
+        if (text) {
+            havera = (dms_to_degrees (text, &v) >= 0);
+            if (havera)	{
                 v *= 15;
-            window_wcs->xref = v;
+                window_wcs->xref = v;
+            }
         }
 
-        foundit = ( (text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC)) != NULL );
-        havedec = ( foundit && (dms_to_degrees(text, &v) >= 0) );
-        if (havedec) window_wcs->yref = v;
+        gboolean havedec = FALSE;
+        text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC);
+        if (text) {
+            havedec = (dms_to_degrees(text, &v) >= 0);
+            if (havedec)
+                window_wcs->yref = v;
+        }
 
+        gboolean havescale = FALSE;
         if (window_wcs->wcsset < WCS_INITIAL) {
             double scale;
 
             havescale = (fits_get_double(channel->fr, P_STR(FN_SECPIX), &scale) > 0);
-            if (! havescale) havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
             if (! havescale)
-                if (havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0)))
+                havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
+            if (! havescale) {
+                havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0));
+                if (havescale)
                     scale = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
+            }
 
-            if ((channel->fr->exp.bin_x > 1) && (channel->fr->exp.bin_y == channel->fr->exp.bin_x))
-                scale *= channel->fr->exp.bin_x;
+            if (havescale) {
+                if ((channel->fr->exp.bin_x > 1) && (channel->fr->exp.bin_y == channel->fr->exp.bin_x))
+                    scale *= channel->fr->exp.bin_x;
 
-            window_wcs->xinc = - scale / 3600.0;
-            window_wcs->yinc = - scale / 3600.0;
-            if (P_INT(OBS_FLIPPED))	window_wcs->yinc = -window_wcs->yinc;
+                window_wcs->xinc = - scale / 3600.0;
+                window_wcs->yinc = - scale / 3600.0;
+
+                if (P_INT(OBS_FLIPPED))	window_wcs->yinc = -window_wcs->yinc;
+            }
 
             window_wcs->rot = 0;
         }
@@ -523,7 +491,7 @@ int load_gsc2_to_window(gpointer window, char *name)
 		return -1;
 	d3_printf("read_gsc2: looking for %s\n", name);
 
-	if (file_is_zipped(name)) {
+    if (is_zip_name(name)) {
         if (-1 != asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), name)) {
 			rfn = popen(cmd, "r");
 			free(cmd);
@@ -574,15 +542,14 @@ static void open_rcp(GtkWidget *chooser, gpointer user_data)
 static void open_mband(GtkWidget *chooser, gpointer user_data)
 {	
 	struct file_action *fa = user_data;
-	gpointer mwin;
 
     char *mband = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
     g_return_if_fail(mband != NULL);
 
     add_to_mband(fa->window, mband);
 
-	mwin = g_object_get_data(G_OBJECT(fa->window), "im_window");
-	if (mwin != NULL)
+    GtkWidget *mwin = g_object_get_data(G_OBJECT(fa->window), "im_window");
+    if (mwin != NULL)
         set_last_open(mwin, "last_open_mband", mband);
 	else
         set_last_open(fa->window, "last_open_mband", mband);
@@ -658,7 +625,6 @@ static void get_file(GtkWidget *chooser, gpointer user_data)
 {
 	struct file_action *fa = user_data;
 	get_file_type cb;
-	gpointer mwin;
 
     char *fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
 	g_return_if_fail(fn != NULL);
@@ -667,8 +633,8 @@ static void get_file(GtkWidget *chooser, gpointer user_data)
 	if (cb)
 		(* cb)(fn, fa->window, fa->arg1);
 
-	mwin = g_object_get_data(G_OBJECT(fa->window), "im_window");
-	if (mwin != NULL)
+    GtkWidget *mwin = g_object_get_data(G_OBJECT(fa->window), "im_window");
+    if (mwin != NULL)
         set_last_open(mwin, "last_open_etc", fn);
 	else
         set_last_open(fa->window, "last_open_etc", fn);
@@ -686,7 +652,7 @@ void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *na
 	GtkWidget *window = data;
 	GtkWidget *chooser;
 	struct file_action *fa;
-	char *lastopen;
+    char *lastopen = NULL;
 
 	fa = calloc(1, sizeof(struct file_action));
 
@@ -699,12 +665,22 @@ void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *na
     if (title == NULL) title = "Select file";
     chooser = create_file_chooser(title, F_OPEN, fa);
 
-    fa->file_filter[0] = 0;
+//    fa->file_filter[0] = 0;
 //	if (filter != NULL)	strncpy(fa->file_filter, filter, FILE_FILTER_SZ);
 
-    lastopen = (name[0] != 0) ? name : g_object_get_data(G_OBJECT(window), "last_open_fits");
-	if (lastopen)
-		gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(chooser), lastopen);
+    char *nm = NULL;
+    if (name && name[0] != 0)
+        nm = name;
+    else {
+        lastopen = g_object_get_data(G_OBJECT(window), "last_open_fits");
+        if (lastopen && lastopen[0] != 0)
+            nm = lastopen;
+    }
+
+    if (nm)
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(chooser), lastopen);
+    else
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(chooser), "filename.fits");
 }
 
 
@@ -730,7 +706,7 @@ void file_select(gpointer data, char *title, char *filter,
     if (title == NULL) title = "Select file";
     chooser = create_file_chooser(title, F_SAVE, fa);
 
-    fa->file_filter[0] = 0;
+//    fa->file_filter[0] = 0;
 //	if (filter != NULL)	strncpy(fa->file_filter, filter, FILE_FILTER_SZ);
 
 	lastopen = g_object_get_data(G_OBJECT(window), "last_open_etc");
@@ -759,7 +735,7 @@ void file_select_list(gpointer data, char *title, char *filter,
     if (title == NULL) title = "Select file";
     chooser = create_file_chooser(title, F_OPEN, fa);
 
-    fa->file_filter[0] = 0;
+//    fa->file_filter[0] = 0;
 //	if (filter != NULL)	strncpy(fa->file_filter, filter, FILE_FILTER_SZ);
 
 	lastopen = g_object_get_data(G_OBJECT(window), "last_open_etc");
@@ -776,6 +752,13 @@ static void file_popup_cb(gpointer window, guint action)
 	char *fn;
 	char *lastopen;
     char *home = g_object_get_data(G_OBJECT(window), "home_path");
+// check if home_path != current directory and update home path ?
+
+    if (home == NULL) {
+        home = ".";
+        g_object_set_data_full(G_OBJECT(window), "home_path", strdup("."), (GDestroyNotify) free);
+    }
+
 //printf("filegui.file_popup_cb\n");
 	fa = calloc(1, sizeof(struct file_action));
 	fa->window = window;
@@ -786,7 +769,7 @@ static void file_popup_cb(gpointer window, guint action)
 
         chooser = create_file_chooser("Select fits file to open", F_OPEN, fa);
 
-        fa->file_filter[0] = 0;
+//        fa->file_filter[0] = 0;
     //	if (filter != NULL)	strncpy(fa->file_filter, filter, FILE_FILTER_SZ);
 
 		lastopen = g_object_get_data(G_OBJECT(window), "last_open_fits");
@@ -848,7 +831,7 @@ static void file_popup_cb(gpointer window, guint action)
 			return ;
 		}
 
-		fn = force_extension(channel->fr->name, "pnm");
+        fn = add_extension(channel->fr->name, "pnm");
 		fa->data = channel;
 		fa->arg1 = (action == FILE_EXPORT_PNM16);
 
@@ -872,17 +855,17 @@ static void file_popup_cb(gpointer window, guint action)
 
 		fa->data = channel;
 
-        char *fn = "empty";
+        char *fn = NULL;
         if(channel->fr->name)
             fn = strdup(channel->fr->name);
+        else
+            fn = strdup("empty");
 
         chooser = create_file_chooser("Select output file name", F_SAVE, fa);
 
-		gtk_file_chooser_set_filename (GTK_FILE_CHOOSER(chooser), fn);
-        if(channel->fr->name)
-            free(fn);
+        if (fn) gtk_file_chooser_set_filename (GTK_FILE_CHOOSER(chooser), fn), free(fn);
 
-		break;
+        break;
 
 	default:
 		free(fa);
@@ -935,33 +918,40 @@ void act_recipe_open (GtkAction *action, gpointer window)
    or null if it couldn't be found */
 char *find_file_in_path(char *pattern, char *path)
 {
-	char *dir;
 	char *fn = NULL;
-	char buf[1024];
-	char pathc[1024];
+
 	glob_t gl;
 	int ret;
 
-	strncpy(pathc, path, 1023);
-	pathc[1023] = 0;
-	dir = strtok(pathc, ":");
-	while (dir != NULL) {
-		snprintf(buf, 1024, "%s/%s", dir, pattern);
-		d3_printf("looking for %s\n", buf);
-		gl.gl_offs = 0;
-		gl.gl_pathv = NULL;
-		gl.gl_pathc = 0;
-		ret = glob(buf, GLOB_TILDE, NULL, &gl);
-//		d3_printf("glob returns %d\n", ret);
-		if (ret == 0) {
-			fn = strdup(gl.gl_pathv[0]);
-//			d3_printf("found: %s\n", fn);
-			globfree(&gl);
-			return fn;
-		}
-		globfree(&gl);
-		dir = strtok(NULL, ":");
-	}
+    char *pathc = strdup(path);
+    if (pathc) {
+
+        char *dir = strtok(pathc, ":");
+        while (dir != NULL) {
+
+            char *buf = NULL; asprintf(&buf, "%s/%s", dir, pattern);
+            if (buf) {
+                d3_printf("looking for %s\n", buf);
+                gl.gl_offs = 0;
+                gl.gl_pathv = NULL;
+                gl.gl_pathc = 0;
+                ret = glob(buf, GLOB_TILDE, NULL, &gl);
+                //		d3_printf("glob returns %d\n", ret);
+                if (ret == 0) {
+                    fn = strdup(gl.gl_pathv[0]);
+                    //			d3_printf("found: %s\n", fn);
+                    globfree(&gl);
+                    free(pathc);
+                    free(buf);
+                    return fn;
+                }
+                globfree(&gl);
+                free(buf);
+                dir = strtok(NULL, ":");
+            }
+        }
+        free(pathc);
+    }
 	return NULL;
 }
 

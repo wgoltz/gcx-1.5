@@ -23,6 +23,8 @@
 
 /* edit catalog star information - the gui part */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -84,28 +86,36 @@ void star_edit_update_entry(GtkWidget *dialog, char *entry_name, char *text)
 
 	widget = g_object_get_data(G_OBJECT(dialog), entry_name);
 	if(widget != NULL)
-		gtk_entry_set_text(GTK_ENTRY(widget), text);
+        gtk_entry_set_text(GTK_ENTRY(widget), (text == NULL) ? "" : text);
+}
+
+void cat_star_release_ocats(struct cat_star *cats)
+{
+    cat_star_release(cats, "edit_star release ocats");
+}
+
+void cat_star_release_cat_star(struct cat_star *cats)
+{
+    cat_star_release(cats, "edit_star release cat_star");
 }
 
 /* load a star for editing. a copy of the star is made and referenced as
  * "cat_star". A reference to the inital star is kept as "ocats" */
 void star_edit_set_star(GtkWidget *dialog, struct cat_star *cats)
 {
-	struct cat_star *ncats;
-	cat_star_ref(cats);
-	ncats = cat_star_dup(cats);
-    g_object_set_data_full(G_OBJECT(dialog), "ocats", ncats, (GDestroyNotify) cat_star_release);
-    g_object_set_data_full(G_OBJECT(dialog), "cat_star", cats, (GDestroyNotify) cat_star_release);
+//    cat_star_ref(cats, "star_edit_set_star");
+    struct cat_star *ocats = cat_star_dup(cats);
+    g_object_set_data_full(G_OBJECT(dialog), "ocats", ocats, (GDestroyNotify) cat_star_release_ocats);
+//    g_object_set_data_full(G_OBJECT(dialog), "cat_star", cats, (GDestroyNotify) cat_star_release_cat_star);
+    g_object_set_data(G_OBJECT(dialog), "cat_star", cats);
 }
 
 /* update the dialog fields from 'cat_star'
  * note: we don't queue a redraw here */
 void update_star_edit(GtkWidget *dialog)
 {
-	char buf[256];
-	int n;
-// which cat star to update? gs->s or current frame cats
-// here
+    char *buf;
+
     struct cat_star *last_cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
     if (last_cats == NULL) return;
 
@@ -115,7 +125,7 @@ void update_star_edit(GtkWidget *dialog)
 
 //    struct gui_star *gs;
 
-//    if (gs = last_cats->guis)
+//    if (gs = last_cats->gs)
 //        cats = CAT_STAR(gs->s); // base cats
 //    if (cats == NULL) return;
 //printf("update_star_edit ");
@@ -128,101 +138,56 @@ void update_star_edit(GtkWidget *dialog)
 
 	star_edit_update_flags(dialog, cats);
 
-    degrees_to_hms_pr(buf, cats->ra, 2);
-    star_edit_update_entry(dialog, "pstar_ra_entry", buf);
+    char *ras = degrees_to_hms_pr(cats->ra, 2);
+    if (ras) star_edit_update_entry(dialog, "pstar_ra_entry", ras), free(ras);
 
-	degrees_to_dms_pr(buf, cats->dec, 1);
-    star_edit_update_entry(dialog, "pstar_dec_entry", buf);
+    char *decs = degrees_to_dms_pr(cats->dec, 1);
+    if (decs) star_edit_update_entry(dialog, "pstar_dec_entry", decs), free(decs);
 
-	snprintf(buf, 255, "%.1f", cats->equinox);
-    star_edit_update_entry(dialog, "pstar_equinox_entry", buf);
+    buf = NULL; asprintf(&buf, "%.1f", cats->equinox);
+    if (buf) star_edit_update_entry(dialog, "pstar_equinox_entry", buf), free(buf);
 
     star_edit_update_entry(dialog, "pstar_name_entry", cats->name);
 
-	snprintf(buf, 255, "%.2f", cats->mag);
-    star_edit_update_entry(dialog, "pstar_mag_entry", buf);
+    buf = NULL; asprintf(&buf, "%.2f", cats->mag);
+    if (buf) star_edit_update_entry(dialog, "pstar_mag_entry", buf), free(buf);
 
-	if (cats->comments != NULL) {
-        star_edit_update_entry(dialog, "pstar_comments_entry", cats->comments);
-	} else {
-        star_edit_update_entry(dialog, "pstar_comments_entry", "");
-	}
+    star_edit_update_entry(dialog, "pstar_comments_entry", cats->comments);
+    star_edit_update_entry(dialog, "pstar_cat_mag_entry", cats->cmags);
+    star_edit_update_entry(dialog, "pstar_std_mag_entry", cats->smags);
+    star_edit_update_entry(dialog, "pstar_inst_mag_entry", cats->imags);
 
-    if (cats->cmags != NULL) {
-        star_edit_update_entry(dialog, "pstar_cat_mag_entry", cats->cmags);
-    } else {
-        star_edit_update_entry(dialog, "pstar_cat_mag_entry", "");
-    }
-
-	if (cats->smags != NULL) {
-        star_edit_update_entry(dialog, "pstar_std_mag_entry", cats->smags);
-	} else {
-        star_edit_update_entry(dialog, "pstar_std_mag_entry", "");
-	}
-
-	if (cats->imags != NULL) {
-        star_edit_update_entry(dialog, "pstar_inst_mag_entry", cats->imags);
-	} else {
-        star_edit_update_entry(dialog, "pstar_inst_mag_entry", "");
-	}
-
-	n = 0;
+    buf = NULL;
 	if (cats->flags & INFO_POS) {
-		n += snprintf(buf+n, 255-n, "x:%.2f/%.3f y:%.2f/%.3f dx:%.2f dy:%.2f",
+        str_join_varg(&buf, "\nx:%.2f/%.3f y:%.2f/%.3f dx:%.2f dy:%.2f",
 			      cats->pos[POS_X], cats->pos[POS_XERR],
 			      cats->pos[POS_Y], cats->pos[POS_YERR],
 			      cats->pos[POS_DX], cats->pos[POS_DY] );
 	}
 	if (cats->flags & INFO_NOISE) {
-        if (n > 0) n += snprintf(buf+n, 255-n, "\n");
-
-        n += snprintf(buf+n, 255-n, "photon:%.3f  read:%.3f  sky:%.3f  scint:%.3f",
+        str_join_varg(&buf, "\nphoton:%.3f  read:%.3f  sky:%.3f  scint:%.3f",
 			      cats->noise[NOISE_PHOTON], cats->noise[NOISE_READ],
 			      cats->noise[NOISE_SKY], cats->noise[NOISE_SCINT]);
 	}
+    // cats->residual should be updated with each frame (stf_aphot)
+    // ofr_to_stf_cats(ofr) does this in ofr_selection_cb but also pushes smag
 	if (cats->flags & (INFO_RESIDUAL | INFO_STDERR)) {
-        if (n > 0) n += snprintf(buf+n, 255-n, "\n");
-// cats->residual should be updated with each frame (stf_aphot)
-// ofr_to_stf_cats(ofr) does this in ofr_selection_cb but also pushes smag
-        if (cats->flags & (INFO_RESIDUAL)) n += snprintf(buf+n, 255-n, "residual:%.3f  ", cats->residual);
-        if (cats->flags & (INFO_STDERR)) n += snprintf(buf+n, 255-n, "stderr:%.3f ", cats->std_err);
+        if (cats->flags & (INFO_RESIDUAL)) str_join_varg(&buf, "\nresidual:%.3f", cats->residual);
+        if (cats->flags & (INFO_STDERR)) str_join_varg(&buf, "\nstderr:%.3f", cats->std_err);
 	}
 
 	if (cats->astro) {
-        if (n > 0) n += snprintf(buf+n, 255-n, "\n");
+        str_join_varg(&buf, "\nEpoch:%.4f", cats->astro->epoch);
+        if ((cats->astro->ra_err < 1000 * BIG_ERR) && (cats->astro->dec_err < 1000 * BIG_ERR))
+            str_join_varg(&buf, "\nRAerr:%.0f DECerr:%.0f", cats->astro->ra_err, cats->astro->dec_err);
 
-		n += snprintf(buf+n, 255-n, "Epoch:%.4f ", cats->astro->epoch);
-        if ((cats->astro->ra_err < 1000 * BIG_ERR) && (cats->astro->dec_err < 1000 * BIG_ERR)) {
-            n += snprintf(buf+n, 255-n, "RAerr:%.0f DECerr:%.0f ", cats->astro->ra_err, cats->astro->dec_err);
-		}
-		if (cats->astro->flags & ASTRO_HAS_PM) {
-            n += snprintf(buf+n, 255-n, "\nRApm:%.0f DECpm:%.0f ", cats->astro->ra_pm, cats->astro->dec_pm);
-		}
-		if (cats->astro->catalog) {
-            n += snprintf(buf+n, 255-n, "Cat:%s ", cats->astro->catalog);
-		}
+        if (cats->astro->flags & ASTRO_HAS_PM)
+            str_join_varg(&buf, "\nRApm:%.0f DECpm:%.0f", cats->astro->ra_pm, cats->astro->dec_pm);
+
+        if (cats->astro->catalog)
+            str_join_varg(&buf, "\nCat:%s", cats->astro->catalog);
 	}
-    if (n) named_label_set(dialog, "pstar_star_details_label", buf);
-}
-
-void star_append_comments(struct cat_star *cats, char *ncom)
-{
-	int cl;
-	char *nc;
-	if (cats->comments == NULL) {
-		cats->comments = malloc(strlen(ncom) + 1);
-        if (cats->comments == NULL)	return;
-
-		strcpy(cats->comments, ncom);
-		return;
-	}
-	cl = strlen(cats->comments);
-	nc = realloc(cats->comments, cl + strlen(ncom) + 2);
-    if (nc == NULL)	return;
-
-	strcpy(nc + cl, ncom);
-	cats->comments = nc;
-	return;
+    if (buf) named_label_set(dialog, "pstar_star_details_label", buf), free(buf);
 }
 
 /* place a copy of src into dest; if desc is non-null, free it first
@@ -261,7 +226,7 @@ static void update_star_cb( GtkWidget *widget, gpointer data )
 	g_return_if_fail(im_window != NULL);
     redraw_cat_stars(im_window);
 	gtk_widget_queue_draw(im_window);
-	close_star_edit(NULL, im_window);
+    close_star_edit(widget, im_window);
 }
 
 /* parse a double value from an editable; if a valid number is found,
@@ -422,7 +387,7 @@ static void entry_changed_cb( GtkWidget *widget, gpointer dialog)
 	}
     if (widget == g_object_get_data(G_OBJECT(dialog), "pstar_name_entry")) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
-		strncpy(cats->name, text, CAT_STAR_NAME_SZ);
+        update_dynamic_string(&cats->name, text);
 		g_free(text);
 	}
     gui_update_star(dialog, cats);
@@ -548,8 +513,8 @@ static void cancel_edit_cb( GtkWidget *widget, gpointer data )
 	cats->dec = ocats->dec;
 	cats->mag = ocats->mag;
 	cats->equinox = ocats->equinox;
-	strncpy(cats->name, ocats->name, CAT_STAR_NAME_SZ);
-	cats->flags = ocats->flags;
+    cats->flags = ocats->flags;
+    update_dynamic_string(&cats->name, ocats->name);
 	update_dynamic_string(&cats->comments, ocats->comments);
 	update_dynamic_string(&cats->smags, ocats->smags);
 	update_dynamic_string(&cats->imags, ocats->imags);
@@ -560,16 +525,14 @@ static void cancel_edit_cb( GtkWidget *widget, gpointer data )
 
 static void star_make_std(struct cat_star *cats)
 {
-	char com[256];
 	if (CATS_TYPE(cats) == CATS_TYPE_SREF) {
 		err_printf("Star is already standard\n");
 		return;
 	}
 	if (cats->comments == NULL)
-		snprintf(com, 255, "%s", cats->name);
+        cats->comments = strdup(cats->name);
 	else
-		snprintf(com, 255, ", %s", cats->name);
-	star_append_comments(cats, com);
+        str_join_str(&cats->comments, ", %s", cats->name);
 //	d3_printf("new_comments: %s\n", cats->comments);
 	cats->flags &= ~(CATS_FLAG_VARIABLE | CATS_TYPE_MASK);
 	cats->flags |= CATS_TYPE_APSTD;
@@ -592,7 +555,8 @@ static void mkref_cb( GtkWidget *widget, gpointer data )
 static void close_star_edit( GtkWidget *widget, gpointer data )
 {
 	g_return_if_fail(data != NULL);
-	g_object_set_data(G_OBJECT(data), "star_edit_dialog", NULL);
+//	g_object_set_data(G_OBJECT(data), "star_edit_dialog", NULL);
+    gtk_widget_set_visible(widget, FALSE);
 }
 
 static gboolean activate_cb( GtkWidget *widget, gpointer data )
@@ -681,8 +645,9 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 
         set_named_callback(dialog, "pstar_center_button", "clicked", pstar_C_cb);
 
-//        g_signal_connect (G_OBJECT (dialog), "destroy", G_CALLBACK (close_star_edit), window);
-        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
+        g_signal_connect (G_OBJECT (dialog), "destroy", G_CALLBACK (close_star_edit), window);
+//        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
+        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (close_star_edit), NULL);
         g_object_set(G_OBJECT (dialog), "destroy-with-parent", TRUE, NULL);
 
 //		star_edit_set_star(dialog, cats);
@@ -694,11 +659,31 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 //		update_star_edit(dialog);
 //		gtk_widget_queue_draw(dialog);
 //		gdk_window_raise(dialog->window);
+
+        gtk_widget_show(dialog);
+        gtk_widget_set_visible(dialog, FALSE);
 	}
     star_edit_set_star(dialog, cats);
     update_star_edit(dialog);
 
-    gtk_widget_show(dialog);
+    if (! gtk_widget_get_visible(dialog)) {
+        int x, y; // set these on close then restore?
+        gtk_window_get_position(GTK_WINDOW(dialog), &x, &y);
+
+        gint width, height;
+        gtk_window_get_size(GTK_WINDOW(dialog), &width, &height);
+
+        int screen_width = gdk_window_get_width(dialog->window);
+        int screen_height = gdk_window_get_height(dialog->window);
+
+        int xoffset = (x + width > screen_width) ? - 200 : 200;
+        int yoffset = (y + height > screen_height) ? - 200 : 200;
+
+        gtk_window_move(GTK_WINDOW(dialog), x + xoffset, y + yoffset);
+
+        gtk_widget_set_visible(dialog, TRUE);
+    }
+
     gdk_window_raise(dialog->window);
 }
 
@@ -716,7 +701,8 @@ void do_edit_star(GtkWidget *window, GSList *found, int make_std)
 
 	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
-    gs = GUI_STAR(found->data);
+    gs = GUI_STAR(found->data); // handle first star only
+
     cats = CAT_STAR(gs->s);
 	if (cats == NULL) {
 //        if ( wcs && wcs->wcsset == WCS_VALID ) {
@@ -725,8 +711,10 @@ void do_edit_star(GtkWidget *window, GSList *found, int make_std)
 /* we create a cat star here */
 d3_printf("making cats\n");
             wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
+
 			cats = cat_star_new();
-			snprintf(cats->name, CAT_STAR_NAME_SZ, "x%.0fy%.0f", gs->x,  gs->y);
+            asprintf(&cats->name, "x%.0fy%.0f", gs->x, gs->y);
+
 			cats->ra = ra;
 			cats->dec = dec;
 			cats->equinox = 1.0 * wcs->equinox;
@@ -794,12 +782,12 @@ void add_star_from_catalog(gpointer window)
     gboolean newframe = (i_ch == NULL || i_ch->fr == NULL);
     if (newframe) {
         if (modal_yes_no("An image frame is needed to load objects.\nCreate new frame using the default geometry?", "New Frame?") <= 0) {
-			cat_star_release(cats);
+            cat_star_release(cats, "add_star_from_catalog");
 			return;
 		}
 		fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
         frame_to_channel(fr, window, "i_channel");
-        release_frame(fr);
+        release_frame(fr, "add_star_from_catalog");
     } else {
         fr = i_ch->fr;
     }
@@ -821,7 +809,7 @@ void add_star_from_catalog(gpointer window)
             if (modal_yes_no("The object is outside the image area.\n"
                    "Do you want to change the current wcs\n"
                    "(and remove all stars)?", "New Wcs?") <= 0) {
-                cat_star_release(cats);
+                cat_star_release(cats, "add_star_from_catalog");
 
                 if (newframe) {
 printf("wcs_clone 5\n"); fflush(NULL);

@@ -53,8 +53,6 @@
 int open_plot(FILE **fp, char *initial)
 {
 	FILE *plfp = NULL;
-	char *fn;
-	char qu[1024];
 
 	if (!P_INT(FILE_PLOT_TO_FILE)) {
 // replace writing to pipe and allow gnuplot can handle user interaction
@@ -69,36 +67,37 @@ int open_plot(FILE **fp, char *initial)
 		err_printf("Cannot run gnuplot, prompting for file\n");
 	}
 
-	fn = modal_file_prompt("Select Plot File", initial);
+    char *fn = modal_file_prompt("Select Plot File", initial);
 	if (fn == NULL) {
         err_printf("Aborted open plot - no open file\n");
 		return -1;
 	}
 
 	if ((plfp = fopen(fn, "r")) != NULL) { /* file exists */
-		snprintf(qu, 1023, "File %s exists\nOverwrite?", fn);
-		if (!modal_yes_no(qu, "gcx: file exists")) {
-			fclose(plfp);
-            err_printf("Aborted open plot - cancelled\n");
+        fclose(plfp);
 
-            free(fn);
-			return -1;
-		} else {
-			fclose(plfp);
-		}
+        char *qu = NULL;
+        asprintf(&qu, "File %s exists\nOverwrite?", fn);
+        if (qu) {
+            int res = modal_yes_no(qu, "gcx: file exists"); free(qu);
+
+            if (! res) {
+                err_printf("Aborted open plot - writing to %s cancelled\n", fn);
+                free(fn);
+                return -1;
+            }
+        }
 	}
 
 	plfp = fopen(fn, "w");
-	if (plfp == NULL) {
+    int res = (plfp == NULL);
+    if (res)
 		err_printf("Cannot create file %s (%s)", fn, strerror(errno));
 
-        free(fn);
-		return -1;
-	}
     if (fp)	*fp = plfp;
 
     free(fn);
-    return 0;
+    return (res) ? -1 : 0;
 }
 
 /* close a plot pipe or file. Should be passed the value returned by open_plot */
@@ -175,13 +174,14 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 			osl = g_list_next(osl);
 			if (ofr->band != band) 
 				continue;
-			sl = ofr->sol;
+			sl = ofr->sobs;
 			while(sl != NULL) {
 				sob = STAR_OBS(sl->data);
 				sl = g_list_next(sl);
 
                 if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
                 if (sob->weight <= 0.0001) continue;
+                if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
                 if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
                 if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
@@ -261,7 +261,7 @@ static int get_mjd_bounds_from_sobs(GList *sobs, double *min, double *max)
 {
     int n = 0;
     struct o_star *ost = STAR_OBS(sobs->data)->ost;
-    GList *sl = ost->sol;
+    GList *sl = ost->sobs;
     double mjd, mjdmin, mjdmax;
 
     while (sl != NULL) {
@@ -322,25 +322,24 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 	while (osl != NULL) {
         struct o_frame *ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band < 0) 
-			continue;
+        if (ofr->band < 0) continue;
+
 //		d3_printf("*%d\n", ZPSTATE(ofr));
 		if (ZPSTATE(ofr) == ZP_ALL_SKY) {
 			asfl = g_list_prepend(asfl, ofr);
 		}
 		if (g_list_find(bsl, (gpointer)ofr->band) == NULL) {
 			bsl = g_list_append(bsl, (gpointer)ofr->band);
-			if (i > 0)
-				fprintf(dfp, ", ");
-			fprintf(dfp, "'-' title '%s' with errorbars ", 
-				ofr->trans->bname);
+
+            if (i > 0) fprintf(dfp, ", ");
+            fprintf(dfp, "'-' title '%s' with errorbars", ofr->trans->bname);
 			bnames = g_list_append(bnames, ofr->trans->bname);
 			i++;
 		}
 	}
 	if (asfl != NULL) 
 		for (bl = bnames; bl != NULL; bl = g_list_next(bl)) {
-            fprintf(dfp, ", '-' title '%s-allsky' with errorbars ",	(char *)(bl->data));
+            fprintf(dfp, ", '-' title '%s-allsky' with errorbars",	(char *)(bl->data));
 		}	
 	fprintf(dfp, "\n");
 
@@ -350,12 +349,11 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 		while (osl != NULL) {
             struct o_frame *ofr = O_FRAME(osl->data);
 			osl = g_list_next(osl);
-			if (ofr->band != band) 
-				continue;
-			if (ofr->zpointerr >= BIG_ERR)
-				continue;
-			if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR)
-				continue;
+
+            if (ofr->band != band) continue;
+            if (ofr->zpointerr >= BIG_ERR) continue;
+            if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
+
 			n++;
             fprintf(dfp, "%.7f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
 				ofr->zpoint, ofr->zpointerr);
@@ -369,10 +367,10 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 			while (osl != NULL) {
                 struct o_frame *ofr = O_FRAME(osl->data);
 				osl = g_list_next(osl);
-				if (ofr->band != band) 
-					continue;
-				if (ofr->zpointerr >= BIG_ERR)
-					continue;
+
+                if (ofr->band != band) continue;
+                if (ofr->zpointerr >= BIG_ERR) continue;
+
 				n++;
                 fprintf(dfp, "%.7f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
 					ofr->zpoint, ofr->zpointerr);
@@ -408,26 +406,25 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 	while (osl != NULL) {
 		ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band < 0) 
-			continue;
+
+        if (ofr->band < 0) continue;
+
 //		d3_printf("*%d\n", ZPSTATE(ofr));
 		if (ZPSTATE(ofr) == ZP_ALL_SKY) {
 			asfl = g_list_prepend(asfl, ofr);
 		}
 		if (g_list_find(bsl, (gpointer)ofr->band) == NULL) {
 			bsl = g_list_append(bsl, (gpointer)ofr->band);
-			if (i > 0)
-				fprintf(dfp, ", ");
-			fprintf(dfp, "'-' title '%s' with errorbars ", 
-				ofr->trans->bname);
+
+            if (i > 0) fprintf(dfp, ", ");
+            fprintf(dfp, "'-' title '%s' with errorbars", ofr->trans->bname);
 			bnames = g_list_append(bnames, ofr->trans->bname);
 			i++;
 		}
 	}
 	if (asfl != NULL) 
 		for (bl = bnames; bl != NULL; bl = g_list_next(bl)) {
-			fprintf(dfp, ", '-' title '%s-allsky' with errorbars ", 
-				(char *)(bl->data));
+            fprintf(dfp, ", '-' title '%s-allsky' with errorbars", (char *)(bl->data));
 		}	
 	fprintf(dfp, "\n");
 
@@ -437,16 +434,14 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 		while (osl != NULL) {
 			ofr = O_FRAME(osl->data);
 			osl = g_list_next(osl);
-			if (ofr->band != band) 
-				continue;
-			if (ofr->zpointerr >= BIG_ERR)
-				continue;
-			if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR)
-				continue;
+
+            if (ofr->band != band) continue;
+            if (ofr->zpointerr >= BIG_ERR) continue;
+            if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
+
 			n++;
-            fprintf(dfp, "%.7f %.5f %.5f\n", ofr->airmass,
-				ofr->zpoint, ofr->zpointerr);
-			}	
+            fprintf(dfp, "%.7f %.5f %.5f\n", ofr->airmass, ofr->zpoint, ofr->zpointerr);
+        }
 		fprintf(dfp, "e\n");
 	}
 	if (asfl != NULL) 
@@ -456,13 +451,12 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 			while (osl != NULL) {
 				ofr = O_FRAME(osl->data);
 				osl = g_list_next(osl);
-				if (ofr->band != band) 
-					continue;
-				if (ofr->zpointerr >= BIG_ERR)
-					continue;
+
+                if (ofr->band != band) continue;
+                if (ofr->zpointerr >= BIG_ERR) continue;
+
 				n++;
-                fprintf(dfp, "%.7f %.5f %.5f\n", ofr->airmass,
-					ofr->zpoint, ofr->zpointerr);
+                fprintf(dfp, "%.7f %.5f %.5f\n", ofr->airmass, ofr->zpoint, ofr->zpointerr);
 			}	
 			fprintf(dfp, "e\n");
 		}
@@ -487,13 +481,18 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 	g_return_val_if_fail(dfp != NULL, -1);
 	g_return_val_if_fail(mbds != NULL, -1);
 	g_return_val_if_fail(band >= 0, -1);
-	g_return_val_if_fail(mbds->trans[band].c1 >= 0, -1);
-	g_return_val_if_fail(mbds->trans[band].c2 >= 0, -1);
-	
+
+    struct transform trans = mbds->trans[band];
+
+    g_return_val_if_fail(trans.c1 >= 0, -1);
+    g_return_val_if_fail(trans.c2 >= 0, -1);
+
+    char *bname1 = mbds->trans[trans.c1].bname;
+    char *bname2 = mbds->trans[trans.c2].bname;
+
 	plot_preamble(dfp);
-	fprintf(dfp, "set xlabel '%s-%s'\n", mbds->trans[mbds->trans[band].c1].bname, 
-		mbds->trans[mbds->trans[band].c2].bname);
-	if (weighted) {
+    fprintf(dfp, "set xlabel '%s-%s'\n", bname1, bname2);
+    if (weighted) {
 		fprintf(dfp, "set ylabel 'Standard errors'\n");
 	} else {
 		fprintf(dfp, "set ylabel 'Residuals'\n");
@@ -501,9 +500,7 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 //	fprintf(dfp, "set ylabel '%s zeropoint fit weighted residuals'\n", mbds->bnames[band]);
 //	fprintf(dfp, "set yrange [-1:1]\n");
 	fprintf(dfp, "set title 'Transformation: %s = %s_i + %s_0 + %.3f * (%s - %s)'\n",
-		mbds->trans[band].bname, mbds->trans[band].bname, 
-		mbds->trans[band].bname, mbds->trans[band].k, 
-		mbds->trans[mbds->trans[band].c1].bname, mbds->trans[mbds->trans[band].c2].bname);
+        trans.bname, trans.bname, trans.bname, trans.k, bname1, bname2);
 //	fprintf(dfp, "set pointsize 1.5\n");
 	fprintf(dfp, "plot ");
 	
@@ -526,28 +523,30 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 	while (osl != NULL) {
 		ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band != band) 
-			continue;
-		if (ofr->tweight < 0.0000000001) 
-			continue;
-		sl = ofr->sol;
+
+        if (ofr->band != band) continue;
+        if (ofr->tweight < 0.0000000001) continue;
+
+		sl = ofr->sobs;
 		while(sl != NULL) {
 			sob = STAR_OBS(sl->data);
 			sl = g_list_next(sl);
 
             if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
             if (sob->weight <= 0.00001) continue;
+            if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
             if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
             if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
 			n++;
 
             struct o_star *ost = sob->ost;
-            if (ost->smag[mbds->trans[band].c1] == MAG_UNSET) continue;
-            if (ost->smag[mbds->trans[band].c2] == MAG_UNSET) continue;
 
-            double smagerr_1 = DEFAULT_ERR(ost->smagerr[mbds->trans[band].c1]);
-            double smagerr_2 = DEFAULT_ERR(ost->smagerr[mbds->trans[band].c2]);
+            if (ost->smag[trans.c1] == MAG_UNSET) continue;
+            if (ost->smag[trans.c2] == MAG_UNSET) continue;
+
+            double smagerr_1 = DEFAULT_ERR(ost->smagerr[trans.c1]);
+            double smagerr_2 = DEFAULT_ERR(ost->smagerr[trans.c2]);
 
             if (smagerr_1 < 9 && smagerr_2 < 9) {
 				v = sob->residual * sqrt(sob->nweight);
@@ -556,13 +555,11 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 				clamp_double(&u, -RESIDUAL_CLAMP, RESIDUAL_CLAMP);
 				if (weighted) 
                     fprintf(dfp, "%.5f %.5f %.5f\n",
-                        ost->smag[mbds->trans[band].c1]
-                        - ost->smag[mbds->trans[band].c2],
+                        ost->smag[trans.c1] - ost->smag[trans.c2],
 						v, sob->imagerr);
 				else 
                     fprintf(dfp, "%.5f %.5f %.5f\n",
-                        ost->smag[mbds->trans[band].c1]
-                        - ost->smag[mbds->trans[band].c2],
+                        ost->smag[trans.c1] - ost->smag[trans.c2],
 						u, sob->imagerr);
 			}
 		}	
@@ -580,54 +577,42 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 	double mi = HUGE;
 	double ma = -HUGE;
 	int n = 0;
-	GList *sl;
-	double m, me;
-	
+
+	GList *sl;	
     for (sl = sol; sl != NULL; sl = sl->next) {
         struct star_obs *sob = STAR_OBS(sl->data);
         struct o_frame *ofr = O_FRAME(sob->ofr);
 
-        if (ofr->skip)	continue;
+        if (ofr->skip) continue;
         if (ofr->zpstate <= ZP_FIT_ERR) continue;
         if (sob->imagerr >= BIG_ERR) continue;
-        if (sob->flags & CPHOT_NOT_FOUND) continue;
+        if (sob->imag == MAG_UNSET) continue;
+        if (sob->flags & CPHOT_NOT_FOUND) continue;;
 
         if ((ofr->band == -1) || (ofr->band == band)) {
 
-            m = sob->mag;
-            me = sob->err;
+            if ((CATS_TYPE(sob->cats) & (CATS_TYPE_APSTAR | CATS_TYPE_APSTD)) == 0) continue;
+//            if (sob->ost->smag[band] == MAG_UNSET) continue;
 
-            if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+            double m = sob->imag + sob->ofr->zpoint;
+            double me = sob->imagerr; // sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
 
-                if (sob->ost->smag[band] == MAG_UNSET) continue;
+            esum += me;
+            sum += m;
+            if (mi > m) mi = m;
+            if (ma < m) ma = m;
+            sumsq += sqr(m);
 
-                m = sob->imag + sob->ofr->zpoint;
-                me = sob->imagerr; // sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
-
-            } else if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR) continue;
+            n++;
         }
-
-		esum += me;
-		sum += m;
-		if (mi > m)
-			mi = m;
-		if (ma < m)
-			ma = m;
-		sumsq += sqr(m);
-		n++;
 	}
 	if (n > 0) {
-		if (avg)
-			*avg = sum/n;
-		if (sigma)
-			*sigma = sqrt(sumsq/n - sqr(sum/n));
-		if (merr)
-            *merr = esum/n;
+        if (avg) *avg = sum/n;
+        if (sigma) *sigma = sqrt(sumsq/n - sqr(sum/n));
+        if (merr) *merr = esum/n;
 	}
-	if (min)
-		*min = mi;
-	if (max)
-		*max = ma;
+    if (min) *min = mi;
+    if (max) *max = ma;
 	return n;
 }
 
@@ -646,21 +631,6 @@ struct plot_sol_data {
     char *neg;
     char *plot;
 };
-
-#define PLOTCMD(out_string, ...) ({ \
-char *s; \
-int n = asprintf(&s, __VA_ARGS__); \
-if (n >= 0) { \
-    if ((out_string) == NULL) { \
-        (out_string) = s; \
-    } else { \
-        (out_string) = realloc((out_string), strlen((out_string)) + strlen(s) + 2); \
-        strcat((out_string), s); \
-        free(s); \
-    } \
-} \
-})
-
 
 static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 {
@@ -698,10 +668,10 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 
             if ((m != MAG_UNSET) && (me < BIG_ERR)) {
                 if (sob->flags & CPHOT_CENTERED) {
-                    PLOTCMD(data->pos, "%.7f %.3f %.3f\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
+                    str_join_varg(&data->pos, "\n%.7f %.3f %.3f", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
                     n_pos++;
                 } else if (sob->flags & CPHOT_FAINT) {
-                    PLOTCMD(data->neg, "%.4f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
+                    str_join_varg(&data->neg, "\n%.4f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
                     n_neg++;
                 }
             }
@@ -712,7 +682,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
     if (n_pos + n_neg) {
         if (n_pos) {
             fprintf(data->plfp, "$POS%d << END\n", data->n);
-            fprintf(data->plfp, "%s", data->pos); // plot data to pipe
+            fprintf(data->plfp, "%s\n", data->pos); // plot data to pipe
             fprintf(data->plfp, "END\n");
             free(data->pos);
             result += 1;
@@ -720,7 +690,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 
         if (n_neg) {
             fprintf(data->plfp, "$NEG%d << END\n", data->n);
-            fprintf(data->plfp, "%s", data->neg); // plot data to pipe
+            fprintf(data->plfp, "%s\n", data->neg); // plot data to pipe
             fprintf(data->plfp, "END\n");
             free(data->neg);
             result += 2;
@@ -737,22 +707,19 @@ static void plot_sol(struct plot_sol_data *data, GList *sol)
         struct star_obs *sob = STAR_OBS(sol->data);
         struct o_frame *ofr = sob->ofr;
 
-        int ns = sol_stats(sob->ost->sol, ofr->band, &avg, &sigma, &min, &max, &merr);
+        int ns = sol_stats(sob->ost->sobs, ofr->band, &avg, &sigma, &min, &max, &merr);
 
         if (ns == 0) {
-            if (data->n) PLOTCMD(data->plot, ", " );
-            PLOTCMD(data->plot, "'' title '%s(%s) not detected'", sob->cats->name, ofr->trans->bname);
+            str_join_varg(&data->plot, ", '' title '%s(%s) not detected' ps 0", sob->cats->name, ofr->trans->bname);
 
         } else {
-            int result = plot_sol_obs(data, sob->ost->sol);
+            int result = plot_sol_obs(data, sob->ost->sobs);
             if (result & 0x1) { // pos
-                if (data->n) PLOTCMD(data->plot, ", " );
-                PLOTCMD(data->plot, "$POS%d title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me:%4.1f n:%2d' with errorbars ",
+                str_join_varg(&data->plot, ", $POS%d title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me:%4.1f n:%2d' with errorbars",
                         data->n, sob->cats->name, ofr->trans->bname, avg, sigma, min, max, merr, sigma/merr, ns);
             }
             if (result & 0x2) { // neg
-                if (result & 0x1) PLOTCMD(data->plot, ", " );
-                PLOTCMD(data->plot, "$NEG%d title 'faint' with labels ", data->n);
+                str_join_varg(&data->plot, ", $NEG%d title 'faint' with labels", data->n);
             }
         }
 
@@ -800,7 +767,7 @@ int plot_star_mag_vs_time(GList *sobs)
     if (sobs == NULL) return -1;
 
     double mjdmin, mjdmax;
-    if (get_mjd_bounds_from_sobs(sobs, &mjdmin, &mjdmax) < 0) return -1;
+    if (get_mjd_bounds_from_sobs(sobs, &mjdmin, &mjdmax) <= 0) return -1;
 
     double jdmin = mjd_to_jd(mjdmin), jdmax = mjd_to_jd(mjdmax);    
 

@@ -27,6 +27,8 @@
 // $Revision: 1.22 $
 // $Date: 2009/09/27 15:19:48 $
 
+#define _GNU_SOURCE
+
 #include <math.h>
 
 #include <stdio.h>
@@ -94,7 +96,7 @@ int find_bad_pixels(struct bad_pix_map *map, struct ccd_frame *fr, double sig)
 	float v;
 
     int ret = 0;
-	if (!fr->stats.statsok)
+    if (!fr->stats.statsok)
 		frame_stats(fr);
 
     double lo = - sig * fr->stats.csigma;
@@ -138,20 +140,25 @@ error:
    bad pixels/columns */
 int save_bad_pix(struct bad_pix_map *map)
 {
-	char lb[81];
-	FILE *fp;
 	int i;
 
-	lb[80] = 0;
-	strncpy(lb, map->filename, 70);
-	if (strlen(lb) <= 7 || strcmp(lb + strlen(lb) - 7, ".badpix") != 0)
-		strcat(lb, ".badpix");
+    char *fn = NULL;
+    if (map->filename) {
+        int len = strlen(map->filename);
+        if (len <= 7 || strcmp(map->filename + len - 7, ".badpix") != 0)
+            asprintf(&fn, "%s.badpix", map->filename);
+    } else
+        fn = strdup(".badpix");
 
-	fp = fopen(lb, "w");
-	if (!fp) {
-		err_printf("save_bad_pix: Cannot open file: %s for writing\n",
-			   map->filename);
-		return ERR_FILE;
+    FILE *fp = NULL;
+    if (fn) {
+        fp = fopen(fn, "w");
+        if (!fp) {
+            err_printf("save_bad_pix: Cannot open file: %s for writing\n", fn);
+            free(fn);
+            return ERR_FILE;
+        }
+        free(fn);
 	}
 
 	fprintf(fp, "pixels %d\n", map->pixels);
@@ -181,22 +188,20 @@ int load_bad_pix(struct bad_pix_map *map)
     }
     if (map->pix) return 0;
 
-	char lb[81];
-	FILE *fp;
 	int i, ret, pixels;
 
-	lb[80] = 0;
+//    int len = strlen(map->filename);
+//    char *fn = NULL;
+//    if (len < 7 || strcmp(map->filename + len - 7, ".badpix") != 0)
+//        asprintf(&fn, "%s.badpix", map->filename);
 
-	strncpy(lb, map->filename, 70);
-    if (strlen(lb) < 7 || strcmp(lb + strlen(lb) - 7, ".badpix") != 0)
-		strcat(lb, ".badpix");
+    FILE *fp = NULL;
 
-	fp = fopen(lb, "r");
+    fp = fopen(map->filename, "r");
     if (fp == NULL) {
-		err_printf("load_bad_pix: Cannot open file: %s for reading\n",
-               lb);
-		return ERR_FILE;
-	}
+        err_printf("load_bad_pix: Cannot open file: %s for reading\n", map->filename);
+        return ERR_FILE;
+    }
 
 //	if (map->pixels != 0)
 //		free(map->pix);

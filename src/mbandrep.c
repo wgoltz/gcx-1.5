@@ -47,26 +47,23 @@
 #include "recipe.h"
 #include "filegui.h"
 
-static char constell[100][4] = {
-	"AND", "ANT", "APS", "AQL", "AQR", "ARA", "ARI", "AUR", "BOO", "CAE",
-	"CAM", "CAP", "CAR", "CAS", "CEN", "CEP", "CET", "CHA", "CIR", "CMA",
-	"CMI", "CNC", "COL", "COM", "CRA", "CRB", "CRT", "CRU", "CRV", "CVN",
-	"CVS", "CYG", "DEL", "DOR", "DRA", "EQU", "ERI", "FOR", "GEM", "GRU",
-	"HER", "HOR", "HYA", "HYI", "IND", "LAC", "LEO", "LEP", "LIB", "LMI",
-	"LUP", "LYN", "LYR", "MEN", "MIC", "MON", "MUS", "NOR", "OCT", "OPH",
-	"ORI", "PAV", "PEG", "PER", "PHE", "PIC", "PSA", "PSC", "PUP", "PYX",
-	"RET", "SCL", "SCO", "SCT", "SER", "SEX", "SGE", "SGR", "TAU", "TEL",
-	"TRA", "TRI", "TUC", "UMA", "UMI", "VEL", "VIR", "VOL", "VUL", "WDC"
-};
+static char *constellations =
+    "AND ANT APS AQL AQR ARA ARI AUR BOO CAE "
+    "CAM CAP CAR CAS CEN CEP CET CHA CIR CMA "
+    "CMI CNC COL COM CRA CRB CRT CRU CRV CVN "
+    "CYG DEL DOR DRA EQU ERI FOR GEM GRU HER "
+    "HOR HYA HYI IND LAC LEO LEP LIB LMI LUP "
+    "LYN LYR MEN MIC MON MUS NOR OCT OPH ORI "
+    "PAV PEG PER PHE PIC PSA PSC PUP PYX RET "
+    "SCL SCO SCT SER SEX SGE SGR TAU TEL TRA "
+    "TRI TUC UMA UMI VEL VIR VOL VUL";
+
 
 static int is_constell(char *cc)
 {
-	int i;
-	for (i = 0; i < 90; i++) {
-		if (!strcasecmp(cc, constell[i]))
-			return 1;
-	}
-	return 0;
+    char *found = strstr(constellations, cc);
+
+    return (found) ? found - constellations : -1;
 }
 
 /* search the validation file for an entry matching 
@@ -222,7 +219,7 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
 // need to copy all data from ofr and sob to stf
             ofr_to_stf_cats(ofr);             // set target star smags
             ofr_transform_to_stf(mbds, ofr);  // append transform to stf
-            n += g_list_length(ofr->sol);
+            n += g_list_length(ofr->sobs);
             stf_fprint(repfp, ofr->stf, 0, 0);
 		}
 
@@ -251,7 +248,7 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
 // implement multiple target/check stars using a list of check stars identified in comments
                 int ncheck = 0;
                 GList *check_stars = NULL;
-                for (fl = ofr->sol; fl != NULL; fl = g_list_next(fl)) { // make list of check stars
+                for (fl = ofr->sobs; fl != NULL; fl = g_list_next(fl)) { // make list of check stars
                     struct star_obs *sob = STAR_OBS(fl->data);
                     if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR) {
                         char *s = sob->cats->comments;
@@ -281,7 +278,7 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
                     printf("%d check stars\n", ncheck);
 
                 int nstd = 0;
-                for (fl = ofr->sol; fl != NULL; fl = g_list_next(fl)) { // count std stars
+                for (fl = ofr->sobs; fl != NULL; fl = g_list_next(fl)) { // count std stars
                     struct star_obs *sob = STAR_OBS(fl->data);
                     if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
                         comp = sob;
@@ -292,7 +289,7 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
                     printf("no std stars\n");
 
                 nstars = 0; // could be different for different frames?
-                for (fl = ofr->sol; fl != NULL; fl = g_list_next(fl)) { // report target stars
+                for (fl = ofr->sobs; fl != NULL; fl = g_list_next(fl)) { // report target stars
                     struct star_obs *sob = STAR_OBS(fl->data);
                     if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR || CATS_TYPE(sob->cats) == CATS_TYPE_APSTD)
                         nstars += ! rep_star(repfp, sob, action & REP_FMT_MASK, nstd == 1 ? comp : NULL, check_stars);
@@ -321,33 +318,36 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
 char * mbds_short_result(struct o_frame *ofr)
 {
 	GList *sl;
-	char buf[1024];
-	char * rep = NULL;
-    int n, flags;
+    char *rep = NULL;
 
 	d3_printf("qr\n");
 	g_return_val_if_fail(ofr != NULL, NULL);
 
 	ofr_to_stf_cats(ofr);
-	for (sl = ofr->sol; sl != NULL; sl = g_list_next(sl)) {
+	for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) {
         struct star_obs *sob = STAR_OBS(sl->data);
         if ( CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR ) continue;
 
-		n = snprintf(buf, 1023, "%s: %s=%.3f/%.3f  %d outliers, fit me1=%.2g ",
-                 sob->cats->name, ofr->trans->bname,
-                 sob->mag, sob->err,
-			     ofr->outliers, ofr->me1);
+        char *line = NULL;
+        asprintf(&line, "%s: %s=%.3f/%.3f  %d outliers, fit me1=%.2g",
+                         sob->cats->name, ofr->trans->bname,
+                         sob->mag, sob->err,
+                         ofr->outliers, ofr->me1);
 
-        flags = sob->flags & CPHOT_MASK & ~CPHOT_NO_COLOR;
-		if (flags) {
-			n += snprintf(buf + n, 1023-n, "[ ");
-            n += cat_flags_to_string(flags, buf + n, 1023 - n);
-			n += snprintf(buf + n, 1023-n, "]");
-		}
-		rep = strdup(buf);
-		d3_printf("%s\n", rep);
+        int flags = sob->flags & CPHOT_MASK & ~CPHOT_NO_COLOR;
+        if (flags) {
+            char *flags_string = cat_flags_to_string(flags);
+            if (flags_string) str_join_str(&line, " [%s]", flags_string), free(flags_string);
+        }
 
-        break;
+        if (line) {
+            if (rep == NULL)
+                rep = line;
+            else {
+                str_join_str(&rep, "\n%s", line);
+                free(line);
+            }
+        }
 	}
 	return rep;
 }

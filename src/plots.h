@@ -1,6 +1,9 @@
 #ifdef _PLOTS_H_
 #else
 
+#include <stdio.h>
+#include <gtk/gtk.h>
+
 int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted);
 int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp, int band, GList *ofrs, int weighted);
 int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs);

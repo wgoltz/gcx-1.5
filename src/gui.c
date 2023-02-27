@@ -244,7 +244,7 @@ int info_printf_sb2(gpointer window, const char *fmt, ...)
 {
 	va_list ap, ap2;
 	int ret;
-	char err_string[ERR_SIZE+1];
+    char *err_string = NULL;
 	GtkWidget *label;
 
 #ifdef __va_copy
@@ -254,12 +254,12 @@ int info_printf_sb2(gpointer window, const char *fmt, ...)
 #endif
 	va_start(ap, fmt);
 	va_start(ap2, fmt);
-	ret = vsnprintf(err_string, ERR_SIZE, fmt, ap2);
-	if (ret > 0 && err_string[ret-1] == '\n')
+    ret = vasprintf(&err_string, fmt, ap2);
+    if (ret && err_string[ret-1] == '\n')
 		err_string[ret-1] = 0;
 //    d3_printf("%s\n", err_string);
     label = g_object_get_data(G_OBJECT(window), "main_window_status_label");
-	gtk_label_set_text(GTK_LABEL(label), err_string);
+    if (err_string) gtk_label_set_text(GTK_LABEL(label), err_string), free(err_string);
 	va_end(ap);
 	return ret;
 }
@@ -271,7 +271,7 @@ int err_printf_sb2(gpointer window, const char *fmt, ...)
 {
 	va_list ap, ap2;
 	int ret;
-	char err_string[ERR_SIZE+1];
+    char *err_string = NULL;
 	GtkWidget *label;
 
 #ifdef __va_copy
@@ -281,12 +281,12 @@ int err_printf_sb2(gpointer window, const char *fmt, ...)
 #endif
 	va_start(ap, fmt);
 	va_start(ap2, fmt);
-	ret = vsnprintf(err_string, ERR_SIZE, fmt, ap2);
+    ret = vasprintf(&err_string, fmt, ap2);
 	if (ret > 0 && err_string[ret-1] == '\n')
 		err_string[ret-1] = 0;
 	err_printf("%s\n", err_string);
     label = g_object_get_data(G_OBJECT(window), "main_window_status_label");
-	gtk_label_set_text(GTK_LABEL(label), err_string);
+    if (err_string) gtk_label_set_text(GTK_LABEL(label), err_string), free(err_string);
 	va_end(ap);
 	return ret;
 }
@@ -327,7 +327,7 @@ void act_frame_new (GtkAction *action, gpointer window)
     struct ccd_frame *fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
     char *fn = "New Frame";
     fr->name = strdup(fn);
-    get_frame(fr);
+    get_frame(fr, "act_frame_new");
 // set wcs from window
 
     GSList *fl = NULL;
@@ -344,7 +344,7 @@ void act_frame_new (GtkAction *action, gpointer window)
 //    imf_display_cb (NULL, dialog);
 
 	frame_to_channel(fr, window, "i_channel");
-    release_frame(fr);
+    release_frame(fr, "act_frame_new");
 }
 
 struct mouse_motion {
@@ -1104,13 +1104,13 @@ GtkWidget * create_image_window()
 
     GtkWidget *alignment = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
 //    gtk_widget_show (alignment);
-    gtk_scrolled_window_add_with_viewport (scw, alignment);
+    gtk_scrolled_window_add_with_viewport (GTK_SCROLLED_WINDOW(scw), alignment);
 
     GtkWidget *darea = gtk_drawing_area_new();
     gtk_container_add (GTK_CONTAINER(alignment), darea);
 //    gtk_widget_show (darea);
 
-    GtkWidget *main_window_status_label = gtk_label_new ("main_window_status_label");
+    GtkWidget *main_window_status_label = gtk_label_new ("Welcome to GCX.");
     g_object_ref (main_window_status_label);
     g_object_set_data_full (G_OBJECT (window), "main_window_status_label", main_window_status_label, (GDestroyNotify) g_object_unref);
     gtk_misc_set_padding (GTK_MISC (main_window_status_label), 3, 3);
@@ -1337,6 +1337,7 @@ int window_auto_pairs(gpointer window)
 {
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL) return -1;
+    if (gsl->sl == NULL) return -1;
 
 	info_printf_sb2(window, "Looking for Star Pairs...");
     while (gtk_events_pending ()) gtk_main_iteration ();

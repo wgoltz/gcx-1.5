@@ -159,88 +159,91 @@ static int get_recipe_flags(GtkWidget *dialog)
 /* called when we click ok */
 static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
 {
-	GtkWidget *window;
-	struct gui_star_list *gsl;
-	struct wcs *wcs;
-	char *fn, *fn2, *comment, *target, *seq;
-	int w = 0, h = 0;
-	int flags;
-	struct stf *rcp;
-	FILE *rfp;
-	char qu[1024];
-	struct image_channel *i_ch;
-	GList *stars;
-
-
-	window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
 	g_return_if_fail(window != NULL);
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
+
+    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
+
+    int w = 0, h = 0;
 	if (i_ch != NULL && i_ch->fr != NULL) {
 		w = i_ch->fr->w;
 		h = i_ch->fr->h;
 	}
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	if (wcs == NULL) {
 		err_printf_sb2(window, "Cannot create a recipe without a wcs");
 		error_beep();
 		return;
 	}
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL || gsl->sl == NULL) {
 		err_printf_sb2(window, "No stars to put in recipe");
 		error_beep();
 		return;
 	}
-	fn = named_entry_text(dialog, "recipe_file_entry");
+
+    char *fn = named_entry_text(dialog, "recipe_file_entry");
 	if (fn == NULL || fn[0] == 0) {
 		err_printf_sb2(window, "Please enter a recipe file name");
 		error_beep();
-		if (fn != NULL)
-			g_free(fn);
+        if (fn != NULL)	free(fn);
 		return;
 	}
-	fn2 = add_extension(fn, "rcp");
-	if (fn2 == NULL)
-		fn2 = fn;
-	else
-		g_free(fn);
 
+    char *fn2 = add_extension(fn, "rcp");
+    if (fn2 == NULL) fn2 = strdup(fn);
+    free(fn);
+
+    FILE *rfp;
 	if ((rfp = fopen(fn2, "r")) != NULL) { /* file exists */
-		snprintf(qu, 1023, "File %s exists\nOverwrite?", fn2);
-		if (!modal_yes_no(qu, "gcx: file exists")) {
-			free(fn2);
-			fclose(rfp);
-			return;
-		} else {
-			fclose(rfp);
-		}
+        char *qu = NULL;
+
+        asprintf(&qu, "File %s exists\nOverwrite?", fn2);
+        if (qu) {
+            if (!modal_yes_no(qu, "gcx: file exists")) {
+                free(fn2);
+                fclose(rfp);
+                free(qu);
+                return;
+
+            } else {
+                free(qu);
+                fclose(rfp);
+            }
+        }
 	}
+
 	rfp = fopen(fn2, "w");
 	if (rfp == NULL) {
 		err_printf_sb2(window, "Cannot create file %s (%s)", fn2, strerror(errno));
 		free(fn2);
 		return;
 	}
-	comment = named_entry_text(dialog, "comments_entry");
-	target = named_entry_text(dialog, "tgt_entry");
-	seq = named_entry_text(dialog, "seq_entry");
-	flags = get_recipe_flags(dialog);
-	rcp = create_recipe(gsl->sl, wcs, flags, comment, target, seq, w, h);
+
+    char *comment = named_entry_text(dialog, "comments_entry");
+    char *target = named_entry_text(dialog, "tgt_entry");
+    char *seq = named_entry_text(dialog, "seq_entry");
+    int flags = get_recipe_flags(dialog);
+
+    struct stf *rcp = create_recipe(gsl->sl, wcs, flags, comment, target, seq, w, h);
+
 	if (rcp == NULL) {
 		err_printf_sb2(window, "%s", last_err());
 	} else {
         g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)stf_free_all);
 		stf_fprint(rfp, rcp, 0, 0);
-		stars = stf_find_glist(rcp, 0, SYM_STARS);
+
+        GList *stars = stf_find_glist(rcp, 0, SYM_STARS);
 		info_printf_sb2(window, "recipe", 10000,
 				"Wrote %d star(s) to %s\n", g_list_length(stars), fn2);
 	}
 	fclose(rfp);
 	free(fn2);
-	g_free(comment);
-	g_free(target);
-	g_free(seq);
+    free(comment);
+    free(target);
+    free(seq);
 	if (rcp != NULL)
 		gtk_widget_hide(dialog);
 }

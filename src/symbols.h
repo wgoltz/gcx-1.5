@@ -43,6 +43,7 @@
 typedef enum {
     SYM_NULL,
     SYM_RECIPE,
+    SYM_RECIPY,
     SYM_STARS,
     SYM_OBSERVATION,
     SYM_AP_PAR,
@@ -144,6 +145,7 @@ extern char *symname[]; // declared in recipe.c : char *symname[SYM_LAST] = SYM_
 #define SYM_NAMES_INIT {\
     "null",\
     "recipe",\
+    "recipy",\
     "stars",\
     "observation",\
     "ap_par",\

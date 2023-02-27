@@ -66,7 +66,6 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
 
 void *io_indi_open_server(const char *host, int port, void (*cb)(void *fd, void *opaque), void *opaque)
 {
-	struct sockaddr_in serv_addr;
 	struct hostent *hp;
 	int sockfd;
 	GIOChannel *fh;
@@ -78,7 +77,8 @@ void *io_indi_open_server(const char *host, int port, void (*cb)(void *fd, void 
 	}
 
 	/* create a socket to the INDI server */
-	(void) memset ((char *)&serv_addr, 0, sizeof(serv_addr));
+    struct sockaddr_in serv_addr = { 0 };
+
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr =
 			    ((struct in_addr *)(hp->h_addr_list[0]))->s_addr;

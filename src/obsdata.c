@@ -23,6 +23,8 @@
 
 /* Observation data handling */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -147,7 +149,7 @@ int obs_set_from_object(struct obs_data *obs, char *name)
 	obs->dec = cats->dec;
 	obs->equinox = cats->equinox;
 	replace_strval(&(obs->objname), strdup(name));
-	cat_star_release(cats);
+    cat_star_release(cats, "obs_set_from_object");
 	return 0;
 }
 
@@ -177,7 +179,7 @@ void obs_data_release(struct obs_data *obs)
 	if (obs->ref_count <= 1) {
         if (obs->objname) free(obs->objname);
         if (obs->filter) free(obs->filter);
-        if (obs->comment) free(obs->filter);
+        if (obs->comment) free(obs->comment);
 		free(obs);
 	} else {
 		obs->ref_count --;
@@ -189,15 +191,14 @@ void obs_data_release(struct obs_data *obs)
 
 void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
 {
-	char lb[128];
-	char deg[64];
+    char *line = NULL;
 
 //    if (! fr->fim) {
 //        printf ("obsdata.ccd_frame_add_obs NULL fr->fim\n");
 //        return;
 //    }
 
-	if (obs != NULL) {
+    if (obs) {
 		if (obs->ra != 0.0 || obs->rot != 0.0 || obs->dec != 0.0) {
             fr->fim.xref = obs->ra;
             fr->fim.yref = obs->dec;
@@ -207,68 +208,67 @@ printf("ccd_frame_add_obs_info, no set wcsset = WCS_INITIAL\n"); fflush(NULL);
 
             fr->fim.wcsset = WCS_INITIAL;
 
-            degrees_to_hms_pr(deg, obs->ra, 2);
-			sprintf(lb, "'%s'", deg);
-			fits_add_keyword(fr, P_STR(FN_RA), lb);
+            char *ras = degrees_to_hms_pr(obs->ra, 2);
+            line = NULL; if (ras) asprintf(&line, "'%s'", ras), free(ras);
+            if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
 
-			degrees_to_dms_pr(deg, obs->dec, 1);
-			sprintf(lb, "'%s'", deg);
-			fits_add_keyword(fr, P_STR(FN_DEC), lb);
+            char *decs = degrees_to_dms_pr(obs->dec, 1);
+             line = NULL;if (decs) asprintf(&line, "'%s'", decs), free(decs);
+            if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
 
-            sprintf(lb, "%20.1f / IMAGE ROTATION", obs->rot);
-            fits_add_keyword(fr, P_STR(FN_CROTA1), lb);
+            line = NULL; asprintf(&line, "%20.1f / IMAGE ROTATION", obs->rot);
+            if (line) fits_add_keyword(fr, P_STR(FN_CROTA1), line), free(line);
 		}
         fr->fim.equinox = obs->equinox;
 
-		if (obs->filter != NULL) {
-			snprintf(lb, 127, "'%s'", obs->filter);
-			fits_add_keyword(fr, P_STR(FN_FILTER), lb);
+        if (obs->filter) {
+            line = NULL; asprintf(&line, "'%s'", obs->filter);
+            if (line) fits_add_keyword(fr, P_STR(FN_FILTER), line), free(line);
 		}
-		if (obs->objname != NULL) {
-			snprintf(lb, 127, "'%s'", obs->objname);
-			fits_add_keyword(fr, P_STR(FN_OBJECT), lb);
+        if (obs->objname) {
+            line = NULL; asprintf(&line, "'%s'", obs->objname);
+            if (line) fits_add_keyword(fr, P_STR(FN_OBJECT), line), free(line);
 		}
-        degrees_to_hms_pr(deg, obs->ra, 2);
-		sprintf(lb, "'%s'", deg);
-		fits_add_keyword(fr, P_STR(FN_OBJCTRA), lb);
+        char *ras = degrees_to_hms_pr(obs->ra, 2);
+        line = NULL; if (ras) asprintf(&line, "'%s'", ras), free(ras);
+        if (line) fits_add_keyword(fr, P_STR(FN_OBJCTRA), line), free(line);
 
-		degrees_to_dms_pr(deg, obs->dec, 1);
-		sprintf(lb, "'%s'", deg);
-		fits_add_keyword(fr, P_STR(FN_OBJCTDEC), lb);
+        char *decs = degrees_to_dms_pr(obs->dec, 1);
+        line = NULL; if (decs) asprintf(&line, "'%s'", decs), free(decs);
+        if (line) fits_add_keyword(fr, P_STR(FN_OBJCTDEC), line), free(line);
 
-		sprintf(lb, "%20.1f / EQUINOX OF COORDINATES", obs->equinox);
-		fits_add_keyword(fr, P_STR(FN_EQUINOX), lb);
+        line = NULL; asprintf(&line, "%20.1f / EQUINOX OF COORDINATES", obs->equinox);
+        if (line) fits_add_keyword(fr, P_STR(FN_EQUINOX), line), free(line);
 	}
 
-	snprintf(lb, 127, "'%s'", P_STR(OBS_TELESCOP));
-	fits_add_keyword(fr, P_STR(FN_TELESCOP), lb);
+    line = NULL; asprintf(&line, "'%s'", P_STR(OBS_TELESCOP));
+    if (line) fits_add_keyword(fr, P_STR(FN_TELESCOP), line), free(line);
 
-	snprintf(lb, 127, "'%s'", P_STR(OBS_FOCUS));
-	fits_add_keyword(fr, P_STR(FN_FOCUS), lb);
+    line = NULL; asprintf(&line, "'%s'", P_STR(OBS_FOCUS));
+    if (line) fits_add_keyword(fr, P_STR(FN_FOCUS), line), free(line);
 
-	sprintf(lb, "%20.1f / TELESCOPE APERTURE IN CM", P_DBL(OBS_APERTURE));
-	fits_add_keyword(fr, P_STR(FN_APERTURE), lb);
+    line = NULL; asprintf(&line, "%20.1f / TELESCOPE APERTURE IN CM", P_DBL(OBS_APERTURE));
+    if (line) fits_add_keyword(fr, P_STR(FN_APERTURE), line), free(line);
 
-	sprintf(lb, "%20.1f / TELESCOPE FOCAL LENGTH IN CM", P_DBL(OBS_FLEN));
-	fits_add_keyword(fr, P_STR(FN_FLEN), lb);
+    line = NULL; asprintf(&line, "%20.1f / TELESCOPE FOCAL LENGTH IN CM", P_DBL(OBS_FLEN));
+    if (line) fits_add_keyword(fr, P_STR(FN_FLEN), line), free(line);
 
-    sprintf(lb, "%20.3f / IMAGE SCALE (ARCSEC PER PIXEL)", P_DBL(OBS_SECPIX));
-    fits_add_keyword(fr, P_STR(FN_SECPIX), lb);
+    line = NULL; asprintf(&line, "%20.3f / IMAGE SCALE (ARCSEC PER PIXEL)", P_DBL(OBS_SECPIX));
+    if (line) fits_add_keyword(fr, P_STR(FN_SECPIX), line), free(line);
 
-	snprintf(lb, 127, "'%s'", P_STR(OBS_OBSERVER));
-	fits_add_keyword(fr, P_STR(FN_OBSERVER), lb);
+    line = NULL; asprintf(&line, "'%s'", P_STR(OBS_OBSERVER));
+    if (line) fits_add_keyword(fr, P_STR(FN_OBSERVER), line), free(line);
 
-	degrees_to_dms_pr(deg, P_DBL(OBS_LATITUDE), 1);
-	sprintf(lb, "'%s'", deg);
-	fits_add_keyword(fr, P_STR(FN_LATITUDE), lb);
+    char *lat = degrees_to_dms_pr(P_DBL(OBS_LATITUDE), 1);
+    line = NULL; if (lat) asprintf(&line, "'%s'", lat), free(lat);
+    if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
 
-	degrees_to_dms_pr(deg, P_DBL(OBS_LONGITUDE), 1);
-	sprintf(lb, "'%s'                         ", deg);
-	sprintf(lb+20, " / WESTERN LONGITUDE");
-	fits_add_keyword(fr, P_STR(FN_LONGITUDE), lb);
+    char *lng = degrees_to_dms_pr(P_DBL(OBS_LONGITUDE), 1);
+    line = NULL; if (lng) asprintf(&line, "'%20s' / WESTERN LONGITUDE", lng), free(lng);
+    if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
 
-	sprintf(lb, "%20.1f / OBSERVING SITE ALTITUDE (M)", P_DBL(OBS_ALTITUDE));
-	fits_add_keyword(fr, P_STR(FN_ALTITUDE), lb);
+    line = NULL; asprintf(&line, "%20.1f / OBSERVING SITE ALTITUDE (M)", P_DBL(OBS_ALTITUDE));
+    if (line) fits_add_keyword(fr, P_STR(FN_ALTITUDE), line), free(line);
 }
 
 /* look for CD_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
@@ -392,8 +392,8 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
 
 int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
 {
-	g_return_if_fail(fr != NULL);
-    g_return_if_fail(wcs != NULL);
+    g_return_val_if_fail(fr != NULL, -1);
+    g_return_val_if_fail(wcs != NULL, -1);
 
     double d;
     gboolean ok = TRUE;
@@ -485,15 +485,18 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
 /* push the noise data from exp into the header fields of fr */
 void noise_to_fits_header(struct ccd_frame *fr, struct exp_data *exp)
 {
-	char lb[128];
-	sprintf(lb, "%20.3f / ELECTRONS / ADU", exp->scale);
-	fits_add_keyword(fr, P_STR(FN_ELADU), lb);
-	sprintf(lb, "%20.3f / READ NOISE IN ADUs", exp->rdnoise);
-	fits_add_keyword(fr, P_STR(FN_RDNOISE), lb);
-	sprintf(lb, "%20.3f / MULTIPLICATIVE NOISE COEFF", exp->flat_noise);
-	fits_add_keyword(fr, P_STR(FN_FLNOISE), lb);
-	sprintf(lb, "%20.3f / BIAS IN ADUs", exp->bias);
-	fits_add_keyword(fr, P_STR(FN_DCBIAS), lb);
+    char *line;
+    line = NULL; asprintf(&line, "%20.3f / ELECTRONS / ADU", exp->scale);
+    if (line) fits_add_keyword(fr, P_STR(FN_ELADU), line), free(line);
+
+    line = NULL; asprintf(&line, "%20.3f / READ NOISE IN ADUs", exp->rdnoise);
+    if (line) fits_add_keyword(fr, P_STR(FN_RDNOISE), line), free(line);
+
+    line = NULL; asprintf(&line, "%20.3f / MULTIPLICATIVE NOISE COEFF", exp->flat_noise);
+    if (line) fits_add_keyword(fr, P_STR(FN_FLNOISE), line), free(line);
+
+    line = NULL; asprintf(&line, "%20.3f / BIAS IN ADUs", exp->bias);
+    if (line) fits_add_keyword(fr, P_STR(FN_DCBIAS), line), free(line);
 }
 
 
@@ -521,117 +524,122 @@ double make_jdate(int y, int m, int d, double hours)
 /* try to get the jdate from the header fields */
 double frame_jdate(struct ccd_frame *fr)
 {
-	double v;
-    char date_time[64];
-
     double jd = 0;
 
-    gboolean jd_valid = FALSE;
+    double v;
+    if (fits_get_double(fr, P_STR(FN_MJD), &v) > 0) {
+        jd = mjd_to_jd(v);
 
-    if (!jd_valid) {
-        jd_valid = (fits_get_double(fr, P_STR(FN_MJD), &v) > 0);
-        if (jd_valid) {
-            d1_printf("using mjd=%.14g from %s\n", v, P_STR(FN_MJD));
-            jd = mjd_to_jd(v);
-        }
-    }
+    } else if (fits_get_double(fr, P_STR(FN_JDATE), &v) > 0) {
+        jd = v;
 
-    if (!jd_valid) {
-        jd_valid = (fits_get_double(fr, P_STR(FN_JDATE), &v) > 0);
-        if (jd_valid) {
-            d1_printf("using jdate=%.14g from %s\n", v, P_STR(FN_JDATE));
-            jd = v;
-        }
-    }
+    } else {
+        gboolean make_jd = FALSE;
+        int y, m, d;
+        double time;
 
-    if (! jd_valid) {
-        int found_date_time = fits_get_string(fr, P_STR(FN_DATE_OBS), date_time, 63) > 0;
-
-        if (! found_date_time) {
-//            err_printf("no jd found for frame!\n");
-
-        } else {
-            int y, m, d;
-            double dt_jd;
-
-            gboolean time_valid = FALSE;
-            char ut_time[64];
-            char *time;
+        while (1) {
+            char *date_time = fits_get_string(fr, P_STR(FN_DATE_TIME));
 
             // look for date in date_time as YYYY-MM-DD or YYYY/MM/DD
-            gboolean date_valid = (sscanf(date_time, "%d-%d-%d", &y, &m, &d) == 3) || (sscanf(date_time, "%d/%d/%d", &y, &m, &d) == 3);
+            if (date_time)
+                make_jd = (sscanf(date_time, "%d-%d-%d", &y, &m, &d) == 3)
+                        || (sscanf(date_time, "%d/%d/%d", &y, &m, &d) == 3);
 
-            d1_printf("using %s='%s' for date/time\n", P_STR(FN_DATE_OBS), date_time);
-            if (! date_valid) err_printf("error parsing date\n");
-
-            double hours = 0.0;
-            if (date_valid) {
-
-                if (! time_valid) { // look for T in date_time
-
-                    time = strstr(date_time, "T");
-                    time_valid = (time != NULL && time[0] != 0);
-
-                    if (time_valid) time = time + 1;
-                }
-
-                if (! time_valid) { // look for TIME_OBS
-
-                    time_valid = (fits_get_string(fr, P_STR(FN_TIME_OBS), ut_time, 63) > 0);
-
-                    if (time_valid) time = ut_time;
-                }
-
-                if (! time_valid) { // look for UT and reread date
-                    time_valid = (fits_get_string(fr, P_STR(FN_UT), ut_time, 63) > 0);
-
-                    if (time_valid) time = ut_time;
-
-                    // re-read date in date_time as dd/mm/yy, add 1900 to yy
-                    date_valid = ((sscanf(date_time, "%d-%d-%d", &d, &m, &y) == 3) || (sscanf(date_time, "%d/%d/%d", &d, &m, &y) == 3));
-                    if (date_valid) y += 1900;
+            if (!make_jd) {
+                if (date_time) free(date_time);
+                date_time = fits_get_string(fr, P_STR(FN_DATE_OBS));
+                if (date_time) {
+                    make_jd = (sscanf(date_time, "%d-%d-%d", &y, &m, &d) == 3)
+                            || (sscanf(date_time, "%d/%d/%d", &y, &m, &d) == 3);
                 }
             }
 
-            time_valid = time_valid && (dms_to_degrees(time, &hours) == 0);
+            if (!make_jd) break; // no y, m, d
 
-            dt_jd = make_jdate(y, m, d, hours);
+            char *timestr = NULL;
 
-            if (time_valid && date_valid) {
-                double exptime;
-                if (fits_get_double (fr, P_STR(FN_EXPTIME), &exptime) > 0) {
-                    double offset = P_DBL(OBS_TIME_OFFSET) * exptime / 60 / 60 / 24;
-                    dt_jd += offset;
-                }
+            char *t;
+            if (date_time && (t = strstr(date_time, "T")) && (t[0] == 'T')) {
+                timestr = strdup(t + 1);
+            } else if ((t = fits_get_string(fr, P_STR(FN_TIME_OBS)))) {
+                timestr = t;
+            } else if ((t = fits_get_string(fr, P_STR(FN_UT)))) {
+                timestr = t;
+            }
 
-                double tz = P_DBL(OBS_TIME_ZONE);
-                if (tz) {
-                    d1_printf("subtracted time zone %.0f from date-time to get jd %.5f\n", tz, jd);
-                    dt_jd -= tz / 24;
-                }
+            if ((make_jd = (timestr != NULL))) {
+                make_jd = (dms_to_degrees(timestr, &time) >= 0);
+                free(timestr);
+            }
+
+            if (date_time) free(date_time);
+
+            break;
+        }
+
+        if (make_jd) { // have y, m, d and time
+            double dt_jd = make_jdate(y, m, d, time);
+
+            double exptime; // correct time as fraction of exposure time
+            if (fits_get_double (fr, P_STR(FN_EXPTIME), &exptime) > 0) {
+                double offset = P_DBL(OBS_TIME_OFFSET) * exptime / 60 / 60 / 24;
+                dt_jd += offset;
+            }
+
+            double tz = P_DBL(OBS_TIME_ZONE); // correct for time zone if set
+            if (tz) {
+                d1_printf("subtracted time zone %.0f from date-time to get jd %.5f\n", tz, jd);
+                dt_jd -= tz / 24;
             }
 
             jd = dt_jd;
-        }
+
+        } else
+            printf("no frame jd and no date/time set to calculate jd!\n");
     }
 
     return jd;
 }
 
-void date_time_from_jdate(double jd, char *date, int n)
+static int jdate_to_timeval(double jd, struct timeval *tv)
+{
+    struct timeval btv;
+    double bjd;
+    long dsec, dusec;
+
+    btv.tv_sec = 0;
+    btv.tv_usec = 0;
+
+    bjd = timeval_to_jdate(&btv);
+
+    if (bjd > jd) {
+        err_printf("jdate_to_timeval: trying to convert jdate:%.14g from before Jan1, 1970\n", jd);
+        return -1;
+    }
+    dsec = (jd - bjd) * 86400 + 0.5;
+    dusec = ((jd - bjd) * 86400 - dsec) * 1000000;
+    tv->tv_sec = dsec;
+    tv->tv_usec = dusec;
+    return 0;
+}
+
+char *date_time_from_jdate(double jd)
 {
 	struct timeval tv;
 	struct tm *t;
+    char *date = NULL;
 
     if (! isnan(jd)) {
-        jdate_to_timeval(jd, &tv);
-        t = gmtime((time_t *)&((tv.tv_sec)));
+        if (jdate_to_timeval(jd, &tv) >= 0) {
+            t = gmtime((time_t *)&((tv.tv_sec)));
 
-        snprintf(date, n, "'%d-%02d-%02dT%02d:%02d:%05.2f'", 1900 + t->tm_year, t->tm_mon + 1,
-            t->tm_mday, t->tm_hour, t->tm_min, 1.0 * t->tm_sec +
-            1.0 * tv.tv_usec / 1000000);
+            asprintf(&date, "'%d-%02d-%02dT%02d:%02d:%05.2f'", 1900 + t->tm_year, t->tm_mon + 1,
+                     t->tm_mday, t->tm_hour, t->tm_min, 1.0 * t->tm_sec +
+                     1.0 * tv.tv_usec / 1000000);
+        }
     }
-	
+    return date;
 }
 
 
@@ -652,25 +660,35 @@ double calculate_airmass(double ra, double dec, double ast, double lat, double l
  * return 0.0 if airmass couldn't be calculated */
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) 
 {
-	char dms[64];
-
     double v;
-	if (fits_get_double(fr, P_STR(FN_AIRMASS), &v) > 0) {
-		return v;
-	}
+    if (fits_get_double(fr, P_STR(FN_AIRMASS), &v) > 0) return v;
 
+    gboolean found_zd = FALSE;
     double zd;
-    if ( (fits_get_string(fr, P_STR(FN_ZD), dms, 63) > 0) && (dms_to_degrees(dms, &zd) >= 0) ) {
-        return airmass(90.0 - zd);
+    char *dms = fits_get_string(fr, P_STR(FN_ZD));
+    if (dms) {
+        found_zd = (dms_to_degrees(dms, &zd) >= 0);
+        free(dms);
     }
+    if (found_zd) return airmass(90.0 - zd);
 
     double lat, lng, jd;
 
-    if (! ((fits_get_string(fr, P_STR(FN_LATITUDE), dms, 63) > 0) && (dms_to_degrees(dms, &lat) >= 0)))
-        lat = P_DBL(OBS_LATITUDE);
-	
-    if (! ((fits_get_string(fr, P_STR(FN_LONGITUDE), dms, 63) > 0) && (dms_to_degrees(dms, &lng) >= 0)))
-		lng = P_DBL(OBS_LONGITUDE);
+    gboolean found_lat = FALSE;
+    dms = fits_get_string(fr, P_STR(FN_LATITUDE));
+    if (dms) {
+        found_lat = (dms_to_degrees(dms, &lat) >= 0);
+        free(dms);
+    }
+    if (! found_lat) lat = P_DBL(OBS_LATITUDE);
+
+    gboolean found_lng = FALSE;
+    dms = fits_get_string(fr, P_STR(FN_LONGITUDE));
+    if (dms) {
+        found_lng = (dms_to_degrees(dms, &lng) >= 0);
+        free(dms);
+    }
+    if (! found_lng) lng = P_DBL(OBS_LONGITUDE);
 
     jd = frame_jdate(fr);
     if (jd == 0) return 0;
@@ -691,27 +709,6 @@ double timeval_to_jdate(struct timeval *tv)
 			+ t->tm_sec / (3600.0) + tv->tv_usec / 
 			(1000000.0 * 3600.0));
 	return jd;
-}
-
-void jdate_to_timeval(double jd, struct timeval *tv)
-{
-	struct timeval btv;
-	double bjd;
-	long dsec, dusec;
-
-	btv.tv_sec = 0;
-	btv.tv_usec = 0;
-
-	bjd = timeval_to_jdate(&btv);
-
-	if (bjd > jd) {
-        err_printf("jdate_to_timeval: trying to convert jdate:%.14g from before Jan1, 1970\n", jd);
-		return;
-	}
-	dsec = (jd - bjd) * 86400 + 0.5;
-	dusec = ((jd - bjd) * 86400 - dsec) * 1000000;
-	tv->tv_sec = dsec;
-	tv->tv_usec = dusec;
 }
 
 
@@ -754,8 +751,7 @@ double obs_current_airmass(struct obs_data *obs)
 
 void wcs_to_fits_header(struct ccd_frame *fr)
 {
-	char lb[80];
-	char deg[80];
+    char *line;
 
 //    if (! fr->fim) {
 //        printf ("obsdata.wcs_to_fits_header NULL fr->fim\n");
@@ -767,41 +763,41 @@ void wcs_to_fits_header(struct ccd_frame *fr)
 	fits_add_keyword(fr, "CTYPE1", "'RA---TAN'");
 	fits_add_keyword(fr, "CTYPE2", "'DEC--TAN'");
 
-    sprintf(lb, "%20.8f / ", fr->fim.xref);
-	fits_add_keyword(fr, P_STR(FN_CRVAL1), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.xref);
+    if (line) fits_add_keyword(fr, P_STR(FN_CRVAL1), line), free(line);
 
-    sprintf(lb, "%20.8f / ", fr->fim.yref);
-	fits_add_keyword(fr, P_STR(FN_CRVAL2), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.yref);
+    if (line) fits_add_keyword(fr, P_STR(FN_CRVAL2), line), free(line);
 
-    sprintf(lb, "%20.8f / ", fr->fim.xinc);
-	fits_add_keyword(fr, P_STR(FN_CDELT1), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.xinc);
+    if (line) fits_add_keyword(fr, P_STR(FN_CDELT1), line), free(line);
 
-    sprintf(lb, "%20.8f / ", fr->fim.yinc);
-	fits_add_keyword(fr, P_STR(FN_CDELT2), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.yinc);
+    if (line) fits_add_keyword(fr, P_STR(FN_CDELT2), line), free(line);
 
-    sprintf(lb, "%20.8f / ", fr->fim.xrefpix);
-	fits_add_keyword(fr, P_STR(FN_CRPIX1), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.xrefpix);
+    if (line) fits_add_keyword(fr, P_STR(FN_CRPIX1), line), free(line);
 
-    sprintf(lb, "%20.8f / ", fr->fim.yrefpix);
-	fits_add_keyword(fr, P_STR(FN_CRPIX2), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.yrefpix);
+    if (line) fits_add_keyword(fr, P_STR(FN_CRPIX2), line), free(line);
 
-    sprintf(lb, "%20.8f / ", fr->fim.rot);
-	fits_add_keyword(fr, P_STR(FN_CROTA1), lb);
+    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.rot);
+    if (line) fits_add_keyword(fr, P_STR(FN_CROTA1), line), free(line);
 
-    sprintf(lb, "%20.1f / ", 1.0 * fr->fim.equinox);
-	fits_add_keyword(fr, P_STR(FN_EQUINOX), lb);
+    line = NULL; asprintf(&line, "%20.1f / ", 1.0 * fr->fim.equinox);
+    if (line) fits_add_keyword(fr, P_STR(FN_EQUINOX), line), free(line);
 
-    degrees_to_hms_pr(deg, fr->fim.xref, 2);
-	sprintf(lb, "'%s'", deg);
-	fits_add_keyword(fr, P_STR(FN_RA), lb);
+    char *ras = degrees_to_hms_pr(fr->fim.xref, 2);
+    line = NULL; if (ras) asprintf(&line, "'%s'", ras), free(ras);
+    if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
 
-    degrees_to_dms_pr(deg, fr->fim.yref, 1);
-	sprintf(lb, "'%s'", deg);
-	fits_add_keyword(fr, P_STR(FN_DEC), lb);
+    char *decs = degrees_to_dms_pr(fr->fim.yref, 1);
+    line = NULL; if (decs) asprintf(&line, "'%s'", decs), free(decs);
+    if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
 
-    sprintf(lb, "%20.3f / IMAGE SCALE IN SECONDS PER PIXEL", 3600.0 * fabs(fr->fim.xinc));
-	fits_add_keyword(fr, P_STR(FN_SECPIX), lb);
+    line = NULL; asprintf(&line, "%20.3f / IMAGE SCALE IN SECONDS PER PIXEL", 3600.0 * fabs(fr->fim.xinc));
+    if (line) fits_add_keyword(fr, P_STR(FN_SECPIX), line), free(line);
 
-    sprintf(lb, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
-    fits_add_keyword(fr, P_STR(FN_AIRMASS), lb);
+    line = NULL; asprintf(&line, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
+    if (line) fits_add_keyword(fr, P_STR(FN_AIRMASS), line), free(line);
 }

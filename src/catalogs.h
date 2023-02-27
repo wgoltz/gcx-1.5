@@ -106,7 +106,7 @@ struct cat_star {
 	double sky;		/* sky value */
 	double diffam;		/* differential airmass (from frame center) */
 
-	char name[CAT_STAR_NAME_SZ+1]; /* designation for the star */
+    char *name; /* designation for the star */
 	double residual; /* fitting data, not used by catalog code */
 	double std_err;
 	double noise[NOISE_LAST];
@@ -120,7 +120,7 @@ struct cat_star {
     int n; /* number of observations for mean */
     double m, m2, me; /* mean accumulators */
     char *bname; /* band name for accumulators */
-    struct gui_star *guis; /* pointer to gui_star */
+    struct gui_star *gs; /* pointer to gui_star */
 };
 
 #define CATALOG(x) ((struct catalog *)(x))
@@ -129,10 +129,8 @@ struct catalog {
 	int ref_count;
 	char *name; /* name of catalog */
 	int flags; /* flags for catalog */
-	int (* cat_search)(struct cat_star *cst[], struct catalog *cat, 
-			   double ra, double dec, double radius, int n);
-	int (* cat_get)(struct cat_star *cst[], struct catalog *cat, 
-			char *name, int n);
+    int (* cat_search)(struct cat_star *cst[], struct catalog *cat, double ra, double dec, double radius, int n);
+    int (* cat_get)(struct cat_star *cst[], struct catalog *cat, char *name, int n);
 	int (* cat_add)(struct cat_star *cst, struct catalog *cat);
 	int (* cat_sync)(struct catalog *cat);
 	void *data; 		/* usually hold a list of cat_stars - or nothing */
@@ -148,8 +146,8 @@ struct catalog {
 
 /* function prototypes */
 extern struct cat_star *cat_star_new(void);
-extern void cat_star_ref(struct cat_star *cats);
-extern void cat_star_release(struct cat_star *cats);
+extern void cat_star_ref(struct cat_star *cats, char *msg);
+extern struct cat_star *cat_star_release(struct cat_star *cats, char *msg);
 char ** cat_list(void);
 struct catalog * open_catalog(char *catname);
 void close_catalog(struct catalog *cat);
@@ -159,7 +157,7 @@ int lookup_band(char *text, char *band, int *bs, int *be);
 int get_band_by_name(char *text, char *band, double *mag, double *err);
 int local_load_file(char *fn);
 void local_load_catalogs(char *path);
-int cat_flags_to_string (int flags, char *cat_flags_string, int string_size);
+char *cat_flags_to_string (int flags);
 
 
 #endif

@@ -13,6 +13,7 @@
 #ifndef _CCD_H_
 #define _CCD_H_
 
+#include <stdio.h>
 #include <math.h>
 #include <sys/time.h>
 
@@ -93,6 +94,14 @@ struct exp_data {
 
 // center of the population lies between 1/POP_CENTER and 1-1/POP_CENTER
 #define POP_CENTER 4
+#define H_SIZE (2*65535 + 1)
+#define H_START (-65535)
+// frame_stats fills the statistics buffer for the frame
+#define H_MIN (0) // leftmost bin value
+#define H_MAX (H_SIZE) // rightmost bin value (+1)
+
+#define HIST_OFFSET (-H_START) // offset to accomodate small negative values in histogram
+// size of histogram, and value of the first bin (for ring stats)
 
 // an image histogram
 struct im_histogram {
@@ -118,7 +127,7 @@ struct im_stats {
     double zero;
     double scale;
 	double avgs[4];
-    int free; // struct was alloc'd by alloc_stats and should be freed by free_stats
+//    int free; // struct was alloc'd by alloc_stats and should be freed by free_stats
 	struct im_histogram hist; // the histogram for the current image
 };
 
@@ -267,7 +276,7 @@ struct ccd_frame {
 	int y_skip; 	// number of lines skipped at the beginning of each frame
 	unsigned magic; // an unique number identifying the frame (science, dark, flatfield etc)
 	struct exp_data exp;
-	struct im_stats stats;
+    struct im_stats stats;
     struct wcs fim;
 	struct raw_metadata rmeta;
 	int data_valid;	/* non-zero shows the data in the array is valid
@@ -287,6 +296,7 @@ struct ccd_frame {
     void *alignment_mask; // pixels overlapping with alignment frame
     int data_is_flipped; // 0 - data arranged as from file, 1 - data rows flipped top to bottom
     void *ofr; // pointer to o_frame if mband active
+    struct image_file *imf; // point back to imf
 };
 
 // magic numbers for ccd frame
@@ -457,35 +467,30 @@ struct ap_params {
 #define RECIPE_TEXT 256
 
 // structure defining a relative photometry problem
-struct vs_recipe {
-    int ref_count;		/* refcount for the recipe structure */
-    char objname[RECIPE_TEXT+1];
-    char chart[RECIPE_TEXT+1];
-    char frame[RECIPE_TEXT+1];
-    char repstar[RECIPE_TEXT+1];	// format of star report
-    char repinfo[RECIPE_TEXT+1];	// format of file info report
-	double ra, dec;		// official coordinates of object
-    int usewcs;		// flag showing that the recipe params are relative to the wcs
-	double scint_factor;	// scintillation noise factor
-	double aperture;	// aperture of telescope used (cm) (used if not found in frame header)
-	double airmass;		// airmass of observations (used if not found in frame header)
-	struct ap_params p;	// measurement parameters
-    int max_cnt;		/* max number of stars in recipe */
-	int cnt;		// number of stars in structure
-    struct star *s;		/* malloced array of stars, freed when the recipe
-				   is freed */
-};
+//struct vs_recipe { // not used
+//    int ref_count;		/* refcount for the recipe structure */
+//    char objname[RECIPE_TEXT+1];
+//    char chart[RECIPE_TEXT+1];
+//    char frame[RECIPE_TEXT+1];
+//    char repstar[RECIPE_TEXT+1];	// format of star report
+//    char repinfo[RECIPE_TEXT+1];	// format of file info report
+//	double ra, dec;		// official coordinates of object
+//    int usewcs;		// flag showing that the recipe params are relative to the wcs
+//	double scint_factor;	// scintillation noise factor
+//	double aperture;	// aperture of telescope used (cm) (used if not found in frame header)
+//	double airmass;		// airmass of observations (used if not found in frame header)
+//	struct ap_params p;	// measurement parameters
+//    int max_cnt;		/* max number of stars in recipe */
+//	int cnt;		// number of stars in structure
+//    struct star *s;		/* malloced array of stars, freed when the recipe
+//				   is freed */
+//};
 
-
-
-// size of histogram, and value of the first bin (for ring stats)
-#define H_START (-65535)
-#define H_SIZE (2*65535 + 1)
 
 // ring stats result
 struct rstats {
-	double all;
-	double used;
+    int all;
+    double used;
 	double avg;
 	double median;
 	double sigma;
@@ -578,8 +583,13 @@ int deb_printf(int level, const char *fmt, ...);
 
 // function declarations from ccd/ccd_frame.c
 
-extern void get_frame(struct ccd_frame *fr);
-extern struct ccd_frame *release_frame(struct ccd_frame *fr);
+extern void set_color_plane(struct ccd_frame *fr, int plane_iter, float *fptr);
+extern void scale_shift_frame_CFA(struct ccd_frame *fr, double *mp, double *sp);
+extern void free_stats(struct im_stats *st);
+extern int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im_stats *st);
+extern struct im_stats *alloc_stats(struct im_stats *st);
+extern void get_frame(struct ccd_frame *fr, char *msg);
+extern struct ccd_frame *release_frame(struct ccd_frame *fr, char *msg);
 extern struct ccd_frame *new_frame(unsigned size_x, unsigned size_y);
 extern struct ccd_frame *new_frame_fr(struct ccd_frame* fr, unsigned size_x, unsigned size_y);
 extern struct ccd_frame *new_frame_head_fr(struct ccd_frame* cam, unsigned size_x, unsigned size_y);
@@ -588,13 +598,12 @@ extern int alloc_frame_data(struct ccd_frame *fr);
 extern void free_frame_data(struct ccd_frame *fr);
 extern int frame_to_float(struct ccd_frame *fr);
 extern struct ccd_frame *clone_frame(struct ccd_frame *fr);
-extern int frame_stats(struct ccd_frame *fr);
+extern void frame_stats(struct ccd_frame *fr);
 
 struct ccd_frame *read_fits_file(char *filename, int force_unsigned, char *default_cfa);
-struct ccd_frame *read_gz_fits_file(char *filename, char *ungz, int force_unsigned,
-				    char *default_cfa);
+struct ccd_frame *read_gz_fits_file(char *filename, char *ungz, int force_unsigned, char *default_cfa);
 extern int write_fits_frame(struct ccd_frame *fr, char *filename);
-extern int write_gz_fits_frame(struct ccd_frame *fr, char *fn, char *gzcmd);
+extern int write_gz_fits_frame(struct ccd_frame *fr, char *fn);
 extern int scale_shift_frame(struct ccd_frame *fr, double m, double s);
 extern int madd_frames (struct ccd_frame *fr, struct ccd_frame *fr1, double m);
 //extern int libip_head(struct ccd_frame *fr);
@@ -604,7 +613,7 @@ int fits_delete_keyword(struct ccd_frame *fr, char *kwd);
 extern int fits_add_history(struct ccd_frame *fr, char *val);
 extern int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1);
 extern int crop_frame(struct ccd_frame *fr, int x, int y, int w, int h);
-int fits_get_string(struct ccd_frame *fr, char *kwd, char *v, int n);
+char *fits_get_string(struct ccd_frame *fr, char *kwd);
 int fits_get_dms(struct ccd_frame *fr, char *kwd, double *v);
 int fits_get_double(struct ccd_frame *fr, char *kwd, double *v);
 int fits_get_int(struct ccd_frame *fr, char *kwd, int *v);
@@ -646,12 +655,12 @@ double hist_clip_avg(struct rstats *rs, double *median, double sigmas,
 		     double *lclip, double *hclip);
 extern int aperture_photometry(struct ccd_frame *fr, struct star *s,
 			struct ap_params *p, struct bad_pix_map *bp);
-extern int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs);
-extern void get_ph_solution(struct vs_recipe *vs);
+//extern int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs); // not used
+//extern void get_ph_solution(struct vs_recipe *vs); // not used
 extern double flux_to_absmag(double flux);
 extern double absmag_to_flux(double mag);
-extern double scint_noise(struct ccd_frame *fr, struct vs_recipe *vs);
-extern int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double *d, double *am);
+//extern double scint_noise(struct ccd_frame *fr, struct vs_recipe *vs); // not used
+//extern int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double *d, double *am); // not used
 extern double scintillation(double t, double d, double am);
 
 // from ccd/sources.c
@@ -679,11 +688,13 @@ extern int worldpos(double xpos, double ypos, double xref, double yref, double x
 extern double airmass (double aa);
 extern void precess_hiprec (double epo1, double epo2, double *ra, double *dec);
 extern void range (double *v, double r);
-extern void degrees_to_dms(char *lb, double deg);
-extern void degrees_to_hms(char *lb, double deg);
 extern int dms_to_degrees(char *decs, double *deg);
-extern int degrees_to_dms_pr(char *lb, double deg, int prec);
-extern int degrees_to_hms_pr(char *lb, double deg, int prec);
+
+extern char *degrees_to_dms_pr(double deg, int prec);
+extern char *degrees_to_hms_pr(double deg, int prec);
+extern char *degrees_to_dms(double deg);
+extern char *degrees_to_hms(double deg);
+
 
 // from ccd/median.c
 extern double dmedian(double a[], int n);
@@ -693,16 +704,16 @@ extern float fmedian(float a[], int n);
 #define sqr(x) ((x)*(x))
 
 // from ccd/rcp.c
-extern void fprint_recipe(FILE *fp, struct vs_recipe *vs, int verb);
-extern void fscan_recipe(FILE *fp, struct vs_recipe *vs);
-extern void report_stars(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what);
-extern int string_has(char *str, char c);
-extern int add_pgm_star(struct vs_recipe *vs, double x, double y);
-extern int add_std_star(struct vs_recipe *vs, double x, double y, double mag);
-extern struct vs_recipe *new_vs_recipe(int n);
-extern void ref_vs_recipe(struct vs_recipe *vs);
-extern void release_vs_recipe(struct vs_recipe *vs);
-void report_event(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what);
+//extern void fprint_recipe(FILE *fp, struct vs_recipe *vs, int verb); // not used
+//extern void fscan_recipe(FILE *fp, struct vs_recipe *vs); // not used
+//extern void report_stars(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what); // not used
+//extern int string_has(char *str, char c);
+//extern int add_pgm_star(struct vs_recipe *vs, double x, double y); // not used
+//extern int add_std_star(struct vs_recipe *vs, double x, double y, double mag); // not used
+//extern struct vs_recipe *new_vs_recipe(int n); // not used
+//extern void ref_vs_recipe(struct vs_recipe *vs); // not used
+//extern void release_vs_recipe(struct vs_recipe *vs); // not used
+//void report_event(FILE *fp, struct vs_recipe *vs, struct ccd_frame *fr, int what); // not used
 
 
 // bits for report_star what

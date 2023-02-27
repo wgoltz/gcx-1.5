@@ -441,6 +441,7 @@ void
 editXMLEle (XMLEle *ep, const char *pcdata)
 {
     freeString (&ep->pcdata);
+    newString (&ep->pcdata);
     appendString (&ep->pcdata, pcdata);
     ep->pcdata_hasent = (strpbrk (pcdata, entities) != NULL);
 }
@@ -475,6 +476,7 @@ void
 editXMLAtt (XMLAtt *ap, const char *str)
 {
     freeString (&ap->valu);
+    newString (&ap->valu);
     appendString (&ap->valu, str);
 }
 
@@ -978,8 +980,12 @@ growString (String *sp, int c)
 {
     int l = sp->sl + 2;		/* need room for '\0' plus c */
 
-    if (!sp->s) newString (sp);
-    if (l > sp->sm) sp->s = (char *) moremem (sp->s, sp->sm *= 2);
+    if (l > sp->sm) {
+        if (!sp->s)
+        newString (sp);
+        else
+        sp->s = (char *) moremem (sp->s, sp->sm *= 2);
+    }
 
     sp->s[--l] = '\0';
     sp->s[--l] = (char)c;
@@ -993,8 +999,12 @@ appendString (String *sp, const char *str)
     int strl = strlen (str);
     int l = sp->sl + strl + 1;	/* need room for '\0' */
 
-    if (!sp->s) newString (sp);
-    if (l > sp->sm) sp->s = (char *) moremem (sp->s, (sp->sm = l));
+    if (l > sp->sm) {
+        if (!sp->s)
+        newString (sp);
+        if (l > sp->sm)
+        sp->s = (char *) moremem (sp->s, (sp->sm = l));
+    }
 
     strcpy (&sp->s[sp->sl], str);
     sp->sl += strl;

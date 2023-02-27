@@ -2,9 +2,10 @@
 #define _COMMON_INDI_H_
 
 #include <glib-object.h>
+#include "libindiclient/indi.h"
 
 struct INDI_callback_t {
-	int type;
+    unsigned int type;
 	struct INDI_common_t *device;
 	void *func;
 	void *data;
@@ -14,12 +15,12 @@ struct INDI_callback_t {
 #define INDI_COMMON (struct INDI_common_t *)
 
 #define COMMON_INDI_VARS                    \
-	char name[20];                      \
+    char *name;                      \
 	int ready;                          \
 	int is_connected;                   \
 	void (*check_state)(void *data);    \
 	GSList *callbacks;                   \
-	int callback_max;
+    unsigned int callback_max;
 
 enum {
 	INDI_READY,
@@ -35,5 +36,5 @@ void INDI_try_dev_connect(struct indi_prop_t *iprop, struct INDI_common_t *devic
 int INDI_update_elem_if_changed(struct indi_prop_t *iprop, const char *elemname, double newval);
 void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *func, void *data, char *msg);
 void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void *func);
-void INDI_exec_callbacks(struct INDI_common_t *device, int type);
+void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type);
 #endif

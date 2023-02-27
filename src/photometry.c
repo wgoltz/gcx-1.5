@@ -169,6 +169,7 @@ int center_star(struct ccd_frame *fr, struct star *st, double max_ce)
 	return 0;
 }
 
+static int found = 0;
 
 /* measure instrumental magnitudes for the stars in the stf. */
 static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, struct ap_params *ap)
@@ -177,7 +178,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 //    ap_params_from_par (&apdef);
 //    ap = &apdef;
 
-    memcpy (&ap->exp, &fr->exp, sizeof (struct exp_data));
+    ap->exp = fr->exp;
 
     char *filter = stf_find_string (stf, 1, SYM_OBSERVATION, SYM_FILTER);
 	if (filter == NULL) {
@@ -194,7 +195,10 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
     double lat, lng, jd;
 
     gboolean dodiffam = (! stf_am_pars (stf, &lat, &lng, &jd));
-    if (! dodiffam)	d1_printf("cannot calculate differential AM. lat, long or time unknown\n");
+    if (! dodiffam)	{
+        d1_printf("cannot calculate differential AM. lat, long or time unknown\n");
+        return -1;
+    }
 
     double ast = get_apparent_sidereal_time(jd);
 
@@ -214,18 +218,15 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         struct cat_star *cats = CAT_STAR(sl->data);
 
         cats->flags &= ~CPHOT_MASK;
-//		wcs_xypix(wcs, cats->ra, cats->dec, &x, &y);
 
         double x, y;
 		cats_xypix(wcs, cats, &x, &y);
-//printf("photometry.stf_aphot %lf %lf", x, y);
 
         cats->pos[POS_X] = x;
         cats->pos[POS_Y] = y;
 
         if (! star_in_frame (fr, x, y, rm)) { // need to also add offset if frame has been realigned
 			cats->flags |= CPHOT_INVALID;
-//printf(" invalid\n");
 			continue;
 		}
 
@@ -234,8 +235,8 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 			cats->flags |= INFO_DIFFAM;
 		}
 
-        struct star s;
-        memset (&s, 0, sizeof (struct star));
+
+        struct star s = { 0 };
 		s.x = x;
 		s.y = y;
 		s.xerr = BIG_ERR;
@@ -245,7 +246,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         if (ap->center) {
 			if (center_star(fr, &s, P_DBL(AP_MAX_CENTER_ERR))) {
 				cats->flags |= CPHOT_NOT_FOUND;
-//printf(" not found\n");
+// set limit mag here?
                 continue;
             }
             cats->flags |= CPHOT_CENTERED;
@@ -256,10 +257,9 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 
         if (aphot_star(fr, &s, ap, NULL)) { // only need position, can do this without smags
             cats->flags |= CPHOT_INVALID;
-//printf(" cphot invalid\n");
+
             continue;
         }
-//        printf("\n");
 
         if ((cats->flags & CPHOT_CENTERED) && !(cats->flags & CATS_FLAG_ASTROMET) && P_INT(AP_MOVE_TARGETS)) {
             wcs_worldpos(wcs, s.x, s.y, &cats->ra, &cats->dec);
@@ -310,11 +310,10 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 
             if (aphot_star(fr, &s, ap, NULL)) {
                 cats->flags |= CPHOT_INVALID;
-//printf(" cphot invalid 2\n");
                 continue;
             }
         }
-//printf("stf_aphot %s %d %08x %s %s\n", fr->name, cats->guis->sort, cats, cats->name, cats->imags); fflush(NULL);
+//printf("stf_aphot %s %d %08x %s %s\n", fr->name, cats->gs->sort, cats, cats->name, cats->imags); fflush(NULL);
 	}
 
 	return 0;
@@ -326,29 +325,35 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 {
 	struct stf *stf = NULL;
 
-	char s[80];
+    char *s;
 
-    int fits_has_band = fits_get_string (fr, P_STR(FN_FILTER), s, 79) > 0;
-
-    if (P_INT(AP_FORCE_IBAND) || ! fits_has_band)
+    char *band = fits_get_string (fr, P_STR(FN_FILTER));
+    if (P_INT(AP_FORCE_IBAND) || (band == NULL))
         stf = stf_append_string (NULL, SYM_FILTER, P_STR(AP_IBAND_NAME));
     else {
-//        trim_lcase_first_word (s);
-        stf = stf_append_string (NULL, SYM_FILTER, s);
+        stf = stf_append_string (NULL, SYM_FILTER, band);
 	}
-    if (fits_get_string (fr, P_STR(FN_OBJECT), s, 79) > 0) {
-        trim_blanks (s);
-        stf_append_string (stf, SYM_OBJECT, s);
+
+    char *object = fits_get_string (fr, P_STR(FN_OBJECT));
+    if (object) {
+        trim_blanks (object);
+        stf_append_string (stf, SYM_OBJECT, object);
+        free(object);
 	}
-    degrees_to_hms_pr (s, wcs->xref, 2);
-    stf_append_string (stf, SYM_RA, s);
-    degrees_to_dms_pr (s, wcs->yref, 1);
-    stf_append_string (stf, SYM_DEC, s);
+
+    char *ras = degrees_to_hms_pr (wcs->xref, 2);
+    if (ras) stf_append_string (stf, SYM_RA, ras), free(ras);
+
+    char *decs = degrees_to_dms_pr (wcs->yref, 1);
+    if (decs) stf_append_string (stf, SYM_DEC, decs), free(decs);
+
     stf_append_double (stf, SYM_EQUINOX, wcs->equinox);
 
-    if (fits_get_string (fr, P_STR(FN_TELESCOP), s, 79) > 0) {
-        trim_blanks (s);
-        stf_append_string (stf, SYM_TELESCOPE, s);
+    char *telescope = fits_get_string (fr, P_STR(FN_TELESCOP));
+    if (telescope) {
+        trim_blanks (telescope);
+        stf_append_string (stf, SYM_TELESCOPE, telescope);
+        free(telescope);
 	}
 //	if (fits_get_double(fr, P_STR(FN_APERTURE), &v) > 0) {
 //		d1_printf("using aperture = %.3f from %s\n",
@@ -377,17 +382,15 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 		lat = wcs->lat;
 		lng = wcs->lng;
 	} else {
-//printf("photometry.create_obs_alist using default location\n");
 		lat = P_DBL(OBS_LATITUDE);
 		lng = P_DBL(OBS_LONGITUDE);
-		got_location = TRUE;
 	}
-	if (got_location) {
-        degrees_to_dms_pr (s, lat, 0);
-        stf_append_string (stf, SYM_LATITUDE, s);
-        degrees_to_dms_pr (s, lng, 0);
-        stf_append_string (stf, SYM_LONGITUDE, s);
-	}		
+
+    s = degrees_to_dms_pr (lat, 0);
+    if (s) stf_append_string (stf, SYM_LATITUDE, s), free(s);
+
+    s = degrees_to_dms_pr (lng, 0);
+    if (s) stf_append_string (stf, SYM_LONGITUDE, s), free(s);
 
     if (fits_get_double (fr, P_STR(FN_ALTITUDE), &v) > 0) {
         stf_append_double (stf, SYM_ALTITUDE, v);
@@ -407,9 +410,12 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
             if (v > 0.0) stf_append_double (stf, SYM_AIRMASS, v);
 		}
 	}
-    if (fits_get_string (fr, P_STR(FN_OBSERVER), s, 79) > 0) {
-        trim_blanks (s);
-        stf_append_string (stf, SYM_OBSERVER, s);
+
+    char *observer = fits_get_string (fr, P_STR(FN_OBSERVER));
+    if (observer) {
+        trim_blanks (observer);
+        stf_append_string (stf, SYM_OBSERVER, observer);
+        free(observer);
 	}
 	return stf;
 }
@@ -466,30 +472,35 @@ static void stf_keep_good_phot(struct stf *stf)
     struct stf *st = stf_find (stf, 0, SYM_STARS);
     if (st == NULL || st->next == NULL || ! STF_IS_GLIST (st->next)) return;
 
-    GList *nsl = NULL, *next = NULL;
+    GList *nsl = NULL;
     GList *stf_glist = STF_GLIST (st->next);
-    GList *sl;
-    for (sl = stf_glist; sl != NULL; sl = next) {
-        next = sl->next;
+    GList *sl = stf_glist;
+    while (sl !=  NULL) {
+        GList *next = g_list_next(sl);
 
         struct cat_star *cats = CAT_STAR (sl->data);
-        if (CATS_TYPE (cats) != CATS_TYPE_APSTAR && CATS_TYPE (cats) != CATS_TYPE_APSTD) {
-            cat_star_release (cats);
-			continue;
-		}
-		if (cats->flags & CPHOT_INVALID) {
-            cat_star_release (cats);
-			continue;
-		}
-        if ((CATS_TYPE (cats) == CATS_TYPE_APSTD) && (cats->flags & CPHOT_NOT_FOUND) && P_INT(AP_DISCARD_UNLOCATED)) {
-			cat_star_release(cats);
-			continue;
-		}
-
         stf_glist = g_list_delete_link(stf_glist, sl);
+
+        sl = next;
+
+        if (cats == NULL) continue;
+
+        if (CATS_TYPE (cats) != CATS_TYPE_APSTAR && CATS_TYPE (cats) != CATS_TYPE_APSTD) {
+            cat_star_release(cats, "");
+            continue;
+        }
+
+        if (cats->flags & CPHOT_INVALID) {
+            cat_star_release(cats, "");
+            continue;
+        }
+
+        if ((CATS_TYPE (cats) == CATS_TYPE_APSTD) && (cats->flags & CPHOT_NOT_FOUND) && P_INT(AP_DISCARD_UNLOCATED)) {
+            cat_star_release(cats, "");
+            continue;
+        }
+
         nsl = g_list_prepend (nsl, cats);
-//        nsl = g_list_prepend (nsl, cat_star_dup (cats));
-//        cat_star_release (cats);
 	}
     g_list_free (stf_glist);
     STF_SET_GLIST (st->next, nsl);
@@ -511,14 +522,15 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
         struct gui_star *gs = GUI_STAR (sl->data);
         sl = g_slist_next (sl);
 
-        if (! gs->s) continue;
+        if (gs->s == NULL) continue;
 
-        struct cat_star *cats = cat_star_dup(CAT_STAR(gs->s));
-        cats->guis = gs;
-        gui_star_ref(gs);
+        struct cat_star *cats = CAT_STAR(gs->s);
+        // ref cats or gs ?
+
+        cats->gs = gs;
 
         // asl has same sort order (by gui_star) as gui_star_list->sl
-        asl = g_list_insert_sorted (asl, cats, (GCompareFunc)cats_guis_compare); // make GList of duplicated cat_stars
+        asl = g_list_insert_sorted (asl, cats, (GCompareFunc)cats_gs_compare); // make sorted GList of cat_stars
 
 //        asl = g_list_prepend (asl, CAT_STAR (gs->s)); // make GList of cat_stats
     }
@@ -564,7 +576,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
 		}
 	}
 
-    stf_keep_good_phot (stf);
+//    stf_keep_good_phot (stf);
 
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 
@@ -582,16 +594,16 @@ static void rep_mbds(char *fn, gpointer data, unsigned action)
 
     FILE *repfp = fopen(fn, "r");
 
-    if (repfp != NULL) { /* file exists */
+    if (repfp) { /* file exists */
         fclose(repfp);
 
-        char qu[1024];
-        snprintf(qu, 1023, "File %s exists\nAppend (or overwrite)?", fn);
+        char *qu = NULL;
+        asprintf(&qu, "File %s exists\nAppend (or overwrite)?", fn);
 
-        int result = append_overwrite_cancel(qu, "gcx: file exists");
+        if (! qu) return;
 
-        if (result < 0)
-            return;
+        int result = append_overwrite_cancel(qu, "gcx: file exists"); free(qu);
+        if (result < 0) return;
 
         switch (result) {
         case AOC_APPEND:
@@ -618,7 +630,7 @@ static void rep_mbds(char *fn, gpointer data, unsigned action)
 	for (sl = mbds->ofrs; sl != NULL; sl = g_list_next(sl)) {
         struct o_frame *ofr = O_FRAME(sl->data);
         if ((action & REP_FMT_MASK) != REP_FMT_DATASET) {
-            if (ofr->sol == NULL || ZPSTATE(ofr) <= ZP_FIT_ERR) continue;
+            if (ofr->sobs == NULL || ZPSTATE(ofr) <= ZP_FIT_ERR) continue;
 		}
 		ofrs = g_list_prepend(ofrs, ofr);
 	}
@@ -741,13 +753,14 @@ static void photometry_cb(gpointer window, guint action)
 				act_control_mband(NULL, window);
 				mbd = g_object_get_data(G_OBJECT(window), "mband_window");
 			}
-            stf_to_mband(mbd, stf, fr);
+            struct o_frame *ofr = stf_to_mband(mbd, stf); // no imf to link to
 			return;
 
         } else {
             struct mband_dataset *mbds = mband_dataset_new();
             struct o_frame *ofr = mband_dataset_add_stf(mbds, stf);
-            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
+//            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
+            mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
             ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
             ofr_transform_stars(ofr, mbds, 0, 0);
@@ -763,7 +776,7 @@ printf("mbds has %d frames\n", g_list_length(mbds->ofrs)); fflush(NULL);
 
             switch(action & PHOT_OUTPUT_MASK) {
             case 0:
-                if (ofr->sol != NULL) {
+                if (ofr->sobs != NULL) {
                     char *ret = mbds_short_result(ofr);
                     if (ret != NULL) {
                         info_printf_sb2(window, ret);
@@ -867,7 +880,8 @@ char * phot_to_fd(gpointer window, FILE *fd, int format)
 		stf_free_all(stf);
 		return NULL;
 	}
-    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_USE_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
+//    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
+    mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
     ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
     ofr_transform_stars(ofr, mbds, 0, 0);

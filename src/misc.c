@@ -49,6 +49,107 @@
 #include "sidereal_time.h"
 //#include "getline.h"
 
+/* str append to str
+   joiner:
+   "%s" join with no separator
+   "\n%s" join with newline
+   " %s" join with space
+
+   if *str == NULL, skip leading isspace (and comma) chars of join
+*/
+
+void str_join_str(char **str, char *join, char *append)
+{
+    int len = 0;
+    if (join) {
+        if (*str == NULL)
+            while (*join && (isspace(*join) || (*join == ','))) join++;
+
+        len = strlen(join) + 2;
+    }
+
+    char *fmt = NULL;
+    if (len > 2) {
+        fmt = calloc(len + 1, sizeof(char));
+        if (fmt == NULL) return;
+
+        char *p = fmt;
+
+        *p++ = '%';
+        *p++ = 's';
+
+        while (*join)
+            *p++ = *join++;
+    }
+
+    char *new_str = NULL;
+    if (*str && append) {
+        asprintf(&new_str, fmt, *str, append);
+        if (new_str) {
+            free(*str);
+            *str = new_str;
+        }
+    } else if (append)
+        *str = strdup(append);
+
+    if (fmt) free(fmt);
+}
+
+void str_join_varg(char **str, char *fmt, ...)
+{
+    va_list ap, ap2;
+
+#ifdef __va_copy
+    __va_copy(ap2, ap);
+#else
+    ap2 = ap;
+#endif
+    va_start(ap, fmt);
+    va_start(ap2, fmt);
+
+    char *append = NULL;
+
+    vasprintf(&append, fmt, ap2);
+
+    if (append) {
+        if (*str == NULL)
+            while (*append && (isspace(*append) || (*append == ','))) append++;
+    }
+
+    char *new_str = NULL;
+    if (*str && append) {
+        asprintf(&new_str, "%s%s", *str, append);
+        if (new_str) {
+            free(*str);
+            *str = new_str;
+        }
+    } else if (append)
+        *str = strdup(append);
+
+    va_end(ap);
+}
+
+char *dot_extension(char *fn)
+{
+    int i = strlen(fn);
+    char *s = fn + i;
+
+    for (; i > 0; i--) if (*s-- == '.') return strdup(s + 1);
+
+    return NULL;
+}
+
+int is_zip_name(char *fn)
+{
+    int len = strlen(fn);
+    if (len < 4) return 0;
+    if (strcasecmp(fn + len - 3, ".gz") == 0) return 2;
+    if (strcasecmp(fn + len - 2, ".z") == 0) return 1;
+    if (strcasecmp(fn + len - 4, ".zip") == 0) return 3;
+    return 0;
+}
+
+
 /* set the entry named name under dialog to the given text */
 void named_entry_set(GtkWidget *dialog, char *name, char *text)
 {
@@ -98,19 +199,47 @@ void named_label_set(GtkWidget *dialog, char *name, char *text)
 }
 
 
-/* get a gmalloced content of a named entry */
-char * named_entry_text(GtkWidget *dialog, char *name)
+/* get a malloced content of a named entry */
+char *named_entry_text(GtkWidget *dialog, char *name)
 {
-	GtkWidget *entry;
-	char *text;
-
 	g_return_val_if_fail(dialog != NULL, NULL);
-	entry = g_object_get_data(G_OBJECT(dialog), name);
+
+    GtkWidget *entry = g_object_get_data(G_OBJECT(dialog), name);
 	g_return_val_if_fail(entry != NULL, NULL);
-	text = gtk_editable_get_chars(GTK_EDITABLE(entry), 0, -1);
+
+    gchar *gtext = gtk_editable_get_chars(GTK_EDITABLE(entry), 0, -1);
+
+    char *text = NULL;
+    if (gtext) text = strdup(gtext), g_free(gtext);
+
 	return text;
 }
 
+// auto generate ouput file name
+// tackon basename of in_file_name to out_file_stub (dir or name)
+// add _num if stub is a name: drop extens, add _num, add extens (auto zip if extens is zippish ?)
+char *save_name(char *in_file_name, char *out_file_stub)
+{
+    char *in_copy = NULL;
+    if (in_file_name == NULL || *in_file_name == 0)
+        in_copy = strdup("no name");
+    else
+        in_copy = strdup(in_file_name);
+
+    char *fn = basename(in_copy);
+    gboolean zipped = (is_zip_name(fn) > 0);
+
+    int sz = strlen(fn);
+
+    // strip numeric suffix
+    if (sz > 0) {
+        char *p = fn + sz;
+        while (--p >= fn) {
+            if (!(*p >= '0' && *p <= '9')) break;
+        }
+    }
+    free(in_copy);
+}
 
 
 /* check if the supplied name+seq number is already used; return a free
@@ -128,13 +257,13 @@ int check_seq_number(char *file, int *sqn)
     free(fcopy);
     if (dir == NULL) return 0;
 
-    char *filen = basename(file);
-    int sz = strlen(filen);
+    char *fn = basename(file);
+    int sz = strlen(fn);
 
     // strip numeric suffix
     int p = sz - 1;
     while (p > 0) {
-        if (filen[p] >= '0' && filen[p] <= '9')
+        if (fn[p] >= '0' && fn[p] <= '9')
            p--;
         else
            break;
@@ -145,7 +274,7 @@ int check_seq_number(char *file, int *sqn)
 
     struct dirent * entry;
 	while ((entry = readdir(dir))) {
-        if (strncmp(entry->d_name, filen, sz)) continue;
+        if (strncmp(entry->d_name, fn, sz)) continue;
         int n = strtol(entry->d_name + sz, NULL, 10);
         if (n > lseq) lseq = n;
 	}
@@ -244,14 +373,17 @@ double angular_dist(double a, double b)
 }
 
 
-void drop_dot_extension(char *fn)
+int drop_dot_extension(char *fn)
 {
-    int i;
-    for (i = strlen(fn); i > 0; i--)
+    int i = strlen(fn);
+    while (i > 0) {
         if (fn[i] == '.') {
-            fn[i] = 0;
+            fn[i--] = 0;
             break;
         }
+        i--;
+    }
+    return i;
 }
 
 /* general interval timer functions */

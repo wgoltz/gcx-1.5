@@ -1,6 +1,8 @@
 #ifndef _IMGLIST_H_
 #define _IMGLIST_H_
 
+#include <gtk/gtk.h>
+
 /* an image file we may or may not have already loaded into memory; 
    we generally keep a GList of those around */
 
@@ -8,7 +10,7 @@ struct image_file {
 	int ref_count;
     int flags;
 	char *filename;
-//    struct wcs *fim; // duplicate of fr->fim ?
+    struct wcs *fim; // wcs if validated
 	struct ccd_frame *fr;
 };
 
@@ -95,7 +97,7 @@ int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, int (* pro
 int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
 
 int imf_load_frame(struct image_file *imf);
-void imf_release_frame(struct image_file *imf);
+void imf_release_frame(struct image_file *imf, char *msg);
 void imf_unload(struct image_file *imf);
 
 struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);

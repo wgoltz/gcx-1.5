@@ -63,6 +63,8 @@ char * ap_shapes[] = PAR_CHOICE_AP_SHAPES;
 
 char * wcsfit_models[] = PAR_CHOICE_WCSFIT_MODELS;
 
+char * std_source_options[] = PAR_STD_SOURCE_OPTIONS;
+
 
 /*
  * return a pointer to a 1-char string describing the current
@@ -132,54 +134,50 @@ void make_defval_string(GcxPar p, char *c, int len)
 
 
 /* print a item value for display) */
-void make_value_string(GcxPar p, char *c, int len)
+char *make_value_string(GcxPar p)
 {
 	char **ch;
-	int i;
+    char *c = NULL;
 
 	switch(PAR_TYPE(p)) {
 	case PAR_INTEGER:
-		if (PAR_FORMAT(p) == FMT_OPTION
-		    && PAR(p)->choices != NULL) {
+        if ((PAR_FORMAT(p) == FMT_OPTION) && (PAR(p)->choices != NULL)) {
 			ch = PAR(p)->choices;
-			for (i = 0; i < P_INT(p) && *ch != NULL; i++)
-				ch++;
-			snprintf(c, len, "%s", *ch);
+            int i;
+            for (i = 0; (i < P_INT(p)) && (*ch != NULL); i++) ch++;
+            c = strdup(*ch);
 		} else if (PAR_FORMAT(p) == FMT_BOOL) {
-			if (P_INT(p)) {
-				snprintf(c, len, "%s", "yes");
-			} else {
-				snprintf(c, len, "%s", "no");
-			}
+            c = strdup(P_INT(p) ? "yes" : "no");
 		} else {
-			snprintf(c, len, "%d", P_INT(p));
+            asprintf(&c, "%d", P_INT(p));
 		}
 		break;
 	case PAR_DOUBLE:
 		switch(PAR(p)->flags & PAR_PREC_FM) {
 		case PREC_1:
-			snprintf(c, len, "%.1f", P_DBL(p));
+            asprintf(&c, "%.1f", P_DBL(p));
 			break;
 		case PREC_2:
-			snprintf(c, len, "%.2f", P_DBL(p));
+            asprintf(&c, "%.2f", P_DBL(p));
 			break;
 		case PREC_4:
-			snprintf(c, len, "%.4f", P_DBL(p));
+            asprintf(&c, "%.4f", P_DBL(p));
 			break;
 		case PREC_8:
-			snprintf(c, len, "%.8f", P_DBL(p));
+            asprintf(&c, "%.8f", P_DBL(p));
 			break;
 		default:
-			snprintf(c, len, "%.3f", P_DBL(p));
+            asprintf(&c, "%.3f", P_DBL(p));
 			break;
 		}
 		break;
 	case PAR_STRING:
-		snprintf(c, len, "%s", P_STR(p));
+        c = strdup(P_STR(p));
 		break;
 	default:
 		err_printf("unknown param type %x\n", PAR(p)->flags);
 	}
+    return c;
 }
 
 /* try to parse the string to a double according to the format
@@ -252,9 +250,7 @@ void change_par_string(GcxPar p, char *text)
 		free(P_STR(p));
 		P_STR(p) = NULL;
 	}
-	P_STR(p) = malloc(strlen(text)+1);
-	if (P_STR(p) != NULL)
-		strcpy(P_STR(p), text);
+    P_STR(p) = strdup(text);
 }
 
 /* change the parameter's value string using a copy of the supplied
@@ -265,9 +261,7 @@ void change_par_default_string(GcxPar p, char *text)
 		free(PAR(p)->defval.s);
 		PAR(p)->defval.s = NULL;
 	}
-	PAR(p)->defval.s = malloc(strlen(text)+1);
-	if (PAR(p)->defval.s != NULL)
-		strcpy(PAR(p)->defval.s, text);
+    PAR(p)->defval.s = strdup(text);
 }
 
 
@@ -303,12 +297,13 @@ void par_item_restore_default(GcxPar p)
 			par_item_restore_default(pp);
 			pp = PAR(pp)->next;
 		}
-	} else if (PAR(p)->flags & (PAR_USER)) {
+    } else if (PAR(p)->flags & PAR_USER) {
 			if (PAR_TYPE(p) == PAR_STRING) {
 				change_par_string(p, PAR(p)->defval.s);
 			} else {
-				memcpy(&(PAR(p)->val), &(PAR(p)->defval), sizeof(union pval));
-			}
+                PAR(p)->val = PAR(p)->defval;
+//                memcpy(&(PAR(p)->val), &(PAR(p)->defval), sizeof(union pval));
+            }
 			PAR(p)->flags &= ~PAR_USER;
 			PAR(p)->flags &= ~PAR_TO_SAVE;
 	}
@@ -354,7 +349,6 @@ static void fprint_par_leaf(FILE *fp, GcxPar p, char *path)
 {
 	char **c;
 	int i;
-	char buf[256];
 //	fprint_indent(fp, level);
 	fprintf(fp, "# %s\n", PAR(p)->comment);
 	if (PAR_TYPE(p) == PAR_INTEGER
@@ -389,16 +383,19 @@ static void fprint_par_leaf(FILE *fp, GcxPar p, char *path)
 		}
 		fprintf(fp, "%s.%s %s\n\n", path, PAR(p)->name, *c);
 	} else {
-		make_value_string(p, buf, 255);
+        char *buf = make_value_string(p);
 //		fprint_indent(fp, level);
 		if ((PAR_FLAGS(p) & (PAR_FROM_RC | PAR_USER)) == 0) {
 			fprintf(fp, "# ");
 		}
-		if (PAR_TYPE(p) == PAR_STRING) {
-			fprintf(fp, "%s.%s '%s'\n\n", path, PAR(p)->name, buf);
-		} else {
-			fprintf(fp, "%s.%s %s\n\n", path, PAR(p)->name, buf);
-		}
+        if (buf) {
+            if (PAR_TYPE(p) == PAR_STRING) {
+                fprintf(fp, "%s.%s '%s'\n\n", path, PAR(p)->name, buf);
+            } else {
+                fprintf(fp, "%s.%s %s\n\n", path, PAR(p)->name, buf);
+            }
+            free(buf);
+        }
 	}
 }
 

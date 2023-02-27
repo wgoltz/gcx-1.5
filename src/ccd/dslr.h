@@ -5,6 +5,7 @@
 #define _DSLR_H
 
 #include <stdint.h>
+#include <stdlib.h>
 
 /* TIFF_* values are meant not to collide with libtiff ones, where
  * this table was extracted from */

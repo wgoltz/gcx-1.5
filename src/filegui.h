@@ -1,6 +1,8 @@
 #ifndef _FILEGUI_H_
 #define _FILEGUI_H_
 
+#include <gtk/gtk.h>
+
 typedef void (* get_file_list_type) (GSList *fl, gpointer window);
 typedef void (* get_file_type) (char *fn, gpointer window, unsigned arg);
 

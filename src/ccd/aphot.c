@@ -34,7 +34,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "ccd.h"
+#include "ccd/ccd.h"
 //#include "x11ops.h"
 
 
@@ -86,8 +86,8 @@ double hist_clip_avg(struct rstats *rs, double *median, double sigmas,
 	
 	} while (it < 10 && (it == 1 || fabs(so - s2) > 0.00001) && (s != e));
 
-	if (s == e) 
-		m = s + H_START;
+//	if (s == e)
+//		m = s + H_START;
 	if (median) {
 		if (s == e) 
 			*median = s + H_START;
@@ -127,34 +127,23 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 	       double r1, double r2, int quads, struct rstats *rs,
 	       double min, double max)
 {
-	int ix, iy;
-	int xs, ys;
-	int xe, ye;
-	int xc, yc;
-	int nring = 0, nskipped = 0;
-	float v;
-	double sum, sumsq, r;
 //	d3_printf("x:%f y:%f r1:%f r2:%f\n", x, y, r1, r2);
 
 // round the coords off to make sure we use the same number of pixels for the
 // flux measurement
 
-	xc = (int)floor(x+0.5);
-	yc = (int)floor(y+0.5); 
+    int xc = floor(x + 0.5);
+    int yc = floor(y + 0.5);
 
-	xs = (int)(xc-r2); 
-	xe = (int)(xc+r2+1); 
-	ys = (int)(yc-r2); 
-	ye = (int)(yc+r2+1); 
+    int xs = xc - r2;
+    int xe = xc + r2 + 1;
+    int ys = yc - r2;
+    int ye = yc + r2 + 1;
 
-	if (xs < 0)
-		xs = 0;
-	if (ys < 0)
-		ys = 0;
-	if (xe >= fr->w)
-		xe = fr->w - 1;
-	if (ye >= fr->h)
-		ye = fr->h - 1;
+    if (xs < 0) xs = 0;
+    if (ys < 0) ys = 0;
+    if (xe >= fr->w) xe = fr->w - 1;
+    if (ye >= fr->h) ye = fr->h - 1;
 
 //	d3_printf("xc:%d yc:%d r1:%f r2:%f\n", xc, yc, r1, r2);
 
@@ -162,71 +151,73 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 
 //	d3_printf("enter ringstats\n");
 
-	for (ix = 0; ix < H_SIZE; ix++)
-		(rs->h[ix]) = 0;
+    unsigned hix;
+    for (hix = 0; hix < H_SIZE; hix++) rs->h[hix] = 0;
 
 //	d3_printf("init histogram\n");
 
 // walk the ring and collect statistics
-	sum=0.0;
-	sumsq = 0.0;
+
 	rs->min = HUGE;
 	rs->max = -HUGE;
-	for (iy = ys; iy < ye; iy++) {
-		for (ix = xs; ix < xe; ix++) {
-			r = sqr(ix - xc + 0.0) + sqr(iy - yc + 0.0);
-			if (r < sqr(r1) || r >= sqr(r2))
-				continue;
+    unsigned pmin = H_MAX - 1, pmax = H_MIN;
 
-			if (((quads & QUAD1) == 0) && ix-xc >= 0 && iy-yc >= 0)
-				continue;
-			if (((quads & QUAD2) == 0) && ix-xc < 0 && iy-yc >= 0)
-				continue;
-			if (((quads & QUAD3) == 0) && ix-xc < 0 && iy-yc > 0)
-				continue;
-			if (((quads & QUAD4) == 0) && ix-xc >= 0 && iy-yc < 0)
-				continue;
+    int nring = 0, nskipped = 0;
+
+    double sum = 0.0, sumsq = 0.0;
+
+    int iy;
+	for (iy = ys; iy < ye; iy++) {
+        int ix;
+		for (ix = xs; ix < xe; ix++) {
+            double r = sqr(ix - xc) + sqr(iy - yc);
+            if (r < sqr(r1) || r >= sqr(r2)) continue;
+
+            if (((quads & QUAD1) == 0) && ix - xc >= 0 && iy - yc >= 0) continue;
+            if (((quads & QUAD2) == 0) && ix - xc < 0 && iy - yc >= 0) continue;
+            if (((quads & QUAD3) == 0) && ix - xc < 0 && iy - yc > 0) continue;
+            if (((quads & QUAD4) == 0) && ix - xc >= 0 && iy - yc < 0) continue;
 
 			nring ++; 
 //            float *f = (float *)fr->dat + iy * fr->w + ix;
-            v = get_pixel_luminence(fr, ix, iy);
+            float v = get_pixel_luminence(fr, ix, iy);
             if (isnan(v)) {
-                err_printf("ring stats: not a number at %d %d\n", ix, iy);
+                printf("ring stats: not a number at %d %d\n", ix, iy); fflush(NULL);
                 nskipped ++;
                 continue;
             }
-//			if (v < H_START || v >= H_START+H_SIZE) {
-//				nskipped ++;
-//				continue;
-//			}
+
 			if (v < min || v > max) {
 				nskipped ++;
 				continue;
 			}
-            int hp = (int)floor(v) - H_START; // check this stuff
-//            if (hp < H_START)
-//                hp = H_START;
-//            else if (hp >= H_START+H_SIZE)
-//                hp = H_START+H_SIZE - 1;
-            if (hp < 0) {
-                nskipped ++;
-                continue;
-            } else if (hp >= H_SIZE) {
-                nskipped ++;
-                continue;
-            }
-            rs->h[hp] ++;
+
 			sum += v;
 			sumsq += v*v;
+
 			if (v < rs->min) 
 				rs->min = v;
 			if (v > rs->max) 
 				rs->max = v;
+
+            v = floor(v);
+
+            unsigned hp;
+            if (v - H_START < H_MIN)
+                hp = H_MIN;
+            else if (v - H_START >= H_MAX)
+                hp = H_MAX - 1;
+            else
+                hp = v - H_START;
+
+            if (hp < pmin) pmin = hp;
+            if (hp > pmax) pmax = hp;
+
+            rs->h[hp] ++;
 		}
 	}
 
-	if (nring - nskipped <= 0)
-		return -1;
+    if (nring - nskipped <= 0) return -1;
 
 // fill the result structure with the stats
 	rs->all = nring;
@@ -234,18 +225,27 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 	rs->sum = sum;
 	rs->sumsq = sumsq;
 	rs->avg = sum / rs->used;
-	rs->sigma = sqrt(sumsq / rs->used - sqr(sum / rs->used));
+
+    rs->sigma = 0;
+    if ((pmin != pmax) && (nring - nskipped > 1)) {
+        double avg = sum / rs->used;
+        double sigma2 = sumsq / rs->used - avg * avg;
+        if (sigma2 < 0) {
+            printf("dodgy sigma %f %f %f\n", avg, sumsq, rs->used); fflush(NULL);
+            sigma2 = 0;
+        }
+
+        rs->sigma = sqrt(sigma2);
+    }
+
 // walk the histogram and compute median
-	iy = 0;
-	for (ix = 0; ix < H_SIZE; ix++) {
-		iy += rs->h[ix];
-		if (iy >= rs->used / 2)
-			break;
+    int med = 0;
+    for (hix = pmin; hix <= pmax; hix++) {
+        med += rs->h[hix];
+        if (med >= 0.5 * rs->used) break;
 	}
-//	d3_printf("ix = %d iy = %d\n", ix, iy);
-	rs->median = ix + H_START;
-//	d3_printf("ringstats avg:%.2f sum:%.2f sigma:%.2f, min:%.2f max:%.2f\n",
-//		  rs->avg, rs->sum, rs->sigma, rs->min, rs->max); 
+    rs->median = H_START + hix;
+
 	return 0;
 }
 
@@ -501,7 +501,8 @@ static int ap_get_star(struct ccd_frame *fr, struct star *s,
 
 //	d3_printf("flux %.4g pixels %.3f pshotn %.4f fluxerr %.4f flat %.4f\n", s->aph.tflux, 
 //		  s->aph.star_all, phn, s->aph.flux_err, sqrt(flnsq));
-	return 0;
+
+    return 0;
 
 }
 
@@ -535,7 +536,7 @@ int aperture_photometry(struct ccd_frame *fr, struct star *s,
 	if (p->center) {
 		for (i=0; i< 10; i++) {
 			rm = aperture_centroid(fr, p->r1, s->x, s->y, 
-					       s->aph.sky + 2 * fr->stats.csigma, &cx, &cy, 
+                           s->aph.sky + 2 * fr->stats.csigma, &cx, &cy,
 					       &cxerr, &cyerr);
 			if (fabs(cx - s->x) < 0.0001 && fabs(cx - s->x) < 0.0001)
 				break;
@@ -626,7 +627,8 @@ static void print_star_results(struct ph_star *s)
 */
 
 // get scintillation noise parameters
-int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double *d, double *am)
+#ifdef TRUE
+int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double *d, double *am) // not used
 {
 
 	FITS_row * cp;
@@ -667,6 +669,7 @@ int get_scint_pars(struct ccd_frame *fr, struct vs_recipe *vs, double *t, double
     err_printf("could not determine airmass\n");
     return 1;
 }
+#endif
 
 double scintillation(double t, double d, double am)
 {
@@ -688,19 +691,22 @@ double scintillation(double t, double d, double am)
 }
 
 // compute 1-sigma scintillation noise
-double scint_noise(struct ccd_frame *fr, struct vs_recipe *vs)
+#ifdef TRUE
+double scint_noise(struct ccd_frame *fr, struct vs_recipe *vs) // not used
 {
 	double t, d, am;
 
     if (get_scint_pars(fr, vs, &t, &d, &am)) return 0;
 	return vs->scint_factor * scintillation(t, d, am);
 }
+#endif
 
 
 // max shift of a star from the std position 
 #define MAX_SHIFT 3
 // measure the stars in a recipe; return 0 if no error occured
-int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs)
+#ifdef TRUE
+int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs) // not used
 {
 	int i;
 	struct star *s;
@@ -740,9 +746,11 @@ int measure_stars(struct ccd_frame *fr, struct vs_recipe *vs)
 	return ret;
 
 }
+#endif
 
 // compute a photometry solution for the given recipe
-void get_ph_solution(struct vs_recipe *vs)
+#ifdef TRUE
+void get_ph_solution(struct vs_recipe *vs) // not used
 {
 	int i;
 	double std_cal;
@@ -784,5 +792,5 @@ void get_ph_solution(struct vs_recipe *vs)
 		}
 	}
 }
-
+#endif
 

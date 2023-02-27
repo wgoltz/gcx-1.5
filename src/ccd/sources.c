@@ -33,9 +33,10 @@
 #include <math.h>
 #include <ctype.h>
 #include <string.h>
+#include <gtk/gtk.h>
 
 #include "ccd.h"
-#include "abort.h"
+//#include "abort.h"
 //#include "x11ops.h"
 
 // parameters for source extraction
@@ -125,8 +126,13 @@ static int thin_ring_stats(struct ccd_frame *fr, int x, int y,
 	rs->used = nring;
 	rs->sum = sum;
 	rs->avg = sum / rs->used;
-	rs->sigma = sqrt(sumsq / rs->used - sqr(sum / rs->used));
-	rs->median = dmedian(ring, nring);
+
+    rs->sigma = 0;
+    double sigma2 = sumsq / rs->used - sqr(rs->avg);
+    if (sigma2 > 0)
+        rs->sigma = sqrt(sigma2);
+
+    rs->median = dmedian(ring, nring);
 //	d3_printf("thinrs x:%d y:%d r:%d avg:%.2f sum:%.2f sigma%.2f, min%.2f max%.2f\n", 
 //		  x, y, r2,
 //		  rs->avg, rs->sum, rs->sigma, rs->min, rs->max); 
@@ -189,11 +195,12 @@ static int star_moments(struct ccd_frame *fr, double x, double y,
 			v = get_pixel_luminence(fr, ix, iy);
 			if (((rn = sqr(ix - xc) + sqr(iy - yc)) > sqr(r)))
 				continue;
-			nring ++;
-			if (v < sky) {
+            if (v <= sky) {
 				nskipped ++;
 				continue;
 			}
+            nring ++;
+
 			v -= sky;
 /*			mx += v * (ix - x);
 			my += v * (iy - y);
@@ -205,18 +212,21 @@ static int star_moments(struct ccd_frame *fr, double x, double y,
 			mxy += v * (ix) * (iy);
 			mx2 += v * sqr(ix);
 			my2 += v * sqr(iy);
-			sum += v;
-		}
+            sum += v;
+        }
 	}
 // fill the result structure with the stats
-	mx /= sum;
-	my /= sum;
-	mxy /= sum;
-	mx2 /= sum;
-	my2 /= sum;
 
-	m->mx = mx;
-	m->my = my;
+    if (sum != 0) {
+        mx /= sum;
+        my /= sum;
+        mxy /= sum;
+        mx2 /= sum;
+        my2 /= sum;
+
+        m->mx = mx;
+        m->my = my;
+    }
 
 /*
 	m->mxy = mxy + (x - mx) * my + (y - my) * mx + (x - mx) * (y - my);
@@ -226,7 +236,7 @@ static int star_moments(struct ccd_frame *fr, double x, double y,
 	m->mxy = mxy;// + (m->mx) * my + (m->my) * mx + (m->mx) * (m->my);
 	m->mx2 = mx2;// + sqr(m->mx) + mx * (m->mx);
 	m->my2 = my2;// + sqr(m->my) + my * (m->my);
-	m->sum = sum;
+    m->sum = sum; // results not valid if sum == 0
 	m->npix = nring;
 
 	return 0;
@@ -369,10 +379,10 @@ int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_f
 //		free(rsn); free(reg); free(rs);
 		return ret;
 	}
-	if (fr->stats.statsok && fr->stats.csigma < reg.sigma) {
-		minpk = reg.median + NSIGMA * fr->stats.csigma;
+    if (fr->stats.statsok && fr->stats.csigma < reg.sigma) {
+        minpk = reg.median + NSIGMA * fr->stats.csigma;
 	} else {
-		minpk = reg.median + NSIGMA * reg.sigma;
+        minpk = reg.median + NSIGMA * reg.sigma; // reg.sigma == 0
 	}
 
 	x = floor(x + 0.5);
@@ -400,8 +410,8 @@ int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_f
 				rn = MAXSR;
 
 			thin_ring_stats(fr, rs.max_x, rs.max_y, rn, &rsn, -HUGE, HUGE);
-			if (fr->stats.statsok && fr->stats.csigma < rsn.sigma) 
-				skycut = NSIGMA * fr->stats.csigma;
+            if (fr->stats.statsok && fr->stats.csigma < rsn.sigma)
+                skycut = NSIGMA * fr->stats.csigma;
 			else
 				skycut = NSIGMA * rsn.sigma;
 			skycut += rsn.median;
@@ -421,7 +431,8 @@ int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_f
 // get the star's centroid and flux
 			star_moments(fr, 1.0 * rs.max_x, 1.0 * rs.max_y, 1.0 * starr, sky, &m);
 // check star has enough flux
-			if ((m.sum) < min_flux) {
+            if (m.sum == 0) break;
+            if (m.sum <= min_flux) {
 				d4_printf("flux %.2f too low\n", (rsn.sum - rsn.used * skycut));
 				goto badstar;
 			}
@@ -584,7 +595,7 @@ static int check_multiple(struct sources *src, struct star *s)
 //d3_printf("*");
 		if (fabs(s->x - src->s[i].x) < MINSEP) {
 			if (s->flux > src->s[i].flux) {
-				memcpy(&src->s[i], s, sizeof(struct star));
+                src->s[i] = *s;
 //d3_printf(" %d %.2f %.2f %.2f replaced\n", i, s->x, s->y, s->flux);
 			}
 //d3_printf(" %d %.2f %.2f %.2f not replaced\n", i, s->x, s->y, s->flux);
@@ -599,7 +610,7 @@ static int check_multiple(struct sources *src, struct star *s)
 static int insert_star(struct sources *src, struct star *s)
 {
 	if (src->maxn > src->ns) {
-		memcpy(src->s + src->ns, s, sizeof(struct star));
+        src->s[src->ns] = *s;
 		src->ns ++;
 		return 1;
 	}
@@ -717,8 +728,8 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
             star_moments(fr, 1.0 * x, 1.0 * y, 1.0 * starr, sky, &m);
 
 // check star has enough flux
-// (never happens ?)
-            if ((m.sum) < min_flux)	continue;
+
+            if (m.sum <= min_flux)	continue;
 
 // we finally have it; fill up return values and exit
 
@@ -785,6 +796,8 @@ void release_sources(struct sources *src)
 		src->ref_count --;
 		return;
 	}
+    printf("release sources (%d)\n", src->ns);
+
 	free(src->s);
 	free(src);
 }
@@ -799,7 +812,7 @@ void release_star(struct star *s)
 	if (s == NULL)
 		return;
 	if (s->ref_count < 1)
-		err_printf("cat_star has ref_count of %d\n", s->ref_count);
+        err_printf("release_star: cat_star has ref_count of %d\n", s->ref_count);
 	if (s->ref_count == 1) {
         printf("release_star\n"); fflush(NULL);
 		free(s);

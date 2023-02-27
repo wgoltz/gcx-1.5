@@ -36,9 +36,10 @@ static void camera_check_state(struct camera_t *camera)
 {
     if(camera->has_blob && camera->is_connected && camera->expose_prop) {
         camera->ready = 1;
-// printf("camera_check_state: Camera is ready\n"); fflush(NULL);
 		INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_READY);
     }
+printf("camera_check_state: Camera is %sready\n", (camera->ready == 0) ? "not " : ""); fflush(NULL);
+
 }
 
 static void camera_temp_change_cb(struct indi_prop_t *iprop, void *data)
@@ -337,8 +338,10 @@ void camera_stream(struct camera_t *camera, double time, int number)
     }
 }
 
+// this only gets called once when created. should it be added to connection message
 static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
 {
+printf("camera_connect\n"); fflush(NULL);
     struct camera_t *camera = (struct camera_t *)callback_data;
 // try this:
 //    camera_check_state(camera);
@@ -417,7 +420,7 @@ void camera_delete(struct camera_t *camera)
     if (! indi) return;
 
     indi_device_remove_callbacks(indi, camera->name);
-    g_free(camera);
+    free(camera);
 }
 
 // create camera and return it if it is ready

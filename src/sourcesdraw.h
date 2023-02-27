@@ -4,6 +4,8 @@
 #define _SOURCESDRAW_H_
 
 #include <gtk/gtk.h>
+#include "catalogs.h"
+#include "ccd/ccd.h"
 
 typedef enum {
     draw, dont_draw, toggle_draw
@@ -54,7 +56,7 @@ struct gui_star {
 #define STAR_SHOW_LABEL 0x200 /* star should hide it's label */
 #define STAR_HAS_PAIR 0x400 /* star is referenced by a pair */
 #define STAR_HIDDEN 0x800 /* star is hidden from display */
-
+#define STAR_DELETED 0x1000 /* discard star */
 
 
 #define DEFAULT_MAX_SIZE 100
@@ -113,7 +115,7 @@ extern void draw_sources_hook(GtkWidget *darea, GtkWidget *window, GdkRectangle 
 //extern void single_selection(GtkWidget *window, GSList *stars);
 extern struct gui_star *gui_star_new(void);
 extern void gui_star_ref(struct gui_star *gs);
-extern void gui_star_release(struct gui_star *gs);
+extern void gui_star_release(struct gui_star *gs, char *msg);
 extern struct gui_star_list *gui_star_list_new(void);
 extern void gui_star_list_ref(struct gui_star_list *gsl);
 extern void gui_star_list_release(struct gui_star_list *gsl);
@@ -138,8 +140,8 @@ void star_list_update_size(GtkWidget *window);
 void star_list_update_labels(GtkWidget *window);
 GSList *find_stars_window(gpointer window);
 void draw_stars_of_type(struct gui_star_list *gsl, int type_mask, draw_type d);
-int gui_star_compare(struct gui_star *a, struct gui_star *b);
-int cats_guis_compare(struct cat_star *a, struct cat_star *b);
+int gs_compare(struct gui_star *a, struct gui_star *b);
+int cats_gs_compare(struct cat_star *a, struct cat_star *b);
 
 
 // handle binned frames
@@ -151,7 +153,7 @@ struct cat_star * cats_from_current_frame_sob(gpointer main_window, struct gui_s
 /* starlist.c */
 
 int add_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, struct wcs *wcs);
-void remove_stars_of_type(struct gui_star_list *gsl, int type_mask, int flag_mask);
+void remove_stars_of_type(struct gui_star_list *gsl, int type_mask, guint flag_mask);
 int add_star_from_frame_header(struct ccd_frame *fr, struct gui_star_list *gsl, struct wcs *wcs);
 void remove_pair_from(struct gui_star *gs);
 void remove_star(struct gui_star_list *gsl, struct gui_star *gs);
@@ -162,6 +164,7 @@ int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, s
 int merge_cat_star_list_to_window(gpointer window, GList *addsl);
 struct gui_star *window_find_gs_by_cats_name(GtkWidget *window, char *name);
 struct gui_star *find_gs_by_cats_name(struct gui_star_list *gsl, char *name);
-
+void star_list_update_editstar(GtkWidget *window);
+void print_gui_stars(GSList *sl);
 
 #endif

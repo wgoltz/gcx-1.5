@@ -51,6 +51,7 @@
 #include "plots.h"
 #include "psf.h"
 #include "dsimplex.h"
+#include "misc.h"
 
 #define GROWTH_POINTS 128
 #define growth_radius(s) (1.0 + 0.5 * (s))
@@ -125,8 +126,8 @@ struct psf *psf_new(int w, int h)
     d = calloc(w, h * sizeof(float) + sizeof(float *));
 	g_assert(d != NULL);
 
-	f = (float *)(d + w);
-	for (i = 0; i < w; i++) {
+    f = (float *)(d + w);
+    for (i = 0; i < w; i++) {// d[0..w-1] = [w, w+h, w+2h .. w+(w-1)h]
 		d[i] = f;
 		f += h;
 	}
@@ -322,7 +323,7 @@ static void extract_patch(struct ccd_frame *fr, struct psf *psf, double x, doubl
 	for (iy = ys; iy < ye; iy++) {
 		for (ix = xs; ix < xe; ix++) {
 			psf->d[ix][iy] = get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
-			d++;
+//			d++;
 		}
 	}
 }
@@ -425,7 +426,7 @@ static double get_binned_r1(struct ccd_frame *fr)
 
 int growth_curve(struct ccd_frame *fr, double x, double y, double grc[], int n)
 {
-	struct star s;
+    struct star s = { 0 };
 	int i, ret;
 	double mflux = 1;
 	struct stats stats;
@@ -437,7 +438,6 @@ int growth_curve(struct ccd_frame *fr, double x, double y, double grc[], int n)
     auto_adjust_photometry_rings_for_binning(&apdef, fr);
     double r1 = get_binned_r1(fr);
 
-	memset(&s, 0, sizeof(struct star));
 	s.x = x;
 	s.y = y;
 	s.xerr = BIG_ERR;
@@ -474,7 +474,7 @@ int radial_profile(struct ccd_frame *fr, double x, double y, double r,
 		   double *sky, double *err)
 {
 	struct ap_params apdef;
-	struct star s;
+    struct star s = { 0 };
 	int ret, ns = 0;
 	float d;
 	int ri, i;
@@ -482,9 +482,8 @@ int radial_profile(struct ccd_frame *fr, double x, double y, double r,
 	double max = 1.0;
 
 	ap_params_from_par(&apdef);
-	memcpy(&apdef.exp, &fr->exp, sizeof(struct exp_data));
+    apdef.exp = fr->exp;
 
-	memset(&s, 0, sizeof(struct star));
 	s.x = x;
 	s.y = y;
 	s.xerr = BIG_ERR;
@@ -639,17 +638,17 @@ double get_sky(struct ccd_frame *fr, double x, double y, struct ap_params *p,
 	make_annular_aperture(psf, p->r2, p->r3);
 
 	aperture_stats(fr, psf, x, y, stats);
-	ap = stats->all;
+    ap = stats->all;
 	switch(p->sky_method) {
 	case APMET_KS:
 	case APMET_SYMODE:
 		do {
-			so = stats->sigma;
-			th = stats->median + p->sigmas * stats->sigma;
+            so = stats->sigma;
+            th = stats->median + p->sigmas * stats->sigma;
 			ret = dodge_high(fr, psf, x, y, th, p->grow);
 			aperture_stats(fr, psf, x, y, stats);
 			d4_printf("dodged %d>%.1f, aperture avg:%.1f median:%.1f sigma:%.1f\n",
-				  ret, th, stats->avg, stats->median, stats->sigma);
+                  ret, th, stats->avg, stats->median, stats->sigma);
 //		} while (stats->sigma != so && stats->all > 10);
 d2_printf("psf.get_sky bug : %d stats->avg %f stats->sigma %f\n", ret, stats->avg, stats->sigma);
         } while (ret != 0);
@@ -659,20 +658,20 @@ d2_printf("psf.get_sky bug : %d stats->avg %f stats->sigma %f\n", ret, stats->av
 
 	switch(p->sky_method) {
 	case PAR_SKY_METHOD_AVERAGE:
-		s = stats->avg;
-		e = stats->sigma / sqrt(stats->all);
+        s = stats->avg;
+        e = stats->sigma / sqrt(stats->all);
 		break;
 	case PAR_SKY_METHOD_MEDIAN:
-		s = stats->median;
-		e = stats->sigma / sqrt(stats->all) / 0.65;
+        s = stats->median;
+        e = stats->sigma / sqrt(stats->all) / 0.65;
 		break;
 	case PAR_SKY_METHOD_KAPPA_SIGMA:
-		s = stats->avg;
-		e = stats->sigma / sqrt(stats->all);
+        s = stats->avg;
+        e = stats->sigma / sqrt(stats->all);
 		break;
 	case PAR_SKY_METHOD_SYNTHETIC_MODE:
-		s = 3 * stats->median - 2 * stats->avg;
-		e = stats->sigma / sqrt(stats->all);
+        s = 3 * stats->median - 2 * stats->avg;
+        e = stats->sigma / sqrt(stats->all);
 		break;
 	default:
 		err_printf("get_sky: unknown method %d\n", p->sky_method);
@@ -706,7 +705,7 @@ double get_star(struct ccd_frame *fr, double x, double y, struct ap_params *p,
 	make_circular_aperture(psf, p->r1);
 	aperture_stats(fr, psf, x, y, stats);
 
-	f = stats->sum;
+    f = stats->sum;
 
 	if (apert)
 		*apert = psf;
@@ -1045,20 +1044,18 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
 
     double r1 = get_binned_r1(fr);
 
-    char preamble[16384];
-    int np = 0;
-	np += snprintf(preamble+np, 16384-np, "set key below\n");
-//
-    np += snprintf(preamble+np, 16384-np, "set term qt size 800,500\n");
-    np += snprintf(preamble+np, 16384-np, "set mouse\n");
-//
-	np += snprintf(preamble+np, 16384-np, "set y2tics autofreq\n");
-	np += snprintf(preamble+np, 16384-np, "set y2label 'encircled flux'\n");
-	np += snprintf(preamble+np, 16384-np, "set ylabel 'radial profile'\n");
-	np += snprintf(preamble+np, 16384-np, "set grid xtics\n");
-    np += snprintf(preamble+np, 16384-np, "set linetype 1 lc rgb 'dark-red'\n");
-    np += snprintf(preamble+np, 16384-np, "set clip two\n");
-    np += snprintf(preamble+np, 16384-np, "plot [0:%.1f] 0 notitle lt 0, 1 axes x1y2 notitle lt 0, ", 2 * ceil(r1) );
+    char *preamble = NULL;
+
+    str_join_str(&preamble, "%s", "set key below\n");
+    str_join_str(&preamble, "%s", "set term qt size 800,500\n");
+    str_join_str(&preamble, "%s", "set mouse\n");
+    str_join_str(&preamble, "%s", "set y2tics autofreq\n");
+    str_join_str(&preamble, "%s", "set y2label 'encircled flux'\n");
+    str_join_str(&preamble, "%s", "set ylabel 'radial profile'\n");
+    str_join_str(&preamble, "%s", "set grid xtics\n");
+    str_join_str(&preamble, "%s", "set linetype 1 lc rgb 'dark-red'\n");
+    str_join_str(&preamble, "%s", "set clip two\n");
+    str_join_varg(&preamble, "plot [0:%.1f] 0 notitle lt 0, 1 axes x1y2 notitle lt 0", 2 * ceil(r1) );
 
     int n =  2 * GROWTH_POINTS * r1 / growth_radius(GROWTH_POINTS) + 0.5;
     if (n > GROWTH_POINTS) n = GROWTH_POINTS;
@@ -1085,14 +1082,14 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
         double s = 1.0;
 		fit_1d_profile(rpp, &A, NULL, &s, NULL);
 
-        char name[256];
-        int nn = 0;
-		if (gs->s)
-            nn = snprintf(name, 255, "%s ", CAT_STAR(gs->s)->name);
-		else
-			nn = snprintf(name, 255, "x%.0fy%.0f ", gs->x, gs->y);
+        char *name = NULL;
 
-        snprintf(name + nn, 255 - nn, "(FWHM:%.1f peak:%.0f sky:%.1f)", FWHMSIG * s, peak, sky);
+		if (gs->s)
+            name = strdup(CAT_STAR(gs->s)->name);
+		else
+            asprintf(&name, "x%.0fy%.0f", gs->x, gs->y);
+
+        str_join_varg(&name, " (FWHM:%.1f peak:%.0f sky:%.1f)", FWHMSIG * s, peak, sky);
 
         int j;
         for (j = 0; rpp[j].r >= 0; j++) rpp[j].v /= A;
@@ -1103,41 +1100,46 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
 		grc = NULL;
 		rpp = NULL;
 
-        if (i > 0) np += snprintf(preamble+np, 16384-np,", ");
-
-        np += snprintf(preamble+np, 16384-np,
-          "'-' title '%s' lt %d, exp(-0.5*x*x/%.2f) notitle lt %d, '-' axes x1y2 notitle with lines lt %d",
-			name, i+1, s*s, i+1, i+1);
+        if (name) {
+            str_join_varg(&preamble,
+                ", '-' title '%s' lt %d, exp(-0.5*x*x/%.2f) notitle lt %d, '-' axes x1y2 notitle with lines lt %d",
+                name, i+1, s*s, i+1, i+1);
+            free(name);
+        }
 		i++;
 	}
 	if (g_slist_length(gr) <= 0) {
 
         if (grc) free(grc);
         if (rpp) free(rpp);
+        if (preamble) free(preamble);
 
 		err_printf("Bad star (too close to edge?)\n");
 		return -1;
 	}
 
 
-    FILE *dfp = NULL;
+    if (preamble) {
+        FILE *dfp = NULL;
 
-    int pop = open_plot(&dfp, NULL);
-	if (pop >= 0) {
-		fprintf(dfp, "%s\n", preamble);
+        int pop = open_plot(&dfp, NULL);
+        if (pop >= 0) {
+            fprintf(dfp, "%s\n", preamble);
+            free(preamble);
 
-        GSList *vsl;
-        for (sl = gr, vsl = vs; sl != NULL && vsl != NULL; sl = sl->next, vsl = vsl->next) {
-            struct rp_point *rp = vsl->data;
+            GSList *vsl;
+            for (sl = gr, vsl = vs; sl != NULL && vsl != NULL; sl = sl->next, vsl = vsl->next) {
+                struct rp_point *rp = vsl->data;
 
-            for(i = 0; rp[i].r >= 0; i++) fprintf(dfp, "%.2f %.3f\n", rp[i].r, rp[i].v);
-			fprintf(dfp, "e\n");
+                for(i = 0; rp[i].r >= 0; i++) fprintf(dfp, "%.2f %.3f\n", rp[i].r, rp[i].v);
+                fprintf(dfp, "e\n");
 
-            for(i = 0; i < n; i++) fprintf(dfp, "%.2f %.3f\n", growth_radius(i), ((double *)sl->data)[i]);
-			fprintf(dfp, "e\n");
-		}
-		close_plot(dfp, pop);
-	}
+                for(i = 0; i < n; i++) fprintf(dfp, "%.2f %.3f\n", growth_radius(i), ((double *)sl->data)[i]);
+                fprintf(dfp, "e\n");
+            }
+            close_plot(dfp, pop);
+        }
+    }
 
     if (grc) free(grc);
     if (rpp) free(rpp);
@@ -1157,7 +1159,7 @@ void print_star_measures(gpointer window, GSList *found)
 	struct gui_star *gs;
 	struct rp_point *rpp = NULL;
 	int nrp;
-	char name[256];
+    char *name;
 	double peak, sky, flux, err;
 	struct image_channel *i_ch;
 	double A, s;
@@ -1189,17 +1191,19 @@ void print_star_measures(gpointer window, GSList *found)
 	}
     A = r1 / FWHMSIG / 2; s = 1.0;
 	fit_1d_profile(rpp, &A, NULL, &s, NULL);
-	if (gs->s)
-        snprintf(name, 255, "%s %.1f,%.1f", CAT_STAR(gs->s)->name, gs->x, gs->y);
-	else
-		snprintf(name, 255, "%.1f,%.1f", gs->x, gs->y);
 
-	info_printf_sb2(window, "%s  FWHM:%.1f peak:%.0f sky:%.1f flux:%.0f"
+    name = NULL;
+	if (gs->s)
+        asprintf(&name, "%s %.1f,%.1f", CAT_STAR(gs->s)->name, gs->x, gs->y);
+	else
+        asprintf(&name, "%.1f,%.1f", gs->x, gs->y);
+
+    if (name) info_printf_sb2(window, "%s  FWHM:%.1f peak:%.0f sky:%.1f flux:%.0f"
 			" mag:%.03f/%.2g SNR:%.1f",
 			name, FWHMSIG * s, peak, sky,
-			flux, flux_to_absmag(flux), err, 1.08/err);
-	free(rpp);
+            flux, flux_to_absmag(flux), err, 1.08/err), free(name);
 
+    free(rpp);
 }
 
 

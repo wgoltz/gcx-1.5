@@ -18,6 +18,7 @@
   
   Contact Information: gcx@phracturedblue.com <Geoffrey Hausheer>
 *******************************************************************************/
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -79,31 +80,23 @@ static const char indi_prop_type[6][8] = {
 static struct indi_dev_cb_t *indi_find_dev_cb(struct indi_t *indi, const char *devname)
 {
 	indi_list *isl;
-
 	for (isl = il_iter(indi->dev_cb_list); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_dev_cb_t *cb = (struct indi_dev_cb_t *)il_item(isl);
-        if (strlen(cb->devname) == 0)
-            return cb;
-        int i = strncmp(cb->devname, devname, sizeof(cb->devname));
-        if (strncmp(cb->devname, devname, sizeof(cb->devname)) == 0)
-			return cb;
+
+        if ((strlen(cb->devname) == 0) || (strcmp(cb->devname, devname) == 0)) return cb;
 	}
 	return NULL;
 }
 
 struct indi_device_t *indi_find_device(struct indi_t *indi, const char *dev)
 {
-	indi_list *isl;
-	struct indi_device_t *idev;
+    if(! indi) return NULL;
 
-	if(! indi)
-		return NULL;
+    indi_list *isl;
 	for (isl = il_iter(indi->devices); ! il_is_last(isl); isl = il_next(isl)) {
-		idev = (struct indi_device_t *)il_item(isl);
+        struct indi_device_t *idev = (struct indi_device_t *)il_item(isl);
 
-		if (strlen(dev) == 0 || strncmp(idev->name, dev, sizeof(idev->name)) == 0) {
-			return idev;
-		}
+        if (strlen(dev) == 0 || strcmp(idev->name, dev) == 0) return idev;
 	}
 	return NULL;
 }
@@ -111,21 +104,23 @@ struct indi_device_t *indi_find_device(struct indi_t *indi, const char *dev)
 static struct indi_cb_t *indi_create_cb(void (* cb_func)(void *, void *), void *cb_data)
 {
 	struct indi_cb_t *cb = (struct indi_cb_t *)calloc(sizeof(struct indi_cb_t), 1);
-	cb->func = cb_func;
-	cb->data = cb_data;
+    if (cb) {
+        cb->func = cb_func;
+        cb->data = cb_data;
+    }
+
 	return cb;
 }
 
 struct indi_device_t *indi_new_device(struct indi_t *indi, const char *devname)
 {
-	struct indi_device_t *idev;
 	struct indi_dev_cb_t *cb, *first_cb = NULL;
 
-	idev = indi_find_device(indi, devname);
-	if (idev)
-		return idev;
+    struct indi_device_t *idev = indi_find_device(indi, devname);
+    if (idev) return idev;
+
 	idev = (struct indi_device_t *)calloc(1, sizeof(struct indi_device_t));
-	strncpy(idev->name, devname, sizeof(idev->name));
+    idev->name = strdup(devname);
 	idev->indi = indi;
 // here
 	while ((cb = indi_find_dev_cb(indi, devname)) && cb != first_cb) {
@@ -135,7 +130,8 @@ struct indi_device_t *indi_new_device(struct indi_t *indi, const char *devname)
 		idev->new_prop_cb = il_append(idev->new_prop_cb, indi_create_cb(cb->cb.func, cb->cb.data));
 
 		indi->dev_cb_list = il_remove(indi->dev_cb_list, cb);
-		if (strlen(cb->devname)) {
+        if (cb->devname) {
+            free(cb->devname);
 			free(cb);
 		} else {
 			//push this property onto the end of the list
@@ -151,56 +147,50 @@ struct indi_device_t *indi_new_device(struct indi_t *indi, const char *devname)
 struct indi_prop_t *indi_find_prop(struct indi_device_t *idev, const char *name)
 {
 	indi_list *isl;
-	struct indi_prop_t *iprop;
-	for (isl = il_iter(idev->props); ! il_is_last(isl); isl = il_next(isl)) {
-                iprop = (struct indi_prop_t *)il_item(isl);
-		if (strncmp(iprop->name, name, sizeof(iprop->name)) == 0) {
-			return iprop;
-		}
-	}
-	return NULL;
+    for (isl = il_iter(idev->props); ! il_is_last(isl); isl = il_next(isl)) {
+        struct indi_prop_t *iprop = (struct indi_prop_t *)il_item(isl);
+
+        if (strcmp(iprop->name, name) == 0) return iprop;
+    }
+    return NULL;
 }
 
 struct indi_elem_t *indi_find_elem(struct indi_prop_t *iprop, const char *name)
 {
 	indi_list *isl;
-	struct indi_elem_t *ielem;
     if (iprop)
         for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
-                ielem = (struct indi_elem_t *)il_item(isl);
-            if (strncmp(ielem->name, name, sizeof(ielem->name)) == 0) {
-                return ielem;
-            }
+            struct indi_elem_t *ielem = (struct indi_elem_t *)il_item(isl);
+
+            if (strcmp(ielem->name, name) == 0) return ielem;
         }
-	return NULL;
+    return NULL;
 }
 
 double indi_prop_get_number(struct indi_prop_t *iprop, const char *elemname) {
-	struct indi_elem_t *ielem;
-	ielem = indi_find_elem(iprop, elemname);
-	if(! ielem) {
-		return 0;
-	}
+    struct indi_elem_t *ielem = indi_find_elem(iprop, elemname);
+
+    if(! ielem) return 0;
+
 	return ielem->value.num.value;
 }
 
 struct indi_elem_t *indi_prop_set_number(struct indi_prop_t *iprop, const char *elemname, double value) {
-	struct indi_elem_t *ielem;
-	ielem = indi_find_elem(iprop, elemname);
-	if(! ielem) {
-		return NULL;
-	}
+    struct indi_elem_t *ielem = indi_find_elem(iprop, elemname);
+
+    if(! ielem) return NULL;
+
 	ielem->value.num.value = value;
 	return ielem;
 }
 
 struct indi_elem_t *indi_prop_set_string(struct indi_prop_t *iprop, const char *elemname, const char *value) {
-	struct indi_elem_t *ielem;
-	ielem = indi_find_elem(iprop, elemname);
-	if(! ielem) {
-		return NULL;
-	}
-	strncpy(ielem->value.str, value, sizeof(ielem->value.str));
+    struct indi_elem_t *ielem = indi_find_elem(iprop, elemname);
+    if(! ielem) return NULL;
+
+    if (ielem->value.str) free(ielem->value.str);
+
+    ielem->value.str = strdup(value);
 	return ielem;
 }
 
@@ -287,12 +277,14 @@ struct indi_elem_t *indi_dev_set_string(struct indi_device_t *idev, const char *
 	struct indi_elem_t *ielem;
 
 	iprop = indi_find_prop(idev, propname);
-	if(! iprop)
-		return NULL;
+    if(! iprop)	return NULL;
+
 	ielem = indi_find_elem(iprop, elemname);
-	if(! ielem)
-		return NULL;
-	strncpy(ielem->value.str, value, sizeof(ielem->value.str));
+    if(! ielem)	return NULL;
+
+    if (ielem->value.str) free(ielem->value.str);
+    ielem->value.str = strdup(value);
+
 	indi_send(iprop, ielem);
 	return ielem;
 }
@@ -315,14 +307,15 @@ struct indi_elem_t *indi_dev_set_switch(struct indi_device_t *idev, const char *
 
 void indi_dev_enable_blob(struct indi_device_t *idev, int state)
 {
-	char msg[1024];
-
 	if (idev) {
-		sprintf(msg, "<enableBLOB device=\"%s\">%s</enableBLOB>\n", idev->name, state ? "Also" : "Never");
+        char *msg;
+        asprintf(&msg, "<enableBLOB device=\"%s\">%s</enableBLOB>\n", idev->name, state ? "Also" : "Never");
+        if (msg) {
 //        dbg_printf("sending (%lu):\n%s", (unsigned long)strlen(msg), msg); fflush(NULL);
-		io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
+            io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
+            free(msg);
+        }
 	}
-
 }
 
 static int indi_get_state_from_string(const char *statestr)
@@ -361,53 +354,81 @@ int indi_get_type_from_string(const char *typestr)
 	return INDI_PROP_UNKNOWN;
 }
 
+#define MSG_APPEND(fmt, ...) { \
+    if (msg) { \
+        char *fmt2 = NULL; \
+        asprintf(&fmt2, "%%s%s", (fmt)); \
+        if (fmt2) { \
+            char *buf2 = (msg); (msg) = NULL; \
+            asprintf(&msg, fmt2, buf2, __VA_ARGS__); \
+            free(buf2); free(fmt2); \
+         } \
+    } else { \
+         asprintf(&msg, (fmt), __VA_ARGS__); \
+    } \
+}
+
+
 void indi_send(struct indi_prop_t *iprop, struct indi_elem_t *ielem )
 {
-    char msg[4096], *ptr = msg;
-	char val[80];
-	const char *valstr = NULL;
-	const char *type;
+    struct indi_device_t *idev = iprop->idev;
+    const char *type = indi_prop_type[iprop->type];
 
-	struct indi_device_t *idev = iprop->idev;
-	indi_list *isl;
+    char *msg = NULL;
 
-	type = indi_prop_type[iprop->type];
-	ptr += sprintf(msg, "<new%sVector device=\"%s\" name=\"%s\">\n", type, idev->name, iprop->name);
+    MSG_APPEND("<new%sVector device=\"%s\" name=\"%s\">\n", type, idev->name, iprop->name);
+
+    indi_list *isl;
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
-		if (ielem && elem != ielem) {
-			continue;
-		}
+
+        if (ielem && elem != ielem) continue;
+
+        char *val = NULL;
+        char *valstr = NULL;
+
 		switch (iprop->type) {
 		case INDI_PROP_TEXT:
 			valstr = elem->value.str;
 			break;
 		case INDI_PROP_NUMBER:
-			sprintf(val, "%f", elem->value.num.value);
+            asprintf(&val, "%f", elem->value.num.value);
 			valstr = val;
 			break;
 		case INDI_PROP_SWITCH:
-			sprintf(val, "%s", elem->value.set ? "On" : "Off");
+            asprintf(&val, "%s", elem->value.set ? "On" : "Off");
 			valstr = val;
 			break;
-
 		}			
-		ptr += sprintf(ptr, "  <one%s name=\"%s\">%s</one%s>\n", type, elem->name, valstr, type);
+        MSG_APPEND("  <one%s name=\"%s\">%s</one%s>\n", type, elem->name, valstr, type);
+        if (val) free(val);
 	}
-	ptr += sprintf(ptr, "</new%sVector>\n", type);
-	iprop->state = INDI_STATE_BUSY;
-//    dbg_printf("sending %s(%lu):\n%s", type, (unsigned long)strlen(msg), msg); fflush(NULL);
-//	indigui_update_widget(iprop);
-	io_indi_sock_write(iprop->idev->indi->fh, msg, strlen(msg));
-}
+    MSG_APPEND("</new%sVector>\n", type);
 
+    if (msg) {
+printf("indi_send: %s\n", msg); fflush(NULL);
+        iprop->state = INDI_STATE_BUSY;
+        //	indigui_update_widget(iprop);
+        io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
+        free(msg);
+    }
+}
+static int first = 0;
 static void indi_exec_cb(void *cb_list, void *idata, char *msg)
 {
 	indi_list *isl;
+
+    if (first == 0)
+        first = 1;
+    else
+        first = 0;
+
+printf("indi_exec_cb: %s %s\n", msg, (cb_list == NULL) ? "(no callback functions)" : ""); fflush(NULL);
+
+
     if (! cb_list) {
 		return;
     }
-printf("%s\n", msg); fflush(NULL);
 	for (isl = il_iter(cb_list); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_cb_t *cb = ( struct indi_cb_t *)il_item(isl);
 		cb->func(idata, cb->data);
@@ -427,8 +448,9 @@ static int indi_blob_decode(void *data)
 	if (ielem->value.blob.compressed) {
 		if(! ielem->value.blob.zstrm)
 			ielem->value.blob.zstrm = (z_stream *)calloc(1, sizeof(z_stream));
+
 		if(pos == 0) {
-			memset(ielem->value.blob.zstrm, 0, sizeof(z_stream));
+            *(struct z_stream_s *)ielem->value.blob.zstrm = (struct z_stream_s) { 0 };
 			inflateInit((z_stream *)ielem->value.blob.zstrm);
 		}
 		if(! ielem->value.blob.tmp_data)
@@ -484,47 +506,50 @@ static int indi_blob_decode(void *data)
 
 static int indi_convert_data(struct indi_elem_t *ielem, int type, const char *data, unsigned int data_size)
 {
-	if(! data)
-		return FALSE;
+    if(! data) return FALSE;
+
 	switch(type) {
 	case INDI_PROP_TEXT:
-		strncpy(ielem->value.str, data, sizeof(ielem->value.str));
+        if (ielem->value.str) free(ielem->value.str);
+        ielem->value.str = strdup(data);
 		break;
+
 	case INDI_PROP_NUMBER:
 		ielem->value.num.value = strtod(data, NULL);
 		break;
+
 	case INDI_PROP_SWITCH:
-		if (strcmp(data, "On") == 0) {
-			ielem->value.set = 1;
-		} else {
-			ielem->value.set = 0;
-		}
+        ielem->value.set = (strcmp(data, "On") == 0) ? 1 : 0;
 		break;
+
 	case INDI_PROP_LIGHT:
 		ielem->value.set = indi_get_state_from_string(data);
 		break;
+
     case INDI_PROP_BLOB: // currently does not work for .jpeg
-		if (ielem->value.blob.orig_size || ! data_size) {
-			return FALSE;
-		}
-		if (ielem->value.blob.data && ielem->value.blob.size > ielem->value.blob.data_size) {
-			// We free rather than realloc because there is no reason to copy
-			// The old data if a new location is needed
-			free(ielem->value.blob.data);
-			ielem->value.blob.data = NULL;
-		}
-		if (! ielem->value.blob.data) {
-			ielem->value.blob.data = (char *)malloc(ielem->value.blob.size);
-			ielem->value.blob.data_size = ielem->value.blob.size;
-		}
-		ielem->value.blob.ptr = ielem->value.blob.data;
-		ielem->value.blob.orig_data = data;
-		ielem->value.blob.orig_size = data_size;
-		printf("Found blob type: %s size: %lu\n", ielem->value.blob.fmt, (unsigned long)ielem->value.blob.size);
-		ielem->value.blob.compressed = (ielem->value.blob.fmt[strlen(ielem->value.blob.fmt)-2] == '.'
-			 && ielem->value.blob.fmt[strlen(ielem->value.blob.fmt)-1] == 'z')
-			 ? 1 : 0;
-		io_indi_idle_callback(indi_blob_decode, ielem);
+        if (ielem->value.blob.orig_size || ! data_size) return FALSE;
+        if (ielem->value.blob.size == 0) return FALSE;
+
+        if (ielem->value.blob.data && ielem->value.blob.size > ielem->value.blob.data_size) {
+            // We free rather than realloc because there is no reason to copy
+            // The old data if a new location is needed
+            free(ielem->value.blob.data);
+            ielem->value.blob.data = NULL;
+        }
+        if (! ielem->value.blob.data) {
+            ielem->value.blob.data = (char *)malloc(ielem->value.blob.size);
+            ielem->value.blob.data_size = ielem->value.blob.size;
+        }
+        ielem->value.blob.ptr = ielem->value.blob.data;
+        ielem->value.blob.orig_data = data;
+        ielem->value.blob.orig_size = data_size;
+        printf("Found blob type: %s size: %lu\n", ielem->value.blob.fmt, (unsigned long)ielem->value.blob.size);
+
+        ielem->value.blob.compressed = (ielem->value.blob.fmt[strlen(ielem->value.blob.fmt)-2] == '.'
+                && ielem->value.blob.fmt[strlen(ielem->value.blob.fmt)-1] == 'z')
+                ? 1 : 0;
+        io_indi_idle_callback(indi_blob_decode, ielem);
+
 		return TRUE;
 	}
 	return FALSE;
@@ -537,18 +562,22 @@ static void indi_update_prop(XMLEle *root, struct indi_prop_t *iprop)
 
 	iprop->root = root;
 	iprop->state = indi_get_state_from_string(findXMLAttValu(root, "state"));
-	strncpy(iprop->message, findXMLAttValu(root, "message"), sizeof(iprop->message) - 1);
+
+    if (iprop->message) free(iprop->message);
+    iprop->message = strdup(findXMLAttValu(root, "message"));
 
     for (ep = nextXMLEle (root, 1); ep != NULL; ep = nextXMLEle (root, 0)) {
 		struct indi_elem_t *ielem;
-        char *name = findXMLAttValu(ep, "name");
-        ielem = indi_find_elem(iprop, name);
+
+        ielem = indi_find_elem(iprop, findXMLAttValu(ep, "name"));
 
         if (! ielem) continue;
 
         if(iprop->type == INDI_PROP_BLOB) {
 			ielem->value.blob.size = strtoul(findXMLAttValu(ep, "size"), NULL, 10);
-			strncpy(ielem->value.blob.fmt, findXMLAttValu(ep, "format"), sizeof(ielem->value.blob.fmt));
+
+            if (ielem->value.blob.fmt) free(ielem->value.blob.fmt);
+            ielem->value.blob.fmt = strdup(findXMLAttValu(ep, "format"));
 		}
 
 		save |= indi_convert_data(ielem, iprop->type, pcdataXMLEle(ep), pcdatalenXMLEle(ep));
@@ -561,14 +590,14 @@ static void indi_update_prop(XMLEle *root, struct indi_prop_t *iprop)
 
 static struct indi_prop_t *indi_new_prop(XMLEle *root, struct indi_device_t *idev)
 {
-	const char *perm, *label, *rule;
-	struct indi_prop_t *iprop;
+    const char *perm, *rule;
 	XMLEle *ep;
 
-	iprop = (struct indi_prop_t *)calloc(1, sizeof(struct indi_prop_t));
-	iprop->idev = idev;
+    // new iprop
+    struct indi_prop_t *iprop = (struct indi_prop_t *)calloc(1, sizeof(struct indi_prop_t));
 
-	strncpy(iprop->name, findXMLAttValu(root, "name"), sizeof(iprop->name));
+    iprop->idev = idev;
+    iprop->name = strdup(findXMLAttValu(root, "name"));
 
 	perm = findXMLAttValu(root, "perm");
 	if(strcmp(perm, "rw") == 0) {
@@ -584,24 +613,29 @@ static struct indi_prop_t *indi_new_prop(XMLEle *root, struct indi_device_t *ide
 	iprop->type = indi_get_type_from_string(tagXMLEle(root));
 
 	for (ep = nextXMLEle (root, 1); ep != NULL; ep = nextXMLEle (root, 0)) {
-		struct indi_elem_t *ielem;
 
 		if (indi_get_type_from_string(tagXMLEle(ep)) != iprop->type) {
 			// Unhandled type
 			continue;
 		}
-		ielem = (struct indi_elem_t *)calloc(1, sizeof(struct indi_elem_t));
+
+        // new ielem
+        struct indi_elem_t *ielem = (struct indi_elem_t *)calloc(1, sizeof(struct indi_elem_t));
 		ielem->iprop = iprop;
-		strncpy(ielem->name, findXMLAttValu(ep, "name"), sizeof(ielem->name));
-		label = findXMLAttValu(ep, "label");
+
+        ielem->name = strdup(findXMLAttValu(ep, "name"));
+
+        const char *label = findXMLAttValu(ep, "label");
+
 		if (label && strlen(label)) {
-			strncpy(ielem->label, label, sizeof(ielem->label));
+            ielem->label = strdup(label);
 		} else {
-			strncpy(ielem->label, ielem->name, sizeof(ielem->label));
+            ielem->label = strdup(ielem->name);
 		}
+
 		indi_convert_data(ielem, iprop->type, pcdataXMLEle(ep), pcdatalenXMLEle(ep));
 		if(iprop->type == INDI_PROP_NUMBER) {
-			strncpy(ielem->value.num.fmt, findXMLAttValu(ep, "format"), sizeof(ielem->value.num.fmt));
+            ielem->value.num.fmt = strdup(findXMLAttValu(ep, "format"));
 			ielem->value.num.min  = strtod(findXMLAttValu(ep, "min"), NULL);
 			ielem->value.num.max  = strtod(findXMLAttValu(ep, "max"), NULL);
 			ielem->value.num.step = strtod(findXMLAttValu(ep, "step"), NULL);
@@ -609,15 +643,13 @@ static struct indi_prop_t *indi_new_prop(XMLEle *root, struct indi_device_t *ide
 			
 		iprop->elems = il_append(iprop->elems, ielem);
 	}
+
 	if (iprop->type == INDI_PROP_SWITCH) {
 		rule = findXMLAttValu(root, "rule");
-		if(strcmp(rule, "OneOfMany") == 0) {
-			iprop->rule = INDI_RULE_ONEOFMANY;
-		} else if (strcmp(rule, "AtMostOne") == 0) {
-			iprop->rule = INDI_RULE_ATMOSTONE;
-		} else {
-			iprop->rule = INDI_RULE_ANYOFMANY;
-		}
+        if      (strcmp(rule, "OneOfMany") == 0) iprop->rule = INDI_RULE_ONEOFMANY;
+        else if (strcmp(rule, "AtMostOne") == 0) iprop->rule = INDI_RULE_ATMOSTONE;
+        else                                     iprop->rule = INDI_RULE_ANYOFMANY;
+
 	}
 	idev->props = il_append(idev->props, iprop);
 	return iprop;
@@ -645,8 +677,10 @@ printf("indi_device_add_cb: found device \"%s\". add \"%s\" to indi_device new_p
 	} else {
 printf("indi_device_add_cb: device \"%s\" not found. add \"%s\" to dev_cb_list\n", devname, msg);
 		// Device doesn't exist yet, so save this callback for the future
+
+        // new cb
 		struct indi_dev_cb_t *cb = (struct indi_dev_cb_t *)calloc(1, sizeof(struct indi_dev_cb_t));
-		strncpy(cb->devname, devname, sizeof(cb->devname));
+        cb->devname = strdup(devname);
 		cb->cb.func = cb_func;
 		cb->cb.data = cb_data;
 		indi->dev_cb_list = il_append(indi->dev_cb_list, cb);
@@ -660,8 +694,9 @@ void indi_device_remove_callbacks(struct indi_t *indi, const char *devname)
    indi_list *isl;
    for (isl = il_iter(indi->dev_cb_list); ! il_is_last(isl); isl = il_next(isl)) {
        struct indi_dev_cb_t *cb =  (struct indi_dev_cb_t *)il_item(isl);
-       if (strcmp(devname, cb->devname) == 0) {
+       if (cb->devname && (strcmp(devname, cb->devname) == 0)) {
            indi->dev_cb_list = il_remove(indi->dev_cb_list, cb);
+           free(cb->devname);
            free(cb);
        }
    }
@@ -687,19 +722,21 @@ static void indi_handle_message(struct indi_device_t *idev, XMLEle *root)
     if (strncmp(proptype, "set", 3) == 0) {
 		// Update values
 		iprop = indi_find_prop(idev, propname);
-		if (! iprop) {
-			return;
-		}
+        if (! iprop) return;
+
         indi_update_prop(root, iprop);
 
 		if (iprop->type != INDI_PROP_BLOB) {
 			// BLOB callbacks are handled after decoding
             char *msg = NULL;
             asprintf(&msg, "indi_handle_message - set(prop_update_cb) \"%s\"", iprop->name);
-            indi_exec_cb(iprop->prop_update_cb, iprop, msg);
-            free(msg);
+            if (msg) {
+                indi_exec_cb(iprop->prop_update_cb, iprop, msg);
+                free(msg);
+            }
 		}
 		ic_prop_set(idev->indi->config, iprop);
+
 	} else if (strncmp(proptype, "def", 3) == 0) {
 		// Exit if this property is already known
 		if (indi_find_prop(idev, propname)) {
@@ -717,10 +754,13 @@ static void indi_handle_message(struct indi_device_t *idev, XMLEle *root)
 
         char *msg = NULL;
         asprintf(&msg, "indi_handle_message - def(new_prop_cb) \"%s\"", iprop->name);
-        indi_exec_cb(idev->new_prop_cb, iprop, "indi_handle_message - def(new_prop_cb)");
-        free(msg);
+        if (msg) {
+            indi_exec_cb(idev->new_prop_cb, iprop, "indi_handle_message - def(new_prop_cb)");
+            free(msg);
+        }
 
 		ic_prop_def(idev->indi->config, iprop);
+
 	} else if (strncmp(proptype, "message", 7) == 0) {
 		// Display message
 		indigui_show_message(idev->indi, findXMLAttValu(root, "message"));
@@ -733,7 +773,7 @@ void indi_read_cb (void *fd, void *opaque)
 	struct indi_t *indi = (struct indi_t *)opaque;
 	int i, len;
 	char buf[4096];
-    char *errmsg;
+    char *errmsg = NULL;
 	XMLEle *root;
 	struct indi_device_t *idev;
 	LilXML *lillp = (LilXML *)indi->xml_parser;
@@ -743,6 +783,11 @@ void indi_read_cb (void *fd, void *opaque)
 //        dbg_printf("Received (%d): %s\n", len, buf); fflush(NULL);
 		for(i = 0; i < len; i++) {
             root = readXMLEle(lillp, buf[i], &errmsg);
+            if (errmsg) {
+                printf("%s\n", errmsg);
+                free(errmsg);
+                // do something
+            }
             if (root) {
                 const char *dev = findXMLAttValu (root, "device");
                 if (! dev) {
@@ -763,12 +808,9 @@ struct indi_t *indi_init(const char *hostname, int port, const char *config)
 {
 	struct indi_t *indi;
 
-	char msg[1024];
-
 	indi = (struct indi_t *)calloc(1, sizeof(struct indi_t));
 
 	indi->window = indigui_create_window(indi);
-
     indi->config = ic_init(indi, config);
     indi->xml_parser = (void *)newLilXML();
 	indi->fh = io_indi_open_server(hostname, port, indi_read_cb, indi);
@@ -778,9 +820,13 @@ struct indi_t *indi_init(const char *hostname, int port, const char *config)
 		free(indi);
 		return NULL;
 	}
-    sprintf(msg, "<getProperties version='%g'/>\n", INDIGOV);
-	
-	io_indi_sock_write(indi->fh, msg, strlen(msg));
+
+    char *msg = NULL;
+    asprintf(&msg, "<getProperties version='%g'/>\n", INDIGOV);
+    if (msg) {
+        io_indi_sock_write(indi->fh, msg, strlen(msg));
+        free(msg);
+    }
 
 	return indi;
 }

@@ -21,8 +21,11 @@
   Contact Information: radu@corlan.net
 *******************************************************************************/
 
+#define _GNU_SOURCE
+
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /* add a little structure to error/log handling 
  * the latest error string (as printed by err_printf)
@@ -33,7 +36,7 @@
  */
 
 #define ERR_BUF_SIZE 1024
-static char lasterr_string[ERR_BUF_SIZE];
+static char *lasterr_string = NULL;
 int debug_level = 0;
 
 int deb_printf(int level, const char *fmt, ...)
@@ -62,10 +65,12 @@ int err_printf(const char *fmt, ...)
 #endif
 	va_start(ap, fmt);
 	va_start(ap2, fmt);
-	ret = vsnprintf(lasterr_string, ERR_BUF_SIZE-1, fmt, ap2);
+    if (lasterr_string) free(lasterr_string), lasterr_string = NULL;
+    ret = vasprintf(&lasterr_string, fmt, ap2);
 	if (ret > 0 && lasterr_string[ret-1] == '\n')
 		lasterr_string[ret-1] = 0;
     ret = vfprintf(stderr, fmt, ap); fflush(NULL);
+
 	va_end(ap);
 	return ret;
 }
@@ -73,12 +78,13 @@ int err_printf(const char *fmt, ...)
 /* clear the last error string (to make sure we don't get stale errors) */
 void err_clear(void)
 {
-	lasterr_string[0] = 0;
+    if (lasterr_string) free(lasterr_string);
+    lasterr_string = NULL;
 }
 
 /* get the error string */
 char * last_err(void)
 {
-	return lasterr_string;
+    return (lasterr_string) ? lasterr_string : "";
 }
 

@@ -16,13 +16,12 @@ char *get_header(fp,h)
   int fp;
   HEADER *h;
 {
-  static char ww[512];
+  static char ww[512] = { 0 };
   char *w;
   int lheader;
 
 	w = ww;
-	memset( h, 0, sizeof(HEADER));
-	memset(ww, 0, sizeof(ww));
+    *h = (HEADER) { 0 };
 
 	if (read(fp,w,4) != 4) return((char *)0);
 

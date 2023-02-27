@@ -69,126 +69,124 @@ struct stf * create_recipe(GSList *gsl, struct wcs *wcs, int flags,
 
 {
 	GList *tsl = NULL;
-	struct cat_star *cats;
-	struct gui_star *gs;
-	struct stf *st = NULL, *stf;
-	GSList *sl;
-	char ras[64], decs[64];
 
-	if (target != NULL && target[0] == 0)
-		target = NULL;
-		
+    if (target && target[0] == 0) target = NULL;
+
+    GSList *sl;
 	for (sl = gsl; sl != NULL; sl = sl->next) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
+
 		if ( ((flags & MKRCP_INCLUDE_OFF_FRAME) == 0) && w > 0 && h > 0 && 
-		    (gs->x < 0 || gs->x > w || gs->y < 0 || gs->y > h) )
-		    continue;
+            (gs->x < 0 || gs->x > w || gs->y < 0 || gs->y > h) ) continue;
+
 		if (flags & MKRCP_DET) {
-			double ra, dec;
 			if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_SIMPLE)) != 0) {
+                double ra, dec;
 				wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
-				cats = cat_star_new();
-				snprintf(cats->name, CAT_STAR_NAME_SZ, "x%.0fy%.0f", gs->x,  gs->y);
+
+                struct cat_star *cats = cat_star_new();
+                asprintf(&cats->name, "x%.0fy%.0f", gs->x, gs->y);
+
 				cats->ra = ra;
 				cats->dec = dec;
 				cats->equinox = 1.0 * wcs->equinox;
 				cats->mag = 0.0;
 				cats->flags = CATS_TYPE_SREF;
 				cats->comments = NULL;
-				if (flags & MKRCP_DET_TO_TGT) {
-					cats->flags = CATS_TYPE_APSTAR;
-				}
+                if (flags & MKRCP_DET_TO_TGT) cats->flags = CATS_TYPE_APSTAR;
+
 				tsl = g_list_prepend(tsl, cats);
 			}
 		}
-		if (flags & MKRCP_USER) {
-			double ra, dec;
+		if (flags & MKRCP_USER) {			
 			if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_USEL)) != 0) {
+                double ra, dec;
 				wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
-				cats = cat_star_new();
-				snprintf(cats->name, CAT_STAR_NAME_SZ, "x%.0fy%.0f", gs->x,  gs->y);
+
+                struct cat_star *cats = cat_star_new();
+                asprintf(&cats->name, "x%.0fy%.0f", gs->x, gs->y);
+
 				cats->ra = ra;
 				cats->dec = dec;
 				cats->equinox = 1.0 * wcs->equinox;
 				cats->mag = 0.0;
 				cats->flags = CATS_TYPE_SREF;
 				cats->comments = NULL;
-				if (flags & MKRCP_USER_TO_TGT) {
-					cats->flags = CATS_TYPE_APSTAR;
-				}
-				tsl = g_list_prepend(tsl, cats);
-			}
-		}
-		if (flags & MKRCP_FIELD) {
-			if (((TYPE_MASK_GSTAR(gs) & (TYPE_MASK(STAR_TYPE_SREF) )) != 0)
-			    && (gs->s != NULL)) {
+                if (flags & MKRCP_USER_TO_TGT) cats->flags = CATS_TYPE_APSTAR;
 
-                cats = CAT_STAR(gs->s);
-				cat_star_ref(cats);
-				if (flags & MKRCP_FIELD_TO_TGT) {
-					cats->flags = CATS_TYPE_APSTAR;
-				}
 				tsl = g_list_prepend(tsl, cats);
 			}
 		}
-		if (flags & MKRCP_CAT) {
-			if (((TYPE_MASK_GSTAR(gs) & (TYPE_MASK(STAR_TYPE_CAT) )) != 0)
-			    && (gs->s != NULL)) {
+        if (gs->s) {
+            if (flags & MKRCP_FIELD) {
+                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_SREF)) != 0) {
 
-				cats = CAT_STAR(gs->s);
-				cat_star_ref(cats);
-				if (flags & MKRCP_CAT_TO_STD) {
-					cats->flags = CATS_TYPE_APSTD;
-				}
-				tsl = g_list_prepend(tsl, cats);
-			}
-		}
-		if (flags & MKRCP_STD) {
-			if (((TYPE_MASK_GSTAR(gs) & (TYPE_MASK(STAR_TYPE_APSTD) )) != 0)
-			    && (gs->s != NULL)) {
+                    struct cat_star *cats = CAT_STAR(gs->s);
+                    cat_star_ref(cats, "create_recipe field");
+                    if (flags & MKRCP_FIELD_TO_TGT) cats->flags = CATS_TYPE_APSTAR;
 
-                cats = CAT_STAR(gs->s);
-				cat_star_ref(cats);
-				tsl = g_list_prepend(tsl, cats);
-			}
-		}
-		if (flags & MKRCP_TGT) {
-			if (((TYPE_MASK_GSTAR(gs) & (TYPE_MASK(STAR_TYPE_APSTAR) )) != 0)
-			    && (gs->s != NULL)) {
+                    tsl = g_list_prepend(tsl, cats);
+                }
+            }
+            if (flags & MKRCP_CAT) {
+                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_CAT)) != 0) {
 
-                cats = CAT_STAR(gs->s);
-				if (target == NULL)
-					target = cats->name;
-				cat_star_ref(cats);
-				tsl = g_list_prepend(tsl, cats);
-			}
-		}
+                    struct cat_star *cats = CAT_STAR(gs->s);
+                    cat_star_ref(cats, "create_recipe cat");
+                    if (flags & MKRCP_CAT_TO_STD) cats->flags = CATS_TYPE_APSTD;
+
+                    tsl = g_list_prepend(tsl, cats);
+                }
+            }
+            if (flags & MKRCP_STD) {
+                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_APSTD)) != 0) {
+
+                    struct cat_star *cats = CAT_STAR(gs->s);
+                    cat_star_ref(cats, "create_recipe std");
+
+                    tsl = g_list_prepend(tsl, cats);
+                }
+            }
+            if (flags & MKRCP_TGT) {
+                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_APSTAR)) != 0) {
+
+                    struct cat_star *cats = CAT_STAR(gs->s);
+                    if (target == NULL) target = cats->name;
+                    cat_star_ref(cats, "create_recipe target");
+
+                    tsl = g_list_prepend(tsl, cats);
+                }
+            }
+        }
 	}
-	d3_printf("tsl has %d gsl has %d (flags: %d)\n", g_list_length(tsl), 
-		  g_slist_length(gsl), flags);
+
+    d3_printf("tsl has %d gsl has %d (flags: %d)\n", g_list_length(tsl), g_slist_length(gsl), flags);
+
 	if (g_list_length(tsl) == 0) {
 		err_printf("No stars for recipe\n");
 		return NULL;
 	}
 
-    degrees_to_hms_pr(ras, wcs->xref, 2);
-	degrees_to_dms_pr(decs, wcs->yref, 1);
-	if (target != NULL) {
-		st = stf_append_string(NULL, SYM_OBJECT, target);
-		stf_append_string(st, SYM_RA, ras);
-	} else {
-		st = stf_append_string(NULL, SYM_RA, ras);
-	}
-	stf_append_string(st, SYM_DEC, decs);
+    struct stf *st = NULL;
+
+    if (target != NULL) st = stf_append_string(st, SYM_OBJECT, target);
+
+    char *ras = degrees_to_hms_pr(wcs->xref, 2);
+    if (ras) stf_append_string(st, SYM_RA, ras), free(ras);
+
+    char *decs = degrees_to_dms_pr(wcs->yref, 1);
+    if (decs) stf_append_string(st, SYM_DEC, decs), free(decs);
+
 	stf_append_double(st, SYM_EQUINOX, wcs->equinox);
-	if (comment != NULL && comment[0] != 0) {
-		stf_append_string(st, SYM_COMMENTS, comment);
-	}
-	stf = stf_append_list(NULL, SYM_RECIPE, st);
-	if (seq != NULL && seq[0] != 0) {
-		stf_append_string(stf, SYM_SEQUENCE, seq);
-	}
+
+    if (comment && comment[0] != 0) stf_append_string(st, SYM_COMMENTS, comment);
+
+    struct stf *stf = stf_append_list(NULL, SYM_RECIPE, st);
+
+    if (seq && seq[0] != 0) stf_append_string(stf, SYM_SEQUENCE, seq);
+
 	stf_append_glist(stf, SYM_STARS, tsl);
+
 	return stf;
 }
 
@@ -255,7 +253,7 @@ static int crack_constar(char *line, struct cat_star *cats)
 	cats->equinox = 2000.0;
 	cats->mag = mag;
 	cats->smags = smags;
-	strncpy(cats->name, name, CAT_STAR_NAME_SZ);
+    cats->name = strdup(name);;
 //	cats->flags = CATS_FLAG_PHOTOMET;
 
 //	d3_printf("constar name:%s ra:%.4f dec:%.4f mag:%.4f smags:%s\n", 
@@ -312,7 +310,7 @@ end:
 	cats->dec = dec;
 	cats->equinox = 2000.0;
 	cats->mag = mag;
-	strncpy(cats->name, name, CAT_STAR_NAME_SZ);
+    cats->name = strdup(name);
 	cats->comments = lstrndup(comment, k);
 	cats->flags = CATS_TYPE_APSTAR | CATS_FLAG_VARIABLE;
 
@@ -327,48 +325,45 @@ end:
  * or a negative error. name is the file name */
 int read_avsomat_rcp(struct cat_star *cst[], FILE *fp, int n)
 {
-	struct cat_star *cats = NULL;
+
 	FILE *rfn = fp;
 	int sn = 0;
-	size_t linesz, line2sz;
-	char *line, *line2;
 
-	if (cst == NULL)
-		return -1;
+    if (cst == NULL) return -1;
 
-	while ( (sn < n)) {
-		line = NULL;
-		linesz = 0;
-		if (getline(&line, &linesz, rfn) < 0)
-			break;
-//		d3_printf("line is %s\n", line);
-		if (cats == NULL)
-			cats = cat_star_new();
-		if (cats == NULL) {
-			free(line);
-			return -1;
-		}
+    struct cat_star *cats = NULL;
+
+    while (sn < n) {
+        char *line = NULL;
+        size_t linesz = 0;
+
+        if (getline(&line, &linesz, rfn) < 0) break;
+
+        if (cats == NULL) {
+            cats = cat_star_new();
+            if (cats == NULL) {
+                free(line);
+                return -1;
+            }
+        }
+
 		if (!strncasecmp(line, "VARSTAR", 7)) {
-			if (cats == NULL) {
-				free(line);
-				return -1;
-			}
-			line2 = NULL;
-			line2sz = 0;
-			if (getline(&line2, &line2sz, rfn) < 0) {
-				line2 = NULL;
-			}
-//			d3_printf("line2 is %s\n", line2);
+
+            char *line2 = NULL;
+            size_t line2sz = 0;
+
+            if (getline(&line2, &line2sz, rfn) < 0) line2 = NULL;
+
 			if (!crack_varstar(line, line2, cats)) {
 				cst[sn] = cats;
 				sn ++;
 				cats = NULL;
 			} 
 			free(line);
-			if (line2)
-				free(line2);
+            if (line2) free(line2);
 			continue;
 		}
+
 		if (!strncasecmp(line, "CONSTAR", 7)) {
 			if (!crack_constar(line, cats)) {
 				cst[sn] = cats;
@@ -378,8 +373,7 @@ int read_avsomat_rcp(struct cat_star *cst[], FILE *fp, int n)
 			continue;
 		}
 	}
-	if (cats != NULL)
-		cat_star_release(cats);
+    if (cats != NULL) cat_star_release(cats, "read_avsomat_rcp"); // unused cats
 	return sn;
 }
 /*
@@ -498,7 +492,7 @@ int read_gsc2(struct cat_star *csl[], FILE *fp, int n, double *cra, double *cdec
 			return -1;
 		}
 
-		strncpy(cats->name, id, CAT_STAR_NAME_SZ);
+        cats->name = strdup(id);
 		cats->ra = ra;
 		cats->dec = dec;
 		if (vmag < 30)
@@ -531,7 +525,7 @@ int read_gsc2(struct cat_star *csl[], FILE *fp, int n, double *cra, double *cdec
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_gsc2");
 	return n < sn ? n : sn;
 }
 
@@ -592,7 +586,7 @@ int read_landolt_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 			return -1;
 		}
 
-		strncpy(cats->name, id, CAT_STAR_NAME_SZ);
+        cats->name = strdup(id);
 
         cats->ra = ra;
 		cats->dec = dec;
@@ -611,7 +605,7 @@ int read_landolt_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_landolt_table");
 	return n < sn ? n : sn;
 }
 
@@ -685,14 +679,13 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		}
 
 		c = line;
-		for (i = 0; i < CAT_STAR_NAME_SZ - 1; i++) {
-			while (*c == ' ')
-				c++;
-			if (*c == 0)
-				break;
-			cats->name[i] = tolower(*c++);
-		}
-		cats->name[i]=0;
+        while (*c == ' ') c++;
+
+        cats->name = strdup(c);
+
+        for (i = 0; i < strlen(cats->name); i++)
+            cats->name[i] = tolower(*c++);
+
         cats->ra = ra;
 		cats->dec = dec;
 		cats->mag = 0.0;
@@ -715,7 +708,7 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_varlist_table");
 	return n < sn ? n : sn;
 }
 
@@ -727,19 +720,18 @@ int read_henden_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	struct cat_star *cst[MAX_STARS_READ];
 	FILE *rfn = fp;
 	int sn = 0, i, nc;
-	size_t linesz;
-	char *line;
+
 	float vmag, bvmag, ubmag, vrmag, rimag;
 	float verr, bverr, uberr, vrerr, rierr;
 	float ra, dec, raerr, decerr;
-	char id[64];
+    char *id;
 	int ret, len;
 
 	if (csl == NULL)
 		return -1;
 
-	line = NULL;
-	linesz = 0;
+    char *line = NULL;
+    size_t linesz = 0;
 
 	while ( (sn < MAX_STARS_READ)) {
 		if (getline(&line, &linesz, rfn) < 0)
@@ -773,30 +765,20 @@ int read_henden_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 			return -1;
 		}
 
-		snprintf(cats->name, CAT_STAR_NAME_SZ, "%s_%d", id, sn+1);
+        asprintf(&cats->name, "%s_%d", id, sn+1);
 		cats->ra = ra;
 		cats->perr = sqrt(sqr(raerr * cos(degrad(dec))) + sqr(decerr));
 		cats->dec = dec;
 		cats->mag = vmag;
 		cats->equinox = 2000.0;
-        cats->cmags = calloc(1, 256);
-        if (!cats->cmags)
-			continue;
-		i = 0;
-		nc = 255;
-		if (vmag < 90.0 && verr < 9 && i < nc) {
-            i += snprintf(cats->cmags + i, nc-i,
-				      "v=%.3f/%.3f",
-				      vmag, verr);
+
+        if (vmag < 90.0 && verr < 9) {
+            str_join_varg(&cats->cmags, "%s v=%.3f/%.3f", vmag, verr);
 		}
 		if (bvmag < 90.0 && bverr < 9 && i < nc) {
-            i += snprintf(cats->cmags + i, nc-i,
-				      " b-v=%.3f/%.3f",
-				      bvmag, bverr);
+            i += snprintf(cats->cmags + i, nc-i, " b-v=%.3f/%.3f", bvmag, bverr);
 			if (vmag < 90.0 && verr < 9 && i < nc) {
-                i += snprintf(cats->cmags + i, nc-i,
-					      " b=%.3f/%.3f",
-					      vmag + bvmag, sqrt(sqr(verr)+sqr(bverr)));
+                i += snprintf(cats->cmags + i, nc-i, " b=%.3f/%.3f", vmag + bvmag, sqrt(sqr(verr)+sqr(bverr)));
 			}
 			
 		}
@@ -833,7 +815,7 @@ int read_henden_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_henden_table");
 	return n < sn ? n : sn;
 }
 
@@ -904,7 +886,7 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	vmag = strtod(line+i, NULL);
 	/* we now have the variable */
 	cats = cat_star_new();
-	strncpy(cats->name, id, CAT_STAR_NAME_SZ);
+    cats->name = strdup(id);
 	cats->comments = strdup(comm);
     cats->ra = ra;
 	cats->dec = dec;
@@ -931,10 +913,10 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 		if (ret < 14)
 			continue;
 		cats = cat_star_new();
-		snprintf(cats->name, CAT_STAR_NAME_SZ, "%s_%.0f", id, c1);
-        if (-1 == asprintf(&cats->cmags, "v=%.3f/%.3f b=%.3f/%.3f",
-		                   c11, c12, c11+c13, sqrt(sqr(c12)+ sqr(c14))))
-            cats->cmags = NULL;
+
+        asprintf(&cats->name, "%s_%.0f", id, c1);
+        asprintf(&cats->cmags, "v=%.3f/%.3f b=%.3f/%.3f", c11, c12, c11+c13, sqrt(sqr(c12)+ sqr(c14)));
+
 		cats->ra = 15 * c2 + 15 * c3 / 60 + 15 * c4 / 3600;
 		if (c5 < 0) 
 			cats->dec = -(c6 / 60 + c7 / 3600 - c5);
@@ -964,13 +946,11 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 		ret = sscanf(line, "%f %f %f %f %f %f %f %f %f %f %f %f %f",
 			     &c2, &c3, &c4, &c5, &c6, &c7, &c8, 
 			     &c9, &c10, &c11, &c12, &c13, &c14);
-		if (ret < 13)
-			continue;
+        if (ret < 13) continue;
+
 		cats = cat_star_new();
-		snprintf(cats->name, CAT_STAR_NAME_SZ, "%s_%d", id, sn);
-        if (-1 == asprintf(&cats->cmags, "v=%.3f/%.3f b=%.3f/%.3f",
-		                   c11, c12, c11+c13, sqrt(sqr(c12)+ sqr(c14))))
-            cats->cmags = NULL;
+        asprintf(&cats->name, "%s_%d", id, sn);
+        asprintf(&cats->cmags, "v=%.3f/%.3f b=%.3f/%.3f", c11, c12, c11+c13, sqrt(sqr(c12)+ sqr(c14)));
 		cats->ra = 15 * c2 + 15 * c3 / 60 + 15 * c4 / 3600;
 		if (c5 < 0) 
 			cats->dec = -(c6 / 60 + c7 / 3600 - c5);
@@ -985,7 +965,7 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_sumner_table");
 	return n < sn ? n : sn;
 }
 
@@ -1110,7 +1090,7 @@ static int read_gcvs_table(struct cat_star *csl[], FILE *fp, int n, double *cra,
 			return -1;
 		}
 
-		strncpy(cats->name, id, CAT_STAR_NAME_SZ);
+        cats->name = strdup(id);
 		cats->ra = ra;
 		cats->dec = dec;
 		cats->mag = mmax;
@@ -1139,7 +1119,7 @@ static int read_gcvs_table(struct cat_star *csl[], FILE *fp, int n, double *cra,
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_gcvs_table");
 	return n < sn ? n : sn;
 }
 
@@ -1252,7 +1232,7 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 			free(line);
 			return -1;
 		}
-		strncpy(cats->name, id, CAT_STAR_NAME_SZ);
+        cats->name = strdup(id);
 //        cats->ra = ra; // is ra recorded as degrees for this format?
         cats->ra = ra;
 		cats->dec = dec;
@@ -1266,7 +1246,7 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 	for (i=0; i<n && i<sn; i++)
 		csl[i] = cst[i];
 	for (; i<sn; i++) 
-		cat_star_release(cst[i]);
+        cat_star_release(cst[i], "read_gcvs_pos_table");
 	return n < sn ? n : sn;
 }
 
@@ -1276,13 +1256,11 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 int convert_catalog(FILE *inf, FILE *outf, char *catname, double mag_limit) 
 {
 	struct cat_star *csl[MAX_STARS_CONV];
-	int ret = 0, n = -1, i;
+
 	double ra, dec;
-	char comment[64];
-	struct stf *stf, *st;
-	GList *sl = NULL;
 	char *seq = NULL;
 
+    int n = -1;
 	if (!strcasecmp(catname, "landolt")) {
 		n = read_landolt_table(csl, inf, MAX_STARS_CONV, &ra, &dec);
 		seq = "landolt";
@@ -1299,30 +1277,36 @@ int convert_catalog(FILE *inf, FILE *outf, char *catname, double mag_limit)
 		n = read_sumner_table(csl, inf, MAX_STARS_CONV, &ra, &dec);
 		seq = "henden-sumner";
 	} else {
-		return -1;
+        n = -1;
 	}
-	if (n <= 0)
-		return n;
+    if (n <= 0) return n;
 
+    int ret = 0;
+    GList *sl = NULL;
+
+    int i;
 	for (i = 0; i < n; i++) {
 		if (csl[i]->mag > mag_limit) {
-			cat_star_release(csl[i]);
+            cat_star_release(csl[i], "convert_catalog");
 			continue;
 		}
 		sl = g_list_prepend(sl, csl[i]);
 		ret ++;
 	}
 
-	snprintf(comment, 63, "converted from %s, mag_limit=%.1f", 
-		 catname, mag_limit);
-	st = stf_append_string(NULL, SYM_COMMENTS, comment);
-	stf = stf_append_list(NULL, SYM_CATALOG, st);
-	if (seq != NULL) 
-		stf_append_string(stf, SYM_SEQUENCE, seq);
+    struct stf *st = NULL;
+
+    char *comment = NULL; asprintf(&comment, "converted from %s, mag_limit=%.1f", catname, mag_limit);
+    if (comment) st = stf_append_string(NULL, SYM_COMMENTS, comment), free(comment);
+
+    struct stf *stf = stf_append_list(NULL, SYM_CATALOG, st);
+    if (seq != NULL) stf_append_string(stf, SYM_SEQUENCE, seq);
 	stf_append_glist(stf, SYM_STARS, sl);
+
 	stf_fprint(outf, stf, 0, 0);
 	stf_free_all(stf);
 	fflush(outf);
+
 	return ret;
 } 
 
@@ -1409,25 +1393,25 @@ static GList * merge_star(GList *csl, struct cat_star *new_star)
         if (cats_is_duplicate(cats, new_star)) {
 			/* these are the funny replacement/reject rules */
 			if (CATS_TYPE(cats) == CATS_TYPE_SREF) {
-				cat_star_release(cats);
-                cat_star_ref(new_star);
+                cat_star_release(cats, "merge_star 1&2");
+                cat_star_ref(new_star, "merge_star 1&2");
                 sl->data = new_star;
 			} else if (CATS_TYPE(cats) == CATS_TYPE_ALIGN) {
                 if (CATS_TYPE(new_star) != CATS_TYPE_SREF) {
-					cat_star_release(cats);
-                    cat_star_ref(new_star);
+                    cat_star_release(cats, "merge_star 3&4");
+                    cat_star_ref(new_star, "merge_star 3&4");
                     sl->data = new_star;
 				}
 			} else if (CATS_TYPE(cats) == CATS_TYPE_CAT) {
                 if (CATS_TYPE(new_star) != CATS_TYPE_SREF && CATS_TYPE(new_star) != CATS_TYPE_ALIGN) {
-					cat_star_release(cats);
-                    cat_star_ref(new_star);
+                    cat_star_release(cats, "merge_star 5&6");
+                    cat_star_ref(new_star, "merge_star 5&6");
                     sl->data = new_star;
 				}
             } else if (CATS_TYPE(cats) == CATS_TYPE_APSTD || CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
                 if (CATS_TYPE(new_star) == CATS_TYPE_APSTD || CATS_TYPE(new_star) == CATS_TYPE_APSTAR) {
-					cat_star_release(cats);
-                    cat_star_ref(new_star);
+                    cat_star_release(cats, "merge_star 7&8");
+                    cat_star_ref(new_star, "merge_star 7&8");
                     sl->data = new_star;
 				}
 			}
@@ -1435,7 +1419,7 @@ static GList * merge_star(GList *csl, struct cat_star *new_star)
 		} 
 	}
 	if (sl == NULL) {
-        cat_star_ref(new_star);
+        cat_star_ref(new_star, "merge_star");
         csl = g_list_prepend(csl, new_star);
 	}
 	return csl;
@@ -1491,7 +1475,7 @@ int rcp_set_target(FILE *old, char *obj, FILE *outf, double mag_limit)
 	GList *sla;
 	struct stf *stfa, *st, *sto;
 	struct cat_star *cats;
-	char ras[64], decs[64];
+    char *ras, *decs;
 	char *comments = NULL;
 
 	cats = get_object_by_name(obj);
@@ -1519,11 +1503,11 @@ int rcp_set_target(FILE *old, char *obj, FILE *outf, double mag_limit)
 	}
 
 	if (cats->perr < 0.2) {
-        degrees_to_hms_pr(ras, cats->ra, 3);
-		degrees_to_dms_pr(decs, cats->dec, 2);
+        ras = degrees_to_hms_pr(cats->ra, 3);
+        decs = degrees_to_dms_pr(cats->dec, 2);
 	} else {
-        degrees_to_hms_pr(ras, cats->ra, 2);
-		degrees_to_dms_pr(decs, cats->dec, 1);
+        ras = degrees_to_hms_pr(cats->ra, 2);
+        decs = degrees_to_dms_pr(cats->dec, 1);
 	}
 	sto = stf_append_string(NULL, SYM_OBJECT, cats->name);
 	stf_append_string(sto, SYM_RA, ras);
@@ -1555,6 +1539,8 @@ int rcp_set_target(FILE *old, char *obj, FILE *outf, double mag_limit)
 
 	stf_fprint(outf, stfa, 0, 0);
 	stf_free_all(stfa);
+    if (ras) free(ras);
+    if (decs) free(decs);
 	fflush(outf);
 	return 0;
 }
@@ -1568,7 +1554,7 @@ struct stf *make_tyc_stf(char *obj, double box, double mag_limit)
 	int n, i;
 	struct cat_star *cats;
 	struct stf *st, *stf;
-	char ras[64], decs[64];
+    char *ras, *decs;
 		
 	cats = get_object_by_name(obj);
 	if (cats == NULL) {
@@ -1595,14 +1581,14 @@ struct stf *make_tyc_stf(char *obj, double box, double mag_limit)
 	}
 
 	tsl = merge_star(tsl, cats);
-	cat_star_release(cats);
+    cat_star_release(cats, "make_tyc_stf");
 
 	if (cats->perr < 0.2) {
-        degrees_to_hms_pr(ras, cats->ra, 3);
-		degrees_to_dms_pr(decs, cats->dec, 2);
+        ras = degrees_to_hms_pr(cats->ra, 3);
+        decs = degrees_to_dms_pr(cats->dec, 2);
 	} else {
-        degrees_to_hms_pr(ras, cats->ra, 2);
-		degrees_to_dms_pr(decs, cats->dec, 1);
+        ras = degrees_to_hms_pr(cats->ra, 2);
+        decs = degrees_to_dms_pr(cats->dec, 1);
 	}
 	st = stf_append_string(NULL, SYM_OBJECT, cats->name);
 	stf_append_string(st, SYM_RA, ras);
@@ -1614,6 +1600,8 @@ struct stf *make_tyc_stf(char *obj, double box, double mag_limit)
 	stf_append_string(stf, SYM_SEQUENCE, "tycho2");
 	st = stf_append_glist(stf, SYM_STARS, tsl);
 
+    if (ras) free(ras);
+    if (decs) free(decs);
 	return stf;
 }
 

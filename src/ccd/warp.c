@@ -37,7 +37,7 @@
 
 #include "ccd.h"
 //#include "x11ops.h"
-#include "warpaffine.h"
+//#include "warpaffine.h"
 
 float smooth3[9] = {0.25, 0.5, 0.25, 0.5, 1.0, 0.5, 0.25, 0.5, 0.25};
 
@@ -259,17 +259,17 @@ int filter_frame(struct ccd_frame *fr, struct ccd_frame *fro, float *kern, int s
 //		d3_printf("dpi %x dpo %x\n", dpi, dpo);
 
 		for (i = 0; i < (size / 2) * w + (size / 2); i++) {
-			*dpo++ = fr->stats.cavg;
+            *dpo++ = fr->stats.cavg;
 		}
 	}
 
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 
 	return 0;
 
 }
 
-static set_row_to_cavg(struct ccd_frame *fr, int row)
+static void set_row_to_cavg(struct ccd_frame *fr, int row)
 {
     if (! fr->stats.statsok)
         frame_stats(fr);
@@ -295,13 +295,14 @@ int filter_frame_inplace(struct ccd_frame *fr, float *kern, int size)
 // skip first and last row by setting them to cavg
 // need options to specify skip row
     if (1) {
+
         set_row_to_cavg(fr, 0);
         set_row_to_cavg(fr, fr->h - 1);
     }
 
     int ret = filter_frame(fr, nf, kern, size);
 	if (ret < 0) {
-        release_frame(nf);
+        release_frame(nf, "filter_frame_inplace 1");
 		return ret;
 	}
 
@@ -315,9 +316,9 @@ int filter_frame_inplace(struct ccd_frame *fr, float *kern, int size)
         set_color_plane(nf, plane_iter, pfr);
 	}
 
-	fr->stats.statsok = 0;
+    fr->stats.statsok = 0;
 
-    release_frame(nf);
+    release_frame(nf, "filter_frame_inplace 2");
 
 	return ret;
 }
@@ -486,10 +487,12 @@ static void linear_x_shear_data(float *in, int wi, int hi, float *out, int wo, i
 }
 
 void warp_frame(struct ccd_frame *fr, double dx, double dy, double dt) {
-    int plane_iter = 0;
 
     if (!fr->stats.statsok) frame_stats(fr);
+
     float filler = fr->stats.cavg;  // filler value for out-of-frame spots
+
+    int plane_iter = 0;
 
     while ((plane_iter = color_plane_iter(fr, plane_iter))) {
         float *in = get_color_plane(fr, plane_iter);
@@ -809,11 +812,12 @@ void rotate_frame_pi(struct ccd_frame *fr)
 // direction = -1 : anticlockwise
 void rotate_trame_pi_2(struct ccd_frame *fr, int direction)
 {
+    if (!fr->stats.statsok) frame_stats(fr);
+
 // in and out are the same size (width, height, planes), width and height swap
     int plane_iter = 0;
     int all = fr->w * fr->h;
 
-    if (!fr->stats.statsok) frame_stats(fr);
     float filler = fr->stats.cavg;  // filler value for out-of-frame spots
 
     float *out = malloc(all * sizeof(float));
@@ -843,10 +847,11 @@ void flip_frame(struct ccd_frame *fr)
 
 int rotate_frame(struct ccd_frame *fr, double theta)
 {
+    if (!fr->stats.statsok) frame_stats(fr);
+
     int plane_iter = 0;
     int all = fr->w * fr->h;
 
-    if (!fr->stats.statsok) frame_stats(fr);
     float filler = fr->stats.cavg;  // filler value for out-of-frame spots
 
     float *out = malloc(all * sizeof(float));

@@ -52,27 +52,32 @@
 #define EDB_NAME 2
 #define TYCHO2_NAME 3
 
-struct catalog cat_table[MAX_CATALOGS];
+struct catalog cat_table[MAX_CATALOGS] = { 0 };
 char *catalogs[] = {"gsc", "local", "edb", "tycho2"};
 
 char *cat_flag_names[] = FLAGNAMES_INIT;
 
 
-int cat_flags_to_string (int flags, char *cat_flags_string, int string_size)
+char *cat_flags_to_string (int flags)
 {
-    *cat_flags_string = 0;
+    char *cat_flags_string = NULL;
 
-    int n = 0, i = 0;
+    int i = 0;
     while (flags && (cat_flag_names[i] != NULL)) {
+        if (flags & 0x01) {
+            if (cat_flags_string) {
+                char *buf = cat_flags_string; cat_flags_string = NULL;
+                asprintf(&cat_flags_string, "%s %s", buf, cat_flag_names[i]);
+                free(buf);
+            } else
+                asprintf(&cat_flags_string, "%s", cat_flag_names[i]);
+        }
 
-        if (flags & 0x01) n += snprintf(cat_flags_string + n, string_size - n, "%s ", cat_flag_names[i]);
-
-        if (n >= string_size) break;
         flags >>= 1;
 
         i++;
     }
-    return n;
+    return cat_flags_string;
 }
 
 
@@ -131,12 +136,11 @@ static int gsc_search(struct cat_star *cst[], struct catalog *cat,
 
 /* remove duplicates */
 	for(i=1, j=0; i<n_gsc; i++) {
-		while((regs[i] == regs[i-1]) && (ids[i] == ids[i-1]))
-			i++;
+        while((regs[i] == regs[i-1]) && (ids[i] == ids[i-1])) i++;
 		tc[j].ra = ras[i];
 		tc[j].dec = decs[i];
 		tc[j].mag = mags[i];
-		sprintf(tc[j].name, "%04d-%04d", regs[i], ids[i]);
+        asprintf(&tc[j].name, "%04d-%04d", regs[i], ids[i]);
 		j++;
 	}
 	n_gsc = j;
@@ -154,10 +158,9 @@ static int gsc_search(struct cat_star *cst[], struct catalog *cat,
 		cats->perr = BIG_ERR;
 		cats->equinox = 2000.0;
 		cats->mag = tc[i].mag;
-		strcpy(cats->name, tc[i].name);
+        cats->name = tc[i].name; // already dupd
         cats->flags = CATS_TYPE_SREF | CATS_FLAG_ASTROMET;
-		if (-1 ==  asprintf(&cats->comments, "p=G "))
-			cats->comments = NULL;
+//        cats->comments = strdup("p=G");
 		cst[i] = cats;
 	}  
 	free(regs);
@@ -165,7 +168,7 @@ static int gsc_search(struct cat_star *cst[], struct catalog *cat,
 	free(ras);
 	free(decs);
 	free(mags);
-	free(tc);
+    free(tc);
 
 	return i;
 }
@@ -207,54 +210,48 @@ static int cats_mag_comp_fn (const void *a, const void *b)
 static int tycho2_cat_search(struct cat_star *cst[], struct catalog *cat, 
 	       double ra, double dec, double radius, int n)
 {
-	struct cat_star *cats;
-	char *buf, *p;
-	int sz, ret, i;
-	double f;
-	struct cat_star **st;
-	double verr, berr;
-	float raerr, decerr;
-	double rm;
-	
-	st = calloc(CAT_GET_SIZE, sizeof(struct cat_star *));
-
-	sz = TYCRECSZ * CAT_GET_SIZE + CAT_GET_SIZE;
-	buf = calloc(sz, 1);
+    int sz = (TYCRECSZ + 1) * CAT_GET_SIZE;
+    char *buf = calloc(sz, 1);
 
 	radius = fabs(radius);
-	f = cos(degrad(dec));
-	if (f < 0.1) 
-		f = 0.1;
+    double f = cos(degrad(dec));
+    if (f < 0.1) f = 0.1;
 
-    d3_printf("running tycho2 search w:%.3f h:%.3f [%d] f=%.3f\n",
-		  radius*2/60 / f, radius*2/60, n, f);
-	ret = tycho2_search(ra, dec, radius*2/60 / f, radius*2/60, buf, sz, 
-			    P_STR(FILE_TYCHO2_PATH));
+    d3_printf("running tycho2 search w:%.3f h:%.3f [%d] f=%.3f\n", radius*2/60 / f, radius*2/60, n, f);
+    int ret = tycho2_search(ra, dec, radius*2/60 / f, radius*2/60, buf, sz, P_STR(FILE_TYCHO2_PATH));
+
     d3_printf("tycho2 returns %d\n", ret);
 	if (ret <= 0) {
 		free(buf);
-        free(st);
 		return ret;
 	}
-	rm = ra - radius/60/f;
+
+    double rm = ra - radius/60/f;
 	if (rm < 0) {
 		ret += tycho2_search(360 + rm/2, dec, -rm/2, radius*2/60, 
 				     buf + ret * (TYCRECSZ+1), sz - ret * (TYCRECSZ+1), 
 				     P_STR(FILE_TYCHO2_PATH));
-	}
+    }
+    if (ret <= 0) {
+        free(buf);
+        return ret;
+    }
 
-	p = buf;
+//    struct cat_star **st = calloc(CAT_GET_SIZE, sizeof(struct cat_star *));
+    struct cat_star **st = calloc(ret, sizeof(struct cat_star *));
+
+    char *p = buf;
+    int i;
 	for (i = 0; i < ret; i++) {
 		int r, s;
-		float ra, dec;
-		float vt = BIG_ERR, vterr = BIG_ERR, bt = BIG_ERR, bterr = BIG_ERR; 
+        float ra, raerr, dec, decerr;
+        float vt = MAG_UNSET, vterr = BIG_ERR, bt = MAG_UNSET, bterr = BIG_ERR;
 //		d3_printf("tycho star is: \n %s\n", p);
-		if ((sscanf(p, "%d %d", &r, &s)) != 2)
-			break;
-		if ((sscanf(p+15, "%f", &ra) != 1))
-			break;
-		if ((sscanf(p+28, "%f", &dec) != 1))
-			break;
+
+        if ((sscanf(p, "%d %d", &r, &s)) != 2) break;
+        if ((sscanf(p+15, "%f", &ra) != 1)) break;
+        if ((sscanf(p+28, "%f", &dec) != 1)) break;
+
 		sscanf(p+110, "%f", &bt);
 		sscanf(p+117, "%f", &bterr);
 		sscanf(p+123, "%f", &vt);
@@ -262,54 +259,48 @@ static int tycho2_cat_search(struct cat_star *cst[], struct catalog *cat,
 		sscanf(p+57, "%f", &raerr);
 		sscanf(p+61, "%f", &decerr);
 
-		cats = cat_star_new();
+        struct cat_star *cats = cat_star_new();
 		cats->ra = ra;
 		cats->dec = dec;
 		cats->perr = 0.001 * sqrt(sqr(raerr) + sqr(decerr));
 		cats->equinox = 2000.0;
-		sprintf(cats->name, "%04d-%04d", r, s);
+        asprintf(&cats->name, "%04d-%04d", r, s);
         cats->flags = CATS_FLAG_ASTROMET | CATS_TYPE_SREF;
 		if (vt < 30.0 && bt < 30.0) {
 			cats->mag = vt - 0.090 * (bt - vt);
-			verr = vterr;
-			berr = bterr;
-			if (vterr < 0.02)
-				verr = 0.02;
-			if (bterr < 0.02)
-				berr = 0.02;
-			if (-1 == asprintf(&cats->smags, 
-			                   "v=%.3f/%.3f b=%.3f/%.3f vt=%.3f/%.3f bt=%.3f/%.3f",
-			                   vt - 0.090 * (bt - vt), verr,
-			                   0.850 * (bt - vt) + vt - 0.090 * (bt - vt), 
-			                   berr, vt, vterr, bt, bterr))
-				cats->smags = NULL;
-			if (-1 == asprintf(&cats->comments, "p=T "))
-				cats->comments = NULL;
+            double verr = vterr;
+            double berr = bterr;
+
+            if (vterr < 0.02) verr = 0.02;
+            if (bterr < 0.02) berr = 0.02;
+
+            asprintf(&cats->smags, "v=%.3f/%.3f b=%.3f/%.3f vt=%.3f/%.3f bt=%.3f/%.3f",
+                   vt - 0.090 * (bt - vt), verr, 0.850 * (bt - vt) + vt - 0.090 * (bt - vt),
+                               berr, vt, vterr, bt, bterr);
+
+//			asprintf(&cats->comments, "p=T ");
  //           cats->flags = CATS_FLAG_ASTROMET | CATS_TYPE_SREF;
 		} else if (vt < 30.0) {
 			cats->mag = vt;
-            if (-1 == asprintf(&cats->smags, "vt=%.3f/%.3f", vt, vterr))
-				cats->smags = NULL;
+            asprintf(&cats->smags, "vt=%.3f/%.3f", vt, vterr);
+
 		} else {
 			cats->mag = bt;
-            if (-1 == asprintf(&cats->smags, "bt=%.3f/%.3f", bt, bterr))
-				cats->smags = NULL;
+            asprintf(&cats->smags, "bt=%.3f/%.3f", bt, bterr);
 		}
 		st[i] = cats;
 		p+= TYCRECSZ + 1;
 	}
 	free(buf);
 	qsort(st, ret, sizeof(struct cat_star *), cats_mag_comp_fn);
-	for (i=0 ; i < n && i < ret; i++) {
-		cst[i] = st[i];
+    for (i=0 ; i < ret; i++) {
+        cst[i] = st[i]; // copy cat_star pointers
 	}
-	n = i;
-	for (; i < ret; i++) {
-		cat_star_release(st[i]);
-	}
+
 	free(st);
 
-	return n;
+
+    return ret;
 }
 
 /*
@@ -367,7 +358,7 @@ int local_search(struct cat_star *cst[], struct catalog *cat,
  		if (cats->dec > decmax || cats->dec < decmin)
 			continue;
 		cst[i] = cats;
-		cat_star_ref(cats);
+        cat_star_ref(cats, "local_search");
 		i++;
 	}
 	return i;
@@ -388,7 +379,7 @@ static int cached_local_get(struct cat_star *cst[], struct catalog *cat,
 		while (lcat != NULL && i < n) {
 			if (!strcasecmp(name, CAT_STAR(lcat->data)->name)) {
 				cst[i] = lcat->data;
-				cat_star_ref(CAT_STAR(lcat->data));
+                cat_star_ref(CAT_STAR(lcat->data), "cached_local_get 1");
 				i++;
 			}
 			lcat = g_list_next(lcat);
@@ -398,7 +389,7 @@ static int cached_local_get(struct cat_star *cst[], struct catalog *cat,
 		cats = g_hash_table_lookup(cat->hash, name);
 		if (cats != NULL) {
 			cst[0] = cats;
-			cat_star_ref(cats);
+            cat_star_ref(cats, "cached_local_get 2");
 			ret = 1;
 		} else {
 			ret = 0;
@@ -407,7 +398,7 @@ static int cached_local_get(struct cat_star *cst[], struct catalog *cat,
 	return ret;
 }
 
-int local_get(struct cat_star *cst[], struct catalog *cat, 
+int local_get(struct cat_star **cst, struct catalog *cat,
 	      char *name, int n)
 {
 	int ret;
@@ -421,7 +412,7 @@ int local_get(struct cat_star *cst[], struct catalog *cat,
 		/* cannot find in preloaded stars */
 		cats = local_search_files(name);
 		if (cats != NULL) {
-			cst[0] = cats;
+            *cst = cats;
 			ret = 1;
 		} 
 	}
@@ -430,69 +421,17 @@ int local_get(struct cat_star *cst[], struct catalog *cat,
 
 static void update_cat_star(struct cat_star *ocats, struct cat_star *cats)
 {
-    char *t;
-
 	ocats->ra = cats->ra;
 	ocats->dec = cats->dec;
 	ocats->perr = cats->perr;
 	ocats->equinox = cats->equinox;
 	ocats->flags = cats->flags;
-	if (cats->mag != 0.0)
-		ocats->mag = cats->mag;
-	strcpy(ocats->name, cats->name);
-	if (cats->comments != NULL) {
-		if (ocats->comments != NULL) {
-			if (-1 == asprintf(&t, "%s %s", cats->comments, ocats->comments)) {
-				free(ocats->comments);
-				ocats->comments = NULL;
-			} else {
-				free(ocats->comments);
-				ocats->comments = t;
-			}
-		} else {
-			ocats->comments = strdup(cats->comments);
-		}
-	}
-    if (cats->cmags != NULL) {
-        if (ocats->cmags != NULL) {
-            if (-1 == asprintf(&t, "%s %s", cats->cmags, ocats->cmags)) {
-                free(ocats->cmags);
-                ocats->cmags = NULL;
-            } else {
-                free(ocats->cmags);
-                ocats->cmags = t;
-            }
-        } else {
-            ocats->cmags = strdup(cats->cmags);
-        }
-    }
-	if (cats->smags != NULL) {
-		if (ocats->smags != NULL) {
-			if (-1 == asprintf(&t, "%s %s", cats->smags, ocats->smags)) {
-				free(ocats->smags);
-				ocats->smags = NULL;
-			} else {
-				free(ocats->smags);
-				ocats->smags = t;
-			}
-		} else {
-			ocats->smags = strdup(cats->smags);
-		}
-	}
-	if (cats->imags != NULL) {
-		if (ocats->imags != NULL) {
-			if (-1 == asprintf(&t, "%s %s", cats->imags, ocats->imags)) {
-				free(ocats->imags);
-				ocats->imags = NULL;
-			} else {
-				free(ocats->imags);
-				cats->imags = t;
-			}
-		} else {
-			ocats->imags = strdup(cats->imags);
-		}
-	}
-
+    ocats->mag = cats->mag;
+    ocats->name = strdup(cats->name);
+    str_join_str(&ocats->comments, ", %s", cats->comments); // equiv strdup(cats->comments) when ocats->comments == NULL
+    str_join_str(&ocats->cmags, ", %s", cats->cmags);
+    str_join_str(&ocats->smags, ", %s", cats->smags);
+    str_join_str(&ocats->imags, ", %s", cats->imags);
 }
 
 /* add / update a star to the local catalog
@@ -514,7 +453,7 @@ int local_add(struct cat_star *cats, struct catalog *cat)
 			cat->hash = g_hash_table_new(g_str_hash, g_str_equal);
 		}
 		cat->data = g_list_prepend((GList *)cat->data, cats);
-		cat_star_ref(cats);
+        cat_star_ref(cats, "local_add");
 		g_hash_table_insert(cat->hash, cats->name, cats);
 	} else {
 		update_cat_star(cst, cats);
@@ -578,7 +517,7 @@ int edb_get(struct cat_star *cst[], struct catalog *cat,
 	cats->dec = dec;
 	cats->mag = mag;
 	cats->equinox = 2000.0;
-	strncpy(cats->name, name, CAT_STAR_NAME_SZ);
+    cats->name = strdup(name);
     cats->flags = CATS_TYPE_CAT;
 	cst[0] = cats;
 	return 1;
@@ -669,17 +608,18 @@ struct cat_star *cat_star_new(void)
 	struct cat_star *cats;
 //	d3_printf("new cats\n");
 	cats = calloc(1, sizeof(struct cat_star));
-	if (cats != NULL)
+    if (cats) {
 		cats->ref_count = 1;
-	cats->perr = BIG_ERR;
+        cats->perr = BIG_ERR;
+    }
 	return cats;
 }
 
-void cat_star_ref(struct cat_star *cats)
+void cat_star_ref(struct cat_star *cats, char *msg)
 {
-	if (cats == NULL)
-		return;
+    if (cats == NULL) return;
 	cats->ref_count ++;
+    printf("cat_star_ref %d %s %s\n", cats->ref_count, (cats->name) ? cats->name : "", msg); fflush(NULL);
 }
 
 /* create duplicate of cat_star with ref_count 1 */
@@ -693,63 +633,56 @@ struct cat_star *cat_star_dup(struct cat_star *cats)
     if (new_cats == NULL)
         return NULL;
 
-    memcpy(new_cats, cats, sizeof(struct cat_star));
+    *new_cats = *cats;
     new_cats->ref_count = 1;
 
     if (cats->comments) new_cats->comments = strdup(cats->comments);
     if (cats->imags) new_cats->imags = strdup(cats->imags);
     if (cats->cmags) new_cats->cmags = strdup(cats->cmags);
     if (cats->smags) new_cats->smags = strdup(cats->smags);
+    if (cats->name) new_cats->name = strdup(cats->name);
+    if (cats->bname) new_cats->bname = strdup(cats->bname);
 
     if (cats->astro != NULL) {
         new_cats->astro = malloc(sizeof(struct cats_astro));
         if (new_cats->astro != NULL) {
-            memcpy(new_cats->astro, cats->astro, sizeof(struct cats_astro));
+            *new_cats->astro = *cats->astro;
+//            memcpy(new_cats->astro, cats->astro, sizeof(struct cats_astro));
             if (cats->astro->catalog) new_cats->astro->catalog = strdup(cats->astro->catalog);
         }
     }
-    new_cats->guis = NULL;
+    new_cats->gs = NULL;
 
     return new_cats;
 }
 
-void cat_star_release(struct cat_star *cats)
+struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
 {
-	if (cats == NULL)
-		return;
+    if (cats == NULL) return NULL;
 
-	if (cats->ref_count < 1)
-		err_printf("cat_star has ref_count of %d on release\n", cats->ref_count);
+printf("cat_star_release %p %d %s %s %s\n", cats, cats->ref_count, cats->name, msg, (cats->ref_count == 1) ? "freed" : "");
+fflush(NULL);
 
     if (cats->ref_count == 1) {
-        printf("cat_star_release %s\n", cats->name); fflush(NULL);
+//        err_printf("cat_star %p %s freed\n", cats, cats->name);
 
-		if (cats->comments != NULL) {
-			free(cats->comments);
-		}
-        if (cats->cmags != NULL) {
-            free(cats->cmags);
-        }
-		if (cats->smags != NULL) {
-			free(cats->smags);
-		}
-		if (cats->imags != NULL) {
-			free(cats->imags);
-		}
-		if (cats->astro != NULL) {
-			if (cats->astro->catalog != NULL)
-				free(cats->astro->catalog);
+        if (cats->name) free(cats->name);
+        if (cats->comments)	free(cats->comments);
+        if (cats->cmags) free(cats->cmags);
+        if (cats->smags) free(cats->smags);
+        if (cats->imags) free(cats->imags);
+        if (cats->astro) {
+            if (cats->astro->catalog) free(cats->astro->catalog);
 			free(cats->astro);
         }
-        if (cats->guis) {
-            gui_star_release(cats->guis);
-            cats->guis = NULL;
-        }
+        if (cats->gs) cats->gs->s = NULL;
 
 		free(cats);
-	} else {
+        cats = NULL;
+	} else {        
 		cats->ref_count --;
 	}
+    return cats;
 }
 
 /* we don't really need a close, but may later */
@@ -777,14 +710,9 @@ void close_catalog(struct catalog *cat)
 
 static inline int isident(char i) { return ((i == '_') || (isalnum(i)) || (i == '\''));}
 
-static int band_crack(char *text, char **name1, int *name1l,
-		      char ** name2, int *name2l, 
-		      char **qual, int *quall, 
-		      double *mag, double *magerr, char **endp)
+static int band_crack(char *text, char **name1, char **name2, char **qual, double *mag, double *magerr, char **endp)
 {
 	int ret = 0;
-	double m;
-	char *e;
 
 	while ((*text != 0) && (!isident(*text)))
 		text++; /* skip junk at start */
@@ -792,64 +720,85 @@ static int band_crack(char *text, char **name1, int *name1l,
 		*endp = text;
 		return -1;
 	}
-	*name1 = text;
+
+    char *p = text;
 	do {
 		text++;
-	} while (isident(*text));
-	*name1l = text - *name1;
+    } while (*text && isident(*text));
+    char c = *text; *text = 0; *name1 = strdup(p); *text = c;
 
-	while ((*text != 0)) {
+    while (*text != 0) {
 		if (*text == '-' && !(ret & BAND_QUAL)) {
-			while ((*text != 0) && !isident(*text))
+            while (*text && !isident(*text))
 				text++; /* skip junk after '-' */
 			if (*text == 0) {
 				*endp = text;
 				return -1;
 			}
-			*name2 = text;
+
+            char *p = text;
 			do {
 				text++;
-			} while (isident(*text));
-			*name2l = text - *name2;
+            } while (*text && isident(*text));
+            char c = *text; *text = 0; *name2 = strdup(p); *text = c;
 
 			ret |= BAND_INDEX;
-			continue;
-		} else if (*text == '(') {
-			while ((*text != 0) && !isident(*text))
-				text++; /* skip junk after '-' */
-			if (*text == 0)
-				return -1;
-			*qual = text;
-			do {
-				text++;
-			} while (isident(*text));
-			*quall = text - *qual;
 
-			ret |= BAND_QUAL;
-			while ((*text != 0) && (*text != ')'))
-				text++; /* skip until the end of paren */
-		} else if (*text == '=') {
+			continue;            
+        }
+
+        if (*text == '=') {
 			text ++;
-			m = strtod(text, &e);
-			if (text == e)
-				return -1;
-			if (mag)
-				*mag = m;
+
+            char *e; double v = strtod(text, &e);
+            if (text == e) return -1;
+
+            if (mag) { // check for MAG_UNSET
+                char c = *e; *e = 0;
+                *mag = (strstr(text, "90.") == NULL) ? v : MAG_UNSET;
+                *e = c;
+            }
 			text = e;
 			ret |= BAND_MAG;
+
 			continue;
-		} else if ((*text == '/') && (ret & BAND_MAG)) {
-//			d3_printf("found a slash\n");
-			text ++;
-			m = strtod(text, &e);
-			if (text == e)
-				return -1;
-			if (magerr)
-				*magerr = m;
-			text = e;
-			ret |= BAND_MAGERR;
-			continue;
-		} else if (isident(*text)) {
+        }
+
+        if ((*text == '/') && (ret & BAND_MAG)) {
+            text ++;
+
+            char *e; double v = strtod(text, &e);
+            if (text == e) return -1;
+
+            if (magerr) *magerr = v;
+
+            text = e;
+            ret |= BAND_MAGERR;
+
+            continue;
+        }
+
+        if (*text == '(') {
+            while (*text && !isident(*text))
+                text++; /* skip junk after '-' */
+            if (*text == 0) return -1;
+
+            char *p = text;
+            do {
+                text++;
+            } while (*text && isident(*text));
+            char c = *text; *text = 0; *qual = strdup(p); *text = c;
+
+            ret |= BAND_QUAL;
+            while (*text && (*text != ')'))
+                text++;
+
+            if (*text) text++;
+
+            continue;
+        }
+
+        if (isident(*text)) {
 			break;
 		}
 		text ++;
@@ -858,6 +807,17 @@ static int band_crack(char *text, char **name1, int *name1l,
 	return ret;
 }
 
+
+struct band_def {
+    char *n1, *n2, *qual;
+};
+
+void free_band_def (struct band_def *bd)
+{
+    if (bd->n1) free(bd->n1), bd->n1 = NULL;
+    if (bd->n2) free(bd->n2), bd->n2 = NULL;
+    if (bd->qual) free(bd->qual), bd->qual = NULL;
+}
 
 
 /* parse the magnitudes string and extract information for a
@@ -870,122 +830,140 @@ static int band_crack(char *text, char **name1, int *name1l,
 int get_band_by_name(char *mags, char *band, double *mag, double *err)
 {
 	char *text = mags;
-	int btype, type;
-	double m, me;
-    double m1=MAG_UNSET, me1=BIG_ERR, m2=MAG_UNSET, me2=BIG_ERR;
 
-	char *endp, *bendp;
-	char *n1, *n2=NULL, *qual;
-	char *bn1, *bn2=NULL, *bqual;
-	int n1l, n2l, quall;
-	int bn1l, bn2l, bquall;
+    if (text == NULL || band == NULL) return -1;
 
-	if (text == NULL || band == NULL)
-		return -1;
+    struct band_def bd = { 0 };
+    char *bendp;
+    int btype = band_crack(band, &bd.n1, &bd.n2, &bd.qual, NULL, NULL, &bendp);
 
-	btype = band_crack(band, &bn1, &bn1l, &bn2, &bn2l, 
-			   &bqual, &bquall, NULL, NULL, &bendp);
-
-	if (btype < 0)
-		return -1;
+    if (btype < 0) {
+        free_band_def(&bd);
+        return -1;
+    }
 
 	if (btype & BAND_INDEX) { /* look for an index or a pair of mags */
+        struct band_def nd = { 0 };
+        int type;
 		do {
-			type = band_crack(text, &n1, &n1l, &n2, &n2l, 
-					  &qual, &quall, &m, &me, &endp);
-			text = endp;
-			if ((type < 0))
-				continue;
+            free_band_def(&nd);
+
+            char *endp;
+            double m, me;
+
+            type = band_crack(text, &nd.n1, &nd.n2, &nd.qual, &m, &me, &endp);
+            text = endp;
+if (isnan(me))
+    printf("me isnan");
+            if ((type < 0))	continue;
+
 //			d3_printf("type is %d\n", type);
 			if (type & BAND_INDEX) { /* we found an index */
-				if ((n1l != bn1l) || strncasecmp(n1, bn1, n1l))
-					continue;
-				if ((n2l != bn2l) || strncasecmp(n2, bn2, n2l))
-					continue;
-				if (btype & BAND_QUAL) {
-					if (!(type & BAND_QUAL))
-						continue;
-					if ((quall != bquall) || strncasecmp(qual, bqual, quall))
-						continue;
-				}
-				if (type & BAND_MAG) {
-					if (mag)
-						*mag = m;
-					if ((type & BAND_MAGERR) && err)
-						*err = me;
-					return 0;
-				}
+                if (nd.n1 && bd.n1 && nd.n2 && bd.n2) {
+                    if (strcasecmp(nd.n1, bd.n1)) continue;
+                    if (strcasecmp(nd.n2, bd.n2)) continue;
+
+                    if (btype & BAND_QUAL) {
+                        if (!(type & BAND_QUAL)) continue;
+                        if ((nd.qual && bd.qual) && !strcasecmp(nd.qual, bd.qual)) continue;
+                    }
+
+                    if (type & BAND_MAG) {
+                        if (mag)
+                            *mag = m;
+                        if ((type & BAND_MAGERR) && err)
+                            *err = me;
+
+                        free_band_def(&bd);
+                        free_band_def(&nd);
+
+                        return 0;
+                    }
+                }
+
 			} else {
-				if ((m1 >= BIG_ERR) && (bn1l == n1l) && 
-				    (!strncasecmp(bn1, n1, n1l)) ) {
-					if (((btype & BAND_QUAL) == 0) || 
-					    ((type & BAND_QUAL) 
-					     && (quall == bquall) 
-					     && !strncasecmp(qual, bqual, quall))) {
+                double m1 = MAG_UNSET, me1 = BIG_ERR, m2 = MAG_UNSET, me2 = BIG_ERR;
+
+                if ( (m1 == MAG_UNSET) && ((bd.n1 && nd.n1) && !strcasecmp(bd.n1, nd.n1)) ) {
+                    if ( ((btype & BAND_QUAL) == 0) ||
+                         ((type & BAND_QUAL) && ((nd.qual && bd.qual) && !strcasecmp(nd.qual, bd.qual))) ) {
+
 						if (type & BAND_MAG) {
 							m1 = m;
 							if (type & BAND_MAGERR)
 								me1 = me;
 						}
-//						d3_printf("found m1=%f/%f\n", m1, me1);
 					}
 				}
-				if ((m2 >= BIG_ERR) && (bn2l == n1l) && 
-				    (!strncasecmp(bn2, n1, n1l)) ) {
-//					d3_printf("type= %x btype=%x\n", type, btype);
-					if (((btype & BAND_QUAL) == 0) || 
-					    ((type & BAND_QUAL) 
-					     && (quall == bquall) 
-					     && !strncasecmp(qual, bqual, quall))) {
+
+                if ( (m2 == MAG_UNSET) && ((bd.n2 && nd.n1) &&  !strcasecmp(bd.n2, nd.n1)) ) {
+                    if ( ((btype & BAND_QUAL) == 0) ||
+                         ((type & BAND_QUAL) && ((nd.qual && bd.qual) && !strcasecmp(nd.qual, bd.qual))) ) {
+
 						if (type & BAND_MAG) {
 							m2 = m;
 							if (type & BAND_MAGERR)
 								me2 = me;
 						}
-//						d3_printf("found m2=%f/%f\n", m2, me2);
 					}
 				}
-				if ((m1 < BIG_ERR) && (m2 < BIG_ERR)) {
+
+                if ((m1 != MAG_UNSET) && (m2 != MAG_UNSET)) {
 					if (mag)
 						*mag = m1 - m2;
 					if (err && (me1 < BIG_ERR) && (me2 < BIG_ERR))
 						*err = sqrt(sqr(me1) + sqr(me2));
+
+                    free_band_def(&bd);
+                    free_band_def(&nd);
+
 					return 0;
 				}
 			}
 		} while (type >= 0);
+
+        free_band_def(&nd);
+
 	} else { /* look for a single-band mag */
+        struct band_def nd = { 0 };
+        int type;
 		do {
-//printf("catalogs.get_band_by_name %s\n", text);
-			type = band_crack(text, &n1, &n1l, &n2, &n2l, 
-					  &qual, &quall, &m, &me, &endp);
+            free_band_def(&nd);
+
+            char *endp;
+            double m, me;
+            type = band_crack(text, &nd.n1, &nd.n2, &nd.qual, &m, &me, &endp);
 			text = endp;
-			if (type < 0)
-				continue;
-			if (type & BAND_INDEX)
-				continue;
-//			d3_printf("type= %x, btype = %x |%8s| b|%8s|\n", type, btype,
-//				  n1, bn1);
-			if ((n1l != bn1l) || strncasecmp(n1, bn1, n1l))
-				continue;
+
+            if (type < 0) continue;
+            if (type & BAND_INDEX) continue;
+            if ((nd.n1 && bd.n1) && strcasecmp(nd.n1, bd.n1)) continue;
+
 			if (btype & BAND_QUAL) {
-				if (!(type & BAND_QUAL))
-					continue;
-//				d3_printf("%d b%d |%8s| b|%8s|\n", quall, bquall, qual, bqual);
-				if ((quall != bquall) || strncasecmp(qual, bqual, quall))
-					continue;
+                if (!(type & BAND_QUAL)) continue;
+                if ((nd.qual && bd.qual) && !strcasecmp(nd.qual, bd.qual)) continue;
 			}
 			if (type & BAND_MAG) {
+
 				if (mag)
 					*mag = m;
 				if ((type & BAND_MAGERR) && err)
 					*err = me;
+
+                free_band_def(&bd);
+                free_band_def(&nd);
+
 				return 0;
 			}
 		} while (type >= 0);
+
+        free_band_def(&nd);
 	}
+
+    free_band_def(&bd);
 	return -1;
 }
+
 
 /* change the band string pointed by mags to one in which
  * band's values are updated. Return -1 for an error.
@@ -993,31 +971,21 @@ int get_band_by_name(char *mags, char *band, double *mag, double *err)
  * which may be freed/realloced (or be NULL) */
 int update_band_by_name(char **mags, char *band, double mag, double err)
 {
-	char *bs = NULL, *be = NULL;
-	char *nb;
-	int btype, type;
-	char *endp, *bendp;
-	char *n1, *n2=NULL, *qual;
-	char *bn1, *bn2=NULL, *bqual;
-	int n1l, n2l, quall;
-	int bn1l, bn2l, bquall;
-	int ret;
-
-	if (band == NULL)
-		return -1;
-
+    if (band == NULL) return -1;
+if (isnan(err)) {
+    printf("isnan\n"); fflush(NULL);
+}
 //printf("catalogs.update_band_by_name update_band: old mags is: |%s|\n", *mags);
 
 	if (*mags == NULL || *mags[0] == 0) {
+        char *nb = NULL;
 		if (err == 0.0)
-			ret = asprintf(&nb, "%s=%.3f", band, mag);
+            asprintf(&nb, "%s=%.3f", band, mag);
 		else 
-            ret = asprintf(&nb, "%s=%.4f/%.4f", band, mag, err);
-		if (*mags)
-			free(*mags);
-		if (ret == -1)
-			nb = NULL;
-		*mags = nb;
+            asprintf(&nb, "%s=%.4f/%.4f", band, mag, err);
+
+        if (*mags) free(*mags);
+        *mags = nb;
 		return 0;
 	}
 
@@ -1025,43 +993,59 @@ int update_band_by_name(char **mags, char *band, double mag, double err)
     while (*m == ' ') m++;
     char *text = m;
 
-	btype = band_crack(band, &bn1, &bn1l, &bn2, &bn2l, 
-			   &bqual, &bquall, NULL, NULL, &bendp);
+    struct band_def bd = { 0 };
 
+    char *bendp;
+    int btype = band_crack(band, &bd.n1, &bd.n2, &bd.qual, NULL, NULL, &bendp);
+
+    char *bs = NULL, *be = NULL;
+
+    struct band_def nd = { 0 };
+    int type;
 	do {
-		type = band_crack(text, &n1, &n1l, &n2, &n2l, 
-				  &qual, &quall, NULL, NULL, &endp);
+        free_band_def(&nd);
 
-		if ((type < 0))
-			break;
-        int a = (type & (BAND_QUAL | BAND_INDEX)) == (btype & (BAND_QUAL | BAND_INDEX)) && ((bn1l == n1l) && (strncmp(n1, bn1, n1l) == 0));
-        int b = (!(type & BAND_QUAL) && ((bn2l == n2l) && (strncmp(n2, bn2, n2l) == 0)));
-//        if ((type & (BAND_QUAL | BAND_INDEX)) == (btype & (BAND_QUAL | BAND_INDEX))
-//                && ((bn1l == n1l) && !strncmp(n1, bn1, n1l))
-//                && (!(type & BAND_QUAL) || ((bn2l == n2l) && !strncmp(n2, bn2, n2l)))) {
+        char *endp;
+        type = band_crack(text, &nd.n1, &nd.n2, &nd.qual, NULL, NULL, &endp);
+
+        if ((type < 0))	break;
+
+        int a = ( (type & (BAND_QUAL | BAND_INDEX)) == (btype & (BAND_QUAL | BAND_INDEX)) )
+                && ( (bd.n1 && nd.n1) && (strcmp(nd.n1, bd.n1) == 0) );
+        int b = ( !(type & BAND_QUAL) )
+                && ( (bd.n2 && nd.n2) && (strcmp(nd.n2, bd.n2) == 0) );
+
         if(a || b) {
             bs = text; // existing record for this band
-			be = endp;
-//			break;
-		}
+            be = endp;
+        }
+
 		text = endp;
 
-	} while (type >= 0);
+    } while (type >= 0);
+
+    free_band_def(&nd);
+    free_band_def(&bd);
+
+//    char *nb = NULL;
 
     if (bs == NULL) { // band not found - append it to mags
 		if (err == 0.0)
-            ret = asprintf(&nb, "%s %s=%.3f", m, band, mag);
+            str_join_varg(mags, " %s=%.3f", band, mag);
 		else 
-            ret = asprintf(&nb, "%s %s=%.4f/%.4f", m, band, mag, err);
+            str_join_varg(mags, " %s=%.4f/%.4f", band, mag, err);
 
     } else { // band found append to mags
         if (err == 0.0)
-            ret = asprintf(&nb, "%s %s=%.3f", m, band, mag);
+            str_join_varg(mags, " %s=%.3f", band, mag);
         else
-            ret = asprintf(&nb, "%s %s=%.4f/%.4f", m, band, mag, err);
-        if (ret != -1) { // move end back over old band replacing it
-            bs = &(nb[bs - m]);
-            be = &(nb[be - m]);
+            str_join_varg(mags, " %s=%.4f/%.4f", band, mag, err);
+
+        if (*mags) { // move end back over old band replacing it
+            int ixs = bs - m;
+            int ixe = be - m;
+            bs = *mags + ixs;
+            be = *mags + ixe;
             while (*be == ' ') be++;
             for (;; bs++, be++) {
                 *bs = *be;
@@ -1070,13 +1054,8 @@ int update_band_by_name(char **mags, char *band, double mag, double err)
         }
     }
 
-    if (*mags)
-        free(*mags);
-
-    if (ret == -1)
-        nb = NULL;
-
-	*mags = nb;
+//    if (*mags) free(*mags);
+//    *mags = nb;
 	return 0;
 }
 
@@ -1119,32 +1098,35 @@ int local_load_file(char *fn)
 
 /* load all files from path into local catalog */
 void local_load_catalogs(char *path)
-{
-	char *dir;
-	char buf[1024];
-	char pathc[1024];
+{  
 	glob_t gl;
-	int i;
-	int ret;
 
-	strncpy(pathc, path, 1023);
-	pathc[1023] = 0;
-	dir = strtok(pathc, ":");
-	while (dir != NULL) {
-		snprintf(buf, 1024, "%s", dir);
-		gl.gl_offs = 0;
-		gl.gl_pathv = NULL;
-		gl.gl_pathc = 0;
-		ret = glob(buf, GLOB_TILDE, NULL, &gl);
-		if (ret == 0) {
-			for (i = 0; i < gl.gl_pathc; i++) {
-				info_printf("Loading catalog file: %s\n", gl.gl_pathv[i]);
-				local_load_file(gl.gl_pathv[i]);
-			}
-		}
-		globfree(&gl);
-		dir = strtok(NULL, ":");	
-	}
+    char *pathc = strdup(path);
+    if (pathc == NULL) return;
+
+    char *dir = strtok(pathc, ":");
+    while (dir) {
+        gl.gl_offs = 0;
+        gl.gl_pathv = NULL;
+        gl.gl_pathc = 0;
+
+        char *buf = strdup(dir);
+        if (buf) {
+            if (glob(buf, GLOB_TILDE, NULL, &gl) == 0) {
+                unsigned i;
+                for (i = 0; i < gl.gl_pathc; i++) {
+                    info_printf("Loading catalog file: %s\n", gl.gl_pathv[i]);
+                    local_load_file(gl.gl_pathv[i]);
+                }
+            }
+            free(buf);
+        }
+
+        globfree(&gl);
+
+        dir = strtok(NULL, ":");
+    }
+    free(pathc);
 }
 
 static struct cat_star *local_search_file(char *fn, char *name)
@@ -1156,7 +1138,6 @@ static struct cat_star *local_search_file(char *fn, char *name)
 	char *nm = NULL;
 	int paren = 1;
 	GScanner *scan;
-	struct cat_star *cats;
 
 	inf = fopen(fn, "r");
 	if (inf == NULL) {
@@ -1177,8 +1158,7 @@ static struct cat_star *local_search_file(char *fn, char *name)
 		}
 	} while (ret > 0);
 	if (nm == NULL || ret == 0) { 
-		if (lbuf)
-			free(lbuf);
+        if (lbuf) free(lbuf);
 		fclose(inf);
 		return NULL;
 	}
@@ -1201,52 +1181,54 @@ static struct cat_star *local_search_file(char *fn, char *name)
 			paren ++;
 	}
 	lseek(fileno(inf), ftell(inf), SEEK_SET);
-	scan = init_scanner();
+
+    scan = init_scanner();
 	g_scanner_input_file(scan, fileno(inf));
-	cats = cat_star_new();
+
+    struct cat_star *cats = cat_star_new();
 	if (!parse_star(scan, cats)) {
 		g_scanner_destroy(scan);
-		if (lbuf)
-			free(lbuf);
-		fclose(inf);
-		return cats;
 	} else {
-		cat_star_release(cats);
+        cats = cat_star_release(cats, "local_search_files");
 	}
-	if (lbuf)
-		free(lbuf);
+    if (lbuf) free(lbuf);
 	fclose(inf);
-	return NULL;
+    return cats;
 }
 
 static struct cat_star *local_search_files(char *name)
 {
-	char *dir, *path;
-	char buf[1024];
-	char pathc[1024];
 	glob_t gl;
-	int i;
 	int ret;
 	struct cat_star *cats = NULL;
 
-	path = P_STR(FILE_CATALOG_PATH);
-	strncpy(pathc, path, 1023);
-	pathc[1023] = 0;
-	dir = strtok(pathc, ":");
-	while (dir != NULL && cats == NULL) {
-		snprintf(buf, 1024, "%s", dir);
-		gl.gl_offs = 0;
-		gl.gl_pathv = NULL;
-		gl.gl_pathc = 0;
-		ret = glob(buf, GLOB_TILDE, NULL, &gl);
-		if (ret == 0) {
-			for (i = 0; i < gl.gl_pathc; i++) {
-				d1_printf("Searching catalog file: %s\n", gl.gl_pathv[i]);
-				cats = local_search_file(gl.gl_pathv[i], name);
-			}
-		}
-		globfree(&gl);
-		dir = strtok(NULL, ":");	
-	}
+    char *path = P_STR(FILE_CATALOG_PATH);
+    char *pathc = strdup(path);
+    if (pathc == NULL) return NULL;
+
+    char *dir = strtok(pathc, ":");
+    while (dir != NULL && cats == NULL) {
+
+        gl.gl_offs = 0;
+        gl.gl_pathv = NULL;
+        gl.gl_pathc = 0;
+        char *buf = NULL;
+        buf = strdup(dir);
+        if (buf) {
+            ret = glob(buf, GLOB_TILDE, NULL, &gl);
+            if (ret == 0) {
+                unsigned i;
+                for (i = 0; i < gl.gl_pathc; i++) {
+                    d1_printf("Searching catalog file: %s\n", gl.gl_pathv[i]);
+                    cats = local_search_file(gl.gl_pathv[i], name);
+                }
+            }
+            free(buf);
+        }
+        globfree(&gl);
+
+        dir = strtok(NULL, ":");
+    }
+    free(pathc);
 	return cats;
 }

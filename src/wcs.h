@@ -1,6 +1,8 @@
 #ifndef _WCS_H_
 #define _WCS_H_
 
+#include "sourcesdraw.h"
+
 #define INV_DBL -10000.0
 
 /* a pair to be fitted */
@@ -22,7 +24,7 @@ struct wcs *wcs_new(void);
 void wcs_ref(struct wcs *wcs);
 struct wcs *wcs_release(struct wcs *wcs);
 void wcs_clone(struct wcs *dst, struct wcs *src);
-int fit_wcs_window(GtkWidget *window);
+int window_fit_wcs(GtkWidget *window);
 int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double *ypos);
 int wcs_xypix(struct wcs *wcs, double xpos, double ypos, double *xpix, double *ypix);
 void cat_change_wcs(GSList *sl, struct wcs *wcs);

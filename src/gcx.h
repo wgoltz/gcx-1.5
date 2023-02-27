@@ -36,25 +36,25 @@
 
 
 // current circumstances of observation
-#define OBSCOLS 68
+//#define OBSCOLS 68
 
-struct obsdata {
-    double flen;		// focal length (cm)
-    double pixel_size;  // pixel linear size (micron)
-	double aperture;	// telescope aperture (cm)
-	char telescop[OBSCOLS+1];	// telescope name
-	char focus[OBSCOLS+1];	// focus designation
-	char filter[OBSCOLS+1];	// filter used
-	char object[OBSCOLS+1];	// object targeted
-	double ra;		// ra of center of field (degrees)
-	double dec;		// dec of center of field
-	double rot;		// field rotation (N through E)
-	double altitude;	// altitude of target 
-	int equinox;		// equinox of ra/dec
-	double mag;		// magnitude from catalog
-};
+//struct obsdata {
+//    double flen;		// focal length (cm)
+//    double pixel_size;  // pixel linear size (micron)
+//	double aperture;	// telescope aperture (cm)
+//	char *telescop[OBSCOLS+1];	// telescope name
+//	char *focus[OBSCOLS+1];	// focus designation
+//	char *filter[OBSCOLS+1];	// filter used
+//	char *object[OBSCOLS+1];	// object targeted
+//	double ra;		// ra of center of field (degrees)
+//	double dec;		// dec of center of field
+//	double rot;		// field rotation (N through E)
+//	double altitude;	// altitude of target
+//	int equinox;		// equinox of ra/dec
+//	double mag;		// magnitude from catalog
+//};
 
-extern struct obsdata obs;
+//extern struct obsdata obs;
 
 // max number of frames that we combine in one operation
 #define COMB_MAX 256

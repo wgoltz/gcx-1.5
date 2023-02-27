@@ -247,7 +247,7 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer d
                     g_object_set_data_full(G_OBJECT(data), "guider", guider, (GDestroyNotify)guider_release);
                 }
                 guider_set_target(guider, i_ch->fr, gs);
-                gui_star_release(gs);
+                gui_star_release(gs, "");
 
                 gtk_widget_queue_draw(data);
 
@@ -333,9 +333,10 @@ static void find_guide_star_cb( GtkWidget *widget, gpointer window)
 		gsl->select_mask |= TYPE_MASK(STAR_TYPE_ALIGN);
 
         struct star *s = gs->s;
-        if (s) d4_printf("Flux: %f\n", s->flux);
-
-		found = 1;
+        if (s) {
+            d4_printf("Flux: %f\n", s->flux);
+            found = 1;
+        }
 	} else {
 		gs = detect_guide_star(i_ch->fr, NULL);
 		if (gs) {
@@ -431,7 +432,7 @@ static int expose_cb(GtkWidget *window)
 			NULL);
 		frame_stats(fr);
 		frame_to_channel(fr, window, "i_channel");
-        release_frame(fr);
+        release_frame(fr, "expose_cb");
 		guide_image_update(window);
 	} else {
 		err_printf("Received unsupported image format: %s\n", camera->image_format);
@@ -600,7 +601,7 @@ void calibrate_sm( GtkWidget *window, struct guider *guider, struct tele_t *tele
 			guider->ytgt += dy;
 			info_printf("East calibration successful\n");
 			guider->cal_state = GUIDE_DONE;
-		}
+        } // should we fall through here?
 	case GUIDE_DONE:
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (calibrate_button), 0);
 		if ( guider->cal_etime == 0.0 || guider->cal_wtime == 0.0 ) {

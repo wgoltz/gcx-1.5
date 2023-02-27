@@ -1,3 +1,4 @@
+#include <gtk/gtk.h>
 
 /* columns for the processing file list GtkListStore */
 enum {

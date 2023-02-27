@@ -112,7 +112,7 @@ static GList *read_star_list(GScanner *scan)
 			if (!parse_star(scan, cats)) {
 				sl = g_list_prepend(sl, cats);
 			} else {
-				cat_star_release(cats);
+                cat_star_release(cats, "read_star_list");
 			}
 			continue;
 		} else if (tok == ')') {
@@ -673,7 +673,7 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 			tok = g_scanner_get_next_token(scan);
 			switch(tok) {
 			case G_TOKEN_STRING:
-				strncpy(cats->name, stringval(scan), CAT_STAR_NAME_SZ);
+                cats->name = strdup(stringval(scan));
 				havename = 1;
 				break;
 			case '(':
@@ -919,8 +919,8 @@ static void rep_star_flags(struct cat_star *cats, FILE *repfp)
 
 static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
 {
-	char decs[64];
-	char ras[64];
+    char *decs;
+    char *ras;
 	char * typestr;
 
 	if (cats == NULL)
@@ -944,11 +944,11 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
 	}
 
 	if (cats->perr < 0.2) {
-        degrees_to_hms_pr(ras, cats->ra, 3);
-		degrees_to_dms_pr(decs, cats->dec, 2);
+        ras = degrees_to_hms_pr(cats->ra, 3);
+        decs = degrees_to_dms_pr(cats->dec, 2);
 	} else {
-        degrees_to_hms_pr(ras, cats->ra, 2);
-		degrees_to_dms_pr(decs, cats->dec, 1);
+        ras = degrees_to_hms_pr(cats->ra, 2);
+        decs = degrees_to_dms_pr(cats->dec, 1);
 	}
 	fprintf(repfp, "(%s \"%s\" %s %s ",
 		symname[SYM_NAME], cats->name, 
@@ -960,9 +960,10 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
 
 	stf_linebreak(repfp, level);
 
-	fprintf(repfp, "%s \"%s\" %s \"%s\" ", 
-		symname[SYM_RA], ras, 
-		symname[SYM_DEC], decs);
+    if (ras && decs) fprintf(repfp, "%s \"%s\" %s \"%s\" ",	symname[SYM_RA], ras, symname[SYM_DEC], decs);
+    if (ras) free(ras);
+    if (decs) free(decs);
+
 	if (cats->perr < BIG_ERR) {
 		fprintf(repfp, "%s %.2g",
 			symname[SYM_PERR], cats->perr);
@@ -1003,6 +1004,7 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
 	}
 	rep_star_flags(cats, repfp);
 	fprintf(repfp, ") ");
+
 	return 0;
 }
 
@@ -1196,9 +1198,9 @@ struct stf * stf_find(struct stf *stf, int level, ...)
 	va_list ap;
 
 	va_start(ap, level);
-	return stf_va_find(stf, level, ap);
+    struct stf *found = stf_va_find(stf, level, ap);
 	va_end(ap);
-	return stf;
+    return found;
 }
 
 /* find a string in the alist hierarchy. return a pointer to the string 
@@ -1219,8 +1221,7 @@ char * stf_find_string(struct stf *stf, int level, ...)
 //	d3_printf("found stars as %p\n", st);
 	st = st->next;
 	if (!STF_IS_STRING(st)) {
-		err_printf("stf_find_string: symbol is not followed by a string\n",
-			   st->type);
+        err_printf("stf_find_string: symbol is not followed by a string\n", st->type);
 		return NULL;
 	}
 	return STF_STRING(st);
@@ -1334,7 +1335,7 @@ void stf_free_cats(struct stf *stf)
 	GList *sl;
 
 	for (sl = stf_find_glist(stf, 0, SYM_STARS); sl != NULL; sl = g_list_next(sl)) {
-		cat_star_release(CAT_STAR(sl->data));
+        cat_star_release(CAT_STAR(sl->data), "stf_free_cats");
 		sl->data = NULL;
 	}
 }

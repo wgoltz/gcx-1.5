@@ -129,7 +129,7 @@ GtkTreeSelection *tree_view_get_selection(GtkTreeView *tree_view, int select_whi
 
     GList *tmp = g_list_first(sel);
     while (tmp) { // get first path in current selection
-        if (path = tmp->data) break;
+        if ((path = tmp->data) != NULL) break;
         tmp = tmp->next;
     }
 

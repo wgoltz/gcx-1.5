@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include <gtk/gtk.h>
+
 extern void gtk_led_set_color(GtkWidget *widget, unsigned long color);
 extern GtkWidget *gtk_led_new(unsigned long color);
 

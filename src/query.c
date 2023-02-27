@@ -136,7 +136,7 @@ static struct cat_star * parse_cat_line_ucac2_main(char *line)
     if (line + cols[3] == endp) return NULL;
 
 	cats = cat_star_new();
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "ucac%s", line + cols[0]);
+    asprintf(&cats->name, "ucac%s", line + cols[0]);
 
 	cats->ra = u;
 	cats->dec = v;
@@ -217,7 +217,7 @@ static struct cat_star * parse_cat_line_ucac2_bss(char *line)
     if (line + cols[3] == endp) return NULL;
 
 	cats = cat_star_new();
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "ucac2bss%s", line + cols[1]);
+    asprintf(&cats->name, "ucac2bss%s", line + cols[1]);
 
 	/* coordinates and errors */
 	cats->ra = u;
@@ -322,7 +322,7 @@ static struct cat_star * parse_cat_line_ucac3(char *line)
 		return NULL;
 
 	cats = cat_star_new();
-	snprintf(cats->name, CAT_STAR_NAME_SZ, "ucac3%s", line+cols[0]);
+    asprintf(&cats->name, "ucac3%s", line+cols[0]);
 	cats->ra = u;
 	cats->dec = v;
 	cats->equinox = 2000.0;
@@ -402,7 +402,7 @@ static struct cat_star * parse_cat_line_gsc2(char *line)
 		return NULL;
 
 	cats = cat_star_new();
-	snprintf(cats->name, CAT_STAR_NAME_SZ, "%s", line+cols[0]);
+    asprintf(&cats->name, "%s", line+cols[0]);
 	cats->ra = u;
 	cats->dec = v;
 	cats->equinox = 2000.0;
@@ -488,7 +488,7 @@ static struct cat_star * parse_cat_line_gsc23(char *line)
     if (line + cols[2] == endp) return NULL;
 
 	cats = cat_star_new();
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "GSC%s", line + cols[0]);
+    asprintf(&cats->name, "GSC%s", line + cols[0]);
 
     cats->ra = ra;
     cats->dec = dc;
@@ -561,7 +561,7 @@ static struct cat_star * parse_cat_line_gsc_act(char *line)
     *(line + cols[0] + 4) = 0;
 
     double id = strtod(line + cols[0] + 5, &endp);
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "%s-%04.0f", line + cols[0], id);
+    asprintf(&cats->name, "%s-%04.0f", line + cols[0], id);
 
     double ra = strtod(line + cols[1], &endp);
     if (line + cols[1] == endp) return NULL;
@@ -660,7 +660,7 @@ static struct cat_star * parse_cat_line_usnob(char *line)
 
     struct cat_star *cats = cat_star_new();
 
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "USNO-B%s", line+cols[0]);
+    asprintf(&cats->name, "USNO-B%s", line+cols[0]);
     cats->ra = ra;
     cats->dec = dc;
 	cats->equinox = 2000.0;
@@ -800,7 +800,7 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
 
     struct cat_star *cats = cat_star_new();
 
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "UCAC4 %s", line + cols[0]);
+    asprintf(&cats->name, "UCAC4 %s", line + cols[0]);
     cats->ra = ra;
     cats->dec = dc;
     cats->equinox = 2000.0;
@@ -924,7 +924,7 @@ static struct cat_star * parse_cat_line_tycho(char *line)
     int s2 = strtod(line + cols[1], &endp);
     int s3 = strtod(line + cols[2], &endp);
 
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "TYCHO %04d_%05d_%01d", s1, s2, s3);
+    asprintf(&cats->name, "TYCHO %04d_%05d_%01d", s1, s2, s3);
 
     cats->ra = ra;
     cats->dec = dc;
@@ -1029,7 +1029,7 @@ static struct cat_star * parse_cat_line_hip(char *line)
 
     struct cat_star *cats = cat_star_new();
 
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "HIP %s", line + cols[0]);
+    asprintf(&cats->name, "HIP %s", line + cols[0]);
     cats->ra = ra;
     cats->dec = dc;
     cats->equinox = 2000.0;
@@ -1141,7 +1141,7 @@ static struct cat_star * parse_cat_line_apass(char *line)
     if (line + cols[2] == endp) return NULL;
 
     cats = cat_star_new();
-    snprintf(cats->name, CAT_STAR_NAME_SZ, "APASS %s", line + cols[0]);
+    asprintf(&cats->name, "APASS %s", line + cols[0]);
 
     cats->ra = ra;
     cats->dec = dc;
@@ -1426,18 +1426,19 @@ int make_cat_rcp(char *obj, unsigned int catalog, FILE *outf)
 	GList *tsl = NULL;
 	struct cat_star *cats;
 	struct stf *st, *stf;
-	char ras[64], decs[64];
+    char *ras, *decs;
 
-	cats = get_object_by_name(obj);
-	cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
-	if (cats == NULL) {
-		err_printf("make_cat_rcp: cannot find object %s\n", obj);
-		return -1;
-	}
     if (catalog >= QUERY_CATALOGS) {
         err_printf("make_cat_rcp: catalog not recognized\n", obj);
         return -1;
     }
+
+	cats = get_object_by_name(obj);
+	if (cats == NULL) {
+		err_printf("make_cat_rcp: cannot find object %s\n", obj);
+		return -1;
+	}
+    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
 
     tsl = query_catalog(catalog, cats->ra, cats->dec, progress_pr, NULL);
 
@@ -1446,11 +1447,11 @@ int make_cat_rcp(char *obj, unsigned int catalog, FILE *outf)
 //	tsl = merge_star(tsl, cats);
 
 	if (cats->perr < 0.2) {
-        degrees_to_hms_pr(ras, cats->ra, 3);
-		degrees_to_dms_pr(decs, cats->dec, 2);
+        ras = degrees_to_hms_pr(cats->ra, 3);
+        decs = degrees_to_dms_pr(cats->dec, 2);
 	} else {
-        degrees_to_hms_pr(ras, cats->ra, 2);
-		degrees_to_dms_pr(decs, cats->dec, 1);
+        ras = degrees_to_hms_pr(cats->ra, 2);
+        decs = degrees_to_dms_pr(cats->dec, 1);
 	}
 	st = stf_append_string(NULL, SYM_OBJECT, cats->name);
 	stf_append_string(st, SYM_RA, ras);
@@ -1464,7 +1465,9 @@ int make_cat_rcp(char *obj, unsigned int catalog, FILE *outf)
 
 	stf_fprint(outf, stf, 0, 0);
 
-	cat_star_release(cats);
+    if (ras) free(ras);
+    if (decs) free(decs);
+    cat_star_release(cats, "make_cat_rcp");
 	fflush(outf);
 	return 0;
 }
@@ -1539,17 +1542,10 @@ static GList *remove_duplicates(GList *list) {
 
 	GList *keep_gl = g_list_first(list);
 	GList *cats_gl = keep_gl->next;
-	GList *t_gl;
-
-	struct cat_star *keep;
-	struct cat_star *cats;
-
-
-	float keep_err, cats_err;
 
 	while (cats_gl) {
-		keep = keep_gl->data;
-		cats = cats_gl->data;
+        struct cat_star *keep = keep_gl->data;
+        struct cat_star *cats = cats_gl->data;
 
 		if (pos_compare_func(cats, keep)) {
 			keep_gl = cats_gl;
@@ -1557,32 +1553,33 @@ static GList *remove_duplicates(GList *list) {
 			continue;
 		}
 
-        keep_err = 99.0;
+        float keep_err = BIG_ERR, cats_err = BIG_ERR;
+
         if (keep->cmags) {
             sscanf(keep->cmags, "%*[^/]/%f", &keep_err);
             if (keep_err < 0.001) keep_err = 0;
         }
 
-        cats_err = 99.0;
         if (cats->cmags) {
             sscanf(cats->cmags, "%*[^/]/%f", &cats_err);
             if (cats_err < 0.001) cats_err = 0;
         }
 
-        if (cats_err && (cats_err < keep_err)) {
+        if (cats_err < keep_err) {
             list = g_list_delete_link(list, keep_gl);
 
-            cat_star_release(keep);
+            cat_star_release(keep, "remove_duplicates 1");
             keep_gl = cats_gl;
             cats_gl = cats_gl->next;
 
             continue;
         }
 
-		t_gl = cats_gl->next;
-		list = g_list_delete_link(list, cats_gl);
+        GList *t_gl = cats_gl->next;
 
-		cat_star_release(cats);
+		list = g_list_delete_link(list, cats_gl);
+        cat_star_release(cats, "remove_duplicates 2");
+
 		cats_gl = t_gl;
 	}
 

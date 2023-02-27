@@ -164,7 +164,7 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
     g_return_val_if_fail(window != NULL, 0);
 
-	char buf[256];
+    char *buf = NULL;
 
     switch(wcs->wcsset) {
 	case WCS_INVALID:
@@ -182,31 +182,33 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
 	}
 
     if (wcs->xref != INV_DBL) {
-        degrees_to_hms_pr(buf, wcs->xref, 2);
-        named_entry_set(dialog, "wcs_ra_entry", buf);
+        char *ras = degrees_to_hms_pr(wcs->xref, 2);
+        if (ras) named_entry_set(dialog, "wcs_ra_entry", ras), free(ras);
     }
 
     if (wcs->yref != INV_DBL) {
-        degrees_to_dms_pr(buf, wcs->yref, 1);
-        named_entry_set(dialog, "wcs_dec_entry", buf);
+        char *decs = degrees_to_dms_pr(wcs->yref, 1);
+        if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
     }
 
     if (wcs->equinox != INV_DBL) {
-        snprintf(buf, 255, "%.2f", wcs->equinox);
-        named_entry_set(dialog, "wcs_equinox_entry", buf);
+        buf = NULL; asprintf(&buf, "%.2f", wcs->equinox);
+        if (buf) named_entry_set(dialog, "wcs_equinox_entry", buf), free(buf);
     }
 
     if (wcs->rot != INV_DBL) {
-        snprintf(buf, 255, "%.4f", wcs->rot);
-        named_entry_set(dialog, "wcs_rot_entry", buf);
+        buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
+        if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
     }
 
     if ((wcs->xinc != INV_DBL && wcs->yinc != INV_DBL)) {
-        snprintf(buf, 255, "%.4f", (fabs(wcs->xinc) + fabs(wcs->yinc)) * 1800);
-        named_entry_set(dialog, "wcs_scale_entry", buf);
+        buf = NULL; asprintf(&buf, "%.4f", (fabs(wcs->xinc) + fabs(wcs->yinc)) * 1800);
+        if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
     }
 
     gtk_widget_queue_draw(dialog);
+
+    return 0;
 }
 
 /*
@@ -318,24 +320,22 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
 static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 {
     g_assert(wcs != NULL);
-printf("wcsedit_to_wcs\n"); fflush(NULL);
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
     g_return_val_if_fail(window != NULL, 0);
 
     double d, i;
 
-	char *text = NULL, *end;
     double ra = INV_DBL, dec = INV_DBL, equ = INV_DBL, scale = INV_DBL, rot = INV_DBL;
 
 /* parse the fields */
-    text = named_entry_text(dialog, "wcs_ra_entry");
+    char *text = named_entry_text(dialog, "wcs_ra_entry");
     int degrees;
     if ((degrees = dms_to_degrees(text, &d)) >= 0) {
         if (!degrees)
             d *= 15;
         ra = fabs(modf(d / 360, &i) * 360);
     }
-	g_free(text);
+    free(text);
 
     text = named_entry_text(dialog, "wcs_dec_entry");
     if (dms_to_degrees(text, &d) >= 0) {
@@ -347,22 +347,24 @@ printf("wcsedit_to_wcs\n"); fflush(NULL);
                 dec += 90;
         }
     }
-	g_free(text);
+    free(text);
+
+    char *end;
 
     text = named_entry_text(dialog, "wcs_equinox_entry");
     d = strtod(text, &end);
     if (text != end) equ = d;
-	g_free(text);
+    free(text);
 
     text = named_entry_text(dialog, "wcs_scale_entry");
     d = strtod(text, &end);
     if (text != end) scale = d ;
-    g_free(text);
+    free(text);
 
 	text = named_entry_text(dialog, "wcs_rot_entry");
 	d = strtod(text, &end);
     if (text != end) rot = d ;
-	g_free(text);
+    free(text);
 
 /* now see what we can do with them */
 	if (ra == INV_DBL || dec == INV_DBL) {
@@ -466,7 +468,6 @@ printf("wcsedit_to_wcs\n"); fflush(NULL);
 //            fflush(NULL);
 //        }
 //    }
-printf("chg %x\n", chg); fflush(NULL);
     if (chg) return 2;
 
 	return 0;
@@ -548,7 +549,7 @@ void act_wcs_auto (GtkAction *action, gpointer window)
 
     if (window_auto_pairs(window) < 1) return;
 
-    fit_wcs_window(window);
+    window_fit_wcs(window);
 //    gtk_widget_queue_draw(window);
 
 	wcsedit_refresh(window);
@@ -562,7 +563,7 @@ void act_wcs_quiet_auto (GtkAction *action, gpointer window)
 	act_stars_add_tycho2(NULL, window);
 
     if (window_auto_pairs(window) < 1) return;
-    fit_wcs_window(window);
+    window_fit_wcs(window);
 
 //	act_stars_rm_field(NULL, window);
 	act_stars_rm_detected(NULL, window);
@@ -576,7 +577,7 @@ void act_wcs_existing (GtkAction *action, gpointer window)
 	act_stars_add_detected(NULL, window);
     if (window_auto_pairs(window) < 1) return;
 
-    fit_wcs_window(window);
+    window_fit_wcs(window);
 	gtk_widget_queue_draw(window);
 
 	wcsedit_refresh(window);
@@ -584,7 +585,7 @@ void act_wcs_existing (GtkAction *action, gpointer window)
 
 void act_wcs_fit_pairs (GtkAction *action, gpointer window)
 {
-    fit_wcs_window(window);
+    window_fit_wcs(window);
 	gtk_widget_queue_draw(window);
 
 	wcsedit_refresh(window);
@@ -623,11 +624,9 @@ void act_wcs_invalidate (GtkAction *action, gpointer window)
 /* should return -1 if no match found */
 int match_field_in_window(gpointer window)
 {
-	struct wcs *wcs;
-
 	act_wcs_auto (NULL, window);
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	if (wcs == NULL) {
 		err_printf("No WCS found\n");
 		return -1;
@@ -661,10 +660,11 @@ int match_field_in_window_quiet(gpointer window)
 static double get_zoom(gpointer dialog)
 {
     gpointer window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    if (window == NULL) return;
+    if (window == NULL) return 0;
 
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
-    if (geom == NULL) return;
+    if (geom == NULL) return 0;
+
     return geom->zoom;
 }
 
@@ -692,17 +692,16 @@ static void move(int move_x, int move_y, gpointer dialog)
 
     wcs->rot = wcs->xref - dr;
 
-    char buf[256];
+    char *ras = degrees_to_hms_pr(wcs->xref, 2);
+    if (ras) named_entry_set(dialog, "wcs_ra_entry", ras), free(ras);
 
-    degrees_to_hms_pr(buf, wcs->xref, 2);
-    named_entry_set(dialog, "wcs_ra_entry", buf);
+    char *decs = degrees_to_dms_pr(wcs->yref, 1);
+    if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
 
-    degrees_to_dms_pr(buf, wcs->yref, 1);
-    named_entry_set(dialog, "wcs_dec_entry", buf);
+    double i; wcs->rot = modf(wcs->rot / 360, &i) * 360;
 
-    int i; wcs->rot = modf(wcs->rot / 360, &i) * 360;
-    snprintf(buf, 255, "%.4f", wcs->rot);
-    named_entry_set(dialog, "wcs_rot_entry", buf);
+    char *buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
+    if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
 
     wcsedit_refresh(window);
 }
@@ -711,7 +710,6 @@ static void move(int move_x, int move_y, gpointer dialog)
 static void rot(int dir, gpointer dialog)
 {
     if (g_object_get_data(G_OBJECT(dialog), "im_window") == NULL) return;
-
     if (get_named_checkb_val(dialog, "wcs_lock_rot_checkb")) return;
 
     GtkWidget *button = g_object_get_data(G_OBJECT(dialog), "wcs_accelerator_button");
@@ -719,22 +717,20 @@ static void rot(int dir, gpointer dialog)
 
     char *text = named_entry_text(dialog, "wcs_rot_entry");
 
-    char *end;
-    double d = strtod(text, &end);
-
     double rot = INV_DBL;
-    if (text != end) rot = d ;
+    char *end; double d = strtod(text, &end);
+    if (text != end) rot = d;
 
-	g_free(text);
-	if (rot != INV_DBL)
-	{
+    free(text);
+
+	if (rot != INV_DBL)	{
         rot += dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
 
-        int i; rot = modf(rot / 360, &i) * 360;
+        double i; rot = modf(rot / 360, &i) * 360;
 
-        char buf[256];
-		snprintf(buf, 255, "%.4f", rot);
-		named_entry_set(dialog, "wcs_rot_entry", buf);
+        char *buf = NULL; asprintf(&buf, "%.4f", rot);
+        if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
+
         wcsedit_refresh_parent(dialog);
 	}
 }
@@ -744,7 +740,6 @@ static void rot(int dir, gpointer dialog)
 static void scale(int dir, gpointer dialog)
 {
     if (g_object_get_data(G_OBJECT(dialog), "im_window") == NULL) return;
-
     if (get_named_checkb_val(dialog, "wcs_lock_scale_checkb")) return;
 
     GtkWidget *button = g_object_get_data(G_OBJECT(dialog), "wcs_accelerator_button");
@@ -752,19 +747,18 @@ static void scale(int dir, gpointer dialog)
 
     char *text = named_entry_text(dialog, "wcs_scale_entry");
 
-    char *end;
-    double d = strtod(text, &end);
-
     double scale = INV_DBL;
-    if (text != end) scale = d ;
+    char *end; double d = strtod(text, &end);
+    if (text != end) scale = d;
 
-    g_free(text);
-    if (scale != INV_DBL)
-    {
+    free(text);
+
+    if (scale != INV_DBL) {
         scale *= 1 + 0.02 * dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
-        char buf[256];
-        snprintf(buf, 255, "%.4f", scale);
-        named_entry_set(dialog, "wcs_scale_entry", buf);
+
+        char *buf = NULL; asprintf(&buf, "%.4f", scale);
+        if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
+
         wcsedit_refresh_parent(dialog);
     }
 }

@@ -25,6 +25,8 @@
 // $Revision: 1.18 $
 // $Date: 2005/02/12 20:29:47 $
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -651,24 +653,20 @@ static double precs[10] = {1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001,
  */
 
 
-static int degrees_to_hms_or_dms_pr(char *lb, double deg, int prec, int hours)
+static char *degrees_to_hms_or_dms_pr(double deg, int prec, int hours)
 {
-	int d1, d2, d3, d4;
-	char fbuf[32];
-    int rtn;
-
     if (prec > 9) prec = 9;
     if (prec < 0) prec = 0;
 
 
-    char *format = fbuf;
+    char *sign = NULL;
     int neg = deg < 0;
     if (neg) {
         deg = -deg;
-        sprintf(format++, "%s", "-");
     }
+    asprintf(&sign, "%s", neg ? "-" : "");
 
-    int i;
+    double i;
     if (hours)
         deg = deg / 15;
 
@@ -679,47 +677,54 @@ static int degrees_to_hms_or_dms_pr(char *lb, double deg, int prec, int hours)
     else
         deg = modf(deg / 360, &i) * 360;
 
-    d1 = floor (deg);
+    int d1 = floor (deg);
     deg = (deg - d1) * 60.0;
-    d2 = floor (deg);
+    int d2 = floor (deg);
     deg = ((deg - d2) * 60.0);
-    d3 = floor(deg);
+    int d3 = floor(deg);
 
-    if (prec == 0) {
-        sprintf(format, "%s", "%02d:%02d:%02d");
-        rtn = sprintf(lb, fbuf, d1, d2, d3);
-    } else {
-        deg = ((deg - d3) / precs[prec]);
-        d4 = floor(deg);
-        sprintf(format, "%%02d:%%02d:%%02d.%%0%dd", prec);
-        rtn = sprintf(lb, fbuf, d1, d2, d3, d4);
+    char *res = NULL;
+    if (sign) {
+        if (prec == 0) {
+            asprintf(&res, "%s%02d:%02d:%02d", sign, d1, d2, d3);
+        } else {
+            deg = ((deg - d3) / precs[prec]);
+            int d4 = floor(deg);
+            char *format = NULL;
+            asprintf(&format, "%s%%02d:%%02d:%%02d.%%0%dd", sign, prec);
+            if (format) {
+                asprintf(&res, format, d1, d2, d3, d4);
+                free(format);
+            }
+            free(sign);
+        }
     }
 
-    return rtn;
+    return res;
 //	d3_printf("into %s\n", lb);
 }
 
 /* transform degrees into minutes/seconds format
  * with a precision of 2 (decimals of seconds)
  */
-void degrees_to_dms(char *lb, double deg)
+char *degrees_to_dms(double deg)
 {
-    degrees_to_hms_or_dms_pr(lb, deg, 2, 0);
+    return degrees_to_hms_or_dms_pr(deg, 2, 0);
 }
 
-void degrees_to_hms(char *lb, double deg)
+char *degrees_to_hms(double deg)
 {
-    degrees_to_hms_or_dms_pr(lb, deg, 2, 1);
+    return degrees_to_hms_or_dms_pr(deg, 2, 1);
 }
 
-int degrees_to_dms_pr(char *lb, double deg, int prec)
+char *degrees_to_dms_pr(double deg, int prec)
 {
-    return degrees_to_hms_or_dms_pr(lb, deg, prec, 0);
+    return degrees_to_hms_or_dms_pr(deg, prec, 0);
 }
 
-int degrees_to_hms_pr(char *lb, double deg, int prec)
+char *degrees_to_hms_pr(double deg, int prec)
 {
-    return degrees_to_hms_or_dms_pr(lb, deg, prec, 1);
+    return degrees_to_hms_or_dms_pr(deg, prec, 1);
 }
 
 
@@ -763,7 +768,7 @@ int old_dms_to_degrees(char *decs, double *dec)
 
 // transform a string d:m:s coordinate to a float angle (in degrees)
 // if already decimal (assumed) degrees return 1, return 0 otherwise or -1 for error
-int dms_to_degrees(char *decs, double *dec)
+int dms_to_degrees(char *decs, double *deg)
 {
     char *endp;
     int i;
@@ -784,7 +789,7 @@ int dms_to_degrees(char *decs, double *dec)
         for (i = endp - decs; decs[i] && isdigit(decs[i]); i++);
         double dlo = strtod(decs+i, &endp);
         //check it is in [0 to 1) ?
-        *dec = (d + dlo) * sign;
+        *deg = (d + dlo) * sign;
         return 1;
         // ignore any remainder
     }
@@ -792,17 +797,17 @@ int dms_to_degrees(char *decs, double *dec)
     for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
     long m = strtol(decs+i, &endp, 10);
     if (endp == decs+i) {
-        *dec = d * sign;
+        *deg = d * sign;
         return 0;
     }
 
     for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
     double s = strtod(decs+i, &endp);
     if (endp == decs+i) {
-        *dec = (d + m / 60.0) * sign;
+        *deg = (d + m / 60.0) * sign;
         return 0;
     }
 
-    *dec = (d + m / 60.0 + s / 3600.0) * sign;
+    *deg = (d + m / 60.0 + s / 3600.0) * sign;
     return 0;
 }

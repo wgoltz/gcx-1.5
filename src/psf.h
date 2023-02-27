@@ -1,6 +1,10 @@
 #ifndef _PSF_H_
 #define _PSF_H_
 
+#include <gtk/gtk.h>
+
+#include "ccd/ccd.h"
+
 struct rp_point {
 	double r;		/* radius of point */
 	double v;		/* flux at point */

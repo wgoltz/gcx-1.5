@@ -163,12 +163,8 @@ static void add_par_string(GcxPar p, GcxPar parent, int format, char *name, char
 		free(PAR(p)->defval.s);
 		PAR(p)->defval.s = NULL;
 	}
-	P_STR(p) = malloc(strlen(val)+1);
-	if (P_STR(p) != NULL)
-		strcpy(P_STR(p), val);
-	PAR(p)->defval.s = malloc(strlen(val)+1);
-	if (PAR(p)->defval.s != NULL)
-		strcpy(PAR(p)->defval.s, val);
+    P_STR(p) = strdup(val);
+    PAR(p)->defval.s = strdup(val);
 }
 
 /*
@@ -323,6 +319,7 @@ void init_ptable(void)
     add_par_string(FN_DATE_OBS, PAR_FITS_FIELDS, 0, "dateobs", "Fits field for date/time of observation", "DATE-OBS");
     add_par_string(FN_TIME_OBS, PAR_FITS_FIELDS, 0, "timeobs", "Fits field for time of observation", "TIME-OBS");
     add_par_string(FN_UT, PAR_FITS_FIELDS, 0, "ut", "UT of observation", "UT");
+    add_par_string(FN_DATE_TIME, PAR_FITS_FIELDS, 0, "datetime", "date_time of observation", "DATE_TIME");
     add_par_string(FN_TELESCOP, PAR_FITS_FIELDS, 0, "telescop", "Fits field for telescope name", "TELESCOP");
     add_par_string(FN_FOCUS, PAR_FITS_FIELDS, 0, "focus", "Fits field for focus designation", "FOCUS");
     add_par_string(FN_APERTURE, PAR_FITS_FIELDS, 0, "aperture", "Fits field for telescope aperture", "APERT");
@@ -919,12 +916,13 @@ void init_ptable(void)
                "Std star faint limit", 13.2);
     set_par_description(AP_STD_FAINT_LIMIT,
                "Standard star faintest magnitude.");
-    add_par_int(AP_USE_CMAGS, PAR_APHOT, FMT_BOOL, "use_cmags",
-               "Use c-mags for standard stars mags", TRUE);
-    set_par_description(AP_USE_CMAGS,
-               "Take standard star mags from catalog mags. Otherwise, "
-               "use s-mags (fitted with errors) derived from averaged "
-               "local observations that have lower internal scatter.");
+    add_par_int(AP_STD_SOURCE, PAR_APHOT, 0, "std_source",
+               "Std source", PAR_STD_SOURCE_SMAGS);
+    set_par_choices(AP_STD_SOURCE, std_source_options);
+    set_par_description(AP_STD_SOURCE,
+               "cmags: sourced directly from catalog."
+               "smags: derived from fit to local observations"
+               "(which should have less internal scatter).");
     add_par_double(AP_ALPHA, PAR_APHOT, 0, "alpha",
 		       "Alpha", 2.0);
 	set_par_description(AP_ALPHA,
