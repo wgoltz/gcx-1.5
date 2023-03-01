@@ -820,6 +820,8 @@ struct stf *stf_read_frame(FILE *fp)
 				stf->next = nstf;
 				stf = nstf;
 			}
+            if (intval(scan) == SYM_RECIPY) // catch SYM_RECIPY
+                scan->value.v_int = SYM_RECIPE;
 			STF_SET_SYMBOL(stf, intval(scan));
 			if (intval(scan) == SYM_STARS) {
 				sl = read_star_list(scan);

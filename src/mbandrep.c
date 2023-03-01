@@ -236,7 +236,7 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
                 }
             }
 
-            int nstars;
+            int nstars = -1;
             GList *sl;
 
             for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) { // for each selected frame

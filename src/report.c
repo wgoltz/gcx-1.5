@@ -436,7 +436,7 @@ static char *tab_snprint_head(struct col_format *cfmt, int ncol)
 {
 	int i;
 	int p = 0, ret = 0;
-    char *buf;
+
 	int w;
     char *line = NULL;
 
@@ -447,6 +447,8 @@ static char *tab_snprint_head(struct col_format *cfmt, int ncol)
 //			append = string_field(2, "#");
 //		}
         char *append = NULL;
+        char *buf = NULL;
+
 		switch(cfmt[i].type) {
 		case SYM_SMAG:
             asprintf(&buf, "s(%s)", (char *)cfmt[i].data);

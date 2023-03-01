@@ -1,9 +1,16 @@
-Compiling: git clone, set up for automake, then build with ./configure and make.
+Compiling: git clone, set up for automake (I have not looked closely enough at how automake works but running 'autoreconf -i' seems to do the job), then build with ./configure and make.
 
-Or: The program does not use any qt libraries but I use qtcreator to work on it. Use the .proj file with qtcreator.  
+Simpler option: The program does not use any qt libraries but I use qtcreator to work on it. Open the .proj file with qtcreator!
 
-1. GCX uses the GTK+2.0 software tool kit which is no longer maintained. Depending on your themes some things work poorly.
-
-2. Set up for AAVSO report: in the recipe or staredit set target and check stars in the star comments field: "target_something" will match with "check_something"
+The program compiles fine on linux including raspberry pi.
 
 
+1. GCX uses the GTK+2.0 software tool kit which is no longer maintained. Depending on your themes some visual aspects work poorly.
+
+2. AAVSO report: Only ENSEMBLE photometry. In the recipe file or the staredit dialog, set target and check stars by using the star comments field: "target_something" will match with "check_something" (star type must be photometry target). All targets in the feild will be reported.
+
+The AAVSO fields GROUP, CHART or COMMENTS are not set (yet) so they need to be edited if required.
+
+3. There are problems with loading/modifying/saving reports and recipes.
+
+4. Much more can be done on indi/indigo interface to telescope.
