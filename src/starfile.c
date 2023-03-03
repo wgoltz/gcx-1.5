@@ -833,7 +833,7 @@ struct stf *stf_read_frame(FILE *fp)
 				STF_SET_GLIST(stf, sl);
 			}
 			break;
-		case '-':
+        case '-':
 			minus = 2;
 			break;
 		case G_TOKEN_FLOAT:

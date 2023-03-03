@@ -23,6 +23,8 @@
 
 /* functions that adjust an image's pan, zoom and display brightness */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -446,62 +448,55 @@ void stats_cb(gpointer data, guint action)
  * display stats in region around cursor
  * does not use action or menu_item
  */
-void show_region_stats(GtkWidget *window, double x, double y)
+void show_region_stats(GtkWidget *window, double x, double y) // are x and y ever out of frame bounds?
 {
-	char buf[180];
-	gpointer ret;
-	struct image_channel *i_channel;
-	struct map_geometry *geom;
+    char *buf = NULL;
+
 	struct rstats rs;
-	int xi, yi;
-	float val;
 
-	ret = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (ret == NULL) /* no channel */
-		return;
-	i_channel = ret;
-	if (i_channel->fr == NULL) /* no frame */
-		return;
+    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (i_channel == NULL) return;
 
-	geom = g_object_get_data(G_OBJECT(window), "geometry");
-	if (geom == NULL)
-		return;
+    struct ccd_frame *fr = i_channel->fr;
+    if (fr == NULL) return;
+
+    struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
+    if (geom == NULL) return;
 
 	x /= geom->zoom;
 	y /= geom->zoom;
 
-	xi = x;
-	yi = y;
+    int xi = x;
+    int yi = y;
 
-	if (i_channel->fr->pix_format == PIX_FLOAT) {
-		val = get_pixel_luminence(i_channel->fr, xi, yi);
-		ring_stats(i_channel->fr, x, y, 0, 10, 0xf, &rs, -HUGE, HUGE);
+    if (fr->pix_format == PIX_FLOAT) {
+        float val = get_pixel_luminence(fr, xi, yi);
+        ring_stats(fr, x, y, 0, 10, 0xf, &rs, -HUGE, HUGE);
 
-		if (i_channel->fr->magic & FRAME_VALID_RGB) {
-			sprintf(buf, "[%d,%d]=%.1f (%.1f, %.1f, %.1f)  Region: Avg:%.1f  Sigma:%.1f  Min:%.1f  Max:%.1f",
-				xi, yi, val,
-				*(((float *) i_channel->fr->rdat) + xi + yi * i_channel->fr->w),
-				*(((float *) i_channel->fr->gdat) + xi + yi * i_channel->fr->w),
-				*(((float *) i_channel->fr->bdat) + xi + yi * i_channel->fr->w),
+        if (fr->magic & FRAME_VALID_RGB) {
+            asprintf(&buf, "[%d,%d]=%.1f (%.1f, %.1f, %.1f)  Region: Avg:%.1f  Sigma:%.1f  Min:%.1f  Max:%.1f",
+                xi, yi, val,
+                *(((float *) fr->rdat) + xi + yi * fr->w),
+                *(((float *) fr->gdat) + xi + yi * fr->w),
+                *(((float *) fr->bdat) + xi + yi * fr->w),
 				rs.avg, rs.sigma, rs.min, rs.max );
-            float *p;
-            p = (float *)i_channel->fr->rdat + xi + yi * i_channel->fr->w;
-            p = (float *)i_channel->fr->gdat + xi + yi * i_channel->fr->w;
-            p = (float *)i_channel->fr->bdat + xi + yi * i_channel->fr->w;
+//            float *p;
+//            p = (float *)fr->rdat + xi + yi * fr->w;
+//            p = (float *)fr->gdat + xi + yi * fr->w;
+//            p = (float *)fr->bdat + xi + yi * fr->w;
 
 		} else {
-			sprintf(buf, "[%d,%d]=%.1f  Region: Avg:%.1f  Sigma:%.1f  Min:%.1f  Max:%.1f",
+            asprintf(&buf, "[%d,%d]=%.1f  Region: Avg:%.1f  Sigma:%.1f  Min:%.1f  Max:%.1f",
 				xi, yi, val, rs.avg, rs.sigma, rs.min, rs.max );
 		}
-	} else if (i_channel->fr->pix_format == PIX_BYTE) {
+    } else if (fr->pix_format == PIX_BYTE) {
 		/* FIXME: This won't work with RGB */
-		val = 1.0 * *((unsigned char *)(i_channel->fr->dat) + xi + yi * i_channel->fr->w);
-		sprintf(buf, "Pixel [%d,%d]=%.1f",
-		xi, yi, val);
+        float val = 1.0 * *((unsigned char *)(fr->dat) + xi + yi * fr->w);
+        asprintf(&buf, "Pixel [%d,%d]=%.1f", xi, yi, val);
 	} else {
-		sprintf(buf, "Pixel [%d,%d] unknown format", xi, yi);
+        asprintf(&buf, "Pixel [%d,%d] unknown format", xi, yi);
 	}
-	info_printf_sb2(window, "%s\n", buf);
+    if (buf) info_printf_sb2(window, "%s\n", buf), free(buf);
 }
 
 /*
@@ -519,9 +514,9 @@ void show_zoom_cuts(GtkWidget * window)
 
     GtkWidget *zoom_and_cuts = g_object_get_data(G_OBJECT(window), "zoom_and_cuts");
     if (zoom_and_cuts) {
-        char buf[180];
-        sprintf(buf, " Z:%.2f  Lcut:%.0f  Hcut:%.0f", geom->zoom, i_channel->lcut, i_channel->hcut);
-        gtk_label_set_text(GTK_LABEL(zoom_and_cuts), buf);
+        char *buf = NULL;
+        asprintf(&buf, " Z:%.2f  Lcut:%.0f  Hcut:%.0f", geom->zoom, i_channel->lcut, i_channel->hcut);
+        if (buf) gtk_label_set_text(GTK_LABEL(zoom_and_cuts), buf), free(buf);
     }
 
     /* see if we have a imadjust dialog and update it, too */
@@ -550,11 +545,6 @@ void channel_set_lut_from_gamma(struct image_channel *channel)
     double x0 = channel->toe;
     double x1 = channel->gamma * channel->toe;
 
-    if (channel->lut_clip == 0)
-        channel->invert = 0;
-    else if (channel->lut_clip == 1)
-        channel->invert = 1;
-
     if (channel->invert) {
         double t = x1; x1 = x0; x0 = t;
     }
@@ -564,8 +554,7 @@ void channel_set_lut_from_gamma(struct image_channel *channel)
 
 //		d3_printf("channel offset is %f\n", channel->offset);
 		if (x0 < 0.001) {
-			y = 65535 * (channel->offset + (1 - channel->offset) *
-				     pow(x, 1.0 / channel->gamma));
+            y = 65535 * (channel->offset + (1 - channel->offset) * pow(x, 1.0 / channel->gamma));
 		} else {
             double g = (x + x1) * x0 / ((x + x0) * x1);
 			y = 65535 * (channel->offset + (1 - channel->offset) * pow(x, g));
@@ -578,8 +567,8 @@ void channel_set_lut_from_gamma(struct image_channel *channel)
     int lo = 0, hi = 65535, t = lo;
 
     switch (channel->lut_clip) {
-    case 0 : break;
-    case 1 : lo = hi; hi = t; break;
+    case 0 : if (channel->invert) { lo = hi; hi = t; } break;
+    case 1 : if (! channel->invert) { lo = hi; hi = t; } break;
     case 2 : hi = lo; break;
     case 3 : lo = hi; break;
     }
@@ -612,7 +601,7 @@ void rebin_histogram(struct im_histogram *hist, double (* rbh)[2], int dbins,
         low = hist->st;
     }
 
-    int hp = floor(hist->hsize * ((low - hist->st) / (hist->end - hist->st)));
+    unsigned int hp = floor(hist->hsize * ((low - hist->st) / (hist->end - hist->st)));
     int dp = 0;
     double ri = 0.0;
 
@@ -642,7 +631,7 @@ void rebin_histogram(struct im_histogram *hist, double (* rbh)[2], int dbins,
             dri -= hbinsize;
         }
 
-#undef SETLIMITS()
+#undef SETLIMITS
 
         if (hp == hist->hsize) break;
 
@@ -1201,7 +1190,7 @@ GtkWidget* create_imadj_dialog ()
   gtk_box_pack_start (GTK_BOX (vbox1), hist_scrolled_win, TRUE, TRUE, 0);
   gtk_container_set_border_width (GTK_CONTAINER (hist_scrolled_win), 2);
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (hist_scrolled_win), GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
-  gtk_range_set_update_policy (GTK_RANGE (GTK_SCROLLED_WINDOW (hist_scrolled_win)->hscrollbar), GTK_POLICY_NEVER);
+//  gtk_range_set_update_policy (GTK_RANGE (GTK_SCROLLED_WINDOW (hist_scrolled_win)->hscrollbar), GTK_POLICY_NEVER);
 
   viewport1 = gtk_viewport_new (NULL, NULL);
   g_object_ref (viewport1);

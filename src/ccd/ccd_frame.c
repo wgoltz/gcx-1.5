@@ -346,6 +346,9 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
     unsigned *hdata = st->hist.hdat;
     unsigned hsize = st->hist.hsize;
 
+    unsigned int hix; // clear histogram
+    for (hix = 0; hix < hsize; hix++) hdata[hix] = 0;
+
     double hmin = H_MIN;
     double hstep = (H_MAX - H_MIN) / hsize;
     unsigned binmax = 0;
