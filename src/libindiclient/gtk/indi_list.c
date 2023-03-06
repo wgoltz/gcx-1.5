@@ -29,8 +29,8 @@ indi_list *il_iter(indi_list *l)
 
 indi_list *il_next(indi_list *l)
 {
-	GSList *gsl = (GSList *)l;
-	return g_slist_next(gsl);
+//	GSList *gsl = (GSList *)l;
+    return g_slist_next(l);
 }
 
 int il_is_last(indi_list *l)
@@ -45,34 +45,34 @@ indi_list *il_new()
 
 indi_list *il_prepend(indi_list *l, void *data)
 {
-    GSList *gsl = l;
-	return g_slist_prepend((GSList *)l, data);
+//    GSList *gsl = l;
+    return g_slist_prepend(l, data);
 }
 
 indi_list *il_append(indi_list *l, void *data)
 {
-    GSList *gsl = l;
-    gsl = g_slist_append((GSList *)l, data);
-    return gsl;
+//    GSList *gsl = l;
+//    gsl = g_slist_append((GSList *)l, data);
+    return g_slist_append(l, data);
 }
 
 
 indi_list *il_remove(indi_list *l, void *data)
 {
-	return g_slist_remove((GSList *)l, data);
+    return g_slist_remove(l, data);
 }
 
 indi_list *il_remove_first(indi_list *l)
 {
-	return g_slist_remove((GSList *)l, ((GSList *)l)->data);
+    return g_slist_remove(l, ((GSList *)l)->data);
 }
 
 void *il_item(indi_list *l)
 {
-	GSList *gsl = (GSList *)l;
-	if(gsl)
-		return gsl->data;
-	return NULL;
+//	GSList *gsl = (GSList *)l;
+    if (l)
+        return ((GSList *)l)->data;
+    return NULL;
 }
 
 void *il_first(void *l)
@@ -84,6 +84,6 @@ void *il_first(void *l)
 
 unsigned int il_length(indi_list *l)
 {
- 	return g_slist_length((GSList *)l);
+    return g_slist_length(l);
 }
 

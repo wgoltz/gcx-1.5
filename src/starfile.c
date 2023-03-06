@@ -1068,25 +1068,25 @@ int stf_fprint(FILE *fp, struct stf *stf, int level, int col)
 //	if (level == 1)
 //		col = stf_linebreak(fp, level);
 	for (; stf != NULL; stf = stf->next) {
-        double d;
-        char *s;
-        int i;
-        unsigned int ui;
+//        double d;
+//        char *s;
+//        int i;
+//        unsigned int ui;
 		switch(stf->type) {
 		case STFT_SYMBOL:
 			if (col > STF_PRINT_RIGHT)
 				col = stf_linebreak(fp, level);
 			if (level == 0 && col > STF_PRINT_TAB)
 				col = stf_linebreak(fp, level);
-            s = symname[STF_SYMBOL(stf)];
+//            s = symname[STF_SYMBOL(stf)];
 			col += fprintf(fp, "%s ", symname[STF_SYMBOL(stf)]);
 			break;
 		case STFT_DOUBLE:
-            d = STF_DOUBLE(stf);
+//            d = STF_DOUBLE(stf);
 			col += fprintf(fp, "%.12g ", STF_DOUBLE(stf));
 			break;
 		case STFT_STRING:
-            s = STF_STRING(stf);
+//            s = STF_STRING(stf);
 			l = strlen(STF_STRING(stf));
 			if (col + l > STF_PRINT_COLS)
 				col = stf_linebreak(fp, level);
@@ -1095,15 +1095,15 @@ int stf_fprint(FILE *fp, struct stf *stf, int level, int col)
 		case STFT_IDENT:
 //			if (col > STF_PRINT_RIGHT)
 //				col = stf_linebreak(fp, level);
-            s = STF_IDENT(stf);
+//            s = STF_IDENT(stf);
 			col += fprintf(fp, "%s ", STF_IDENT(stf));
 			break;
 		case STFT_INT:
-            i = STF_INT(stf);
+//            i = STF_INT(stf);
 			col += fprintf(fp, "%d ", STF_INT(stf));
 			break;
 		case STFT_UINT:
-            ui = STF_UINT(stf);
+//            ui = STF_UINT(stf);
 			col += fprintf(fp, "%ud ", STF_UINT(stf));
 			break;
 		case STFT_GLIST:

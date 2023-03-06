@@ -1321,9 +1321,7 @@ void plot_sky_histogram(gpointer window, GSList *found)
 		return;
 	}
 	rs = malloc(sizeof(struct rstats));
-	ring_stats(i_ch->fr, gs->x, gs->y,
-		      P_DBL(AP_R2), P_DBL(AP_R3), ALLQUADS, rs,
-		      -HUGE, HUGE);
+    ring_stats(i_ch->fr, gs->x, gs->y, P_DBL(AP_R2), P_DBL(AP_R3), ALLQUADS, rs, -HUGE, HUGE);
 
 	pop = open_plot(&dfp, NULL);
 	if (pop >= 0) {

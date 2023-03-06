@@ -186,7 +186,7 @@ void cam_to_img(GtkWidget *dialog)
 	int mxsk, mysk;
 	int binx, biny;
 	int value, min, max;
-	float fvalue, fmin, fmax;
+//	float fvalue, fmin, fmax;
 	struct camera_t *camera;
 	GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
 
@@ -205,23 +205,23 @@ void cam_to_img(GtkWidget *dialog)
 //	named_spin_set(dialog, "exp_spin", fvalue);
 
 
-    GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(dialog), "img_size_combo_box");
+//    GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(dialog), "img_size_combo_box");
 
-    int active = gtk_combo_box_get_active(GTK_COMBO_BOX(img_size_combo_box));
+//    int active = gtk_combo_box_get_active(GTK_COMBO_BOX(img_size_combo_box));
 
-    double v;
+//    double v;
 
 	camera_get_size(camera, "WIDTH", &value, &min, &max);
     named_spin_set_limits(dialog, "img_width_spin", 0, 1.0 * max);
 
-    v = value * 1000.0 / img_scale[active] / binx;
+//    v = value * 1000.0 / img_scale[active] / binx;
     named_spin_set(dialog, "img_width_spin", 1.0 * value / binx);
     mxsk = 0; //max - value * binx;
 
 	camera_get_size(camera, "HEIGHT", &value, &min, &max);
     named_spin_set_limits(dialog, "img_height_spin", 0, 1.0 * max);
 
-    v = value * 1000.0 / img_scale[active] / biny;
+//    v = value * 1000.0 / img_scale[active] / biny;
     named_spin_set(dialog, "img_height_spin", 1.0 * value / biny);
     mysk = 0; //max - value * biny;
 

@@ -764,8 +764,8 @@ void *indigui_create_window(struct indi_t *indi)
 
 	g_object_unref (ui);
 
-    GtkScrolledWindow *scr = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(scr, GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    GtkWidget *scr = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scr), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
 
     gtk_box_pack_start(GTK_BOX (vbox), scr, TRUE, TRUE, 0);
 //    gtk_container_add(GTK_CONTAINER (vbox), GTK_WIDGET (scr));
@@ -777,12 +777,12 @@ void *indigui_create_window(struct indi_t *indi)
     gtk_notebook_set_scrollable(GTK_NOTEBOOK (notebook), TRUE);
     g_object_set_data_full(G_OBJECT (window), "notebook", notebook, (GDestroyNotify)g_object_unref);
 
-    gtk_scrolled_window_add_with_viewport(scr, notebook);
+    gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scr), notebook);
 
 	textscroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(textscroll, GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(textscroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
 
-    gtk_box_pack_start(vbox, textscroll, FALSE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), textscroll, FALSE, TRUE, 0);
 
 	textbuffer = gtk_text_buffer_new(NULL);
     g_object_ref(textbuffer);

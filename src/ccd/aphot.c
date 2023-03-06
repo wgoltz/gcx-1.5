@@ -151,8 +151,10 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 
 //	d3_printf("enter ringstats\n");
 
-    unsigned hix;
-    for (hix = 0; hix < H_SIZE; hix++) rs->h[hix] = 0;
+//    unsigned hix;
+//    for (hix = 0; hix < H_SIZE; hix++) rs->h[hix] = 0;
+
+    *rs = (struct rstats) {0};
 
 //	d3_printf("init histogram\n");
 
@@ -217,7 +219,10 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 		}
 	}
 
-    if (nring - nskipped <= 0) return -1;
+    if (sum == 0 || (nring - nskipped <= 0)) {
+        printf("ring_stats: bad stats\n"); fflush(NULL);
+        return -1;
+    }
 
 // fill the result structure with the stats
 	rs->all = nring;
@@ -231,7 +236,7 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
         double avg = sum / rs->used;
         double sigma2 = sumsq / rs->used - avg * avg;
         if (sigma2 < 0) {
-            printf("dodgy sigma %f %f %f\n", avg, sumsq, rs->used); fflush(NULL);
+            printf("ring_stats: dodgy sigma %f %f %f\n", avg, sumsq, rs->used); fflush(NULL);
             sigma2 = 0;
         }
 
@@ -240,6 +245,7 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 
 // walk the histogram and compute median
     int med = 0;
+    unsigned int hix;
     for (hix = pmin; hix <= pmax; hix++) {
         med += rs->h[hix];
         if (med >= 0.5 * rs->used) break;
@@ -251,18 +257,14 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 
 // get the sky value and error; we assume that the star position 
 // has been checked against the edges
-static int ap_get_sky(struct ccd_frame *fr, struct star *s, 
-	       struct ap_params *p, struct bad_pix_map *bp)
+static int ap_get_sky(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct bad_pix_map *bp)
 {
 	struct rstats rs;
-	int ret;
+
 	double mean, median;
 
 // get a first round of ring stats
-	ret = ring_stats(fr, s->x, s->y, p->r2, p->r3, p->quads, &rs, -HUGE, HUGE);
-	if (ret) {
-		return ret;
-	}
+    ring_stats(fr, s->x, s->y, p->r2, p->r3, p->quads, &rs, -HUGE, HUGE);
 
 	switch(p->sky_method) {
 	case APMET_AVG:
@@ -473,8 +475,7 @@ static double aperture_centroid(struct ccd_frame *fr, double r, double x, double
 
 
 // get the star flux
-static int ap_get_star(struct ccd_frame *fr, struct star *s, 
-	       struct ap_params *p, struct bad_pix_map *bp)
+static int ap_get_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct bad_pix_map *bp)
 {
     double fsq;
 

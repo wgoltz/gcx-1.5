@@ -336,12 +336,13 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 
     if (fr->pix_format != PIX_FLOAT) {
 		d3_printf("frame_stats: converting frame to float format!\n");
-        int ret = frame_to_float(fr);
-		if (ret < 0) {
-			err_printf("error converting \n");
-			return ret;
+        if (frame_to_float(fr) < 0) {
+            err_printf("error converting frame to float\n");
+            return -1;
 		}
 	}
+
+    if (st->hist.hdat == NULL) return -1;
 
     unsigned *hdata = st->hist.hdat;
     unsigned hsize = st->hist.hsize;

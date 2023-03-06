@@ -1529,7 +1529,7 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
             imf = add_image_file_to_list (imfl, fr->name, IMG_LOADED);
 
             imf->fr = fr;
-            get_frame(imf->fr, "ccdred_run_cb");
+//            get_frame(imf->fr, "ccdred_run_cb");
 
             if (outf && outf[0]) {
                 if (get_named_checkb_val(dialog, "clip_checkb"))
