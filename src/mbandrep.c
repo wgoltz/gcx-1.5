@@ -131,7 +131,7 @@ static int REP_FMT_AAVSO_star(FILE *repfp, struct star_obs *sob, struct star_obs
 
     char *mag_part;
     if (sob->flags & CPHOT_NOT_FOUND) {
-        asprintf (&mag_part, "<%5.3f,NA", sob->ofr->lmag);
+        asprintf (&mag_part, ">%5.3f,NA", sob->ofr->lmag);
     } else {
         asprintf (&mag_part, "%5.3f,%5.3f", sob->mag, sob->err);
     }

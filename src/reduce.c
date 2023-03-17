@@ -1654,20 +1654,19 @@ void refresh_wcs(gpointer window, struct ccd_frame *fr) {
         g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
 
-    struct wcs *frame_wcs = & fr->fim;
-// frame xrefpix, yrefpix correct but no xref, yref - they are in window wcs
+    wcs_from_frame(fr, window_wcs);
 
-    if (frame_wcs->wcsset) { // copy frame wcs to window
-        wcs_clone(window_wcs, frame_wcs);
-        window_wcs->flags &= ~WCS_HINTED;
-
-    } else { // use window wcs as first guess for frame
-        wcs_from_frame(fr, window_wcs); // update window wcs from fits frame fields
-        unsigned int flags = frame_wcs->flags;
-        window_wcs->wcsset = WCS_INITIAL;
-        wcs_clone(frame_wcs, window_wcs);
-        frame_wcs->flags = flags | WCS_HINTED;
-    }
+//    struct wcs *frame_wcs = & fr->fim;
+//    if (frame_wcs->wcsset) { // copy frame wcs to window
+//        wcs_clone(window_wcs, frame_wcs);
+//        window_wcs->flags &= ~WCS_HINTED;
+//    } else { // use window wcs as first guess for frame
+//        wcs_from_frame(fr, window_wcs); // update window wcs from fits frame fields
+//        unsigned int flags = frame_wcs->flags;
+////        window_wcs->wcsset = WCS_INITIAL;
+//        wcs_clone(frame_wcs, window_wcs);
+//        frame_wcs->flags = flags | WCS_HINTED;
+//    }
 
     wcsedit_refresh(window);
 }

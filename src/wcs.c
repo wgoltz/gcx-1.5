@@ -44,159 +44,174 @@
 
 //#define CHECK_WCS_CLOSURE
 
-/* try to get an inital wcs from observation data */
-static void fits_obs_params_to_fim(struct ccd_frame *fr, struct wcs *wcs)
+/* try to get an inital (frame) wcs from frame data */
+static void fits_frame_params_to_fim(struct ccd_frame *fr)
 {
-    gboolean havera = FALSE, havedec = FALSE, haveeq = FALSE, havescale = FALSE, haverot = FALSE;
-    double ra, dec, eq, scale, rot;
-
-    havera = (fits_get_double(fr, P_STR(FN_RA), &ra) > 0);
-    if (! havera) {
-        havera = (fits_get_dms(fr, P_STR(FN_RA), &ra) > 0);
-        if (havera) ra *= 15.0;
+    double ra;
+    gboolean have_ra = (fits_get_double(fr, P_STR(FN_RA), &ra) > 0);
+    if (have_ra) {
+        int d_type = fits_get_dms(fr, P_STR(FN_RA), &ra);
+        have_ra = (d_type >= 0);
+        if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0; // sexa hh:mm:ss else decimal
     }
-    if (! havera)
-        havera = (fits_get_double(fr, P_STR(FN_OBJCTRA), &ra) > 0);
-    if (! havera) {
-        havera = (fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra) > 0);
-        if (havera) ra *= 15.0;
+    if (! have_ra) {
+        have_ra = (fits_get_double(fr, P_STR(FN_OBJCTRA), &ra) > 0);
+        if (have_ra) {
+            int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
+            have_ra = (d_type >= 0);
+            if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0;
+        }
     }
-    if (! havera) ra = INV_DBL;
+//    if (! have_ra) ra = INV_DBL;
 
-    havedec = (fits_get_double(fr, P_STR(FN_DEC), &dec) > 0);
-    if (! havedec) havedec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) > 0);
-    if (! havedec) havedec = (fits_get_double(fr, P_STR(FN_OBJCTDEC), &dec) > 0);
-    if (! havedec) havedec = (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) > 0);
-    if (! havedec) dec = INV_DBL;
+    double dec;
+    gboolean have_dec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) >= 0);
+    if (! have_dec) have_dec = (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) >= 0);
 
-    haveeq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
-    if (! haveeq) haveeq = (fits_get_double(fr, P_STR(FN_EPOCH), &eq) > 0);
-    if (! haveeq) eq = 2000.0;
+//    if (! have_dec) have_dec = (fits_get_double(fr, P_STR(FN_DEC), &dec) > 0);
+//    if (! have_dec) have_dec = (fits_get_double(fr, P_STR(FN_OBJCTDEC), &dec) > 0);
+//    if (! have_dec) dec = INV_DBL;
 
-    havescale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
-    if (! havescale) havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
-    if (! havescale) {
-        havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0));
-        if (havescale)
-            scale = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
-    }
-// assume bin_x == bin_y
-    if (havescale && (fr->exp.bin_x > 1))
-        scale = scale * fr->exp.bin_x;
-    if (! havescale) scale = 1;
-
-    haverot = (fits_get_double(fr, P_STR(FN_CROTA1), &rot) > 0);
-    if (! haverot) rot = 0;
-
-//    struct wcs *frame_wcs = & fr->fim;
-
-    wcs->xrefpix = fr->w / 2;
-    wcs->yrefpix = fr->h / 2;
-
-    wcs->rot = rot;
-    wcs->equinox = eq;
-    wcs->xinc = - scale / 3600.0;
-    wcs->yinc = - scale / 3600.0;
-    if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
-
-d2_printf("wcs.fits_obs_params_to_fim setting wcsset to WCS_INITIAL\n");
-    gboolean haveobject = FALSE;
-
-    if (! havera || ! havedec) {
+    gboolean have_pos = (have_ra && have_dec);
+    if (! have_pos) {
         char *name = fits_get_string(fr, P_STR(FN_OBJECT));
-        
-        if ((haveobject = (name != NULL))) {
-//            d3_printf("looking for object %s\n", name);
-            
+        if (name) {
             struct cat_star *cats = get_object_by_name(name);
-            if ((haveobject = (cats != NULL))) {
+            have_pos = (cats != NULL);
+            if (have_pos) {
                 ra = cats->ra;
                 dec = cats->dec;
             }
         }
     }
 
-    if (haveobject || (havera && havedec)) {
+    double scale;
+    gboolean have_scale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
+
+    double lat;
+    gboolean have_lat = (fits_get_double (fr, P_STR(FN_LATITUDE), &lat) > 0);
+    if (! have_lat) {
+        char *lat_str = fits_get_string (fr, P_STR(FN_LATITUDE));
+        if (lat_str) have_lat = (dms_to_degrees (lat_str, &lat) >= 0), free(lat_str);
+    }
+
+    double lng;
+    gboolean have_lng = (fits_get_double (fr, P_STR(FN_LONGITUDE), &lng) > 0);
+    if (! have_lng) {
+        char *lng_str = fits_get_string(fr, P_STR(FN_LONGITUDE));
+        if (lng_str) have_lng = (dms_to_degrees (lng_str, &lng) >= 0), free(lng_str);
+    }
+
+    double eq;
+    gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
+    if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
+
+    double rot;
+    gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
+
+// now set frame fim
+    struct wcs *wcs = & fr->fim;
+
+    wcs->jd = frame_jdate (fr); // frame center jd
+    if (wcs->jd != 0.0)
+        wcs->flags |= WCS_JD_VALID;
+    // else wcs->flags &= ~WCS_JD_VALID; // reuse jd
+
+    wcs->xrefpix = fr->w / 2;
+    wcs->yrefpix = fr->h / 2;
+
+    if (have_rot) wcs->rot = rot;
+    if (have_eq) wcs->equinox = eq;
+
+    if (have_scale) {
+        wcs->xinc = - scale / 3600.0;
+        wcs->yinc = - scale / 3600.0;
+        wcs->flags |= WCS_HAVE_SCALE;
+    } // else wcs->flags &= ~WCS_HAVE_SCALE; // reuse scale
+
+    if (have_pos) {
         wcs->xref = ra;
         wcs->yref = dec;
+        wcs->flags |= WCS_HAVE_POS;
+    } // else wcs->flags &= ~WCS_HAVE_POS; // reuse pos
 
-        wcs->flags &= ~WCS_HINTED;
+    if (have_lat && have_lng) {
+        wcs->lng = lng;
+        wcs->lat = lat;
+        wcs->flags |= WCS_LOC_VALID;
+    } // else wcs->flags &= ~WCS_LOC_VALID; // reuse loc
+}
+
+static void fits_local_params_to_fim(struct ccd_frame *fr)
+{
+    struct wcs *wcs = & fr->fim;
+
+    if ((wcs->flags & WCS_HAVE_SCALE) == 0) {
+        double scale = P_DBL(OBS_SECPIX);
+        double pixsize_on_flen = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
+        if (fabs(scale - pixsize_on_flen) / (scale + pixsize_on_flen) > 0.01)
+            err_printf("scale derived from (OBS_PIXSZ / OBS_FLEN) differs from (OBS_SECPIX)\n");
+        wcs->xinc = - scale / 3600.0;
+        wcs->yinc = - scale / 3600.0;
+        wcs->flags |= WCS_HAVE_SCALE;
     }
+
+    if ((wcs->flags & WCS_LOC_VALID) == 0) {
+        wcs->lat = P_DBL(OBS_LATITUDE);
+        wcs->lng = P_DBL(OBS_LONGITUDE);
+        wcs->flags |= WCS_LOC_VALID;
+    }
+
+    if (! P_INT(FILE_WESTERN_LONGITUDES)) wcs->lng = -wcs->lng;
+
+    if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
 }
 
 /* adjust the window wcs when a new frame is loaded */
 void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 {
-     // for empty frame have name w,h, type, equinox 2000
-    struct wcs *fr_wcs = & fr->fim;
-
-// *******************
 
 //    if ( fr_wcs->wcsset == WCS_INVALID )
 //        wcs_transform_from_frame (fr, fr_wcs);
 
-    if ( fr_wcs->wcsset <= WCS_INITIAL ) {
-        fits_obs_params_to_fim (fr, window_wcs);
+    struct wcs *fr_wcs = & fr->fim;
 
-    } else if ( (window_wcs->wcsset <= fr_wcs->wcsset) || (window_wcs->flags & WCS_HINTED) ) {
-        wcs_clone(window_wcs, fr_wcs);
+    if (fr_wcs->wcsset < WCS_VALID) {
+
+        if (fr_wcs->wcsset == WCS_INVALID) { // reload everything
+            wcs_clone(fr_wcs, window_wcs);
+
+            fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
+            fits_local_params_to_fim(fr); // fill in from locals
+        }
+
+        if (window_wcs->flags & (WCS_EDITED | WCS_HINTED)) { // pickup stuff from previous frame/wcsedit
+            // whatelse needs to be copied?
+            if (window_wcs->flags & WCS_HAVE_POS) {
+                fr_wcs->xref = window_wcs->xref;
+                fr_wcs->yref = window_wcs->yref;
+                fr_wcs->flags |= WCS_HAVE_POS;
+            }
+            if (window_wcs->flags & WCS_HAVE_SCALE) {
+                fr_wcs->xinc = window_wcs->xinc;
+                fr_wcs->yinc = window_wcs->yinc;
+                fr_wcs->flags |= WCS_HAVE_SCALE;
+            }
+            if (window_wcs->flags & WCS_LOC_VALID) {
+                fr_wcs->lat = window_wcs->lat;
+                fr_wcs->lng = window_wcs->lng;
+                fr_wcs->flags |= WCS_LOC_VALID;
+            }
+            if ((fr_wcs->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+                    == (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+                fr_wcs->wcsset = WCS_INITIAL;
+        }
     }
 
-// *******************
-//    if (fr_wcs->wcsset == WCS_INVALID ) {
-//        if (window_wcs->wcsset) {
-//            window_wcs->wcsset = WCS_INITIAL;
-//            wcs_clone(fr_wcs, window_wcs); // initial fr_wcs from window_wcs
+    wcs_clone(window_wcs, fr_wcs);
 
-//            fr_wcs->xrefpix = fr->w / 2 + 0.5;
-//            fr_wcs->yrefpix = fr->h / 2 + 0.5;
-
-//            fr_wcs->flags |= WCS_HINTED;
-//        }
-//        fits_obs_params_to_fim (fr); // presumably only for locally acquired images?
-//    } else {
-//        printf("fr_wcs is valid\n");
-//        fflush(NULL);
-// this only works if transform is set in frame
-//        wcs_transform_from_frame (fr, fr_wcs); // set transform from frame params
-
-//    }
-
-//    if (fr_wcs->wcsset) {
-//        fr_wcs->flags &= ~WCS_HINTED;
-//        fr_wcs->flags &= ~WCS_USE_LIN;
-//    }
-
-//    wcs_clone(window_wcs, fr_wcs); // fr_wcs to window_wcs
-// ********************
-    window_wcs->jd = frame_jdate (fr); // frame center jd
-    // what about fr_wcs->jd ?
-    if (window_wcs->jd != 0.0)
-        window_wcs->flags |= WCS_JD_VALID;
-	else
-        window_wcs->flags &= ~WCS_JD_VALID;
-
-    double lat;
-    gboolean h_lat = (fits_get_double (fr, P_STR(FN_LATITUDE), &lat) > 0);
-    if (! h_lat) {
-        char *lat_str = fits_get_string (fr, P_STR(FN_LATITUDE));
-        if (lat_str) h_lat = (dms_to_degrees (lat_str, &lat) >= 0), free(lat_str);
-    }
-
-    double lng;
-    gboolean h_lng = (fits_get_double (fr, P_STR(FN_LONGITUDE), &lng) > 0);
-    if (! h_lng) {
-        char *lng_str = fits_get_string( fr, P_STR(FN_LONGITUDE));
-        if (lng_str) h_lng = (dms_to_degrees (lng_str, &lng) >= 0), free(lng_str);
-    }
-
-    if (h_lng && ! P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
-
-    if (h_lat && h_lng) {
-        window_wcs->lng = lng;
-        window_wcs->lat = lat;
-        window_wcs->flags |= WCS_LOC_VALID;
-    }
+    if (fr_wcs->wcsset != WCS_VALID) // ?
+        window_wcs->flags |= WCS_HINTED;
 }
 
 /* creation/deletion of wcs
@@ -206,8 +221,10 @@ struct wcs *wcs_new(void)
     struct wcs *wcs = calloc(1, sizeof(struct wcs));
 
     if (wcs) {
-        wcs->equinox = INV_DBL;
-        wcs->rot = INV_DBL;
+//        wcs->equinox = INV_DBL;
+//        wcs->rot = INV_DBL;
+        wcs->equinox = 2000;
+        wcs->rot = 0;
         wcs->xref = INV_DBL;
         wcs->yref = INV_DBL;
         wcs->xinc = INV_DBL;

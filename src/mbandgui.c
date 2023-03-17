@@ -316,7 +316,7 @@ static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, s
         add_ofr_store_entry( OFR_OUTLIERS_COL, "%d", ofr->outliers );
     }
     add_ofr_store_entry( OFR_AIRMASS_COL, "%.2f", ofr->airmass );
-    add_ofr_store_entry( OFR_JD_COL, "%.5f", mjd_to_jd(ofr->mjd) );
+    add_ofr_store_entry( OFR_JD_COL, "%.6f", mjd_to_jd(ofr->mjd) );
 
     if (ofr->fr_name)
         add_ofr_store_entry( OFR_FILENAME_COL, "%s", basename(ofr->fr_name) );
@@ -670,43 +670,52 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
         add_sob_store_entry( SOB_BAND_COL, "%s", sob->ofr->trans->bname );
     }
 
-    if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
-        char *format[] = {"[%5.3f]", "%5.3f", ">%5.1f"};
-        double imag = MAG_UNSET, imagerr = BIG_ERR;
+    if ((sob->ofr->zpstate & ZP_STATE_MASK) != ZP_NOT_FITTED) {
+        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
 
-        if ((sob->flags & CPHOT_NOT_FOUND) != 0) {
-            if (sob->ofr->lmag != MAG_UNSET) add_sob_store_entry( SOB_SMAG_COL, format[2], sob->ofr->lmag );
+            char *format[] = { ">%.1f", "[%.3f]", "%.3f" };
+            enum { format_err = -1, format_faint, format_tgt, format_std };
 
-        } else if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
-            if (band >= 0) {
-                imag = sob->imag;
-                imagerr = sob->imagerr;
-                if ( sob->ost->smag[band] != MAG_UNSET) {
-                    double m = sob->imag + sob->ofr->zpoint;
-                    double me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
+            double m = MAG_UNSET;
+            double me = BIG_ERR;
+            int fix = format_err;
 
-                    char *f = format[0];
-                    if (sob->nweight != 0) {
-                        m = sob->ost->smag[band];
-                        me = DEFAULT_ERR(sob->ost->smagerr[band]);
-                        f = format[1];
+            if (sob->flags & CPHOT_NOT_FOUND) {
+                if (sob->ofr->lmag != MAG_UNSET) {
+                    m = sob->ofr->lmag;
+                    fix = format_faint;
+                }
+
+            } else {
+                if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+                    if (band >= 0) {
+                        if (sob->nweight != 0) {
+                            m = sob->ost->smag[band];
+                            me = DEFAULT_ERR(sob->ost->smagerr[band]);
+                            fix = format_std;
+
+                        } else if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
+                            m = sob->imag + sob->ofr->zpoint;
+                            me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
+                            fix = format_tgt;
+                        }
                     }
 
-                    add_sob_store_entry( SOB_SMAG_COL, f,  m );
-                    add_sob_store_entry( SOB_SERR_COL, "%.3f", me );
+                } else {
+                    m = sob->mag;
+                    me = sob->err;
+                    fix = format_tgt;
                 }
             }
+            if (fix != format_err) {
+                add_sob_store_entry( SOB_SMAG_COL, format[fix], m );
+                if (fix != format_faint) add_sob_store_entry( SOB_SERR_COL, "%.3f", me );
+            }
 
-        } else {
-            add_sob_store_entry( SOB_SMAG_COL, format[0], sob->mag );
-            add_sob_store_entry( SOB_SERR_COL, "%.3f", sob->err );
-            imag = sob->imag;
-            imagerr = sob->imagerr;
-        }
-
-        if (imag != MAG_UNSET && imagerr != BIG_ERR) {
-            add_sob_store_entry( SOB_IMAG_COL, "%6.3f", imag );
-            add_sob_store_entry( SOB_IMAG_ERR, "%.4f", imagerr );
+            if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
+                add_sob_store_entry( SOB_IMAG_COL, "%.3f", sob->imag );
+                add_sob_store_entry( SOB_IMAG_ERR, "%.4f", sob->imagerr );
+            }
         }
     }
 
@@ -1137,7 +1146,7 @@ static void ofr_selection_cb(GtkWidget *ofr_selection, gpointer mband_dialog)
         }
 
         if (ofr->fr_name) {
-            asprintf(&buf, "JD : %.5f   %s", mjd_to_jd(ofr->mjd), basename(ofr->fr_name));
+            asprintf(&buf, "JD : %.6f   %s", mjd_to_jd(ofr->mjd), basename(ofr->fr_name));
         }
 // try this
 //        ofr_to_stf_cats(ofr);

@@ -233,7 +233,7 @@ void free_frame(struct ccd_frame *fr)
 {
 	if (fr) {
         frame_count--;
-printf("freed %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
+printf("free_frame %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
         free_stats(&fr->stats);
         if (fr->var) free(fr->var);
         if (fr->dat) free(fr->dat);
@@ -1811,15 +1811,17 @@ char *fits_get_string(struct ccd_frame *fr, char *kwd)
 
 /* get a double (degrees) from a string field containing a
  * DMS representation
- * return 1 if successfull, 0 if field is not found, -1 for a
+ * return value from dms_to_degrees if successful, or -1 if field is not found or a
  * parsing error */
+
 int fits_get_dms(struct ccd_frame *fr, char *kwd, double *v)
 {
     char *str = fits_get_string(fr, kwd);
     if (str == NULL) return -1;
 
-    int res = (dms_to_degrees(str, v) < 0);
+    int res = dms_to_degrees(str, v);
     free(str);
+
     return res;
 }
 

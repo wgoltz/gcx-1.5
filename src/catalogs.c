@@ -660,11 +660,10 @@ struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
 {
     if (cats == NULL) return NULL;
 
-printf("cat_star_release %p %d %s %s %s\n", cats, cats->ref_count, cats->name, msg, (cats->ref_count == 1) ? "freed" : "");
-fflush(NULL);
-
     if (cats->ref_count == 1) {
 //        err_printf("cat_star %p %s freed\n", cats, cats->name);
+
+        printf("cat_star_release %p %s %s\n", cats, cats->name, msg); fflush(NULL);
 
         if (cats->name) free(cats->name);
         if (cats->comments)	free(cats->comments);
@@ -1092,7 +1091,7 @@ int local_load_file(char *fn)
 		n ++;
 		local_add(CAT_STAR(sl->data), loc);
 	}
-	stf_free_all(stf);
+    stf_free_all(stf, "local_load_file");
 	return n;
 }
 

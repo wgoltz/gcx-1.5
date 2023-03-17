@@ -569,7 +569,7 @@ double frame_jdate(struct ccd_frame *fr)
             }
 
             if ((make_jd = (timestr != NULL))) {
-                make_jd = (dms_to_degrees(timestr, &time) >= 0);
+                make_jd = (dms_to_degrees(timestr, &time) == DMS_SEXA);
                 free(timestr);
             }
 

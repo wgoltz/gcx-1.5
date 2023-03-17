@@ -156,6 +156,12 @@ static int get_recipe_flags(GtkWidget *dialog)
 	return flags;
 }
 
+
+static void stf_free_all_(struct stf *stf)
+{
+    stf_free_all(stf, "mkrcp_ok_cb");
+}
+
 /* called when we click ok */
 static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
 {
@@ -185,10 +191,9 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
 	}
 
     char *fn = named_entry_text(dialog, "recipe_file_entry");
-	if (fn == NULL || fn[0] == 0) {
+    if (fn == NULL) {
 		err_printf_sb2(window, "Please enter a recipe file name");
 		error_beep();
-        if (fn != NULL)	free(fn);
 		return;
 	}
 
@@ -232,7 +237,7 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
 	if (rcp == NULL) {
 		err_printf_sb2(window, "%s", last_err());
 	} else {
-        g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)stf_free_all);
+        g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)stf_free_all_);
 		stf_fprint(rfp, rcp, 0, 0);
 
         GList *stars = stf_find_glist(rcp, 0, SYM_STARS);

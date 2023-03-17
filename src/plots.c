@@ -146,7 +146,7 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 		fprintf(dfp, "set ylabel 'Residuals'\n");
 	}
 //    fprintf(dfp, "set yrange [-1:1]\n");
-//    fprintf(dfp, "set title '%s: band:%s mjd=%.5f'\n",
+//    fprintf(dfp, "set title '%s: band:%s mjd=%.6f'\n",
 //        ofr->obs->objname, ofr->filter, ofr->mjd);
 	fprintf(dfp, "plot ");
 	
@@ -308,7 +308,7 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 //	fprintf(dfp, "set format x \"%%.3f\"\n");
 	fprintf(dfp, "set xtics autofreq\n");
     fprintf(dfp, "set yrange [:] reverse\n");
-//	fprintf(dfp, "set title '%s: band:%s mjd=%.5f'\n",
+//	fprintf(dfp, "set title '%s: band:%s mjd=%.6f'\n",
 //		ofr->obs->objname, ofr->filter, ofr->mjd);
 	fprintf(dfp, "plot  ");	
 
@@ -399,7 +399,7 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 	fprintf(dfp, "set ylabel 'Magnitude'\n");
 	fprintf(dfp, "set title 'Fitted Frame Zeropoints'\n");
     fprintf(dfp, "set yrange [:] reverse\n");
-//	fprintf(dfp, "set title '%s: band:%s mjd=%.5f'\n", ofr->obs->objname, ofr->filter, ofr->mjd);
+//	fprintf(dfp, "set title '%s: band:%s mjd=%.6f'\n", ofr->obs->objname, ofr->filter, ofr->mjd);
 	fprintf(dfp, "plot  ");
 	
 	osl = ofrs;
@@ -671,7 +671,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
                     str_join_varg(&data->pos, "\n%.7f %.3f %.3f", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
                     n_pos++;
                 } else if (sob->flags & CPHOT_FAINT) {
-                    str_join_varg(&data->neg, "\n%.4f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
+                    str_join_varg(&data->neg, "\n%.7f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
                     n_neg++;
                 }
             }

@@ -234,66 +234,56 @@ static void update_star_cb( GtkWidget *widget, gpointer data )
 static int get_double_from_editable(GtkWidget *widget, double *v)
 {
 	char *endp;
-	double val;
-	char *text;
 
-	text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
-	val = strtod(text, &endp);
-	if (endp == text) {
-		g_free(text);
-		return -1;
-	} else {
-		g_free(text);
-		*v = val;
-		return 0;
-	}
+    char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
+    double val = strtod(text, &endp);
+    g_free(text);
+
+    if (endp == text) return -1;
+
+    *v = val;
+
+    return 0;
 }
 
 /* parse a ra value from an editable; if a valid number is found,
  * it is updated in v and 0 is returned */
 static int get_ra_from_editable(GtkWidget *widget, double *v)
 {
-	double val;
-	char *text;
+    char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
+    if (text == NULL) return -1;
 
-	text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
-    int degrees;
+    double ra;
+    int d_type = dms_to_degrees(text, &ra);
+    g_free(text);
 
-    if ((degrees = dms_to_degrees(text, &val)) < 0) {
-		g_free(text);
-		return -1;
-	} else {
-		g_free(text);
-        if (degrees) {
-            clamp_double(&val, 0, 360);
-            *v = val;
-        } else {
-            clamp_double(&val, 0, 24);
-            *v = val * 15;
-        }
-		return 0;
-	}
+    if (d_type < 0) return -1;
+
+    if (d_type == DMS_SEXA) ra *= 15;
+    clamp_double(&ra, 0, 360);
+
+    *v = ra;
+
+    return 0;
+
 }
 
 /* parse a dec value from an editable; if a valid number is found,
  * it is updated in v and 0 is returned */
 static int get_dec_from_editable(GtkWidget *widget, double *v)
 {
-	double val;
-	char *text;
-	int ret;
+    double dec;
 
-	text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
-	ret = dms_to_degrees(text, &val);
-    if (ret < 0) {
-		g_free(text);
-		return -1;
-	} else {
-		g_free(text);
-		clamp_double(&val, -90.0, 90.0);
-		*v = val;
-		return 0;
-	}
+    char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
+    int d_type = dms_to_degrees(text, &dec);
+    g_free(text);
+
+    if (d_type < 0) return -1;
+    clamp_double(&dec, -90.0, 90.0);
+
+    *v = dec;
+
+    return 0;
 }
 
 
@@ -833,8 +823,7 @@ printf("add_star_from_catalog wcsset = WCS_INITIAL\n"); fflush(NULL);
     wcs->rot = 0.0;
 
     if (! keep_scale) {
-        wcs->xinc = P_DBL(OBS_SECPIX) / 3600.0;
-        wcs->yinc = P_DBL(OBS_SECPIX) / 3600.0;
+        wcs->xinc = wcs->yinc = P_DBL(OBS_SECPIX) / 3600.0;
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
     }
 

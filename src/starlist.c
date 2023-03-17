@@ -456,11 +456,12 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 		return 0;
 	}
 
-    if (fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra) <= 0) {
+    int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
+    if (d_type < 0) {
 		err_printf("no '%s' field in fits header\n", P_STR(FN_OBJCTRA));
 		return 0;
 	}
-	ra *= 15.0;
+    if (d_type == DMS_SEXA)	ra *= 15.0;
 
     if (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) <= 0) {
 		err_printf("no '%s' field in fits header\n", P_STR(FN_OBJCTDEC));

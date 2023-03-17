@@ -1102,16 +1102,17 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 	if (get_named_checkb_val(dialog, "bias_checkb")) {
         char *text = named_entry_text(dialog, "bias_entry");
-
-        if ((ccdr->ops & IMG_OP_BIAS) && ccdr->bias && strcmp(text, ccdr->bias->filename)) {
-			image_file_release(ccdr->bias);
-			ccdr->bias = image_file_new();
-			ccdr->bias->filename = strdup(text);
-		} else if (!(ccdr->ops & IMG_OP_BIAS)) {
-			ccdr->bias = image_file_new();
-			ccdr->bias->filename = strdup(text);
-		}
-        free(text);
+        if (text) {
+            if ((ccdr->ops & IMG_OP_BIAS) && ccdr->bias && strcmp(text, ccdr->bias->filename)) {
+                image_file_release(ccdr->bias);
+                ccdr->bias = image_file_new();
+                ccdr->bias->filename = strdup(text);
+            } else if (!(ccdr->ops & IMG_OP_BIAS)) {
+                ccdr->bias = image_file_new();
+                ccdr->bias->filename = strdup(text);
+            }
+            free(text);
+        }
 		ccdr->ops |= IMG_OP_BIAS;
 
 	} else {
@@ -1123,16 +1124,17 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 	if (get_named_checkb_val(dialog, "dark_checkb")) {
         char *text = named_entry_text(dialog, "dark_entry");
-
-        if ((ccdr->ops & IMG_OP_DARK) && ccdr->dark && strcmp(text, ccdr->dark->filename)) {
-			image_file_release(ccdr->dark);
-			ccdr->dark = image_file_new();
-			ccdr->dark->filename = strdup(text);
-		} else if (!(ccdr->ops & IMG_OP_DARK)) {
-			ccdr->dark = image_file_new();
-			ccdr->dark->filename = strdup(text);
-		}
-        free(text);
+        if (text) {
+            if ((ccdr->ops & IMG_OP_DARK) && ccdr->dark && strcmp(text, ccdr->dark->filename)) {
+                image_file_release(ccdr->dark);
+                ccdr->dark = image_file_new();
+                ccdr->dark->filename = strdup(text);
+            } else if (!(ccdr->ops & IMG_OP_DARK)) {
+                ccdr->dark = image_file_new();
+                ccdr->dark->filename = strdup(text);
+            }
+            free(text);
+        }
 		ccdr->ops |= IMG_OP_DARK;
 
 	} else {
@@ -1144,16 +1146,17 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 	if (get_named_checkb_val(dialog, "flat_checkb")) {
         char *text = named_entry_text(dialog, "flat_entry");
-
-        if ((ccdr->ops & IMG_OP_FLAT) && ccdr->flat && strcmp(text, ccdr->flat->filename)) {
-			image_file_release(ccdr->flat);
-			ccdr->flat = image_file_new();
-			ccdr->flat->filename = strdup(text);
-		} else if (!(ccdr->ops & IMG_OP_FLAT)) {
-			ccdr->flat = image_file_new();
-			ccdr->flat->filename = strdup(text);
-		}
-        free(text);
+        if (text) {
+            if ((ccdr->ops & IMG_OP_FLAT) && ccdr->flat && strcmp(text, ccdr->flat->filename)) {
+                image_file_release(ccdr->flat);
+                ccdr->flat = image_file_new();
+                ccdr->flat->filename = strdup(text);
+            } else if (!(ccdr->ops & IMG_OP_FLAT)) {
+                ccdr->flat = image_file_new();
+                ccdr->flat->filename = strdup(text);
+            }
+            free(text);
+        }
 		ccdr->ops |= IMG_OP_FLAT;
 
 	} else {
@@ -1165,14 +1168,16 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 	if (get_named_checkb_val(dialog, "badpix_checkb")) {
         char *text = named_entry_text(dialog, "badpix_entry");
-        if (ccdr->ops & IMG_OP_BADPIX)
-            if (ccdr->bad_pix_map)
-                bad_pix_map_release(ccdr->bad_pix_map);
+        if (text) {
+            if (ccdr->ops & IMG_OP_BADPIX)
+                if (ccdr->bad_pix_map)
+                    bad_pix_map_release(ccdr->bad_pix_map);
 
-        ccdr->bad_pix_map =  bad_pix_map_new();
-        ccdr->bad_pix_map->filename = strdup(text);
+            ccdr->bad_pix_map =  bad_pix_map_new();
+            ccdr->bad_pix_map->filename = strdup(text);
 
-        free(text);
+            free(text);
+        }
 		ccdr->ops |= IMG_OP_BADPIX;
 
 	} else {
@@ -1189,18 +1194,19 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
     int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
     if (active) {
         char *text = named_entry_text(dialog, "align_entry");
+        if (text) {
+            if ((ccdr->ops & IMG_OP_ALIGN) && ccdr->alignref && strcmp(text, ccdr->alignref->filename)) {
+                image_file_release(ccdr->alignref);
+                ccdr->alignref = image_file_new();
+                ccdr->alignref->filename = strdup(text);
+                free_alignment_stars(ccdr);
 
-        if ((ccdr->ops & IMG_OP_ALIGN) && ccdr->alignref && strcmp(text, ccdr->alignref->filename)) {
-			image_file_release(ccdr->alignref);
-			ccdr->alignref = image_file_new();
-			ccdr->alignref->filename = strdup(text);
-			free_alignment_stars(ccdr);
-
-        } else if (!(ccdr->ops & IMG_OP_ALIGN)) {
-            ccdr->alignref = image_file_new();
-            ccdr->alignref->filename = strdup(text);
+            } else if (!(ccdr->ops & IMG_OP_ALIGN)) {
+                ccdr->alignref = image_file_new();
+                ccdr->alignref->filename = strdup(text);
+            }
+            free(text);
         }
-        free(text);
 		ccdr->ops |= IMG_OP_ALIGN;
 
 	} else {
@@ -1244,18 +1250,21 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
             ccdr->wcs = wcs_release(ccdr->wcs);
 //			ccdr->wcs = NULL;
 		}
-        if (ccdr->recipe) free(ccdr->recipe);
+        if (ccdr->recipe) {
+            free(ccdr->recipe);
+            ccdr->recipe = NULL;
+        }
 
         char *text = named_entry_text(dialog, "recipe_entry");
-        char *p = text;
-        while (*p) // skip leading spaces
-            if (*p++ != ' ') break;
+        if (text) {
+            char *p = text;
+            while (*p)
+                if (*p++ != ' ') break; // skip leading spaces
 
-        if (*p)
-            ccdr->recipe = strdup(p);
-		else
-			ccdr->recipe = NULL;
-        free(text);
+            if (*p) ccdr->recipe = strdup(p);
+
+            free(text);
+        }
 
 		if (get_named_checkb_val(dialog, "phot_reuse_wcs_checkb")) {
             struct wcs *wcs = g_object_get_data(G_OBJECT(ccdr->window), "wcs_of_window");
@@ -1478,7 +1487,6 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 // window wcs is initial
 
     char *outf = named_entry_text (dialog, "output_file_entry");
-    d4_printf("outf is |%s|\n", outf);
 
     int ret = 0;
     GList *gl = imfl->imlist;
@@ -1496,20 +1504,20 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 
             if (ret == 0) {
                 if ( ! (ccdr->ops & IMG_OP_STACK) ) { // no stack
-                    if (ccdr->ops & IMG_OP_INPLACE) {
+                    if (outf) {
+                        if (ccdr->ops & IMG_OP_INPLACE) {
+                            if (get_named_checkb_val(dialog, "clip_checkb"))
+                                save_clipped_image_file(imf, outf, 1, NULL, progress_pr, dialog);
+                            else
+                                save_image_file (imf, outf, 1, NULL, progress_pr, dialog);
 
-                        if (get_named_checkb_val(dialog, "clip_checkb"))
-                            save_clipped_image_file(imf, outf, 1, NULL, progress_pr, dialog);
-                        else
-                            save_image_file (imf, outf, 1, NULL, progress_pr, dialog);
+                        } else {
+                            if (get_named_checkb_val(dialog, "clip_checkb"))
+                                save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
+                            else
+                                save_image_file (imf, outf, 0, &seq, progress_pr, dialog);
 
-                    } else if (outf && outf[0]) {
-
-                        if (get_named_checkb_val(dialog, "clip_checkb"))
-                            save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
-                        else
-                            save_image_file (imf, outf, 0, &seq, progress_pr, dialog);
-
+                        }
                     } else if ( (ccdr->ops & IMG_OP_PHOT) && !(ccdr->ops & IMG_OP_ALIGN) ) {
                         d2_printf("reducegui.ccdred_run_cb phot and not align\n");
                         //               imf->flags &= ~(IMG_LOADED); // needs checking
@@ -1531,7 +1539,7 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
             imf->fr = fr;
 //            get_frame(imf->fr, "ccdred_run_cb");
 
-            if (outf && outf[0]) {
+            if (outf) {
                 if (get_named_checkb_val(dialog, "clip_checkb"))
                     save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
                 else
@@ -1552,7 +1560,7 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
     gtk_widget_set_sensitive (menubar, TRUE);
     gtk_widget_set_sensitive(image_file_view, TRUE);
 
-    free(outf);
+    if (outf) free(outf);
 }
 
 
@@ -1594,19 +1602,20 @@ static void ccdred_one_cb(GtkAction *action, gpointer dialog)
 	if (ret >= 0) {
 // change outf name to follow imf name
         char *outf = named_entry_text (dialog, "output_file_entry");
-        d4_printf ("outf is |%s|\n", outf);
+        if (outf) {
+            if (ccdr->ops & IMG_OP_INPLACE) {
+                if (get_named_checkb_val(dialog, "clip_checkb"))
+                    save_clipped_image_file(imf, outf, 1, NULL, progress_pr, dialog);
+                else
+                    save_image_file (imf, outf, 1, NULL, progress_pr, dialog);
 
-		if (ccdr->ops & IMG_OP_INPLACE) {
-            if (get_named_checkb_val(dialog, "clip_checkb"))
-                save_clipped_image_file(imf, outf, 1, NULL, progress_pr, dialog);
-            else
-                save_image_file (imf, outf, 1, NULL, progress_pr, dialog);
-
-		} else if (outf && outf[0]) {
-            if (get_named_checkb_val(dialog, "clip_checkb"))
-                save_clipped_image_file(imf, outf, 0, NULL, progress_pr, dialog);
-            else
-                save_image_file (imf, outf, 0, NULL, progress_pr, dialog);
+            } else {
+                if (get_named_checkb_val(dialog, "clip_checkb"))
+                    save_clipped_image_file(imf, outf, 0, NULL, progress_pr, dialog);
+                else
+                    save_image_file (imf, outf, 0, NULL, progress_pr, dialog);
+            }
+            free(outf);
 
         } else if ( !(ccdr->ops & IMG_OP_ALIGN) && (ccdr->ops & IMG_OP_PHOT) ) {
 
@@ -1614,7 +1623,6 @@ static void ccdred_one_cb(GtkAction *action, gpointer dialog)
 d2_printf("reducegui.ccdred_one_cb unload: phot and not align\n");
 
 		}
-        free(outf);
 	}
     update_selected_mband_status_label (dialog); // run finish
 //    select_next_imf (dialog);
@@ -1651,14 +1659,13 @@ static void ccdred_qphotone_cb(GtkAction *action, gpointer dialog)
 
     // check that outf is set
     char *outf = named_entry_text (dialog, "output_file_entry");
-    if (outf && (outf[0] == 0)) {
+    if (outf == NULL) {
         error_beep ();
         log_msg ("\nPlease set name for output file in CCDR setup\n", dialog);
-        g_free(outf);
         return;
     }
     d4_printf ("outf is |%s|\n", outf);
-    free(outf);
+    free(outf); // do something with outf ?
 
     GtkWidget *menubar = g_object_get_data (G_OBJECT(dialog), "menubar");
     gtk_widget_set_sensitive (menubar, 0);

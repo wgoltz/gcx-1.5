@@ -298,6 +298,11 @@ static void open_fits(GtkWidget *chooser, gpointer user_data)
 //printf("filegui.open_fits return\n");
 }
 
+static void stf_free_all_(struct stf *stf)
+{
+    stf_free_all(stf, "load_rcp_to_window");
+}
+
 /* load stars from a rcp file into the given windows's gsl */
 int load_rcp_to_window(gpointer window, char *name, char *object)
 {
@@ -310,59 +315,61 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         return -1;
     }
 
-    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (window_wcs == NULL) {
-        window_wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
+    char *obj = NULL;
+    if (object) {
+        if (object[0])
+            obj = strdup(object);
+    } else {
+        obj = fits_get_string(channel->fr, P_STR(FN_OBJECT));
     }
 
-    char *obj = NULL;
+//    if (obj == NULL) err_printf("no object - cannot load/create dynamic recipe\n");
+
     char *name_copy = NULL;
 
-    if (!strcmp(name, "_OBJECT_") || !strcmp(name, "_AUTO_") || !strcmp(name, "_TYCHO_")) {
-		if (object && object[0])
-            obj = strdup(object);
-        else if ((obj = fits_get_string(channel->fr, P_STR(FN_OBJECT))) == NULL) {
-			err_printf("no object - cannot load/create dynamic recipe\n");
-			return -1;
-		}
-		if (strcmp(name, "_TYCHO_")) {
-            char *rcp = NULL;
-            asprintf(&rcp, "%s.rcp", obj);
-            if (rcp) {
-                char *file = NULL;
-                file = find_file_in_path(rcp, P_STR(FILE_RCP_PATH));
-                if (file == NULL) {
-                    if (!strcmp(name, "_AUTO_")) {
-                        d1_printf("cannot find %s in rcp path, creating tycho recipe\n", rcp);
-                        name_copy = strdup("_TYCHO_");
-                    } else {
-                        err_printf("cannot find %s in rcp path\n", rcp);
-                        free(rcp);
-                        return -1;
-                    }
+    gboolean have_OBJECT = (strcmp(name, "_OBJECT_") == 0); // look for obj.rcp
+    gboolean have_AUTO = (strcmp(name, "_AUTO_") == 0); // look for obj.rcp, if not found create TYCHO recipe for obj
+    gboolean have_TYCHO = (strcmp(name, "_TYCHO_") == 0); // create TYCHO recipe for obj
+
+    char *file = NULL;
+
+    if (have_OBJECT || have_AUTO || have_TYCHO) {
+        char *rcp_filename = NULL;
+
+        asprintf(&rcp_filename, "%s.rcp", obj);
+        if (rcp_filename) {
+            file = find_file_in_path(rcp_filename, P_STR(FILE_RCP_PATH)); // does it look for zipped file? (obj.rcp)(.zippish)
+            if (file == NULL) { // obj.rcp not found
+                if (have_AUTO) {
+                    d1_printf("cannot find %s in rcp path, creating tycho recipe\n", rcp_filename);
+                    name_copy = strdup("_TYCHO_"); // create TYCHO recipe
                 } else {
-                    name_copy = strdup(file);
-                    d1_printf("recipe file from object name: %s\n", name);
+                    err_printf("cannot find %s in rcp path\n", rcp_filename);
+                    free(rcp_filename);
+                    return -1;
                 }
-                free(file);
-                free(rcp);
+            } else {
+                name_copy = file; // read obj.rcp(.zippish)
+                d1_printf("recipe file from object name: %s\n", name);
             }
-		}
-	}
-    if (name_copy) name = name_copy;
+            free(rcp_filename);
+        }
+    }
+
+    if (name_copy) name = name_copy; // full path?
 
     struct stf *stf = NULL;
-	if (!strcmp(name, "_TYCHO_")) {
-        if ((window_wcs == NULL) || (window_wcs->wcsset < WCS_INITIAL)) {
-			stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w / 1800), 20);
-		} else {
-            stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w * window_wcs->xinc), 20);
-		}
-        if (name_copy) free(name_copy);
-	} else {
+
+    if (strcmp(name, "_TYCHO_") == 0) { // figure out field size
+//        if (window_wcs->flags & WCS_HINTED) {
+//			stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w / 1800), 20);
+//		} else {
+//            stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w * window_wcs->xinc), 20);
+//		}
+    } else {
 		/* just load the specified file */
-        gboolean zipped = is_zip_name(name);
+        gboolean zipped = (is_zip_name(name) > 0);
+
         FILE *rfn = NULL;
 
         if (zipped) {
@@ -374,15 +381,17 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
                 cmd = NULL; asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), name);
                 if (cmd) rfn = popen(cmd, "r"), free(cmd);
             }
+
 		} else {
 			rfn = fopen(name, "r");
+            // if it fails try to read .zippish file(s)?
 		}
-		if (rfn == NULL) {
-			err_printf("read_rcp: cannot open file %s\n", name);
+
+        if (rfn == NULL) {
+            err_printf("read_rcp: cannot open file %s\n", name);
             if (name_copy) free(name_copy);
-			return -1;
-		}
-        if (name_copy) free(name_copy);
+            return -1;
+        }
 
 		stf = stf_read_frame(rfn);
 
@@ -392,68 +401,83 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 			fclose(rfn);
 		}
 	}
+    if (name_copy) free(name_copy);
 
     if (stf == NULL) return -1;
 
-    // update window_wcs from recipe file
-    if (window_wcs && ((window_wcs->wcsset < WCS_VALID) || (window_wcs->flags & WCS_HINTED))) {
-//printf("filegui.load_rcp_to_window try wcs from rcp\n");
-        window_wcs->xrefpix = channel->fr->w / 2;
-        window_wcs->yrefpix = channel->fr->h / 2;
+    // get wcs
+    // initialize if new
+    // set ra, dec
+    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    if (window_wcs == NULL) {
+        window_wcs = wcs_new();
+        g_object_set_data_full (G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
+    }
 
-        window_wcs->equinox = 2000.0;
-        double v;
+    struct wcs *frame_wcs = & channel->fr->fim;
 
-        if ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 )
-            window_wcs->equinox = v;
+    // update window_wcs from recipe file (just ra and dec?)
+    if (window_wcs) {
+//        if ((window_wcs->wcsset < WCS_VALID) || (window_wcs->flags & WCS_HINTED)) {
+//            //printf("filegui.load_rcp_to_window try wcs from rcp\n");
+//            window_wcs->xrefpix = channel->fr->w / 2;
+//            window_wcs->yrefpix = channel->fr->h / 2;
 
-        gboolean havera = FALSE;
-        char *text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA);
-        if (text) {
-            havera = (dms_to_degrees (text, &v) >= 0);
-            if (havera)	{
-                v *= 15;
-                window_wcs->xref = v;
-            }
-        }
+//            window_wcs->equinox = 2000.0;
+            double v;
 
-        gboolean havedec = FALSE;
-        text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC);
-        if (text) {
-            havedec = (dms_to_degrees(text, &v) >= 0);
-            if (havedec)
-                window_wcs->yref = v;
-        }
+//            if ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 )
+//                window_wcs->equinox = v;
 
-        gboolean havescale = FALSE;
-        if (window_wcs->wcsset < WCS_INITIAL) {
-            double scale;
-
-            havescale = (fits_get_double(channel->fr, P_STR(FN_SECPIX), &scale) > 0);
-            if (! havescale)
-                havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
-            if (! havescale) {
-                havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0));
-                if (havescale)
-                    scale = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
+            gboolean havera = FALSE;
+            char *text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA);
+            if (text) {
+                int d_type = dms_to_degrees (text, &v);
+                havera = (d_type >= 0);
+                if (havera) {
+                    if (d_type == DMS_SEXA)	v *= 15;
+                    window_wcs->xref = v;
+                }
             }
 
-            if (havescale) {
-                if ((channel->fr->exp.bin_x > 1) && (channel->fr->exp.bin_y == channel->fr->exp.bin_x))
-                    scale *= channel->fr->exp.bin_x;
-
-                window_wcs->xinc = - scale / 3600.0;
-                window_wcs->yinc = - scale / 3600.0;
-
-                if (P_INT(OBS_FLIPPED))	window_wcs->yinc = -window_wcs->yinc;
+            gboolean havedec = FALSE;
+            text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC);
+            if (text) {
+                havedec = (dms_to_degrees(text, &v) >= 0);
+                if (havedec)
+                    window_wcs->yref = v;
             }
 
-            window_wcs->rot = 0;
-        }
-        if (havera && havedec && havescale) {
-            printf("load_recipe_to_window wcsset = WCS_INITIAL\n"); fflush(NULL);
-            window_wcs->wcsset = WCS_INITIAL;
-        }
+//            gboolean havescale = FALSE;
+//            if (window_wcs->wcsset < WCS_INITIAL) {
+//                double scale;
+
+//                havescale = (fits_get_double(channel->fr, P_STR(FN_SECPIX), &scale) > 0);
+//                if (! havescale)
+//                    havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
+//                if (! havescale) {
+//                    havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0));
+//                    if (havescale)
+//                        scale = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
+//                }
+
+//                if (havescale) {
+//                    if ((channel->fr->exp.bin_x > 1) && (channel->fr->exp.bin_y == channel->fr->exp.bin_x))
+//                        scale *= channel->fr->exp.bin_x;
+
+//                    window_wcs->xinc = - scale / 3600.0;
+//                    window_wcs->yinc = - scale / 3600.0;
+
+//                    if (P_INT(OBS_FLIPPED))	window_wcs->yinc = -window_wcs->yinc;
+//                }
+
+//                window_wcs->rot = 0;
+//            }
+            if (havera && havedec) { // && havescale) {
+                printf("load_recipe_to_window wcsset = WCS_INITIAL\n"); fflush(NULL);
+                window_wcs->wcsset = WCS_INITIAL;
+            }
+//        }
 	}
 
     GList *rsl = stf_find_glist(stf, 0, SYM_STARS);
@@ -469,7 +493,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //        g_object_set_data(G_OBJECT(mbd), "mbds", NULL);
 //        g_object_set_data(G_OBJECT(window), "gui_star_list", NULL);
     } else
-        g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all);
+        g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all_);
 
     merge_cat_star_list_to_window(window, rsl);
     wcsedit_refresh(window);

@@ -767,7 +767,7 @@ int old_dms_to_degrees(char *decs, double *dec)
 }
 
 // transform a string d:m:s coordinate to a float angle (in degrees)
-// if already decimal (assumed) degrees return 1, return 0 otherwise or -1 for error
+// if already decimal (assumed) degrees return 0, return 1 otherwise or -1 for error
 int dms_to_degrees(char *decs, double *deg)
 {
     char *endp;
@@ -790,24 +790,25 @@ int dms_to_degrees(char *decs, double *deg)
         double dlo = strtod(decs+i, &endp);
         //check it is in [0 to 1) ?
         *deg = (d + dlo) * sign;
-        return 1;
+        return DMS_DECI;
         // ignore any remainder
     }
 
+    // check seperator for ':' ' ' (or other) ?
     for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
     long m = strtol(decs+i, &endp, 10);
     if (endp == decs+i) {
         *deg = d * sign;
-        return 0;
+        return DMS_SEXA;
     }
 
     for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
     double s = strtod(decs+i, &endp);
     if (endp == decs+i) {
         *deg = (d + m / 60.0) * sign;
-        return 0;
+        return DMS_SEXA;
     }
 
     *deg = (d + m / 60.0 + s / 3600.0) * sign;
-    return 0;
+    return DMS_SEXA;
 }

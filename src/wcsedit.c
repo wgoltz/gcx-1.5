@@ -84,8 +84,9 @@ static void wcs_close_cb( GtkWidget *widget, gpointer data )
     g_object_set_data(G_OBJECT(im_window), "wcs_dialog", NULL);
 }
 
-static gpointer wcsedit_create(gpointer window) {
-    gpointer dialog;
+static gpointer window_get_wcsedit(gpointer window) {
+    gpointer dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
+    if (dialog) return dialog;
 
     dialog = create_wcs_edit();
     g_object_set_data(G_OBJECT(dialog), "im_window", window);
@@ -142,17 +143,16 @@ static gpointer wcsedit_create(gpointer window) {
 /* set wcs dialog from window wcs */
 void act_control_wcs (GtkAction *action, gpointer window)
 {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-	if (wcs == NULL) {
-		wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
-	}
+    GtkWidget *dialog = window_get_wcsedit(window);
+    if (dialog == NULL) return;
 
-    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
-    if (! dialog) {
-        dialog = wcsedit_create(window);
-        wcsedit_from_wcs(dialog, wcs);
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    if (wcs == NULL) {
+        wcs = wcs_new();
+        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
     }
+    wcsedit_from_wcs(dialog, wcs);
+
     gtk_widget_show(dialog);
     gdk_window_raise(dialog->window);
 }
@@ -191,15 +191,15 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
         if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
     }
 
-    if (wcs->equinox != INV_DBL) {
+//    if (wcs->equinox != INV_DBL) {
         buf = NULL; asprintf(&buf, "%.2f", wcs->equinox);
         if (buf) named_entry_set(dialog, "wcs_equinox_entry", buf), free(buf);
-    }
+//    }
 
-    if (wcs->rot != INV_DBL) {
+//    if (wcs->rot != INV_DBL) {
         buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
         if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
-    }
+//    }
 
     if ((wcs->xinc != INV_DBL && wcs->yinc != INV_DBL)) {
         buf = NULL; asprintf(&buf, "%.4f", (fabs(wcs->xinc) + fabs(wcs->yinc)) * 1800);
@@ -217,40 +217,24 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
  */
 void wcsedit_refresh(gpointer window)
 {
+    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
+    if (dialog == NULL) return;
+
 //d2_printf("wcsedit.wcsedit_refresh\n");
     struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
     if (wcs == NULL) return;
 
-    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
-    if (dialog == NULL) dialog = wcsedit_create(window);
-
-//    int flip_field = get_named_checkb_val(dialog, "wcs_flip_field_checkb");
-
     int frame_flipped = (wcs->wcsset != WCS_INVALID) && (wcs->xinc * wcs->yinc < 0);
-//    int frame_data_is_flipped = ((wcs->flags & WCS_DATA_IS_FLIPPED) != 0);
-
-//    int current_flip = (frame_data_is_flipped ^ frame_flipped);
-//    int new_flip = frame_flipped;
-
-//printf("wcsedit_refresh --- flip_field %s frame_flipped %s frame_data_is_flipped %s current_flip %s new_flip %s\n",
-//   flip_field ? "Yes" : "No",
-//   frame_flipped ? "Yes" : "No",
-//   frame_data_is_flipped ? "Yes" : "No",
-//   current_flip ? "Yes" : "No",
-//   new_flip ? "Yes" : "No");
 
     g_object_set_data(G_OBJECT(dialog), "no_toggle", (gpointer) 1); // NOT called by toggling flip_field button
     set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
     g_object_set_data(G_OBJECT(dialog), "no_toggle", NULL);
-
-//    fflush(NULL);
 
     wcsedit_from_wcs(dialog, wcs);
 
     // refresh gui stars
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
-//    printf("refresh gui stars\n"); fflush(NULL);
 
     gtk_widget_queue_draw(window);
 }
@@ -313,7 +297,7 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
  *
  * return:
  * 0 if we could set the wcs from values
- * 1 if some values were defaulted
+ * 1 if some values were defaulted // do default elsewhere
  * 2 if there were changes
  * -1 if we didn't have enough data
 */
@@ -321,121 +305,133 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 {
     g_assert(wcs != NULL);
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    g_return_val_if_fail(window != NULL, 0);
-
-    double d, i;
-
-    double ra = INV_DBL, dec = INV_DBL, equ = INV_DBL, scale = INV_DBL, rot = INV_DBL;
+    g_return_val_if_fail(window != NULL, -1);
 
 /* parse the fields */
+    double ra;
     char *text = named_entry_text(dialog, "wcs_ra_entry");
-    int degrees;
-    if ((degrees = dms_to_degrees(text, &d)) >= 0) {
-        if (!degrees)
-            d *= 15;
-        ra = fabs(modf(d / 360, &i) * 360);
-    }
-    free(text);
-
-    text = named_entry_text(dialog, "wcs_dec_entry");
-    if (dms_to_degrees(text, &d) >= 0) {
-        dec = modf(d / 90, &i) * 90;
-        if (dec > 90) {
-            if (i < 0)
-                dec -= 90;
-            else if (i > 0)
-                dec += 90;
+    gboolean have_ra = (text != NULL);
+    if (have_ra) {
+        double d, i;
+        int d_type = dms_to_degrees(text, &d);
+        have_ra = (d_type >= 0);
+        if (have_ra) {
+            if (d_type == DMS_SEXA) d *= 15;
+            ra = fabs(modf(d / 360, &i) * 360);
         }
+        free(text);
     }
-    free(text);
 
-    char *end;
+    double dec;
+    text = named_entry_text(dialog, "wcs_dec_entry");
+    gboolean have_dec = (text != NULL);
+    if (have_dec) {
+        double d, i;
+        if (dms_to_degrees(text, &d) >= 0) {
+            dec = modf(d / 90, &i) * 90;
+            if (dec > 90) {
+                if (i < 0)
+                    dec -= 90;
+                else if (i > 0)
+                    dec += 90;
+                // can i == 0 ?
+            }
+        }
+        free(text);
+    }
 
-    text = named_entry_text(dialog, "wcs_equinox_entry");
-    d = strtod(text, &end);
-    if (text != end) equ = d;
-    free(text);
-
+    double scale;
     text = named_entry_text(dialog, "wcs_scale_entry");
-    d = strtod(text, &end);
-    if (text != end) scale = d ;
-    free(text);
+    gboolean have_scale = (text != NULL);
+    if (have_scale) {
+        char *end;
+        double d = strtod(text, &end);
+        have_scale = ((text != end) && (d != 0));
+        if (have_scale) scale = d;
+        free(text);
+    }
 
-	text = named_entry_text(dialog, "wcs_rot_entry");
-	d = strtod(text, &end);
-    if (text != end) rot = d ;
-    free(text);
+    double equ = 2000;
+    text = named_entry_text(dialog, "wcs_equinox_entry");
+    if (text) {
+        char *end;
+        double d = strtod(text, &end);
+        if (text != end) equ = d;
+        free(text);
+    }
+
+    double rot = 0;
+    text = named_entry_text(dialog, "wcs_rot_entry");
+    if (text) {
+        char *end;
+        double d = strtod(text, &end);
+        if (text != end) {
+            double i;
+            rot = modf(d / 360, &i) * 360;
+        }
+        free(text);
+    }
 
 /* now see what we can do with them */
-	if (ra == INV_DBL || dec == INV_DBL) {
-		err_printf("cannot set wcs: invalid ra/dec\n");
-		return -1; /* can't do anything without those */
-	}
-
-    int ret = 0;
-//    wcs->xref = ra;
-//    wcs->yref = dec;
-
-	if (equ == INV_DBL) {
-        equ = 2000.0;
-        ret |= 1;
-	}
-
-    if (scale == INV_DBL) {
-        scale = P_DBL(OBS_SECPIX);
-        ret |= 2;
-    }
-
-	if (rot == INV_DBL) {
-		rot = 0.0;
-        ret |= 4;
-	}
-
-    rot = modf(rot / 360, &i) * 360;
+ //   int ret = 0;
 
 /* set chg if the wcs has been changed significantly */
-//	d3_printf("diff is %f\n", fabs(ra - wcs->xref));
 
     int chg = 0;
-    if (fabs(ra - wcs->xref) > (1.5 / 36000)) {
+
+    if (have_ra && (fabs(ra - wcs->xref) > 1.5 / 36000)) {
         chg |= 1;
         wcs->xref = ra;
-	}
-    if (fabs(dec - wcs->yref) > (1.0 / 36000)) {
+    }
+
+    if (have_dec && (fabs(dec - wcs->yref) > 1.0 / 36000)) {
         chg |= 2;
         wcs->yref = dec;
-	}
-    if (fabs(rot - wcs->rot) > (1.0 / 9900)) {
+    }
+
+    if (have_ra && have_dec) wcs->flags |= WCS_HAVE_POS;
+
+    if (fabs(rot - wcs->rot) > 1.0 / 9900) {
         chg |= 4;
         wcs->rot = rot;
 	}
+
     if (fabs(equ - wcs->equinox) > 1.0 / 20) {
         chg |= 8;
         wcs->equinox = equ;
 	}
 
-    int sign;
+    if (have_scale) {
+        if ((wcs->flags & WCS_HAVE_SCALE) != 0) {
+            int sign;
 
-    double xs = -scale;
-    sign = signbit(xs * wcs->xinc) ? -1 : 1;
+            double xs = -scale;
+            sign = signbit(xs * wcs->xinc) ? -1 : 1;
 
-    if (fabs(sign * xs - 3600 * wcs->xinc) > (1.0 / 990000)) {
-        chg |= 16;
-        wcs->xinc = xs / 3600.0;
-	}
+            if (fabs(sign * xs - 3600 * wcs->xinc) > (1.0 / 990000)) {
+                chg |= 16;
+                wcs->xinc = xs / 3600.0;
+            }
 
-    double ys = -scale;
-    sign = signbit(ys * wcs->yinc) ? -1 : 1;
+            double ys = -scale;
+            sign = signbit(ys * wcs->yinc) ? -1 : 1;
 
-    if (fabs(sign * ys - 3600 * wcs->yinc) > (1.0 / 990000)) {
-        chg |= 16;
-        wcs->yinc = ys / 3600.0;
+            if (fabs(sign * ys - 3600 * wcs->yinc) > (1.0 / 990000)) {
+                chg |= 16;
+                wcs->yinc = ys / 3600.0;
+            }
+
+            wcs->yinc = - sign * fabs(wcs->yinc);
+
+        } else {
+            wcs->xinc = wcs->yinc = - scale / 3600.0;
+
+            wcs->flags |= WCS_HAVE_SCALE;
+        }
     }
 
-    wcs->yinc = - sign * fabs(wcs->yinc);
-
 // catch validation change
-    char *wcsset_rb_name;
+    char *wcsset_rb_name = NULL;
     switch(wcs->wcsset) {
     case WCS_INVALID:
         wcsset_rb_name = "wcs_unset_rb";
@@ -447,10 +443,10 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
         wcsset_rb_name = "wcs_valid_rb";
         break;
     }
-    if (! get_named_checkb_val(dialog, wcsset_rb_name))
+    if (wcsset_rb_name && (get_named_checkb_val(dialog, wcsset_rb_name) == 0)) // check
         chg |= 64;
 
-    if (ret) return 1;
+//    if (ret) return 1;
 
 //    static char *change_msg[8] = {
 //        "ra",
@@ -468,7 +464,10 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 //            fflush(NULL);
 //        }
 //    }
-    if (chg) return 2;
+    if (chg) {
+        wcs->flags |= WCS_EDITED;
+        return 2;
+    }
 
 	return 0;
 }
@@ -523,7 +522,8 @@ static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
     wcs_clone(frame_wcs, window_wcs);
 
-    wcs_set_validation(window, WCS_INITIAL);
+    if ((frame_wcs->xref != INV_DBL) && (frame_wcs->yref != INV_DBL))
+        wcs_set_validation(window, WCS_INITIAL);
 
     wcsedit_refresh_parent(dialog);
 }
@@ -717,13 +717,9 @@ static void rot(int dir, gpointer dialog)
 
     char *text = named_entry_text(dialog, "wcs_rot_entry");
 
-    double rot = INV_DBL;
-    char *end; double d = strtod(text, &end);
-    if (text != end) rot = d;
-
-    free(text);
-
-	if (rot != INV_DBL)	{
+    char *end;
+    double rot = strtod(text, &end);
+    if (text != end) {
         rot += dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
 
         double i; rot = modf(rot / 360, &i) * 360;
@@ -733,6 +729,7 @@ static void rot(int dir, gpointer dialog)
 
         wcsedit_refresh_parent(dialog);
 	}
+    free(text);
 }
 
 
@@ -747,13 +744,9 @@ static void scale(int dir, gpointer dialog)
 
     char *text = named_entry_text(dialog, "wcs_scale_entry");
 
-    double scale = INV_DBL;
-    char *end; double d = strtod(text, &end);
-    if (text != end) scale = d;
-
-    free(text);
-
-    if (scale != INV_DBL) {
+    char *end;
+    double scale = strtod(text, &end);
+    if (text != end) {
         scale *= 1 + 0.02 * dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
 
         char *buf = NULL; asprintf(&buf, "%.4f", scale);
@@ -761,6 +754,7 @@ static void scale(int dir, gpointer dialog)
 
         wcsedit_refresh_parent(dialog);
     }
+    free(text);
 }
 
 

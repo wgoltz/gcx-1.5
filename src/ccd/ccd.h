@@ -146,6 +146,9 @@ struct im_stats {
 				   transformation. the xinc/yinc are however, according to the
 				   fits convention. */
 #define WCS_DATA_IS_FLIPPED 0x10 // wcs (as read) is flipped (xinc * yinc < 0)
+#define WCS_HAVE_POS 0x20  // have xref and yref
+#define WCS_HAVE_SCALE 0x40 // have xinc and yinc
+#define WCS_EDITED 0x80 // updated values in wcsedit
 
 struct wcs{
 	int ref_count;
@@ -688,6 +691,11 @@ extern int worldpos(double xpos, double ypos, double xref, double yref, double x
 extern double airmass (double aa);
 extern void precess_hiprec (double epo1, double epo2, double *ra, double *dec);
 extern void range (double *v, double r);
+
+enum {
+    DMS_DECI,
+    DMS_SEXA
+} dms_type;
 extern int dms_to_degrees(char *decs, double *deg);
 
 extern char *degrees_to_dms_pr(double deg, int prec);

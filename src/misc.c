@@ -142,10 +142,12 @@ char *dot_extension(char *fn)
 int is_zip_name(char *fn)
 {
     int len = strlen(fn);
-    if (len < 4) return 0;
+    if (len < 3) return 0;
     if (strcasecmp(fn + len - 3, ".gz") == 0) return 2;
     if (strcasecmp(fn + len - 2, ".z") == 0) return 1;
     if (strcasecmp(fn + len - 4, ".zip") == 0) return 3;
+    if (strcasecmp(fn + len - 4, ".bz2") == 0) return 3;
+
     return 0;
 }
 
@@ -210,7 +212,7 @@ char *named_entry_text(GtkWidget *dialog, char *name)
     gchar *gtext = gtk_editable_get_chars(GTK_EDITABLE(entry), 0, -1);
 
     char *text = NULL;
-    if (gtext) text = strdup(gtext), g_free(gtext);
+    if (gtext && gtext[0]) text = strdup(gtext), g_free(gtext);
 
 	return text;
 }

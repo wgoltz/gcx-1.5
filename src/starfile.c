@@ -416,11 +416,10 @@ int parse_star(GScanner *scan, struct cat_star *cats)
             case G_TOKEN_STRING:
             {
                 double val;
-                int degrees;
-                havera = ((degrees = dms_to_degrees(stringval(scan), &val)) >= 0);
+                int d_type = dms_to_degrees(stringval(scan), &val);
+                havera = (d_type >= 0);
                 if (havera) {
-                    if (!degrees)
-                        val *= 15;
+                    if (d_type == DMS_SEXA) val *= 15;
                     cats->ra = val;
                 }
             }
@@ -1344,8 +1343,9 @@ void stf_free_cats(struct stf *stf)
 
 
 /* free a stf and everything in it */
-void stf_free_all(struct stf *stf)
+void stf_free_all(struct stf *stf, char *msg)
 {
+    printf ("stf_free_all %s\n", msg); fflush(NULL);
 	stf_free_cats(stf);
 	stf_free(stf);
 }

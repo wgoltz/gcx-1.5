@@ -143,7 +143,7 @@ void stf_free_cats(struct stf *stf);
 char * stf_find_string(struct stf *stf, int level, ...);
 int stf_find_double(struct stf *stf, double *v, int level, ...);
 GList * stf_find_glist(struct stf *stf, int level, ...);
-void stf_free_all(struct stf *stf);
+void stf_free_all(struct stf *stf, char *msg);
 int parse_star(GScanner *scan, struct cat_star *cats);
 double rprec(double v, double prec);
 struct stf *stf_new(void);

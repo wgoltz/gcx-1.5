@@ -308,7 +308,7 @@ void report_to_table(FILE *inf, FILE *outf, char *format)
 			break;
 		stars = stf_find_glist(stf, 0, SYM_STARS);
 		if (stars == NULL) {
-			stf_free_all(stf);
+            stf_free_all(stf, "report_to_table stars == NULL");
 			continue;
 		}
 		f++;
@@ -334,7 +334,7 @@ void report_to_table(FILE *inf, FILE *outf, char *format)
 				sqrt((sumsqres - sqr(sumres) / nres) / nres));
 
 		}
-		stf_free_all(stf);
+        stf_free_all(stf, "report_to_table");
 	} while (stf != NULL);
 }
 
@@ -856,7 +856,7 @@ int recipe_to_aavso_db(FILE *inf, FILE *outf)
 
 		stars = stf_find_glist(stf, 0, SYM_STARS);
 		if (stars == NULL) {
-			stf_free_all(stf);
+            stf_free_all(stf, "recipe_to_aavso_db stars == NULL");
 			continue;
 		}
 		for (sl = stars; sl != NULL; sl = sl->next) {
@@ -891,7 +891,7 @@ int recipe_to_aavso_db(FILE *inf, FILE *outf)
 			fprintf(outf, "%s\t%s\t%s\t\t%s\t%s\n",
 				sp, cats->name, w, p, sc);
 		}
-		stf_free_all(stf);
+        stf_free_all(stf, "recipe_to_aavso_db");
 	} while (stf != NULL);
 
 	return ret;

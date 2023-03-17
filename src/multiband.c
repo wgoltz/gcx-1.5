@@ -202,7 +202,7 @@ void old_mband_dataset_release(struct mband_dataset *mbds)
 		}
 
         if (ofr->stf != NULL)
-            stf_free_all(ofr->stf);
+            stf_free_all(ofr->stf, "old_mband_dataset_release");
 
         g_list_free(ofr->sobs);
         free(ofr);
@@ -733,7 +733,8 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res)
 		ofr->zpstate = ZP_FIT_ERR;
 		ofr->zpointerr = BIG_ERR;
 	}
-	ofr->lmag = ofr->zpoint - LMAG_FROM_ZP;
+    if (ofr->zpoint != MAG_UNSET)
+        ofr->lmag = ofr->zpoint - LMAG_FROM_ZP;
 	d4_printf("(%s) zeropoint fit: zp: %.5f  zperr %.3f  me1: %.3f  ns %d  no %d\n", 
           ofr->trans->bname, ofr->zpoint, ofr->zpointerr, ofr->me1, ofr->vstars, ofr->outliers);
 	return ofr->me1;

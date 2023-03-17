@@ -366,9 +366,7 @@ void save_frame_auto_name(struct ccd_frame *fr, GtkWidget *dialog)
 	auto_filename(dialog);
 
     char *text = named_entry_text(dialog, "file_entry");
-    if (text == NULL || text[0] == 0) {
-        if (text != NULL) free(text);
-
+    if (text == NULL) {
         text = strdup(DEFAULT_FRAME_NAME);
 		named_entry_set(dialog, "file_entry", text);
 	}
@@ -429,9 +427,12 @@ enum get_options { GET_OPTION_PREVIEW, GET_OPTION_SAVE, GET_OPTION_STREAM };
  * start the next frame if required */
 static void save_frame(struct ccd_frame *fr, GtkWidget *dialog)
 {
+    int seq = -1;
     char *text = named_entry_text(dialog, "exp_frame_entry");
-    int seq = strtol(text, NULL, 10);
-    free(text);
+    if (text) {
+        seq = strtol(text, NULL, 10);
+        free(text);
+    }
 
     d4_printf("Sequence %d\n", seq);
     if (seq > 0) {
@@ -553,9 +554,12 @@ static int expose_indi_cb(GtkWidget *dialog)
     GtkWidget *mode_combo = g_object_get_data(G_OBJECT(dialog), "exp_mode_combo");
 
     if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) != GET_OPTION_PREVIEW) {
+        int seq = -1;
         char *text = named_entry_text(dialog, "exp_frame_entry");
-        int seq = strtol(text, NULL, 10);
-        free(text);
+        if (text) {
+            seq = strtol(text, NULL, 10);
+            free(text);
+        }
 
         d4_printf("Sequence %d\n", seq);
         if (seq == 0) { // revert to get mode_combo
@@ -722,9 +726,12 @@ static int stream_indi_cb(GtkWidget *dialog)
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     // update countdown
+    int seq = -1;
     char *text = named_entry_text(dialog, "exp_frame_entry");
-    int seq = strtol(text, NULL, 10);
-    free(text);
+    if (text) {
+        seq = strtol(text, NULL, 10);
+        free(text);
+    }
 
     char *mb;
     if (seq >= 0) {
@@ -981,8 +988,9 @@ static void old_obsdata_cb( GtkWidget *widget, gpointer data )
     wid = g_object_get_data(G_OBJECT(data), "obs_ra_entry");
     if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
-        if (dms_to_degrees(text, &d) >= 0) {
-            obs->ra = d * 15.0;
+        int d_type = dms_to_degrees(text, &d);
+        if (d_type >= 0) {
+            if (d_type == DMS_SEXA) obs->ra = d * 15.0;
             update_obs_entries(data, obs);
         } else {
             error_beep();

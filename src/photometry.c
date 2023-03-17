@@ -399,7 +399,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
     if (fits_get_double (fr, P_STR(FN_AIRMASS), &v) > 0) {
         d3_printf("using airmass = %.3f from %s\n", v, P_STR(FN_AIRMASS));
         stf_append_double (stf, SYM_AIRMASS, v);
-    } else if (fits_get_dms(fr, P_STR(FN_ZD), &v) > 0) {
+    } else if (fits_get_dms(fr, P_STR(FN_ZD), &v) >= 0) {
         d3_printf("using zd = %.3f from %s\n", v, P_STR(FN_ZD));
         v = airmass(90.0 - v);
         stf_append_double (stf, SYM_AIRMASS, v);
@@ -716,7 +716,7 @@ static void photometry_cb(gpointer window, guint action)
             if ((n = stf_centering_stats(stf, wcs, &r, &me)) != 0)
                 info_printf_sb2(window, "Centered %d stars. Errors (pixels) rms: %.2f max: %.2f", n, r, me);
 		}
-		stf_free_all(stf);
+        stf_free_all(stf, "photometry_cb center stars");
 		break;
 
 	case PHOT_CENTER_PLOT:
@@ -736,7 +736,7 @@ static void photometry_cb(gpointer window, guint action)
                 pclose(plfp);
             }
         }
-		stf_free_all(stf);
+        stf_free_all(stf, "photometry_cb center plot");
 		break;
 
 	case PHOT_RUN:
@@ -877,7 +877,7 @@ char * phot_to_fd(gpointer window, FILE *fd, int format)
     struct o_frame *ofr = mband_dataset_add_stf(mbds, stf);
     if (ofr == NULL) {
 		err_printf("cannot add stf: aborting\n");
-		stf_free_all(stf);
+        stf_free_all(stf, "phot_to_fd");
 		return NULL;
 	}
 //    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));

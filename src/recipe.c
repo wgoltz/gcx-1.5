@@ -63,15 +63,10 @@ char *symname[SYM_LAST] = SYM_NAMES_INIT;
 
 
 /* do the actual work of creating recipe. sl is the list of gui_stars */
-struct stf * create_recipe(GSList *gsl, struct wcs *wcs, int flags, 
-			   char * comment, char * target, char * seq, 
-			   int w, int h)
+struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment, char *target, char *seq, int w, int h)
 
 {
 	GList *tsl = NULL;
-
-    if (target && target[0] == 0) target = NULL;
-
     GSList *sl;
 	for (sl = gsl; sl != NULL; sl = sl->next) {
         struct gui_star *gs = GUI_STAR(sl->data);
@@ -169,7 +164,7 @@ struct stf * create_recipe(GSList *gsl, struct wcs *wcs, int flags,
 
     struct stf *st = NULL;
 
-    if (target != NULL) st = stf_append_string(st, SYM_OBJECT, target);
+    if (target) st = stf_append_string(st, SYM_OBJECT, target);
 
     char *ras = degrees_to_hms_pr(wcs->xref, 2);
     if (ras) stf_append_string(st, SYM_RA, ras), free(ras);
@@ -179,11 +174,11 @@ struct stf * create_recipe(GSList *gsl, struct wcs *wcs, int flags,
 
 	stf_append_double(st, SYM_EQUINOX, wcs->equinox);
 
-    if (comment && comment[0] != 0) stf_append_string(st, SYM_COMMENTS, comment);
+    if (comment) stf_append_string(st, SYM_COMMENTS, comment);
 
     struct stf *stf = stf_append_list(NULL, SYM_RECIPE, st);
 
-    if (seq && seq[0] != 0) stf_append_string(stf, SYM_SEQUENCE, seq);
+    if (seq) stf_append_string(stf, SYM_SEQUENCE, seq);
 
 	stf_append_glist(stf, SYM_STARS, tsl);
 
@@ -571,14 +566,11 @@ int read_landolt_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		if (ret != 6) 
 			continue;
 
-        int degrees;
-        if ((degrees = dms_to_degrees(ras, &ra)) < 0)
-			continue;
-        if (!degrees)
-            ra *= 15;
+        int d_type = dms_to_degrees(ras, &ra);
+        if (d_type < 0)	continue;
+        if (d_type == DMS_SEXA) ra *= 15;
 
-        if (dms_to_degrees(decs, &dec) < 0)
-			continue;
+        if (dms_to_degrees(decs, &dec) < 0) continue;
 
 		cats = cat_star_new();
 		if (cats == NULL) {
@@ -661,14 +653,11 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		if (field[1] == 0 || field[0] == 0)
 			continue;
 
-        int degrees;
-        if ((degrees = dms_to_degrees(line+field[0], &ra)) < 0)
-			continue;
-        if (!degrees)
-            ra *= 15;
+        int d_type = dms_to_degrees(line+field[0], &ra);
+        if (d_type < 0)	continue;
+        if (d_type == DMS_SEXA) ra *= 15;
 
-		if (dms_to_degrees(line+field[1], &dec))
-			continue;
+        if (dms_to_degrees(line+field[1], &dec)) continue;
 
 		d4_printf("ra %.4f dec %.4f\n", ra, dec);
 
@@ -869,11 +858,11 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	if (strlen(line+i) < 14)
 		return -1;
 	d3_printf("ra+dec: |%s|\n", line+i);
-    int degrees;
-    if ((degrees = dms_to_degrees(line+i, &ra)) < 0)
-		return -1;
-    if (!degrees)
-        ra *= 15;
+
+    int d_type = dms_to_degrees(line+i, &ra);
+    if (d_type < 0) return -1;
+    if (d_type == DMS_SEXA) ra *= 15;
+
 	d3_printf("dec: |%s|\n", line+i+11);
 	if (dms_to_degrees(line+i+11, &dec))
 		return -1;
@@ -1214,14 +1203,12 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 		if (line[i] != 'y' && line[i] != 'Y')
 			continue;
 
-        int degrees;
-        if ((degrees = dms_to_degrees(line + rai, &ra)) < 0)
-			continue;
-        if (!degrees)
-            ra *= 15;
-		if (dms_to_degrees(line + deci, &dec))
-			continue;
-		ra *= 15.0;
+        int d_type = dms_to_degrees(line + rai, &ra);
+        if (d_type < 0) continue;
+        if (d_type == DMS_SEXA) ra *= 15;
+
+        if (dms_to_degrees(line + deci, &dec)) continue;
+
 		if (ra == 0.0 || dec == 0.0) {
 			d4_printf("bad gcvs ra/dec\n");
 			continue;
@@ -1304,7 +1291,7 @@ int convert_catalog(FILE *inf, FILE *outf, char *catname, double mag_limit)
 	stf_append_glist(stf, SYM_STARS, sl);
 
 	stf_fprint(outf, stf, 0, 0);
-	stf_free_all(stf);
+    stf_free_all(stf, "convert_catalog");
 	fflush(outf);
 
 	return ret;
@@ -1462,8 +1449,8 @@ int merge_rcp(FILE *old, FILE *newr, FILE *outf, double mag_limit)
 		STF_SET_GLIST(st->next, sla);
 	}
 	stf_fprint(outf, stfa, 0, 0);
-	stf_free_all(stfa);
-	stf_free_all(stfb);
+    stf_free_all(stfa, "merge_rcp free stfa");
+    stf_free_all(stfb, "merge_rcp free stfb");
 	fflush(outf);
 	return n;
 }
@@ -1538,7 +1525,7 @@ int rcp_set_target(FILE *old, char *obj, FILE *outf, double mag_limit)
 	STF_SET_LIST(st->next, sto);
 
 	stf_fprint(outf, stfa, 0, 0);
-	stf_free_all(stfa);
+    stf_free_all(stfa, "rcp_set_target");
     if (ras) free(ras);
     if (decs) free(decs);
 	fflush(outf);
