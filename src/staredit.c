@@ -711,12 +711,16 @@ d3_printf("making cats\n");
 			cats->mag = 0.0;
 			cats->flags = CATS_TYPE_SREF;
 			gs->s = cats;
+
+            cat_star_ref(cats, "do_star_edit"); // try this
+
 			if (make_std) {
                 gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTD;
 				cats->flags = CATS_TYPE_APSTD;
 			} else {
                 gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_SREF;
 			}
+
 		} else {
 			err_printf("cannot make cat star: no wcs\n");
 			return;

@@ -64,11 +64,12 @@ static void recenter_sob_list_cb(GtkWidget *sob_list, gpointer mband_dialog);
 #define PLOT_ZP_TIME 4
 #define PLOT_STAR 5
 
-#define FIT_ZPOINTS 1
-#define FIT_ZP_WTRANS 3
-#define FIT_TRANS 2
-#define FIT_ALL_SKY 4
-#define FIT_SET_AVS 5
+#define FIT_ZPOINTS_CMAGS 1
+#define FIT_ZPOINTS_SMAGS 2
+#define FIT_TRANS 3
+#define FIT_ZP_WTRANS 4
+#define FIT_ALL_SKY 5
+#define FIT_SET_AVS 6
 
 #define SEL_ALL 1
 #define UNSEL_ALL 2
@@ -301,9 +302,8 @@ static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, s
     gtk_list_store_set(GTK_LIST_STORE(ofr_store), iter, OFR_POINTER_COL, ofr, -1);
 
     char *obj = stf_find_string(ofr->stf, 1, SYM_OBSERVATION, SYM_OBJECT);
+    if (obj) add_ofr_store_entry( OFR_OBJECT_COL, "%s", obj );
 
-    if (obj)
-        add_ofr_store_entry( OFR_OBJECT_COL, "%s", obj );
     add_ofr_store_entry( OFR_BAND_COL, "%s", ofr->trans->bname);
     add_ofr_store_entry( OFR_STATUS_COL, "%s%s", states[ofr->zpstate & ZP_STATE_MASK], ofr->as_zp_valid ? "-AV" : "" ); // clear as_zp_valid somewhere
     if (ofr->zpstate >= ZP_ALL_SKY) {
@@ -719,7 +719,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
         }
     }
 
-    if ((sob->ofr->zpstate & ZP_STATE_MASK) >= ZP_ALL_SKY && sob->weight > 0.0) {
+    if ((sob->ofr->zpstate & ZP_STATE_MASK) >= ZP_ALL_SKY && sob->nweight > 0.0) {
         add_sob_store_entry( SOB_RESIDUAL_COL, "%7.3f", sob->residual );
 
         double se = fabs(sob->residual * sqrt(sob->nweight));
@@ -744,8 +744,12 @@ static void sobs_to_sob_list(GtkWidget *sob_list, GList *sol)
         struct star_obs *sob = STAR_OBS(sl->data);
         sl = g_list_next(sl);
 
-        gtk_list_store_prepend(GTK_LIST_STORE(sob_store), &iter);
-        sob_store_set_row_vals(GTK_LIST_STORE(sob_store), &iter, sob);
+        if ((sob->ofr->zpstate & ZP_STATE_MASK) != ZP_NOT_FITTED) {
+            if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
+                gtk_list_store_prepend(GTK_LIST_STORE(sob_store), &iter);
+                sob_store_set_row_vals(GTK_LIST_STORE(sob_store), &iter, sob);
+            }
+        }
     }
 }
 
@@ -1055,10 +1059,7 @@ void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
         struct image_file *imf = ofr->imf;
         if (!imf || (imf_load_frame(imf) < 0)) return;
 
-//        ofr->ccd_frame = imf->fr; // use imf ?
-
-//        get_frame(ofr->ccd_frame); // use imf ?
-        get_frame(imf->fr, "act_mband_display_ofr_frame"); // use imf ?
+//        get_frame(imf->fr, "act_mband_display_ofr_frame"); // use imf ?
         frame_to_channel(imf->fr, window, "i_channel");
 
         imf_release_frame(imf, "act_mband_display_ofr_frame");
@@ -1444,32 +1445,33 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
     g_return_if_fail(mbds != NULL);
 
+    int ms = -1;
+    if (action == FIT_ZPOINTS_CMAGS)
+        ms = MAG_SOURCE_CMAGS;
 
-    GList *gl;
+    if (action == FIT_ZPOINTS_SMAGS)
+        ms = MAG_SOURCE_SMAGS;
 
-    if (action != FIT_SET_AVS) {
+    if (ms != -1) mband_dataset_set_mag_source(mbds, ms);
 
-        mband_dataset_set_mag_source(mbds, P_INT(AP_STD_SOURCE));
-
-//        mb_rebuild_ofr_list(mband_dialog);
-//        mb_rebuild_bands_list(mband_dialog);
-
+    if (mbds->mag_source == -1) {
+        err_printf("fit_cb: no mag source set!\n");
+        return;
     }
+
+// how to set FIT_ZP_WTRANS ?
 
     // make list of ofr's from mband gui selection
     GtkWidget *ofr_list = g_object_get_data(G_OBJECT(mband_dialog), "ofr_list");
     g_return_if_fail(ofr_list != NULL);
 
-//    GtkTreeSelection *ofr_selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(ofr_list));
-
-    // check why this does not work with sorting - duplicate paths?
-//    GList *selected_ofr = gtk_tree_selection_get_selected_rows(ofr_selection, NULL);
     GList *ofrs = NULL;
 
     GtkTreeModel *ofr_store = gtk_tree_view_get_model(GTK_TREE_VIEW(ofr_list));
 
 //    GList *gl = (selected_ofr == NULL) ? mbds->ofrs : selected_ofr;
 
+    GList *gl;
     for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) { // use all ofrs not just selected
 
         struct o_frame *ofr;
@@ -1493,28 +1495,38 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     // do the fitting
     GtkWidget *bands_list = g_object_get_data(G_OBJECT(mband_dialog), "bands_list");
     char *message;
-    if (action == FIT_ZPOINTS)
-        message = "Fitting zero points with no color .. ";
+    if (action == FIT_ZPOINTS_CMAGS)
+        message = "Fitting zero points with no color from cmags .. ";
+    else if (action == FIT_ZPOINTS_SMAGS)
+        message = "Fitting zero points with no color from smags .. ";
     else if (action == FIT_ZP_WTRANS)
         message = "Fitting zero points with current color coefficients .. ";
     else if (action == FIT_SET_AVS)
-        message = "Setting smags to average .. ";
-
+        message = "Setting smags from averages of cmag fit .. ";
 
     switch (action) {
-    case FIT_ZPOINTS:
+    case FIT_ZPOINTS_CMAGS:
+    case FIT_ZPOINTS_SMAGS:
     case FIT_ZP_WTRANS:
         fit_progress(message, mband_dialog);
 
+        gboolean first = TRUE;
         for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
             struct o_frame *ofr = O_FRAME(gl->data);
 
             if (action != FIT_ZP_WTRANS) { // else default values from options or fitted values
+                if (first) {
+                    printf("fit using null transform\n"); fflush(NULL);
+                }
                 ofr->trans->k = 0.0;
                 ofr->trans->kerr = BIG_ERR;
             } else {
-                printf("fit using k/err: %f/%f\n", ofr->trans->k, ofr->trans->kerr); fflush(NULL);
+                if (first) {
+                    printf("fit using current transform k/err: %f/%f\n", ofr->trans->k, ofr->trans->kerr); fflush(NULL);
+                }
             }
+            if (first) first = !first;
+
             ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
 		}
 
@@ -1549,7 +1561,7 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
 		break;
 
     case FIT_SET_AVS: {
-        mbds_cats_smags_from_avgs(ofrs);
+        mbds_smags_from_cmag_avgs(ofrs);
 
         break;
     }
@@ -1604,14 +1616,15 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     g_list_free(ofrs);
 }
 
-void act_mband_fit_zp_null (GtkAction *action, gpointer data)
+void act_mband_fit_zp_cmags (GtkAction *action, gpointer data)
 {
-    fit_cb (data, FIT_ZPOINTS, NULL);
+    fit_cb (data, FIT_ZPOINTS_CMAGS, NULL);
 }
 
-void act_mband_fit_zp_current (GtkAction *action, gpointer data)
+void act_mband_fit_zp_smags (GtkAction *action, gpointer data)
 {
-	fit_cb (data, FIT_ZP_WTRANS, NULL);
+//    fit_cb (data, FIT_ZP_WTRANS, NULL);
+    fit_cb (data, FIT_ZPOINTS_SMAGS, NULL);
 }
 
 void act_mband_fit_zp_trans (GtkAction *action, gpointer data)
@@ -1748,12 +1761,12 @@ static GtkActionEntry mband_menu_actions[] = { // name, stock id, label, accel, 
     { "edit-unhide-all",    NULL, "Unhi_de All",                "<shift>H",   NULL, G_CALLBACK (act_mband_unhide) },
 
 	/* Reduce */
-	{ "reduce-menu",          NULL, "_Reduce" },
-	{ "reduce-fit-zpoints",   NULL, "Fit _Zero Points with Null Coefficients",          NULL, NULL, G_CALLBACK (act_mband_fit_zp_null) },
-	{ "reduce-fit-zp-wtrans", NULL, "Fit Zero Points with _Current Coefficients",       NULL, NULL, G_CALLBACK (act_mband_fit_zp_current) },
-	{ "reduce-fit-trans",     NULL, "Fit Zero Points and _Transformation Coefficients", NULL, NULL, G_CALLBACK (act_mband_fit_zp_trans) },
-	{ "reduce-fit-allsky",    NULL, "Fit Extinction and All-Sky Zero Points",           NULL, NULL, G_CALLBACK (act_mband_fit_allsky) },
-    { "reduce-Smags-from-dataset-averages",    NULL, "Set Smags from Dataset Averages",           NULL, NULL, G_CALLBACK (act_mband_dataset_avgs_to_smags) },
+    { "reduce-menu",            NULL, "_Reduce" },
+    { "reduce-fit-zpoints",     NULL, "Fit Zero Points from _cmags",                NULL, NULL, G_CALLBACK (act_mband_fit_zp_cmags) },
+    { "reduce-smags-from-avgs", NULL, "Set smags from _Averages of cmag Fit",       NULL, NULL, G_CALLBACK (act_mband_dataset_avgs_to_smags) },
+    { "reduce-fit-zp-wtrans",   NULL, "Fit Zero Points from _smags",                NULL, NULL, G_CALLBACK (act_mband_fit_zp_smags) },
+    { "reduce-fit-trans",       NULL, "Fit Zero Points and _Transformation Coeffs", NULL, NULL, G_CALLBACK (act_mband_fit_zp_trans) },
+    { "reduce-fit-allsky",      NULL, "Fit Extinction and All-Sky Zero Points",     NULL, NULL, G_CALLBACK (act_mband_fit_allsky) },
 
 	/* Plot */
 	{ "plot-menu",   NULL, "_Plot" },
@@ -1798,10 +1811,10 @@ static GtkWidget *get_main_menu_bar(GtkWidget *window)
 		"  <!-- Reduce -->"
         "  <menu name='reduce' action='reduce-menu'>"
         "    <menuitem name='reduce-fit-zpoints' action='reduce-fit-zpoints'/>"
+        "    <menuitem name='reduce-smags-from-avgs' action='reduce-smags-from-avgs'/>"
         "    <menuitem name='reduce-fit-zp-wtrans' action='reduce-fit-zp-wtrans'/>"
 		"    <menuitem name='reduce-fit-trans' action='reduce-fit-trans'/>"
         "    <menuitem name='reduce-fit-allsky' action='reduce-fit-allsky'/>"
-        "    <menuitem name='reduce-Smags-from-dataset-averages' action='reduce-Smags-from-dataset-averages'/>"
         "  </menu>"
 		"  <!-- Plot -->"
 		"  <menu name='plot' action='plot-menu'>"

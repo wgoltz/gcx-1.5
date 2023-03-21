@@ -904,9 +904,9 @@ static int normalize_CFA(struct ccd_frame *fr) {
 	int rx = (fr->w + rw) / 2;
 	int ry = (fr->h + rh) / 2;
 
-    struct im_stats *st = calloc(1, sizeof(struct im_stats));
+    struct im_stats *st = alloc_stats(NULL);
     if (st == NULL) return -1;
-    if ((alloc_stats(st) == NULL) || (region_stats(fr, rx, ry, rw, rh, st) < 0)) {
+    if (region_stats(fr, rx, ry, rw, rh, st) < 0) {
         free(st);
         return -1;
     }
@@ -932,7 +932,6 @@ static int normalize_CFA(struct ccd_frame *fr) {
 	scale_shift_frame_CFA(fr, mp, sp);
 
 	free_stats(st);
-    free(st);
 	return 0;
 }
 

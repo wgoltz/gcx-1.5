@@ -587,6 +587,7 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
         if (ofr->zpstate <= ZP_FIT_ERR) continue;
         if (sob->imagerr >= BIG_ERR) continue;
         if (sob->imag == MAG_UNSET) continue;
+        if (sob->flags & CPHOT_INVALID) continue;
         if (sob->flags & CPHOT_NOT_FOUND) continue;;
 
         if ((ofr->band == -1) || (ofr->band == band)) {
@@ -670,7 +671,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
                 if (sob->flags & CPHOT_CENTERED) {
                     str_join_varg(&data->pos, "\n%.7f %.3f %.3f", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
                     n_pos++;
-                } else if (sob->flags & CPHOT_FAINT) {
+                } else if (sob->flags & CPHOT_NOT_FOUND) {
                     str_join_varg(&data->neg, "\n%.7f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
                     n_neg++;
                 }

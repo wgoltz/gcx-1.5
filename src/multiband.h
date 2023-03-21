@@ -13,7 +13,7 @@
 #define MIN_COLOR_VARIANCE P_DBL(MB_MIN_COLOR_VARIANCE) 
 #define AIRMASS_BRACKET_OVERSIZE P_DBL(MB_AIRMASS_BRACKET_OVSIZE)
 #define AIRMASS_BRACKET_MAX_OVERSIZE P_DBL(MB_AIRMASS_BRACKET_OVSIZE)
-#define LMAG_FROM_ZP P_DBL(MB_LMAG_FROM_ZP)	// depends on S/N of sky
+#define LMAG_FROM_ZP P_DBL(AP_LMAG_FROM_ZP)	// depends on S/N of sky
 
 /* an object being observed */
 struct o_star {
@@ -119,6 +119,7 @@ struct mband_dataset {
 	GList *ostars;		/* a list of observed objects */
 	GHashTable *objhash;	/* a hash table used to speed up object lookup */
     int nbands;		    /* how many bands we care about */
+    int mag_source;     /* using cmags or smags */
 	struct transform trans[MAX_MBANDS]; /* transformations */
 };
 
@@ -150,7 +151,7 @@ void ofr_transform_to_stf(struct mband_dataset *mbds, struct o_frame *ofr);
 void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data), void *data);
 void mbds_fit_all(GList *ofrs, int (* progress)(char *msg, void *data), void *data);
 void mbds_to_mband(gpointer dialog, struct mband_dataset *nmbds);
-void mbds_cats_smags_from_avgs(GList *ofrs);
+void mbds_smags_from_cmag_avgs(GList *ofrs);
 struct o_frame *stf_to_mband(gpointer dialog, struct stf *stf);
 struct mband_dataset *dialog_get_mbds(gpointer dialog);
 

@@ -126,8 +126,8 @@ struct im_stats {
 	double median;	// median of frame
     double zero;
     double scale;
+    int free_stats; // if 1 free the stats struct returned by alloc_stats(NULL)
 	double avgs[4];
-//    int free; // struct was alloc'd by alloc_stats and should be freed by free_stats
 	struct im_histogram hist; // the histogram for the current image
 };
 

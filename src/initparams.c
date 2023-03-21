@@ -916,13 +916,20 @@ void init_ptable(void)
                "Std star faint limit", 13.2);
     set_par_description(AP_STD_FAINT_LIMIT,
                "Standard star faintest magnitude.");
-    add_par_int(AP_STD_SOURCE, PAR_APHOT, 0, "std_source",
-               "Std source", PAR_STD_SOURCE_SMAGS);
-    set_par_choices(AP_STD_SOURCE, std_source_options);
-    set_par_description(AP_STD_SOURCE,
-               "cmags: sourced directly from catalog."
-               "smags: derived from fit to local observations"
-               "(which should have less internal scatter).");
+//    add_par_int(AP_STD_SOURCE, PAR_APHOT, 0, "std_source",
+//               "Std source", PAR_STD_SOURCE_SMAGS);
+//    set_par_choices(AP_STD_SOURCE, std_source_options);
+//    set_par_description(AP_STD_SOURCE,
+//               "cmags: sourced directly from catalog."
+//               "smags: derived from fit to local observations"
+//               "(which should have less internal scatter).");
+    add_par_double(AP_LMAG_FROM_ZP, PAR_APHOT, 0, "lmag_from_zp",
+               "Limiting magnitude from zeropoint ", 7.0);
+    set_par_description(AP_LMAG_FROM_ZP,
+                "The amount we subtract from the zeropoint of a frame "
+                "in order to obtain the limiting magnitude used for "
+                "reporting purposes."
+        );
     add_par_double(AP_ALPHA, PAR_APHOT, 0, "alpha",
 		       "Alpha", 2.0);
 	set_par_description(AP_ALPHA,
@@ -1008,14 +1015,6 @@ void init_ptable(void)
 			    "standard frames' airmass range when calculating the range in which "
 			    "frames which are reduced all-sky must lie."
 		);
-	add_par_double(MB_LMAG_FROM_ZP, PAR_MBAND, 0, "lmag_from_zp",
-		       "Limiting magnitude from zeropoint ", 7.0);
-	set_par_description(MB_LMAG_FROM_ZP,
-			    "The amount we subtract from the zeropoint of a frame "
-			    "in order to obtain the limiting magnitude used for "
-			    "reporting purposes."
-		);
-
         /* ccdred */
 	add_par_int(CCDRED_DEMOSAIC_METHOD, PAR_CCDRED, 0, "demosaic_method",
 		    "Method used for demosaic", PAR_DEMOSAIC_METHOD_BILINEAR);

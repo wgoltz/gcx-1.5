@@ -97,16 +97,34 @@ static int frame_count = 0;
 
 struct im_stats *alloc_stats(struct im_stats *st)
 {
-    st->hist.hsize = H_SIZE;
-    st->hist.hdat = (unsigned *)calloc(H_SIZE, sizeof(unsigned));
-    if (st->hist.hdat == NULL) return NULL;
+    struct im_stats *new_st = NULL;
+
+    if (st == NULL) new_st = calloc(1, sizeof(struct im_stats));
+
+     if (new_st) st = new_st;
+
+    if (st) {
+        if (st->hist.hdat == NULL) {
+            st->hist.hdat = (unsigned *)calloc(H_SIZE, sizeof(unsigned));
+            if (st->hist.hdat == NULL) {
+                if (new_st) free(new_st);
+                st = NULL;
+            } else {
+                st->hist.hsize = H_SIZE;
+                st->free_stats = (new_st) ? 1 : 0;
+            }
+        }
+    }
 
     return st;
 }
 
 void free_stats(struct im_stats *st)
 {
+    if (st == NULL) return;
+
     if (st->hist.hdat) free (st->hist.hdat);
+    if (st->free_stats == 1) free(st);
 }
 
 
@@ -177,7 +195,7 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
     if (size_y != 0) hd->h = size_y;
 
 	if (hd->nvar) { //we need to alloc space for variables
-        var = calloc(hd->nvar, sizeof(FITS_row));
+        var = malloc(hd->nvar * sizeof(FITS_row));
 		if (var == NULL) {
             free(hd);
 			return NULL;
@@ -189,6 +207,7 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
         hd->nvar = 0;
     }
 
+    hd->stats = (struct im_stats) { 0 }; // seems to work without this ?
     if (alloc_stats(&hd->stats) == NULL) {
         if (var) free(var);
         free(hd);
@@ -234,13 +253,15 @@ void free_frame(struct ccd_frame *fr)
 	if (fr) {
         frame_count--;
 printf("free_frame %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
-        free_stats(&fr->stats);
         if (fr->var) free(fr->var);
         if (fr->dat) free(fr->dat);
         if (fr->rdat) free(fr->rdat);
         if (fr->gdat) free(fr->gdat);
         if (fr->bdat) free(fr->bdat);
         if (fr->name) free(fr->name);
+
+        free_stats(&fr->stats);
+
 //        if (fr->alignment_mask) free_alignment_mask(fr);
         free(fr);
 	}
@@ -980,11 +1001,12 @@ struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned
 {
     struct ccd_frame *fr = NULL;
 
-//    if (raw_filename(filename) <= 0)
-    fr = read_raw_file(filename);
-    if (fr) return fr;
+    if (raw_filename(filename) <= 0) {
+        fr = read_raw_file(filename);
+        if (fr) return fr;
+    }
 
-    fr = read_jpeg_file(filename);
+    fr = read_jpeg_file(filename); // bail out of here sooner
     if (fr) return fr;
 
     fr = read_tiff_file(filename);

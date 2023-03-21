@@ -740,20 +740,12 @@ GSList *search_stars_near_point(struct gui_star_list *gsl, double x, double y, i
 	while (sl != NULL) {
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
-		if (!(TYPE_MASK_GSTAR(gs) & gsl->display_mask))
-			continue;
-		if (gs->flags & STAR_HIDDEN)
-			continue;
-		if (mask) {
-			if (!(TYPE_MASK_GSTAR(gs) & mask))
-				continue;
-		} else {
-            unsigned bit = TYPE_MASK_GSTAR(gs);
-            unsigned bit_test = bit & gsl->select_mask;
-//            if (!(TYPE_MASK_GSTAR(gs) & gsl->select_mask)) // select_mask needs to be set
-            if (bit_test == 0)
-                continue;
-		}
+
+        if (mask && (TYPE_MASK_GSTAR(gs) & mask) == 0) continue;
+        if (gs->flags & STAR_HIDDEN) continue;
+        if ((TYPE_MASK_GSTAR(gs) & gsl->display_mask) == 0)	continue;
+        if ((TYPE_MASK_GSTAR(gs) & gsl->select_mask) == 0) continue;
+
 		if (star_near_point(gs, x, y)) {
 			ret_sl = g_slist_prepend(ret_sl, gs);
 		}
@@ -778,12 +770,11 @@ GSList *gui_stars_selection(struct gui_star_list *gsl, int type_mask)
 	while (sl != NULL) {
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
-        if (!(TYPE_MASK_GSTAR(gs) & gsl->display_mask))	continue;
-		if (type_mask) {
-            if (!(TYPE_MASK_GSTAR(gs) & type_mask))	continue;
-		} else {
-            if (!(TYPE_MASK_GSTAR(gs) & gsl->select_mask)) continue;
-		}
+
+        if (type_mask && (TYPE_MASK_GSTAR(gs) & type_mask) == 0) continue;
+        if ((TYPE_MASK_GSTAR(gs) & gsl->display_mask) == 0)	continue;
+        if ((TYPE_MASK_GSTAR(gs) & gsl->select_mask) == 0) continue;
+
         if (gs->flags & STAR_SELECTED) ret_sl = g_slist_prepend(ret_sl, gs);
 	}
 	return ret_sl;
@@ -800,8 +791,10 @@ GSList *gui_stars_of_type(struct gui_star_list *gsl, int type_mask)
 	while (sl != NULL) {
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
+
         if (!(TYPE_MASK_GSTAR(gs) & type_mask)) continue;
-		ret_sl = g_slist_prepend(ret_sl, gs);
+
+        ret_sl = g_slist_prepend(ret_sl, gs);
 	}
 	return ret_sl;
 }
@@ -816,11 +809,8 @@ GSList *gui_stars_of_type(struct gui_star_list *gsl, int type_mask)
  */
 GSList *get_selection_from_window(GtkWidget *window, int type_mask)
 {
-	struct gui_star_list *gsl;
-
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL)
-		return NULL;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return NULL;
 
 	return gui_stars_selection(gsl, type_mask);
 }
@@ -829,8 +819,7 @@ GSList *find_stars_window(gpointer window) {
     find_stars_cb(window, ADD_STARS_DETECT);
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl == NULL)
-        return NULL;
+    if (gsl == NULL) return NULL;
 
     return gui_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE));
 }
@@ -841,21 +830,16 @@ GSList *find_stars_window(gpointer window) {
  */
 GSList * stars_under_click(GtkWidget *window, GdkEventButton *event)
 {
-	struct map_geometry *geom;
-	struct gui_star_list *gsl;
-	double x, y;
-	GSList *found=NULL;
+    struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
+    if (geom == NULL) return NULL;
 
-	geom = g_object_get_data(G_OBJECT(window), "geometry");
-	if (geom == NULL)
-		return NULL;
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL)
-		return NULL;
-	x = event->x / geom->zoom;
-	y = event->y / geom->zoom;
-	found = search_stars_near_point(gsl, x, y, 0);
-	return found;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return NULL;
+
+    double x = event->x / geom->zoom;
+    double y = event->y / geom->zoom;
+
+    return search_stars_near_point(gsl, x, y, 0);
 }
 
 
@@ -872,6 +856,7 @@ static void select_stars(GtkWidget *window, GdkEventButton *event, int multiple)
 
     double x = event->x / geom->zoom;
     double y = event->y / geom->zoom;
+
     GSList *found = search_stars_near_point(gsl, x, y, 0);
 
 	d3_printf("looking for stars near %.0f, %.0f\n", x, y);
@@ -880,6 +865,7 @@ static void select_stars(GtkWidget *window, GdkEventButton *event, int multiple)
 	while (sl != NULL) {
         struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
+
         d3_printf("found [%08p] %.2f,%.2f  size %.0f\n", gs, gs->x, gs->y, gs->size) ;
 		gs->flags ^= STAR_SELECTED;
 	}
@@ -895,15 +881,11 @@ static void select_stars(GtkWidget *window, GdkEventButton *event, int multiple)
 /* re-generate and redraw catalog stars in window */
 void redraw_cat_stars(GtkWidget *window)
 {
-	struct gui_star_list *gsl;
-	struct wcs *wcs;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL)
-		return;
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-	if (gsl == NULL)
-		return;
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    if (wcs == NULL) return;
 
 	cat_change_wcs(gsl->sl, wcs);
 

@@ -47,7 +47,6 @@
 #include "interface.h"
 #include "wcs.h"
 #include "cameragui.h"
-#include "filegui.h"
 
 #include "recipe.h"
 #include "multiband.h"
@@ -116,6 +115,7 @@ struct mband_dataset *mband_dataset_new(void)
 		return NULL;
 
 	mbds->ref_count = 1;
+    mbds->mag_source = -1;
 	mbds->objhash = g_hash_table_new(g_str_hash, g_str_equal);
 	return mbds;
 }
@@ -164,14 +164,13 @@ static void mband_dataset_remove_sob(struct mband_dataset *mbds, struct star_obs
     g_hash_table_remove(mbds->objhash, sob->cats->name);
     mbds->ostars = g_list_remove(mbds->ostars, sob->ost);
     o_star_release(sob->ost);
+    d4_printf("%s removed\n", sob->cats->name);
 
     mbds->sobs = g_list_remove(mbds->sobs, sob);
-    star_obs_release(sob);
+//    star_obs_release(sob);
 
     mbds->ofrs = g_list_remove(mbds->ofrs, sob);
     star_obs_release(sob);
-
-    d4_printf("%s removed\n", sob->cats->name);
 }
 
 void old_mband_dataset_release(struct mband_dataset *mbds)
@@ -274,6 +273,7 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
         }
 
         g_hash_table_insert(mbds->objhash, cats->name, ost);
+
         o_star_ref(ost);
         mbds->ostars = g_list_prepend(mbds->ostars, ost);
 
@@ -351,12 +351,20 @@ int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *of
         mband_dataset_add_sob(mbds, cats, ofr); // adds sob to ofr->sobs
         ns ++;
     }
+//printf("mband_dataset_add_sobs_to_ofr ns %d\n", ns); fflush(NULL);
     return ns;
 }
 
-/* update smag source for mbds->ofrs o_stars (cats->smags or cats->cmags)*/
+/* update smag for mbds->ofrs o_stars (use cats->smags or cats->cmags)*/
 int mband_dataset_set_mag_source(struct mband_dataset *mbds, int ms)
 {
+    if (ms != MAG_SOURCE_CMAGS && ms != MAG_SOURCE_SMAGS)
+        ms = MAG_SOURCE_CMAGS;
+
+    if (ms == mbds->mag_source) return 0;
+
+    mbds->mag_source = ms;
+
     int nf = 0;
     GList *gl;
     for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
@@ -437,14 +445,16 @@ static void ofr_sob_initial_weights(struct o_frame *ofr, struct transform *trans
 	while(sl != NULL) {
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
+
 		sob->nweight = 0.0;
 
-        if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
-        if (ofr->band < 0) continue;
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
         if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
         if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+
+        if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
+        if (ofr->band < 0) continue;
 
         double trsqe = 0;
 		if (trans != NULL) {
@@ -485,21 +495,15 @@ static double ofr_sob_residuals(struct o_frame *ofr, struct transform *trans)
 		sl = g_list_next(sl);
 
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->weight < 0.000000001) continue;
         if (sob->ost->smag[sob->ofr->band] == MAG_UNSET) continue;
         if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
         if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
+        if (sob->weight < 0.000000001) continue;
+
         double zpoint = ofr->zpoint;
         if (zpoint == MAG_UNSET) zpoint = 22; // guess
         sob->residual = sob->ost->smag[sob->ofr->band] - sob->imag - zpoint;
-
-//printf("%s residual %.3f sigma %.3f weight %.9f nweight %.9f\n",
-//                      sob->cats->name,
-//                      sob->residual, 1 / sqrt(sob->nweight),
-//                      sob->weight, sob->nweight); fflush(NULL);
-if (isnan(sob->weight))
-    printf("isnan\n");
 
         if (trans != NULL)
             if ((sob->ost->smag[trans->c1] != MAG_UNSET) && (sob->ost->smag[trans->c2] != MAG_UNSET))
@@ -561,7 +565,7 @@ static void ofr_sob_reweight(struct o_frame *ofr, struct transform *trans, doubl
 		sl = g_list_next(sl);
 
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->nweight <= 0.0) continue;
+        if (sob->nweight == 0.0) continue;
 
 		ns ++;
         sob->weight = sob->nweight / (1.0 + pow(fabs(sob->residual)/(alpha / sqrt(sob->nweight)), beta));
@@ -590,7 +594,7 @@ static double ofr_sob_stats(struct o_frame *ofr,
 		sl = g_list_next(sl);
 
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->nweight <= 0.0) continue;
+        if (sob->nweight == 0.0) continue;
 
 		ns ++;
 		we += sob->weight;
@@ -619,7 +623,7 @@ static double ofr_sob_stats(struct o_frame *ofr,
 		sl = g_list_next(sl);
 
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->nweight <= 0.0) continue;
+        if (sob->nweight == 0.0) continue;
 
 		r2 += sqr(sob->residual - rm) * sob->weight;
         if (trans != NULL) {
@@ -663,12 +667,12 @@ static double ofr_median_residual(struct o_frame *ofr)
 		sl = g_list_next(sl);
 
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->nweight <= 0.0) continue;
+        if (sob->nweight == 0.0) continue;
 
 		n++;
 	}
-	if (n == 0)
-		return 0;
+    if (n == 0)	return 0;
+
 //	d3_printf("medianing %d stars\n", n);
 	a = malloc(n * sizeof(double));
 	n = 0;
@@ -678,7 +682,7 @@ static double ofr_median_residual(struct o_frame *ofr)
 		sl = g_list_next(sl);
 
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->nweight <= 0.0) continue;
+        if (sob->nweight == 0.0) continue;
 
 		a[n] = sob->residual;
 		n++;
@@ -695,8 +699,6 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res)
 	double res;
 	int i;
 	struct transform *trans = ofr->trans;
-    // check for low sob nweight
-    // sob = NULL
 
 	if (w_res) {
         ofr->zpoint = MAG_UNSET;
@@ -710,11 +712,8 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res)
 		ofr_sob_reweight(ofr, trans, alpha, beta);
 	}
     for (i = 0; i < 16; i++) {
-        // check ofr->sobs = NULL
-        // sob from ofr->sobs with low weight
 		res = ofr_sob_residuals(ofr, trans);
-		if (fabs(res) < SMALL_ERR)
-			break;
+        if (fabs(res) < SMALL_ERR) break;
 
         ofr->zpoint += res;
 		ofr_sob_reweight(ofr, trans, alpha, beta);
@@ -749,9 +748,6 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
     GList *sl;
     int i;
 
-    double w = 0, c, c2, r2, rc;
-    int ns, r_ns;
-    double r_c, r_c2=0, r_r2, r_rc;
     struct transform *trans = NULL;
 
     for (i = 0; i < 100; i++) {
@@ -759,8 +755,8 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
         while (sl != NULL) {
             struct o_frame *ofr = O_FRAME(sl->data);
             sl = g_list_next(sl);
-			if (ofr->band != band)
-				continue;
+
+            if (ofr->band != band) continue;
 
 			trans = ofr->trans;
 
@@ -777,16 +773,23 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
             asprintf(&msg, "Fitting band %s, iteration %d", trans->bname, i+1);
             if (msg) (*progress)(msg, data), free(msg);
         }
-        w = c = rc = c2 = r2 = 0.0;
-        ns = 0;
+
+        double w, c, c2, r2, rc;
+        w = c = c2 = r2 = rc = 0.0;
+        int ns = 0;
+
+        if (band >= 0) trans->kerr = BIG_ERR;
+
         sl = ofrs;
-		if (band >= 0) 
-            trans->kerr = BIG_ERR;
         while (sl != NULL) {
             struct o_frame *ofr = O_FRAME(sl->data);
             sl = g_list_next(sl);
-			if (ofr->band != band)
-                continue;
+
+            if (ofr->band != band) continue;
+
+            double r_c, r_c2, r_r2, r_rc;
+            int r_ns;
+
 			w += ofr_sob_stats(ofr, NULL, &r_c, &r_rc, &r_c2, &r_r2, &r_ns);
 			c += r_c;
 			rc += r_rc;
@@ -809,19 +812,18 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
             err_printf("Insufficient color variance: %f for band %s\n", c2, trans->bname);
 			break;
         }
-//		d3_printf("w: %.3f, rc: %.5f, c2: %.5f, r2: %.5f, b: %.5f\n",
-//			  w, rc, c2, r2, rc / c2);
+
         if (fabs(rc / c2) < SMALL_ERR) {
 			trans->kerr = sqrt(r2 / (ns - 2)) / sqrt(c2);
             d3_printf("k = %.3f, kerr = %.3f\n", trans->k, trans->kerr);
+
 			sl = ofrs;
             while (sl != NULL) {
                 struct o_frame *ofr = O_FRAME(sl->data);
 				sl = g_list_next(sl);
-//printf("multiband.mbds_fit_band fit zpoints?\n");
-				if (ofr->band != band)
-					continue;
-//printf("yes\n");
+
+                if (ofr->band != band) continue;
+
                 ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0));
 			}
 			break;
@@ -831,8 +833,9 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
         while (sl != NULL) {
             struct o_frame *ofr = O_FRAME(sl->data);
 			sl = g_list_next(sl);
-			if (ofr->band != band)
-                continue;
+
+            if (ofr->band != band) continue;
+
 			ofr->zpoint -= c * rc / c2;
 		}
 	}
@@ -871,8 +874,7 @@ void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data
 
         double w = 0, c = 0, c2 = 0, r2 = 0, rc = 0;
 
-        if (band >= 0)
-            trans->kerr = BIG_ERR;
+        if (band >= 0) trans->kerr = BIG_ERR;
 
         int ns = 0;
         sl = ofrs;
@@ -880,8 +882,7 @@ void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data
             struct o_frame *ofr = O_FRAME(sl->data);
             sl = g_list_next(sl);
 
-            if (ofr->band != band)
-                continue;
+            if (ofr->band != band) continue;
 
             int r_ns;
             double r_c = 0, r_c2 = 0, r_r2 = 0, r_rc = 0;
@@ -921,12 +922,10 @@ void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data
                 struct o_frame *ofr = O_FRAME(sl->data);
                 sl = g_list_next(sl);
 
-                if (ofr->band != band)
-                    continue;
+                if (ofr->band != band) continue;
 
                 ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 0);
             }
-printf("converged %i\n", i); fflush(NULL);
             break;
         }
 
@@ -936,8 +935,8 @@ printf("converged %i\n", i); fflush(NULL);
         while (sl != NULL) { // adjust zpoint for all frames in band
             struct o_frame *ofr = O_FRAME(sl->data);
             sl = g_list_next(sl);
-            if (ofr->band != band)
-                continue;
+
+            if (ofr->band != band) continue;
 
             ofr->zpoint -= c * rc / c2;
         }
@@ -947,28 +946,27 @@ printf("converged %i\n", i); fflush(NULL);
 /* fit the zeropoints and transformation coefficients for frames in ofrs */
 void mbds_fit_all(GList *ofrs, int (* progress)(char *msg, void *data), void *data)
 {
-	GList *bl, *osl, *bsl = NULL;
-	struct o_frame *ofr;
-	int band;
-
-	osl = ofrs;
+    GList *bsl = NULL;
+    GList *osl = ofrs;
 	while (osl != NULL) {
-		ofr = O_FRAME(osl->data);
+        struct o_frame *ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band < 0) 
-			continue;
+
+        if (ofr->band < 0) continue;
+
 		if (g_list_find(bsl, (gpointer)ofr->band) == NULL) {
 			bsl = g_list_append(bsl, (gpointer)ofr->band);
 		}
 	}
+
+    GList *bl;
 	for (bl = bsl; bl != NULL; bl = g_list_next(bl)) {
-		band = (long) bl->data;
-		d3_printf("band: %d\n", band);
+        int band = (long) bl->data;
 		mbds_fit_band(ofrs, band, progress, data);
 	}
 }
 
-void mbds_cats_smags_from_avgs(GList *ofrs)
+void mbds_smags_from_cmag_avgs(GList *ofrs)
 {
     GList *gl;
     for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
@@ -1036,7 +1034,7 @@ void mband_dataset_set_bands_by_string(struct mband_dataset *mbds, char *bspec)
 
     int state = 0;
 	while (tok != TOK_EOL) {
-        char *buf;
+        char *buf = NULL;
 
 		switch(state) {
 		case 0: 	/* wait for band */
@@ -1437,15 +1435,12 @@ void ofr_transform_stars(struct o_frame *ofr, struct mband_dataset *mbds, int tr
 /* transform target stars in mbds */
 void mbds_transform_all(struct mband_dataset *mbds, GList *ofrs, int avg)
 {
-	GList *osl;
-	struct o_frame *ofr;
-
-	osl = ofrs;
+    GList *osl = ofrs;
 	while (osl != NULL) {
-		ofr = O_FRAME(osl->data);
+        struct o_frame *ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band < 0) 
-			continue;
+
+        if (ofr->band < 0) continue;
 
 		ofr_transform_stars(ofr, mbds, 1, avg);
 	}
@@ -1454,16 +1449,15 @@ void mbds_transform_all(struct mband_dataset *mbds, GList *ofrs, int avg)
 /* calculate initial weights for the all-sky zp fit */
 static void all_sky_initial_weights(GList *ofrs)
 {
-	GList *osl;
-	struct o_frame *ofr;
-
+    GList *osl;
 	for (osl = ofrs; osl != NULL; osl = g_list_next(osl)) {
-		ofr = O_FRAME(osl->data);
+        struct o_frame *ofr = O_FRAME(osl->data);
+
 		ofr->weight = ofr->nweight = 0.0;
-		if (ofr->zpstate < ZP_FIT_NOCOLOR) 
-			continue;
-		if (ofr->zpointerr <= 0)
-			continue;
+
+        if (ofr->zpstate < ZP_FIT_NOCOLOR) continue;
+        if (ofr->zpointerr <= 0) continue;
+
 		ofr->weight = ofr->nweight = 1 / sqr(ofr->zpointerr);
 	}
 }
@@ -1476,49 +1470,50 @@ static double all_sky_stats(GList *ofrs, double zz, double e, double tam,
 			    double *w_res, double *w_am, double *w_resam, double *w_am2,
 			    double *w_res2, int *nframes)
 {
-	GList *sl;
-	struct o_frame *ofr;
-	double we = 0, r = 0, a = 0, a2 = 0, r2 = 0, ra = 0, nf = 0;
-	double rm = 0, am = 0;
+    double we = 0, r = 0, a = 0;
+    int nf = 0;
 
-	sl = ofrs;
+    GList *sl = ofrs;
 	while(sl != NULL) {
-		ofr = O_FRAME(sl->data);
+        struct o_frame *ofr = O_FRAME(sl->data);
 		sl = g_list_next(sl);
-		if (ofr->nweight <= 0.0)
-			continue;
+
+        if (ofr->nweight == 0.0) continue;
+
 		nf ++;
 		ofr->residual = ofr->zpoint - zz - e * (ofr->airmass - tam);
 		we += ofr->weight;
 		r += ofr->residual * ofr->weight;
 		a += ofr->airmass * ofr->weight;
-	}
+    }
+
+    double rm = 0, am = 0;
 	if (we > 0) {
 		rm = r / we;
 		am = a / we;
 	}
+
+    double  a2 = 0, r2 = 0, ra = 0;
+
 	sl = ofrs;
 	while(sl != NULL) {
-		ofr = O_FRAME(sl->data);
+        struct o_frame *ofr = O_FRAME(sl->data);
 		sl = g_list_next(sl);
-		if (ofr->nweight <= 0.0)
-			continue;
+
+        if (ofr->nweight == 0.0) continue;
+
 		r2 += sqr(ofr->residual - rm) * ofr->weight;
 		a2 += sqr(ofr->airmass - am) * ofr->weight;
 		ra += (ofr->residual - rm) * (ofr->airmass - am) * ofr->weight;
 	}
-	if (w_res != NULL)
-		*w_res = r;
-	if (w_am != NULL)
-		*w_am = a;
-	if (w_resam != NULL)
-		*w_resam = ra;
-	if (w_res2 != NULL)
-		*w_res2 = r2;
-	if (w_am2 != NULL)
-		*w_am2 = a2;
-	if (nframes != NULL)
-		*nframes = nf;
+
+    if (w_res != NULL) *w_res = r;
+    if (w_am != NULL) *w_am = a;
+    if (w_resam != NULL) *w_resam = ra;
+    if (w_res2 != NULL) *w_res2 = r2;
+    if (w_am2 != NULL) *w_am2 = a2;
+    if (nframes != NULL) *nframes = nf;
+
 	return we;
 }
 
@@ -1535,7 +1530,7 @@ static void all_sky_reweight(GList *ofrs, double alpha, double beta)
 		ofr = O_FRAME(sl->data);
 		sl = g_list_next(sl);
 
-        if (ofr->nweight <= 0.0) continue;
+        if (ofr->nweight == 0.0) continue;
 
         ofr->weight = ofr->nweight / (1.0 + pow(fabs(ofr->residual)/(alpha / sqrt(ofr->nweight)), beta));
 	}
@@ -1554,7 +1549,7 @@ static double all_sky_zz_median(GList *ofrs)
 	while(sl != NULL) {
 		ofr = O_FRAME(sl->data);
 		sl = g_list_next(sl);
-		if (ofr->nweight <= 0.0)
+        if (ofr->nweight == 0.0)
 			continue;
 		n++;
 	}
@@ -1566,7 +1561,7 @@ static double all_sky_zz_median(GList *ofrs)
 	while(sl != NULL) {
 		ofr = O_FRAME(sl->data);
 		sl = g_list_next(sl);
-		if (ofr->nweight <= 0.0)
+        if (ofr->nweight == 0.0)
 			continue;
 		a[n] = ofr->zpoint;
 		n++;
@@ -1646,9 +1641,11 @@ int all_sky_fit_extinction(GList *ofrs, struct transform *trans)
 	while(sl != NULL) {
 		ofr = O_FRAME(sl->data);
 		sl = g_list_next(sl);
+
 		ofr->as_zp_valid = 0;
-		if (ofr->nweight <= 0.0)
-			continue;
+
+        if (ofr->nweight == 0.0) continue;
+
 		if (sqr(ofr->residual) * ofr->nweight > sqr(ZP_OUTLIER_THRESHOLD) ) {
 			no ++;
 		} else if (trans->zzerr < BIG_ERR){
@@ -1682,15 +1679,12 @@ static int ofr_am_compare(struct o_frame *a, struct o_frame *b)
    or any frames if val = false. Return 1 if so */
 static int valid_bracket(GList *sl, struct o_frame *ofr)
 {
-	GList *lp, *li;
-	struct o_frame *of;
+    GList *lp = g_list_find(sl, ofr);
+    if (lp == NULL) return 0;
 
-	lp = g_list_find(sl, ofr);
-	if (lp == NULL)
-		return 0;
-
+    GList *li;
 	for (li = lp; li != NULL; li = g_list_next(li)) {
-		of = O_FRAME(li->data);
+        struct o_frame *of = O_FRAME(li->data);
 		if (ZPSTATE(of) >= ZP_FIT_NOCOLOR) {
 			if (of->as_zp_valid) {
 //				d3_printf(" right valid %.5f\n", of->obs->mjd);
@@ -1708,7 +1702,7 @@ static int valid_bracket(GList *sl, struct o_frame *ofr)
 		return 0;
 	}
 	for (li = lp; li != NULL; li = g_list_previous(li)) {
-		of = O_FRAME(li->data);
+        struct o_frame *of = O_FRAME(li->data);
 		if (ZPSTATE(of) >= ZP_FIT_NOCOLOR) {
 			if (of->as_zp_valid) {
 //				d3_printf(" left valid %.5f\n", of->obs->mjd);
@@ -1733,12 +1727,11 @@ static int valid_bracket(GList *sl, struct o_frame *ofr)
 static void all_sky_zeropoints(GList *aml, GList *tl, struct transform *trans)
 {
 	GList *sl;
-	struct o_frame *ofr;
-	double minam = 10, maxam = 0, ovs;
+    double minam = 10, maxam = 0;
 
 //	d4_printf("aml has %d, tl has %d\n", g_list_length(aml), g_list_length(tl));
 	for (sl = aml; sl != NULL; sl = g_list_next(sl)) {
-		ofr = O_FRAME(sl->data);
+        struct o_frame *ofr = O_FRAME(sl->data);
 		if (ZPSTATE(ofr) >= ZP_FIT_NOCOLOR && ofr->as_zp_valid) {
 			if (ofr->airmass < minam)
 				minam = ofr->airmass;
@@ -1746,29 +1739,27 @@ static void all_sky_zeropoints(GList *aml, GList *tl, struct transform *trans)
 				maxam = ofr->airmass;
 		}
 	}
-	ovs = (AIRMASS_BRACKET_OVERSIZE - 1) * (maxam - minam);
-	if (ovs > AIRMASS_BRACKET_MAX_OVERSIZE)
-		ovs = AIRMASS_BRACKET_MAX_OVERSIZE;
+
+    double ovs = (AIRMASS_BRACKET_OVERSIZE - 1) * (maxam - minam);
+    if (ovs > AIRMASS_BRACKET_MAX_OVERSIZE) ovs = AIRMASS_BRACKET_MAX_OVERSIZE;
+
 	minam -= ovs;
 	maxam += ovs;
 
 	for (sl = aml; sl != NULL; sl = g_list_next(sl)) {
-		ofr = O_FRAME(sl->data);
-		if (ZPSTATE(ofr) <= ZP_FIT_ERR) {
-			if (ofr->airmass >= minam 
-			    && ofr->airmass <= maxam
-			    && valid_bracket(tl, ofr)) {
-//				d3_printf("frame in valid bracket (band=%d)\n", band);
-				ofr->zpoint = trans->zz + (ofr->airmass - trans->am) *
-					trans->e;
-				ofr->lmag = ofr->zpoint - LMAG_FROM_ZP;
-				ofr->zpointerr = sqrt(sqr(trans->zzerr) + 
-						  sqr(trans->eerr * (ofr->airmass - trans->am)) );
-				if (ofr->zpointerr < BIG_ERR)
-					ofr->zpstate = ZP_ALL_SKY;
-			} 
-		}
-	} 
+        struct o_frame *ofr = O_FRAME(sl->data);
+        if (ZPSTATE(ofr) <= ZP_FIT_ERR
+                && ofr->airmass >= minam
+                && ofr->airmass <= maxam
+                && valid_bracket(tl, ofr)) {
+
+            ofr->zpoint = trans->zz + (ofr->airmass - trans->am) * trans->e;
+            ofr->lmag = ofr->zpoint - LMAG_FROM_ZP;
+            ofr->zpointerr = sqrt(sqr(trans->zzerr) + sqr(trans->eerr * (ofr->airmass - trans->am)) );
+
+            if (ofr->zpointerr < BIG_ERR) ofr->zpstate = ZP_ALL_SKY;
+        }
+    }
 
 //	d3_printf("\n");
 }
@@ -1776,18 +1767,16 @@ static void all_sky_zeropoints(GList *aml, GList *tl, struct transform *trans)
 /* fit all-sky zeropoints for the frames that haven't been successfully fitted yet */
 int fit_all_sky_zp(struct mband_dataset *mbds, GList *ofrs)
 {
-	GList *bl, *osl, *bsl = NULL;
-	GList *fofrs = NULL, *sl;
-	struct o_frame *ofr;
-	int band, ret;
-	GList *tlist = NULL, *amlist = NULL;
+    GList *bsl = NULL;
+    GList *tlist = NULL;
 
-	osl = ofrs;
+    GList *osl = ofrs;
 	while (osl != NULL) {
-		ofr = O_FRAME(osl->data);
+        struct o_frame *ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band < 0) 
-			continue;
+
+        if (ofr->band < 0) continue;
+
 		if (g_list_find(bsl, (gpointer)ofr->band) == NULL) {
 			bsl = g_list_append(bsl, (gpointer)ofr->band);
 		}
@@ -1796,38 +1785,50 @@ int fit_all_sky_zp(struct mband_dataset *mbds, GList *ofrs)
 		tlist = g_list_prepend(tlist, ofr);
 	}
 	tlist = g_list_sort(tlist, (GCompareFunc)ofr_time_compare);
+
+    GList *bl;
 	for (bl = bsl; bl != NULL; bl = g_list_next(bl)) {
-		band = (long) bl->data;
-		fofrs = NULL;
-//		d3_printf("band: %d\n", band);
+        int band = (long) bl->data;
+
 		/* do the fit for each band */
+        GList *fofrs = NULL;
+
+        GList *sl;
 		for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) {
 			if (O_FRAME(sl->data)->band == band) {
 				fofrs = g_list_prepend(fofrs, sl->data);
 			}
 		}
-		ret = all_sky_fit_extinction(fofrs, &mbds->trans[band]);
+
+        int ret = all_sky_fit_extinction(fofrs, &mbds->trans[band]);
 		g_list_free(fofrs);
+
 		if (ret) {
 			g_list_free(tlist);
 			g_list_free(bsl);
+
             char *msg = NULL;
             asprintf(&msg, "%s: %s\n", mbds->trans[band].bname, last_err());
             if (msg) err_printf("%s", msg), free(msg);
+
 			return ret;
 		}
 	}
+
 	for (bl = bsl; bl != NULL; bl = g_list_next(bl)) {
-		band = (long) bl->data;
-		amlist = NULL;
-//		d3_printf("band: %d\n", band);
-		/* do the fit for each band */
+        int band = (long) bl->data;
+
+        /* do the fit for each band */
+        GList *amlist = NULL;
+
+        GList *sl;
 		for (sl = ofrs; sl != NULL; sl = g_list_next(sl)) {
 			if (O_FRAME(sl->data)->band == band) {
 				amlist = g_list_prepend(amlist, sl->data);
 			}
 		}
 		amlist = g_list_sort(amlist, (GCompareFunc)ofr_am_compare);
+
 		all_sky_zeropoints(amlist, tlist, &mbds->trans[band]);
 		g_list_free(amlist);
 	}
@@ -1869,9 +1870,11 @@ void ofr_to_stf_cats(struct o_frame *ofr)
                 m = sob->imag + sob->ofr->zpoint;
                 me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
                 sob->cats->flags = sob->flags & ~INFO_RESIDUAL & ~INFO_STDERR;
+
             } else {
                 m = sob->ost->smag[ofr->band];
-                me = 1 / sqrt(sob->weight); // probably not
+//                me = 1 / sqrt(sob->weight); // probably not
+                me = 1 / sqrt(sob->nweight); // ? try this
 
                 sob->cats->residual = sob->residual;
                 sob->cats->std_err = fabs(sob->residual * sqrt(sob->nweight));
@@ -1887,8 +1890,7 @@ void ofr_transform_to_stf(struct mband_dataset *mbds, struct o_frame *ofr)
 {
 	struct stf *stf = NULL, *st;
 
-	if (ofr->stf == NULL)
-		return;
+    if (ofr->stf == NULL) return;
 
 	stf = stf_append_string(NULL, SYM_BAND, ofr->ltrans.bname);	
 	if (ofr->ltrans.c1 >= 0 && ofr->ltrans.c2 >= 0) {

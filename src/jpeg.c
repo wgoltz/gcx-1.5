@@ -50,7 +50,7 @@ struct ccd_frame *read_jpeg_file(char *filename) {
 	cinfo.err = jpeg_std_error(&jerr.pub);
 	jerr.pub.error_exit = my_error_exit;
   /* Establish the setjmp return context for my_error_exit to use. */
-	if (setjmp(jerr.setjmp_buffer))
+    if (setjmp(jerr.setjmp_buffer)) // gets to here with fits file
 		goto exit1;
 
     jpeg_create_decompress(&cinfo);

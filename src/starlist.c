@@ -44,6 +44,7 @@
 #include "params.h"
 #include "wcs.h"
 #include "misc.h"
+#include "multiband.h"
 
 /*
  * remove a star from gui_star_list
@@ -238,6 +239,7 @@ int add_cat_stars(struct cat_star **catsl, int n,
 
 	for (i=0; i<n; i++) {
 		gs = gui_star_new();
+
 //		wcs_xypix(wcs, catsl[i]->ra, catsl[i]->dec, &(gs->x), &(gs->y));
 		cats_xypix(wcs, (catsl[i]), &(gs->x), &(gs->y));
 		gs->size = cat_star_size(catsl[i]);
@@ -251,6 +253,7 @@ int add_cat_stars(struct cat_star **catsl, int n,
 			gs->flags = STAR_TYPE_CAT;
 
 		gs->s = catsl[i];
+
         if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
 
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
@@ -300,6 +303,7 @@ int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, s
         else {
             cat_star_release(CAT_STAR(gs->s), "merge_cat_stars");
             gs->s = catsl[i];
+
             if (CATS_TYPE(catsl[i]) == CATS_TYPE_APSTAR) {
                 gs->flags = STAR_TYPE_APSTAR;
             } else if (CATS_TYPE(catsl[i]) == CATS_TYPE_APSTD) {
@@ -374,7 +378,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 
         else {
             cat_star_release(CAT_STAR(gs->s), "merge_cat_star_list");
-            cat_star_ref(acats, "merge_cat_star_list");
+            cat_star_ref(acats, "merge_cat_star_list (acats)");
             gs->s = acats;
 
             if (CATS_TYPE(acats) == CATS_TYPE_APSTAR) {
@@ -403,7 +407,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 		else
 			gs->flags = STAR_TYPE_CAT;
 
-        cat_star_ref(cats, "merge_cat_star_list");
+        cat_star_ref(cats, "merge_cat_star_list (cats)");
 		gs->s = cats;
         if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
 
@@ -650,39 +654,31 @@ int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
 		return -1;
 }
 
-// if frame has been measured point gui_stars at frame cats
+// if current frame has been measured point gui_stars at frame cats
 void star_list_update_editstar(GtkWidget *window)
 {
-    struct gui_star *gs;
-
-    GList *gl;
-    struct gui_star_list *gsl;
-    struct o_frame *ofr;
-    struct star_obs *sob;
-
-    gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl == NULL)
-        return;
-
 // current frame ofr
-//    GSList *sl = gsl->sl;
-//    gl = ofr->sobs;
-//    struct cat_star *cats1, cats2;
+    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (i_chan == NULL) return;
 
-//    do {
-//        if (sl == NULL) break;
-//        gs = GUI_STAR(sl->data);
-//        sl = g_slist_next(sl);
+    struct o_frame *ofr = i_chan->fr->ofr;
+    if (ofr == NULL) return;
 
-//        if (gl == NULL) break;
-//        struct cat_star *cats = CAT_STAR(gl->data);
+    GList *sobs = ofr->sobs;
+    while (sobs != NULL) {
+        struct star_obs *sob = (struct star_obs *) sobs->data;
+        sobs = g_list_next(sobs);
 
-// find gs->s in sob list
-// for each sob
-//    if sob->cats->gs = gs->s
-//        gs->s = ofr->sob->cats
-//        break
-
+        struct gui_star *gs = sob->cats->gs;
+        if (sob->flags & CPHOT_INVALID) {
+            gs->flags |= STAR_HIDDEN;
+        } else {
+            gs->flags &= ~STAR_HIDDEN;
+            // copy from cats
+            // update frame position
+            // set mag (if not std)
+        }
+    }
 }
 
 /* update the cat sizes according to the current limiting magnitude
@@ -690,17 +686,14 @@ void star_list_update_editstar(GtkWidget *window)
 
 void star_list_update_size(GtkWidget *window)
 {
-	struct gui_star *gs;
-	GSList *sl = NULL;
-	struct gui_star_list *gsl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL)
-		return;
-	sl = gsl->sl;
+    GSList *sl = gsl->sl;
 	while(sl != NULL) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
+
 		if (gs->s) {
 			gs->size = cat_star_size(CAT_STAR(gs->s));
 			gs->flags &= ~STAR_HIDDEN;
@@ -716,17 +709,14 @@ void star_list_update_size(GtkWidget *window)
 
 void star_list_update_labels(GtkWidget *window)
 {
-	struct gui_star *gs;
-	GSList *sl = NULL;
-	struct gui_star_list *gsl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL)
-		return;
-	sl = gsl->sl;
+    GSList *sl = gsl->sl;
 	while(sl != NULL) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
+
 		if (gs->s) {
 			gui_star_label_from_cats(gs);
 		}
@@ -738,12 +728,9 @@ void star_list_update_labels(GtkWidget *window)
  */
 void remove_stars(GtkWidget *window, int type_mask, int flag_mask)
 {
-	struct gui_star_list *gsl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL) {
-		return;
-	}
 	remove_stars_of_type(gsl, type_mask, flag_mask);
 	gtk_widget_queue_draw(window);
 }
@@ -753,12 +740,9 @@ void remove_stars(GtkWidget *window, int type_mask, int flag_mask)
  */
 void toggle_stars(GtkWidget *window, int type_mask)
 {
-    struct gui_star_list *gsl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-    gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl == NULL) {
-        return;
-    }
     draw_stars_of_type(gsl, type_mask, toggle_draw);
     gtk_widget_queue_draw(window);
 }
@@ -769,19 +753,16 @@ void toggle_stars(GtkWidget *window, int type_mask)
  */
 void remove_pairs(GtkWidget *window, int flag_mask)
 {
-	struct gui_star_list *gsl;
-	struct gui_star *gs;
-	GSList *sl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL) {
-		return;
-	}
-	sl = gsl->sl;
+    GSList *sl = gsl->sl;
 	while (sl != NULL) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
+
         if ((gs->flags & STAR_HAS_PAIR) != STAR_HAS_PAIR) continue;
+
         if (gs->pair && ((gs->flags | gs->pair->flags) & flag_mask) == flag_mask) {
 			remove_pair_from(gs);
 		}
@@ -793,46 +774,40 @@ void remove_pairs(GtkWidget *window, int flag_mask)
 // need to have done a cat_change with valid wcs for this frame if this is to work properly
 int remove_off_frame_stars(gpointer window)
 {
-	struct gui_star_list *gsl;
-	struct image_channel *i_ch;
-	int w, h, i = 0;
-	struct gui_star *gs;
-	GSList *sl=NULL, *osl=NULL, *head;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return 0;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL) {
-		return 0;
-	}
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
+    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
 	if (i_ch == NULL || i_ch->fr == NULL) {
 		err_printf("No image frame\n");
 		return 0;
 	}
-	w = i_ch->fr->w;
-	h = i_ch->fr->h;
 
-	head = gsl->sl;
-    
+    int w = i_ch->fr->w;
+    int h = i_ch->fr->h;
+
     double extra = P_DBL(AP_R3) / gsl->binning;
 
-	sl = head;
+    GSList *osl = NULL;
+    int i = 0;
+
+    GSList *head = gsl->sl;
+    GSList *sl = head;
 	while (sl != NULL) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
+
 		if (gs->x < extra || gs->x > w - 1 - extra || gs->y < extra || gs->y > h - 1 - extra) {
 			i++;
 			gs->flags &= ~STAR_HAS_PAIR;
-//			d3_printf("gs release\n");
-            gui_star_release(gs, "remove_off_frame_stars");
+//            gui_star_release(gs, "remove_off_frame_stars"); // nooo
 			if (osl != NULL) {
 				osl->next = sl->next;
 				sl->next = NULL;
-//				d3_printf("free 1sl\n");
 				g_slist_free_1(sl);
 				sl = osl->next;
 			} else {
 				head = sl->next;
 				sl->next = NULL;
-//				d3_printf("free 1sl\n");
 				g_slist_free_1(sl);
 				sl = head;
 			}
@@ -842,6 +817,7 @@ int remove_off_frame_stars(gpointer window)
 		}
 	}
 	gsl->sl = head;
+
 	gtk_widget_queue_draw(window);
 	return i;
 }
@@ -850,17 +826,16 @@ int remove_off_frame_stars(gpointer window)
  */
 struct gui_star *gui_star_new(void)
 {
-	struct gui_star *gs;
-	gs = calloc(1, sizeof(struct gui_star));
-	gs->ref_count = 1;
-//	d3_printf("gs new\n");
+    struct gui_star *gs = calloc(1, sizeof(struct gui_star));
+    if (gs) gs->ref_count = 1;
+
 	return gs;
 }
 
 void gui_star_ref(struct gui_star *gs)
 {
-	if (gs == NULL)
-		return;
+    if (gs == NULL) return;
+
 	gs->ref_count ++;
 }
 
@@ -873,13 +848,8 @@ void remove_pair_from(struct gui_star *gs)
     if (gs->pair == NULL) return;
 
 	gs->pair->flags &= ~STAR_HAS_PAIR;
-//	d3_printf("remove_pair_from: gs refc is %d, pair refc is %d\n",
-//		  gs->ref_count, GUI_STAR(gs->pair)->ref_count);
     gs->pair->pair = NULL;
-//    gui_star_release(gs->pair, "remove_pair_from");
     gs->pair = NULL;
-//try this:
-//    gui_star_release(gs, "remove_pair_from 2");
 }
 
 /* remove pair from star, searching gsl for a star referencing it as a pair
@@ -887,24 +857,25 @@ void remove_pair_from(struct gui_star *gs)
  */
 void search_remove_pair_from(struct gui_star *gs, struct gui_star_list *gsl)
 {
-	GSList *sl;
+
 	struct gui_star *gsp = NULL;
 	if (gs->pair != NULL) {
 		remove_pair_from(gs);
 		return;
 	}
-	sl = gsl->sl;
-	while (sl != NULL) {
+
+    GSList *sl = gsl->sl;
+    while (sl != NULL) { // search gsl for pair = gs
 		gsp = GUI_STAR(sl->data);
+        sl = g_slist_next(sl);
+
         if (gsp->pair == gs) {
-			d3_printf("found pair to remove\n");
 			remove_pair_from(gsp);
 			break;
 		}
-		sl = g_slist_next(sl);
 	}
-	if (sl == NULL)
-		remove_pair_from(gs);
+//	if (sl == NULL)
+//		remove_pair_from(gs);
 }
 
 void gui_star_release(struct gui_star *gs, char *msg)
@@ -950,18 +921,18 @@ void gui_star_release(struct gui_star *gs, char *msg)
  */
 struct gui_star_list *gui_star_list_new(void)
 {
-	struct gui_star_list *gsl;
-	gsl = calloc(1, sizeof(struct gui_star_list));
-	gsl->ref_count = 1;
-	gui_star_list_update_colors(gsl);
-	gsl->max_size = DEFAULT_MAX_SIZE;
+    struct gui_star_list *gsl = calloc(1, sizeof(struct gui_star_list));
+    if (gsl) {
+        gsl->ref_count = 1;
+        gui_star_list_update_colors(gsl);
+        gsl->max_size = DEFAULT_MAX_SIZE;
+    }
 	return gsl;
 }
 
 void gui_star_list_ref(struct gui_star_list *gsl)
 {
-	if (gsl == NULL)
-		return;
+    if (gsl == NULL) return;
 	gsl->ref_count ++;
 }
 
@@ -989,8 +960,8 @@ static void print_gs(gpointer p, gpointer user_data)
 
 void gui_star_list_release(struct gui_star_list *gsl)
 {
-	if (gsl == NULL)
-		return;
+    if (gsl == NULL) return;
+
 	if (gsl->ref_count < 1)
 		g_warning("gui_star_list has ref_count of %d\n", gsl->ref_count);
 	if (gsl->ref_count == 1) {
@@ -1012,9 +983,12 @@ void gui_star_list_release(struct gui_star_list *gsl)
 void print_gui_stars(GSList *sl)
 {
     char *last_name = NULL;
+
     int n = 0;
     while (sl) {
         struct gui_star *gs = GUI_STAR(sl->data);
+        sl = g_slist_next(sl);
+
         printf("%p %08x %d %p", gs, gs->flags, gs->sort, gs->s);
         if (gs->s) {
             struct cat_star *cats = CAT_STAR(gs->s);
@@ -1027,8 +1001,8 @@ void print_gui_stars(GSList *sl)
         printf("\n");
         fflush(NULL);
 
-        sl = g_slist_next(sl);
         n++;
     }
+
     if (last_name) free(last_name);
 }

@@ -486,25 +486,25 @@ static void pairs_change_wcs(GSList *pairs, struct wcs *wcs)
 
 void cat_change_wcs(GSList *sl, struct wcs *wcs)
 {
-	struct gui_star *gs;
-	struct cat_star *cats;
 //printf("cat_change_wcs wcs->xinc * wcs->yinc < 0 %s\n", wcs->xinc * wcs->yinc < 0 ? "Yes" : "No"); fflush(NULL);
 	while (sl != NULL) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
+        sl = g_slist_next(sl);
+
 		if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) && gs->s != NULL) {
-            cats = CAT_STAR(gs->s);
+            struct cat_star *cats = CAT_STAR(gs->s);
 //printf("%d %s\n", gs->sort, cats->name); fflush(NULL);
 //            wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
             cats_xypix(wcs, cats, &(gs->x), &(gs->y));
 		}
-		sl = g_slist_next(sl);
 	}
 }
 
 
 void adjust_wcs(struct wcs *wcs, double dx, double dy, double ds, double dtheta)
 {
-	double t;
+    double t, st, ct;
+
 //printf("wcs.adjust_wcs xref=%.3f yref=%.3f rot=%.3f\n",
 //		  wcs->xref, wcs->yref, wcs->rot, dx, dy, dtheta);
 	if (wcs->xinc * wcs->yinc < 0) { /* flipped */
@@ -514,6 +514,8 @@ void adjust_wcs(struct wcs *wcs, double dx, double dy, double ds, double dtheta)
 		wcs->rot -= dtheta;
 		t = -degrad(dtheta);
 	}
+    sincos(t, &st, &ct);
+
 	if (fabs(dtheta) < 5 && fabs(ds - 1) < 0.05) {
 		if (wcs->xinc * wcs->yinc < 0) { /* flipped */
 			rot_vect(&dx, &dy, -wcs->rot);
@@ -528,9 +530,6 @@ void adjust_wcs(struct wcs *wcs, double dx, double dy, double ds, double dtheta)
 
     wcs->xref -= wcs->xinc * dx;
     wcs->yref -= wcs->yinc * dy;
-
-    double st, ct;
-    sincos(t, &st, &ct);
 
     wcs->pc[0][0] = wcs->pc[0][0] * ct - wcs->pc[0][1] * st;
     wcs->pc[0][1] = wcs->pc[0][0] * st + wcs->pc[0][1] * ct;
