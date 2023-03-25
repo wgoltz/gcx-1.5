@@ -175,7 +175,7 @@ int save_bad_pix(struct bad_pix_map *map)
 
 /* load_bad_pix loads a bad pixel file; if the map structure supplied
    already has a data table attached to it, it is freed first */
-// changed: don't reload if pix already loaded
+// return -1 fail, 0 ok, 1 if pix already loaded
 int load_bad_pix(struct bad_pix_map *map)
 {
     if (map->filename == NULL) {
@@ -186,7 +186,7 @@ int load_bad_pix(struct bad_pix_map *map)
         err_printf("load_bad_pix: empty filename\n");
         return -1;
     }
-    if (map->pix) return 0;
+    if (map->pix) return 1;
 
 	int i, ret, pixels;
 

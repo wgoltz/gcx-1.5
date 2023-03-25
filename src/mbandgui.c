@@ -1057,7 +1057,7 @@ void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
         if (window == NULL) return;
 
         struct image_file *imf = ofr->imf;
-        if (!imf || (imf_load_frame(imf) < 0)) return;
+        if (imf_load_frame(imf) < 0) return;
 
 //        get_frame(imf->fr, "act_mband_display_ofr_frame"); // use imf ?
         frame_to_channel(imf->fr, window, "i_channel");

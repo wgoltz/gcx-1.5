@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -373,12 +374,32 @@ int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, c
     return 0;
 }
 
+// check imf for change to file
+int imf_check_reload(struct image_file *imf)
+{
+    if (imf->flags & IMG_IN_MEMORY_ONLY) return 0;
+
+    struct stat new_stats = { 0 };
+    if (stat(imf->filename, &new_stats)) return 1;
+
+    gboolean not_loaded = (imf->flags & IMG_LOADED) == 0;
+    gboolean reload_sec = (imf->mtime.tv_sec != new_stats.st_mtim.tv_sec);
+    gboolean reload_nsec = (imf->mtime.tv_nsec != new_stats.st_mtim.tv_nsec);
+
+    imf->mtime.tv_sec = new_stats.st_mtim.tv_sec;
+    imf->mtime.tv_nsec = new_stats.st_mtim.tv_nsec;
+
+    return (not_loaded || reload_sec || reload_nsec) ? 1 : 0;
+}
+
 /* load the frame specififed in the image file struct into memory and
  * compute it's stats; return a negative error code (and update the error string)
  * if something goes wrong. Return 0 for success. If the file is already loaded, it's not
- * read again */
+ * read again (return 1) */
 int imf_load_frame(struct image_file *imf)
 {
+    if (imf == NULL) return -1;
+
     if (imf->filename == NULL) {
         err_printf("imf_load_frame: null filename\n");
         return -1;
@@ -389,7 +410,9 @@ int imf_load_frame(struct image_file *imf)
     }
 
     struct ccd_frame *fr = imf->fr;
-    if (! (imf->flags & IMG_LOADED)) {
+
+    int reloaded = 0;
+    if (imf_check_reload(imf) > 0) {
 d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
         fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
 
@@ -401,12 +424,15 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
         imf->fr = fr;
         fr->imf = imf;
         imf->flags |= IMG_LOADED;
+        reloaded = 1;
     }
+
     get_frame(imf->fr, "imf_load_frame");
 
     rescan_fits_exp(fr, &(fr->exp));
     if (! fr->stats.statsok) frame_stats(fr);
 
+//// only for "light" images
     struct wcs *wcs = &(fr->fim);
     if (imf->fim && (imf->fim->wcsset == WCS_VALID)) { // valid wcs
         wcs_clone(wcs, imf->fim);
@@ -416,9 +442,10 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
             wcs->wcsset = WCS_INVALID;
         }
     }
+////
 
 //printf("reduce.imf_load_frame return ok\n");
-    return 0;
+    return reloaded;
 }
 
 /* unload all ccd_frames that are not marked dirty */
@@ -506,8 +533,9 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
             return 1;
         }
 
-        int ret = (imf_load_frame(ccdr->bias) ? 2 : 0);
-        PROGRESS_MESSAGE( "bias frame: %s %s\n", ccdr->bias->filename, ret ?  "(load failed)" : "(loaded)" )
+        int ret = imf_load_frame(ccdr->bias); // 1 : already loaded, dont repeat message
+        if (ret < 1) PROGRESS_MESSAGE( "bias frame: %s %s\n", ccdr->bias->filename, ret ?  "(load failed)" : "(loaded)" );
+        ret = (ret < 0 ? 2 : 0);
 
         if (ret) return ret;
 
@@ -519,8 +547,9 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
             return 1;
         }
 
-        int ret = (imf_load_frame(ccdr->dark) ? 2 : 0);
-        PROGRESS_MESSAGE( "dark frame: %s %s\n", ccdr->dark->filename, ret ? "(load failed)" : "(loaded)" )
+        int ret = imf_load_frame(ccdr->dark);
+        if (ret < 1) PROGRESS_MESSAGE( "dark frame: %s %s\n", ccdr->dark->filename, ret ? "(load failed)" : "(loaded)" );
+        ret = (ret < 0 ? 2 : 0);
 
         if (ret) return ret;
 
@@ -533,8 +562,9 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
             return 1;
         }
 
-        int ret = (imf_load_frame(ccdr->flat) ? 2 : 0);
-        PROGRESS_MESSAGE( "flat frame: %s %s\n", ccdr->flat->filename,  ret ? "(load failed)" : "(loaded)" )
+        int ret = imf_load_frame(ccdr->flat);
+        if (ret < 1) PROGRESS_MESSAGE( "flat frame: %s %s\n", ccdr->flat->filename,  ret ? "(load failed)" : "(loaded)" );
+        ret = (ret < 0 ? 2 : 0);
 
         if (ret) return ret;
 
@@ -547,8 +577,9 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, vo
             return 1;
         }
 
-        int ret = (load_bad_pix(ccdr->bad_pix_map) ? 2 : 0);
-        PROGRESS_MESSAGE( "bad pixels: %s %s\n", ccdr->bad_pix_map->filename,  ret ? "(load failed)" : "(loaded)" )
+        int ret = load_bad_pix(ccdr->bad_pix_map);
+        if (ret < 1) PROGRESS_MESSAGE( "bad pixels: %s %s\n", ccdr->bad_pix_map->filename,  ret ? "(load failed)" : "(loaded)" )
+        ret = (ret < 0 ? 2 : 0);
 
         if (ret) return ret;
     }
@@ -1611,10 +1642,10 @@ d3_printf("load alignment stars");
 	g_return_val_if_fail(ccdr->alignref != NULL, -1);
 
     if (! ccdr->align_stars) { // no valid align_stars yet
+        int res = imf_load_frame(ccdr->alignref);
+        if (res < 0) return -1;
 
-        if (imf_load_frame (ccdr->alignref)) return -1;
-
-//        if (ccdr->ops & CCDR_ALIGN_STARS) free_alignment_stars (ccdr);
+        if (ccdr->ops & CCDR_ALIGN_STARS) free_alignment_stars (ccdr);
 
         ccdr->align_stars = detect_frame_stars (ccdr->alignref->fr);
         if (ccdr->align_stars) {
@@ -1626,12 +1657,12 @@ d3_printf("load alignment stars");
             }
             ccdr->ops |= CCDR_ALIGN_STARS; // turn on alignment
         }
-
-        struct wcs *wcs = g_object_get_data (G_OBJECT(ccdr->window), "wcs_of_window");
-        if (wcs == NULL) {
-            wcs = wcs_new();
-            g_object_set_data_full (G_OBJECT(ccdr->window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
-        }
+// read wcs from alignment frame (if set)
+//        struct wcs *wcs = g_object_get_data (G_OBJECT(ccdr->window), "wcs_of_window");
+//        if (wcs == NULL) {
+//            wcs = wcs_new();
+//            g_object_set_data_full (G_OBJECT(ccdr->window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
+//        }
 
 //        struct image_file *imf = ccdr->alignref; // clone window wcs from alignref
  //       if (imf && imf->fim && imf->fim->wcsset) { // is imf->fim set?

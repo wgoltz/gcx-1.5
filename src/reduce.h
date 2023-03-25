@@ -12,6 +12,7 @@ struct image_file {
 	char *filename;
     struct wcs *fim; // wcs if validated
 	struct ccd_frame *fr;
+    struct timespec mtime; // last stat.st_mtim to check for reload
 };
 
 #define IMG_OP_BIAS 0x01 /* image has been bias-substracted */
@@ -110,6 +111,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
 int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
 void free_alignment_stars(struct ccd_reduce *ccdr);
+int imf_check_reload(struct image_file *imf);
 
 void refresh_wcs(gpointer window, struct ccd_frame *fr);
 
