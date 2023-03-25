@@ -1508,15 +1508,15 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             imf_release_frame(imf, "stack_frames");
     }
 
-    if (fr) {
-        struct image_file *imf = image_file_new();
-        imf->filename = strdup(fr->name);
-        wcs_clone(imf->fim, &fr->fim); // setup imf->fim from somewhere
-        imf->flags |= (IMG_LOADED & IMG_DIRTY);
+//    if (fr) {
+//        struct image_file *imf = image_file_new();
+//        imf->filename = strdup(fr->name);
+//        wcs_clone(imf->fim, &fr->fim); // setup imf->fim from somewhere
+//        imf->flags |= (IMG_LOADED | IMG_DIRTY | IMG_IN_MEMORY_ONLY);
 
-        fr->imf = imf;
-        imf->fr = fr;
-    }
+//        fr->imf = imf;
+//        imf->fr = fr;
+//    }
 
 d3_printf("ccd_frame.stack_frames return ok\n");
     return fr;

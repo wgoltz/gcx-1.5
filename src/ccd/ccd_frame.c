@@ -124,7 +124,7 @@ void free_stats(struct im_stats *st)
     if (st == NULL) return;
 
     if (st->hist.hdat) free (st->hist.hdat);
-    if (st->free_stats == 1) free(st);
+    if (st->free_stats == 1) free(st); // clangd says st offset by 80 bytes from alloc
 }
 
 
@@ -252,7 +252,7 @@ void free_frame(struct ccd_frame *fr)
 {
 	if (fr) {
         frame_count--;
-printf("free_frame %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
+// printf("free_frame %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
         if (fr->var) free(fr->var);
         if (fr->dat) free(fr->dat);
         if (fr->rdat) free(fr->rdat);
@@ -263,7 +263,7 @@ printf("free_frame %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->na
         free_stats(&fr->stats);
 
 //        if (fr->alignment_mask) free_alignment_mask(fr);
-        free(fr);
+        free(fr); // clangd says attempt to free released memory (something in free_stats)
 	}
 }
 
@@ -372,7 +372,7 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
     for (hix = 0; hix < hsize; hix++) hdata[hix] = 0;
 
     double hmin = H_MIN;
-    double hstep = (H_MAX - H_MIN) / hsize;
+    double hstep = (H_MAX - H_MIN) / hsize; // clangd says division by 0 (stats not setup correctly)
     unsigned binmax = 0;
 
     double sum = 0.0;
@@ -1205,14 +1205,16 @@ int write_fits_frame(struct ccd_frame *fr, char *filename)
 {
 // if zipped set or has zipped extension write zipped file, else unzipped
 // play with extension to make sense
-    char *fn = strdup(filename);
-    int zipped = is_zip_name(fn);
-    if (zipped) drop_dot_extension(fn);
 
-    if (zipped)
-        return write_gz_fits_frame(fr, fn);
-    else
-        return write_fits_frame_unzipped(fr, fn);
+    if (is_zip_name(filename)) {
+        char *fn = strdup(filename);
+        drop_dot_extension(fn);
+        int res = write_gz_fits_frame(fr, fn);
+        free(fn);
+        return res;
+
+    } else
+        return write_fits_frame_unzipped(fr, filename);
 }
 
 

@@ -985,7 +985,7 @@ gboolean image_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer wind
     if ((!i_channel->color && cache->type != MAP_CACHE_GRAY) ||	(i_channel->color && cache->type != MAP_CACHE_RGB)) {
         d3_printf("expose: other cache type\n");
 d3_printf("image expose, free cache %p\n", cache->dat);
-        if (cache->dat) free(cache->dat);
+        if (cache->dat) { free(cache->dat); cache->dat = NULL; }
 		cache->cache_valid = 0;
 	} else if (cache->zoom != geom->zoom) {
 //		d3_printf("expose: other cache zoom\n");

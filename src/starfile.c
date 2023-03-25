@@ -393,7 +393,8 @@ static int get_centroid_from_rcp(GScanner *scan, struct cat_star *cats)
 int parse_star(GScanner *scan, struct cat_star *cats)
 {
 	int havera = 0, havedec = 0, havename = 0, havemag = 0, haveeq = 0;
-	GTokenType tok;
+//	GTokenType tok;
+    unsigned tok;
 
 	do {
 		tok = g_scanner_get_next_token(scan);
@@ -771,8 +772,9 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 struct stf *stf_read_frame(FILE *fp)
 {
 	GScanner *scan;
-	GTokenType tok;
-	int level = 0;
+//    GTokenType tok;
+    unsigned tok;
+    int level = 0;
 	int minus = 0;
 	GList *sl;
 	struct stf *ret = NULL;

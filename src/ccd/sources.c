@@ -792,9 +792,9 @@ void release_sources(struct sources *src)
 		src->ref_count --;
 		return;
 	}
-    printf("release sources (%d)\n", src->ns);
+//    printf("release sources (%d)\n", src->ns);
 
-	free(src->s);
+    free(src->s);
 	free(src);
 }
 

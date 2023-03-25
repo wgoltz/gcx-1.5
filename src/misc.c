@@ -129,14 +129,16 @@ void str_join_varg(char **str, char *fmt, ...)
     va_end(ap);
 }
 
-char *dot_extension(char *fn)
+int dot_extension(char *fn)
 {
-    int i = strlen(fn);
-    char *s = fn + i;
+    char *p = fn + strlen(fn);
 
-    for (; i > 0; i--) if (*s-- == '.') return strdup(s + 1);
+    while (--p >= fn)
+        if (*p == '.') break;
 
-    return NULL;
+    if (p == fn) return -1;
+
+    return p - fn;
 }
 
 int is_zip_name(char *fn)
@@ -228,18 +230,27 @@ char *save_name(char *in_file_name, char *out_file_stub)
     else
         in_copy = strdup(in_file_name);
 
-    char *fn = basename(in_copy);
-    gboolean zipped = (is_zip_name(fn) > 0);
+    char *fn0 = basename(in_copy);
+    gboolean zipped = (is_zip_name(fn0) > 0);
 
-    int sz = strlen(fn);
+    char *fn = strdup(fn0);
+    char *extens = NULL;
 
-    // strip numeric suffix
-    if (sz > 0) {
-        char *p = fn + sz;
-        while (--p >= fn) {
-            if (!(*p >= '0' && *p <= '9')) break;
-        }
+    // drop zip extension
+    if (zipped) drop_dot_extension(fn);
+
+    int i = has_extension(fn);
+    if (i > 0) {
+        extens = strdup(fn + i); // maybe multiple extens?
+        fn[i] = 0; // drop extens
     }
+    int seq = get_seq(fn);
+
+    // build outfile name
+//    if (seq > 0)
+//    char *out_file = str_join_str(out_file_stub, "%s", )
+
+
     free(in_copy);
 }
 
@@ -374,7 +385,7 @@ double angular_dist(double a, double b)
 	return d;
 }
 
-
+// drop extension by converting last '.' (if found) to 0
 int drop_dot_extension(char *fn)
 {
     int i = strlen(fn);
@@ -386,6 +397,34 @@ int drop_dot_extension(char *fn)
         i--;
     }
     return i;
+}
+
+// return position of '.' of (last) extension
+int has_extension(char *fn)
+{
+    char *p = fn + strlen(fn);
+    while (--p >= fn)
+        if (*p == '.') break;
+    return (int) (p - fn);
+}
+
+// return numeric sequence number at end of filename
+int get_seq(char *fn)
+{
+    char *p = fn + strlen(fn);
+    int i = 0;
+    while (--p >= fn) {
+        if (!(*p >= '0' && *p <= '9')) break;
+        i++;
+    }
+    if (i) {
+        p++;
+        char *endp = p;
+        unsigned res = strtoul(p, &endp, 10);
+        if (endp != p) return -1;
+        return res;
+    }
+    return -1;
 }
 
 /* general interval timer functions */

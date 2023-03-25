@@ -20,9 +20,11 @@ int check_seq_number(char *file, int *sqn);
 void clamp_spin_value(GtkSpinButton *spin);
 void named_label_set(GtkWidget *dialog, char *name, char *text);
 
-char *dot_extension(char *fn);
+int dot_extension(char *fn);
 int drop_dot_extension(char *fn);
 int is_zip_name(char *fn);
+int has_extension(char *fn);
+int get_seq(char *fn);
 
 double angular_dist(double a, double b);
 void update_timer(struct timeval *tv_old);

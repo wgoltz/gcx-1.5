@@ -214,6 +214,7 @@ extern void star_edit_dialog(GtkWidget *window, GSList *found);
 extern void star_edit_star(GtkWidget *window, struct cat_star *cats);
 extern void do_edit_star(GtkWidget *window, GSList *found, int make_std);
 extern void add_star_from_catalog(gpointer window);
+void star_edit_set_star(GtkWidget *dialog, struct cat_star *cats);
 
 /* textgui.c */
 extern void update_fits_header_display(gpointer window);

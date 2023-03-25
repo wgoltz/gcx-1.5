@@ -91,12 +91,12 @@ void star_edit_update_entry(GtkWidget *dialog, char *entry_name, char *text)
 
 void cat_star_release_ocats(struct cat_star *cats)
 {
-    cat_star_release(cats, "edit_star release ocats");
+    cat_star_release(cats, "");
 }
 
 void cat_star_release_cat_star(struct cat_star *cats)
 {
-    cat_star_release(cats, "edit_star release cat_star");
+    cat_star_release(cats, "edit_star");
 }
 
 /* load a star for editing. a copy of the star is made and referenced as
@@ -121,20 +121,10 @@ void update_star_edit(GtkWidget *dialog)
 
     struct cat_star *cats = last_cats;
 
-//    gpointer main_window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    struct star_obs *sob = sob_from_current_frame(window, cats);
 
-//    struct gui_star *gs;
-
-//    if (gs = last_cats->gs)
-//        cats = CAT_STAR(gs->s); // base cats
-//    if (cats == NULL) return;
-//printf("update_star_edit ");
-//    struct cat_star *current_cats;
-//    if (current_cats = cats_from_current_frame_sob(main_window, gs))
-//        cats = current_cats;
-
-
-//	d3_printf("comments: %s\n", cats->comments);
+    // update edit star fields from sob
 
 	star_edit_update_flags(dialog, cats);
 
@@ -169,8 +159,8 @@ void update_star_edit(GtkWidget *dialog)
 			      cats->noise[NOISE_PHOTON], cats->noise[NOISE_READ],
 			      cats->noise[NOISE_SKY], cats->noise[NOISE_SCINT]);
 	}
-    // cats->residual should be updated with each frame (stf_aphot)
-    // ofr_to_stf_cats(ofr) does this in ofr_selection_cb but also pushes smag
+
+    // update from sob
 	if (cats->flags & (INFO_RESIDUAL | INFO_STDERR)) {
         if (cats->flags & (INFO_RESIDUAL)) str_join_varg(&buf, "\nresidual:%.3f", cats->residual);
         if (cats->flags & (INFO_STDERR)) str_join_varg(&buf, "\nstderr:%.3f", cats->std_err);
@@ -567,8 +557,7 @@ static gboolean focus_out_cb (GtkWidget *widget, GdkEventFocus *event, gpointer 
  */
 void star_edit_star(GtkWidget *window, struct cat_star *cats)
 {
-	GtkWidget *dialog;
-	dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
+    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
 	if (dialog == NULL) {
 		dialog = create_pstar();
 

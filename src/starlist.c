@@ -163,11 +163,9 @@ void draw_stars_of_type(struct gui_star_list *gsl, int type_mask, draw_type d)
 /* call remove_stars_of_type on the gsl of window */
 void remove_stars_of_type_window(GtkWidget *window, int type_mask, int flag_mask)
 {
-	struct gui_star_list *gsl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-	if (gsl == NULL)
-		return;
 	remove_stars_of_type(gsl, type_mask, flag_mask);
 }
 
@@ -175,11 +173,9 @@ void remove_stars_of_type_window(GtkWidget *window, int type_mask, int flag_mask
 /* call draw_stars_of_type on the gsl of window */
 void draw_stars_of_type_window(GtkWidget *window, int type_mask, draw_type d)
 {
-    struct gui_star_list *gsl;
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
 
-    gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl == NULL)
-        return;
     draw_stars_of_type(gsl, type_mask, d);
     gtk_widget_queue_draw(window);
 }
@@ -187,9 +183,7 @@ void draw_stars_of_type_window(GtkWidget *window, int type_mask, draw_type d)
 /* find a gui star who's cats has the given name */
 struct gui_star * window_find_gs_by_cats_name(GtkWidget *window, char *name)
 {
-	struct gui_star_list *gsl;
-
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL) return NULL;
 
 	return find_gs_by_cats_name(gsl, name);
@@ -199,19 +193,18 @@ struct gui_star * window_find_gs_by_cats_name(GtkWidget *window, char *name)
 /* set the label of a gui_star from the catstar */
 void gui_star_label_from_cats (struct gui_star *gs)
 {
-	double mag;
-
     if (gs->s == NULL) return;
-    struct cat_star *cats = CAT_STAR(gs->s);
 
 	if (gs->label.label != NULL) {
 		free(gs->label.label);
 		gs->label.label = NULL;
 	}
 
+    struct cat_star *cats = CAT_STAR(gs->s);
     if (CATS_TYPE(cats) == CATS_TYPE_APSTAR && P_INT(LABEL_APSTAR)) {
         gs->label.label = strdup(cats->name);
     } else if (CATS_TYPE(cats) == CATS_TYPE_APSTD && P_INT(LABEL_APSTAR)) {
+        double mag;
         if (cats->smags && !get_band_by_name(cats->smags, P_STR(LABEL_APSTD_BAND), &mag, NULL)) {
             asprintf(&gs->label.label, "%.0f", mag * 10);
 		} else {
@@ -235,10 +228,8 @@ int add_cat_stars(struct cat_star **catsl, int n,
 		  struct gui_star_list *gsl, struct wcs *wcs)
 {
 	int i;
-	struct gui_star *gs;
-
 	for (i=0; i<n; i++) {
-		gs = gui_star_new();
+        struct gui_star *gs = gui_star_new();
 
 //		wcs_xypix(wcs, catsl[i]->ra, catsl[i]->dec, &(gs->x), &(gs->y));
 		cats_xypix(wcs, (catsl[i]), &(gs->x), &(gs->y));
@@ -266,9 +257,8 @@ int add_cat_stars(struct cat_star **catsl, int n,
 struct gui_star *find_gs_by_cats_name(struct gui_star_list *gsl, char *name)
 {
 	GSList *sl;
-	struct gui_star *gs;
 	for (sl = gsl->sl; sl != NULL; sl = sl->next) {
-		gs = GUI_STAR(sl->data);
+        struct gui_star *gs = GUI_STAR(sl->data);
 
         if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) == 0) continue;
         if (gs->s == NULL) continue;
@@ -355,19 +345,16 @@ int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, s
  * merging is done by name.
  */
 int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs)
-{
-	GList *al;
-	int n = 0;
-	struct gui_star *gs;
-	struct cat_star *cats;
-	struct cat_star *acats;
-	GSList *newsl = NULL, *sl;
+{	
+    GSList *newsl = NULL;
+    int n = 0;
 
-	for (al = addsl; al != NULL; al = al->next) {
+    GList *al;
+    for (al = addsl; al != NULL; al = al->next) {
 		n++;
-		acats = CAT_STAR(al->data);
+        struct cat_star *acats = CAT_STAR(al->data);
 
-		gs = find_gs_by_cats_name(gsl, acats->name);
+        struct gui_star *gs = find_gs_by_cats_name(gsl, acats->name);
 
 //        if (gs && (gs->flags & STAR_DELETED)) undelete_star(gs); // restore gs if it was deleted
 
@@ -391,9 +378,12 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
                 gs->flags = STAR_TYPE_CAT;
         }
 	}
+
+    GSList *sl;
     for (sl = newsl; sl != NULL; sl = sl->next) { // only new stars will be refd
-		cats = CAT_STAR(sl->data);
-		gs = gui_star_new();
+        struct cat_star *cats = CAT_STAR(sl->data);
+        struct gui_star *gs = gui_star_new();
+
 //		wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
 		cats_xypix(wcs, cats, &(gs->x), &(gs->y));
 		gs->size = cat_star_size(cats);
@@ -407,7 +397,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 		else
 			gs->flags = STAR_TYPE_CAT;
 
-        cat_star_ref(cats, "merge_cat_star_list (cats)");
+        cat_star_ref(cats, "");
 		gs->s = cats;
         if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
 
@@ -415,6 +405,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 		gui_star_label_from_cats(gs);
 //printf("starlist.merge_cat_star_list adding star at %f %f\n", gs->x, gs->y);
 	}
+
 	g_slist_free(newsl);
 	cat_change_wcs(gsl->sl, wcs);
 	return n;
@@ -439,6 +430,7 @@ int merge_cat_star_list_to_window(gpointer window, GList *addsl)
 
 	gsl->display_mask |= TYPE_MASK_CATREF;
 	gsl->select_mask |= TYPE_MASK_CATREF;
+
 	return merge_cat_star_list(addsl, gsl, wcs);
 }
 
@@ -450,16 +442,13 @@ int merge_cat_star_list_to_window(gpointer window, GList *addsl)
 int add_star_from_frame_header(struct ccd_frame *fr,
 			       struct gui_star_list *gsl, struct wcs *wcs)
 {
-	double ra, dec, equinox;
-	struct gui_star *gs;
-	struct cat_star *cats;
-
     char *object = fits_get_string(fr, P_STR(FN_OBJECT));
     if (object == NULL) {
         err_printf("no '%s' field in fits header\n", P_STR(FN_OBJECT));
 		return 0;
 	}
 
+    double ra;
     int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
     if (d_type < 0) {
 		err_printf("no '%s' field in fits header\n", P_STR(FN_OBJCTRA));
@@ -467,17 +456,19 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 	}
     if (d_type == DMS_SEXA)	ra *= 15.0;
 
+    double dec;
     if (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) <= 0) {
 		err_printf("no '%s' field in fits header\n", P_STR(FN_OBJCTDEC));
 		return 0;
 	}
 
+    double equinox;
     if (fits_get_double(fr, P_STR(FN_EQUINOX), &equinox) <= 0) {
 		equinox = wcs->equinox;
 	}
     d3_printf("name %s ra %.4f dec %.4f, equ: %.1f\n", object, ra, dec, equinox);
 
-	cats = cat_star_new();
+    struct cat_star *cats = cat_star_new();
 	cats->ra = ra;
 	cats->dec = dec;
 	cats->equinox = equinox;
@@ -485,7 +476,7 @@ int add_star_from_frame_header(struct ccd_frame *fr,
     cats->name = strdup(object);
 	cats->flags = CATS_TYPE_CAT;
 
-	gs = gui_star_new();
+    struct gui_star *gs = gui_star_new();
 //	wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
 	cats_xypix(wcs, cats, &(gs->x), &(gs->y));
 	gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
@@ -503,19 +494,18 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 /* it keeps a reference to the cat_stars without ref-ing them */
 int add_cat_stars_to_window(gpointer window, struct cat_star **catsl, int n)
 {
-	struct wcs *wcs;
-	struct gui_star_list *gsl;
-	int i;
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 /* we unref the cat stars, so the caller shouldn't */
 		d3_printf("add_cat_stars_to_window: invalid wcs, deleting stars\n");
-		for (i=0; i < n; i++)
+        int i;
+        for (i=0; i < n; i++)
             cat_star_release(catsl[i], "add_cat_stars_to_window");
 		return -1;
 	}
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		gsl = gui_star_list_new();
 		attach_star_list(gsl, window);
@@ -533,9 +523,7 @@ int add_cat_stars_to_window(gpointer window, struct cat_star **catsl, int n)
 /* the stars are ref'd*/
 int add_gui_stars_to_window(gpointer window, GSList *sl)
 {
-	struct gui_star_list *gsl;
-
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		gsl = gui_star_list_new();
 		attach_star_list(gsl, window);
@@ -561,27 +549,22 @@ int add_gui_stars_to_window(gpointer window, GSList *sl)
 int add_stars_from_gsc(struct gui_star_list *gsl, struct wcs *wcs,
 			double radius, double maxmag, int n)
 {
-	int n_gsc, ret;
-	struct cat_star **cats;
-	struct catalog *cat;
-//	char buf[CAT_STAR_NAME_SZ];
-
     if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		g_warning("add_stars_from_wcs: bad wcs");
 		return 0;
 	}
 
-	cat = open_catalog("gsc");
+    struct catalog *cat = open_catalog("gsc");
 
 	if (cat == NULL || cat->cat_search == NULL)
 		return 0;
 
-	cats = calloc(n, sizeof(struct cat_star *));
+    struct cat_star **cats = calloc(n, sizeof(struct cat_star *));
 
 //	d3_printf("ra:%.4f, dec:%.4f\n", wcs->xref, wcs->yref);
 
 //	d3_printf("before call, cat_search = %08x\n", (unsigned)cat->cat_search);
-	n_gsc = (* cat->cat_search)(cats, cat, wcs->xref, wcs->yref, radius, n);
+    int n_gsc = (* cat->cat_search)(cats, cat, wcs->xref, wcs->yref, radius, n);
 
 	d3_printf ("got %d from cat_search\n", n_gsc);
 
@@ -589,9 +572,9 @@ int add_stars_from_gsc(struct gui_star_list *gsl, struct wcs *wcs,
 		free(cats);
 		return n_gsc;
 	}
-	ret = merge_cat_stars(cats, n_gsc, gsl, wcs);
-
+    int ret = merge_cat_stars(cats, n_gsc, gsl, wcs);
 	free(cats);
+
 	return ret;
 }
 
@@ -601,85 +584,78 @@ int add_stars_from_gsc(struct gui_star_list *gsl, struct wcs *wcs,
  */
 int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
 {
-	struct gui_star_list *gsl;
-	struct wcs *wcs;
-	GSList *sl;
-	struct gui_star *gs;
-
-
 	g_return_val_if_fail(cats != NULL, -2);
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	g_return_val_if_fail(gsl != NULL, -2);
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	g_return_val_if_fail(wcs != NULL, -2);
 
-	sl = gsl->sl;
-    int found = 0;
-	while (sl != NULL) {
-//        if (found) break;
-
-		gs = GUI_STAR(sl->data);
-		sl = g_slist_next(sl);
-		if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) && gs->s == cats) {
-            found++;
-			gs->size = cat_star_size(CAT_STAR(gs->s));
+    struct gui_star *gs = cats->gs;
+    if (gs) {
+        if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) {
+            gs->size = cat_star_size(cats);
 //			wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
-			cats_xypix(wcs, cats, &(gs->x), &(gs->y));
-			if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTAR) {
+            cats_xypix(wcs, cats, &(gs->x), &(gs->y));
+            if (CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
                 gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTAR;
-				gui_star_label_from_cats(gs);
-				continue;
-			}
-			if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTD) {
+                gui_star_label_from_cats(gs);
+            } else if (CATS_TYPE(cats) == CATS_TYPE_APSTD) {
                 gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTD;
-				gui_star_label_from_cats(gs);
-				continue;
-			}
-			if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_SREF) {
+                gui_star_label_from_cats(gs);
+            } else if (CATS_TYPE(cats) == CATS_TYPE_SREF) {
                 gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_SREF;
-				gui_star_label_from_cats(gs);
-				continue;
-			} else {
+                gui_star_label_from_cats(gs);
+            } else {
                 gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_CAT;
-				gui_star_label_from_cats(gs);
-				continue;
-			}
-		}
-	}
-
-	if (found)
-		return 0;
-	else
-		return -1;
-}
-
-// if current frame has been measured point gui_stars at frame cats
-void star_list_update_editstar(GtkWidget *window)
-{
-// current frame ofr
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-    if (i_chan == NULL) return;
-
-    struct o_frame *ofr = i_chan->fr->ofr;
-    if (ofr == NULL) return;
-
-    GList *sobs = ofr->sobs;
-    while (sobs != NULL) {
-        struct star_obs *sob = (struct star_obs *) sobs->data;
-        sobs = g_list_next(sobs);
-
-        struct gui_star *gs = sob->cats->gs;
-        if (sob->flags & CPHOT_INVALID) {
-            gs->flags |= STAR_HIDDEN;
-        } else {
-            gs->flags &= ~STAR_HIDDEN;
-            // copy from cats
-            // update frame position
-            // set mag (if not std)
+                gui_star_label_from_cats(gs);
+            }
         }
+        return 0;
+
+    } else {
+        int found = 0;
+
+        GSList *sl = gsl->sl;
+        while (sl != NULL) {
+            struct gui_star *gs = GUI_STAR(sl->data);
+            sl = g_slist_next(sl);
+
+            if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) && gs->s == cats) {
+                found++;
+                gs->size = cat_star_size(CAT_STAR(gs->s));
+                //			wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
+                cats_xypix(wcs, cats, &(gs->x), &(gs->y));
+                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTAR) {
+                    gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTAR;
+                    gui_star_label_from_cats(gs);
+                    continue;
+                }
+                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTD) {
+                    gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTD;
+                    gui_star_label_from_cats(gs);
+                    continue;
+                }
+                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_SREF) {
+                    gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_SREF;
+                    gui_star_label_from_cats(gs);
+                    continue;
+                } else {
+                    gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_CAT;
+                    gui_star_label_from_cats(gs);
+                    continue;
+                }
+            }
+        }
+
+        if (found)
+            return 0;
+        else
+            return -1;
     }
 }
+
 
 /* update the cat sizes according to the current limiting magnitude
  * and mark some as hidden if appropiate */

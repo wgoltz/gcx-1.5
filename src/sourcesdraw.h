@@ -142,6 +142,10 @@ GSList *find_stars_window(gpointer window);
 void draw_stars_of_type(struct gui_star_list *gsl, int type_mask, draw_type d);
 int gs_compare(struct gui_star *a, struct gui_star *b);
 int cats_gs_compare(struct cat_star *a, struct cat_star *b);
+struct star_obs *sob_from_current_frame(gpointer main_window, struct cat_star *cats);
+
+// from staredit.c
+void update_star_edit(GtkWidget *dialog);
 
 
 // handle binned frames
@@ -164,7 +168,7 @@ int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, s
 int merge_cat_star_list_to_window(gpointer window, GList *addsl);
 struct gui_star *window_find_gs_by_cats_name(GtkWidget *window, char *name);
 struct gui_star *find_gs_by_cats_name(struct gui_star_list *gsl, char *name);
-void star_list_update_editstar(GtkWidget *window);
 void print_gui_stars(GSList *sl);
+
 
 #endif

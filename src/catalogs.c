@@ -612,14 +612,16 @@ struct cat_star *cat_star_new(void)
 		cats->ref_count = 1;
         cats->perr = BIG_ERR;
     }
-	return cats;
+    return cats;
 }
 
 void cat_star_ref(struct cat_star *cats, char *msg)
 {
     if (cats == NULL) return;
-	cats->ref_count ++;
-    printf("cat_star_ref %d %s %s\n", cats->ref_count, (cats->name) ? cats->name : "", msg); fflush(NULL);
+    cats->ref_count ++;
+    if (msg && *msg) {
+        printf("cat_star_ref %d %s %s\n", cats->ref_count, (cats->name) ? cats->name : "", msg); fflush(NULL);
+    }
 }
 
 /* create duplicate of cat_star with ref_count 1 */
@@ -663,7 +665,18 @@ struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
     if (cats->ref_count == 1) {
 //        err_printf("cat_star %p %s freed\n", cats, cats->name);
 
-        printf("cat_star_release %p %s %s\n", cats, cats->name, msg); fflush(NULL);
+        if (msg && *msg != 0) {
+            char *buf = NULL;
+            if (cats->gs)
+                asprintf(&buf, "%s %d", cats->name, cats->gs->sort);
+            else
+                asprintf(&buf, "%s", cats->name);
+
+            if (buf) {
+                printf("cat_star_release %p %s %s\n", cats, buf, msg);
+                free(buf);
+            }
+        }
 
         if (cats->name) free(cats->name);
         if (cats->comments)	free(cats->comments);
@@ -674,9 +687,15 @@ struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
             if (cats->astro->catalog) free(cats->astro->catalog);
 			free(cats->astro);
         }
-        if (cats->gs) cats->gs->s = NULL;
+        if (cats->gs) {// gs->s should point to cats
+            if (cats->gs->s != cats)
+                printf("bad gs pointer %p\n", cats->gs->s);
+            else
+                cats->gs->s = NULL;
+        }
 
-		free(cats);
+        free(cats);
+        fflush(NULL);
         cats = NULL;
 	} else {        
 		cats->ref_count --;

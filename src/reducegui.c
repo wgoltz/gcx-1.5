@@ -931,9 +931,11 @@ static void imf_reload_cb(GtkAction *action, gpointer dialog)
 
 d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
 
-        imf_release_frame(imf, "imf_reload_cb");
+        if (!(imf->flags & IMG_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
+            imf_release_frame(imf, "imf_reload_cb");
 
-        imf->flags &= IMG_SKIP; // we keep the skip flag
+            imf->flags &= IMG_SKIP; // we keep the skip flag
+        }
 
         tmp = tmp->next;
 	}
@@ -1534,9 +1536,10 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 
         struct ccd_frame *fr = stack_frames (imfl, ccdr, progress_pr, dialog);
         if (fr) {
-            imf = add_image_file_to_list (imfl, fr->name, IMG_LOADED);
+            imf = add_image_file_to_list (imfl, fr->name, IMG_LOADED | IMG_IN_MEMORY_ONLY | IMG_DIRTY);
 
             imf->fr = fr;
+            fr->imf = imf;
 //            get_frame(imf->fr, "ccdred_run_cb");
 
             if (outf) {

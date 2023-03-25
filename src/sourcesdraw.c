@@ -876,6 +876,14 @@ static void select_stars(GtkWidget *window, GdkEventButton *event, int multiple)
 
 
 
+// if current frame has been measured point gui_stars at frame cats
+static void star_list_update_editstar(GtkWidget *window)
+{
+    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
+    if (dialog == NULL) return;
+
+    update_star_edit(dialog);
+}
 
 
 /* re-generate and redraw catalog stars in window */
@@ -1609,10 +1617,22 @@ static char *sprint_star(struct gui_star *gs, struct wcs *wcs)
     return buf;
 }
 
-struct cat_star *cats_from_current_frame_sob(gpointer main_window, struct gui_star *gs)
-{
-    if (gs == NULL) return NULL;
+int *median(int *p0, int *p1){}
 
+int *binary_search(int find, int *p0, int *p1)
+{
+    if (find < *p0) return NULL;
+    if (find > *p1) return NULL;
+    if (find == *p0) return p0;
+    if (find == *p1) return p1;
+    int *p = median(p0, p1);
+    if (find > *p) return binary_search(find, p, p1);
+    if (find < *p) return binary_search(find, p0, p);
+    return p;
+}
+
+struct star_obs *sob_from_current_frame(gpointer main_window, struct cat_star *cats)
+{   
     struct image_channel *i_chan = g_object_get_data(main_window, "i_channel");
     if (i_chan == NULL || i_chan->fr == NULL) {
         err_printf_sb2(main_window, "No frame - load a frame\n");
@@ -1635,8 +1655,7 @@ struct cat_star *cats_from_current_frame_sob(gpointer main_window, struct gui_st
     int valid = gtk_tree_model_get_iter_first (ofr_store, &iter);
     struct o_frame *ofr = NULL;
 
-    while (valid)
-    {
+    while (valid) {
         struct o_frame *p = NULL;
         gtk_tree_model_get (ofr_store, &iter, 0, &p, -1);
         if (p) {
@@ -1652,52 +1671,37 @@ struct cat_star *cats_from_current_frame_sob(gpointer main_window, struct gui_st
 
     if (ofr == NULL) return NULL;
 
-    struct cat_star *cats = NULL;
+    int sort = cats->gs->sort;
+    struct star_obs *sob = NULL;
+
     GList *sl;
-//    sl = g_list_reverse(ofr->sobs);
-//    for (sl; sl != NULL; sl = g_list_next(sl)) {
-//        struct star_obs *sob = STAR_OBS(sl->data);
-//        printf("%s %d\n", sob->cats->name, sob->cats->gs->sort);
-//    }
+    for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) { // sobs sorted by cat->gs->sort
+        sob = STAR_OBS(sl->data);
 
-
-    int sort = gs->sort;
-    char *last_name = NULL;
-    for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) { // sobs sorted by cat->gs->sort first low
-        struct star_obs *sob = STAR_OBS(sl->data);
         if (sob->cats) {
-            if (sob->cats->gs->sort < sort) {
-                last_name = sob->cats->name;
-                continue;
-            }
-
-            if (sob->cats->gs->sort > sort) {
-                char *name = (gs->s) ? CAT_STAR(gs->s)->name : "";
-                printf("gui star %s not found in sob_list. last sob->cats name %s\n", name, last_name); fflush(NULL);
-            } else {
-                cats = sob->cats;
-printf ("frame %s sob->cats: %p %s\n", ofr->fr_name, cats, cats->name); fflush(NULL);
-
-            }
-            break;
+            struct gui_star *gs = sob->cats->gs;
+            if (gs->sort == sort) break;
         }
     }
-
-    return cats;
+if (sob == NULL) {
+    printf("cats %p %s %d not found in sob list\n", cats, cats->name, sort);
+    fflush(NULL);
+}
+    return sob;
 }
 
 /* if the star edit dialog is open, pust the selected star into it */
 static void edit_star_hook(struct gui_star *gs, GtkWidget *window)
 {
-	GtkWidget *dialog;
+    if (gs == NULL) return;
 
-	dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
-	if (dialog == NULL || gs->s == NULL)
-		return;
-//printf("edit_star_hook ");
-    struct cat_star *cats = cats_from_current_frame_sob(window, gs);
-    if (! cats) {
-        cats = CAT_STAR(gs->s);
+    struct cat_star *cats = (TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_CAT)) ? CAT_STAR(gs->s) : NULL;
+    if (cats == NULL) return;
+
+    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
+    if (dialog == NULL) return;
+
+    if (cats) {
         if (cats->pos[POS_X] == 0 && cats->pos[POS_Y] == 0) {
             cats->pos[POS_X] = gs->x;
             cats->pos[POS_Y] = gs->y;

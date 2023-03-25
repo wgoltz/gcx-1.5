@@ -8,7 +8,7 @@
 
 struct image_file {
 	int ref_count;
-    int flags;
+    long unsigned flags;
 	char *filename;
     struct wcs *fim; // wcs if validated
 	struct ccd_frame *fr;

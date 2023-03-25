@@ -242,18 +242,31 @@ static void export_pnm(GtkWidget *chooser, gpointer user_data)
  */
 static void save_fits(GtkWidget *chooser, gpointer user_data)
 {
-	char *fn;
-	struct file_action *fa = user_data;
-	struct image_channel *ich;
-	int i;
 
-	fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
+	struct file_action *fa = user_data;
+
+    char *fn = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(chooser));
 	g_return_if_fail(fn != NULL);
 
 	d3_printf("Saving fits file: %s\n", fn);
-	ich = fa->data;
+    struct image_channel *ich = fa->data;
 
     write_fits_frame(ich->fr, fn);
+
+    struct image_file *imf = ich->fr->imf;
+    if (imf) {
+        if (imf->filename && (strcmp(imf->filename, "stack result") == 0)) {
+            free(imf->filename);
+            imf->filename = strdup(fn);
+
+            if (ich->fr->name) free(ich->fr->name);
+            ich->fr->name = strdup(basename(fn));
+
+            imf->flags &= ~IMG_IN_MEMORY_ONLY;
+        }
+        imf->flags &= ~IMG_DIRTY;
+        // queue draw reduction window to load changed name?
+    }
 
 	g_free(fn);
 }
