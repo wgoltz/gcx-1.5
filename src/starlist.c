@@ -245,9 +245,9 @@ int add_cat_stars(struct cat_star **catsl, int n,
 
 		gs->s = catsl[i];
 
-        if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
-
+        gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
+
 		gui_star_label_from_cats(gs);
 //		d3_printf("adding star at %f %f\n", gs->x, gs->y);
 	}
@@ -324,9 +324,9 @@ int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, s
 
 		gs->s = cats;
 
-        if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
-
+        gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
+
 		gui_star_label_from_cats(gs);
 //		d3_printf("adding star at %f %f\n", gs->x, gs->y);
 	}
@@ -397,11 +397,12 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 		else
 			gs->flags = STAR_TYPE_CAT;
 
-        cat_star_ref(cats, "");
+        cat_star_ref(cats, "merge_cat_star_list");
 		gs->s = cats;
-        if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
 
+        gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
+
 		gui_star_label_from_cats(gs);
 //printf("starlist.merge_cat_star_list adding star at %f %f\n", gs->x, gs->y);
 	}
@@ -482,8 +483,8 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 	gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 	gs->flags = STAR_TYPE_CAT;
 	gs->s = cats;
-    if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
 
+    gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
  	gsl->sl = g_slist_prepend(gsl->sl, gs);
 
 	return 1;
@@ -530,10 +531,11 @@ int add_gui_stars_to_window(gpointer window, GSList *sl)
 	}
 	while (sl != NULL) {
         struct gui_star *gs = GUI_STAR(sl->data);
-        if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
-
         gui_star_ref(gs);
+
+        gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
         gsl->sl = g_slist_prepend(gsl->sl, gs);
+
 		sl = g_slist_next(sl);
 	}
 	gsl->display_mask |= TYPE_MASK_ALL;

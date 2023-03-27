@@ -646,9 +646,10 @@ void find_stars_cb(gpointer window, guint action)
 				gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 			}
 			gs->flags = STAR_TYPE_SIMPLE;
-            if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
 
+            gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 			gsl->sl = g_slist_prepend(gsl->sl, gs);
+
 			nstars++;
 		}
 		gsl->display_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
@@ -1557,8 +1558,7 @@ static void detect_add_star(GtkWidget *window, double x, double y)
 
 		gs->flags = STAR_TYPE_USEL;
 
-        if (gsl->sl) gs->sort = GUI_STAR(gsl->sl->data)->sort + 1;
-
+        gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
 
 		gsl->display_mask |= TYPE_MASK(STAR_TYPE_USEL);
@@ -1632,7 +1632,10 @@ int *binary_search(int find, int *p0, int *p1)
 }
 
 struct star_obs *sob_from_current_frame(gpointer main_window, struct cat_star *cats)
-{   
+{
+    if (cats == NULL) return NULL;
+    if (cats->gs == NULL) return NULL;
+
     struct image_channel *i_chan = g_object_get_data(main_window, "i_channel");
     if (i_chan == NULL || i_chan->fr == NULL) {
         err_printf_sb2(main_window, "No frame - load a frame\n");

@@ -77,11 +77,11 @@ static void wcsedit_close( GtkWidget *widget, gpointer data )
 
 static void wcs_close_cb( GtkWidget *widget, gpointer data )
 {
-	GtkWidget *im_window;
-	im_window = g_object_get_data(G_OBJECT(data), "im_window");
-	g_return_if_fail(im_window != NULL);
-//printf("wcsedit.wcs_close_cb set dialog to NULL\n");
-    g_object_set_data(G_OBJECT(im_window), "wcs_dialog", NULL);
+//	GtkWidget *im_window;
+//	im_window = g_object_get_data(G_OBJECT(data), "im_window");
+//	g_return_if_fail(im_window != NULL);
+    gtk_widget_hide(widget);
+//    g_object_set_data(G_OBJECT(im_window), "wcs_dialog", NULL);
 }
 
 static gpointer window_get_wcsedit(gpointer window) {
@@ -516,6 +516,8 @@ static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
 {
    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+   if (i_chan == NULL) return;
+
    struct ccd_frame *fr = i_chan->fr;
    struct wcs *frame_wcs = & fr->fim;
 

@@ -1338,7 +1338,7 @@ void stf_free_cats(struct stf *stf)
 	GList *sl;
 
 	for (sl = stf_find_glist(stf, 0, SYM_STARS); sl != NULL; sl = g_list_next(sl)) {
-        cat_star_release(CAT_STAR(sl->data), "stf_free_cats");
+        cat_star_release(CAT_STAR(sl->data), "");
 		sl->data = NULL;
 	}
 }

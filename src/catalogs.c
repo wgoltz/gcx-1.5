@@ -673,7 +673,7 @@ struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
                 asprintf(&buf, "%s", cats->name);
 
             if (buf) {
-                printf("cat_star_release %p %s %s\n", cats, buf, msg);
+                printf("cat_star_release freed %p %s %s\n", cats, buf, msg);
                 free(buf);
             }
         }
@@ -687,12 +687,13 @@ struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
             if (cats->astro->catalog) free(cats->astro->catalog);
 			free(cats->astro);
         }
-        if (cats->gs) {// gs->s should point to cats
-            if (cats->gs->s != cats)
-                printf("bad gs pointer %p\n", cats->gs->s);
-            else
-                cats->gs->s = NULL;
-        }
+// gs might have already been released
+//        if (cats->gs) {// gs->s should point to cats
+//            if (cats->gs->s != cats)
+//                printf("bad gs pointer %p\n", cats->gs->s);
+//            else
+//                cats->gs->s = NULL;
+//        }
 
         free(cats);
         fflush(NULL);

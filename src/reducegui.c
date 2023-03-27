@@ -433,7 +433,8 @@ static void update_dialog_from_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         gtk_combo_box_set_active(GTK_COMBO_BOX(align_combo), 1);
 //		set_named_checkb_val(dialog, "align_checkb", 1);
 	}
-    if (ccdr->recipe && ccdr->recipe[0]) {
+//    if (ccdr->recipe && ccdr->recipe[0]) {
+    if (ccdr->recipe) {
         named_entry_set(dialog, "recipe_entry", ccdr->recipe);
         set_named_checkb_val(dialog, "phot_en_checkb", 1);
     }
@@ -1257,16 +1258,18 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
             ccdr->recipe = NULL;
         }
 
-        char *text = named_entry_text(dialog, "recipe_entry");
-        if (text) {
-            char *p = text;
-            while (*p)
-                if (*p++ != ' ') break; // skip leading spaces
+        ccdr->recipe = named_entry_text(dialog, "recipe_entry");
+//        char *text = named_entry_text(dialog, "recipe_entry");
+//        if (text) {
+//            char *p = text;
+//            while (*p) // skip leading spaces
+//                if (*p == ' ') p++;
+//                else break;
 
-            if (*p) ccdr->recipe = strdup(p);
+//            if (*p) ccdr->recipe = strdup(p);
 
-            free(text);
-        }
+//            free(text);
+//        }
 
 		if (get_named_checkb_val(dialog, "phot_reuse_wcs_checkb")) {
             struct wcs *wcs = g_object_get_data(G_OBJECT(ccdr->window), "wcs_of_window");

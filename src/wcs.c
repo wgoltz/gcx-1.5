@@ -1068,12 +1068,10 @@ int window_fit_wcs(GtkWidget *window)
     struct wcs *frame_wcs = & fr->fim;
 
     wcs_clone(frame_wcs, window_wcs);
-    struct image_file *imf;
-    if ((imf = fr->imf) != NULL) {
-        if (!imf->fim)
-            imf->fim = wcs_new();
-        if (imf->fim)
-            wcs_clone(imf->fim, frame_wcs);
+    struct image_file *imf = fr->imf;
+    if (imf != NULL) {
+        if (!imf->fim) imf->fim = wcs_new();
+        if (imf->fim) wcs_clone(imf->fim, frame_wcs);
     }
 
     wcs_to_fits_header(fr);

@@ -834,7 +834,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
     if ( (ccdr->ops & IMG_OP_PHOT) && ! (imf->flags & IMG_SKIP) ) {
 
-        if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") != NULL || ccdr->recipe != NULL) { // recipe is loaded
+        if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
             REPORT( " phot" )
             if ( aphot_imf(imf, ccdr, progress, data) ) REPORT( " (FAILED)" )
@@ -1620,7 +1620,7 @@ void free_alignment_stars(struct ccd_reduce *ccdr)
 d3_printf("free alignment stars\n");
 	as = ccdr->align_stars;
 	while (as != NULL) {
-        gui_star_release(GUI_STAR(as->data), "");
+        gui_star_release(GUI_STAR(as->data), "free_alignment_stars");
 		as = g_slist_next(as);
 	}
 	g_slist_free(ccdr->align_stars);
@@ -1785,7 +1785,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
     GSList *sl = fsl;
     while (sl) {
         struct gui_star *gs = GUI_STAR(sl->data);
-        gui_star_release(gs, "");
+        gui_star_release(gs, "align_imf_new");
         sl = g_slist_next(sl);
     }
     g_slist_free(fsl);
@@ -2000,7 +2000,7 @@ printf("3\n"); fflush(NULL);
                     GSList *sl = fsl;
                     while (sl) {
                         struct gui_star *gs = GUI_STAR(sl->data);
-                        gui_star_release(gs, "");
+                        gui_star_release(gs, "align_imf");
                         sl = g_slist_next(sl);
                     }
                     g_slist_free(fsl);

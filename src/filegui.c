@@ -313,7 +313,8 @@ static void open_fits(GtkWidget *chooser, gpointer user_data)
 
 static void stf_free_all_(struct stf *stf)
 {
-    stf_free_all(stf, "load_rcp_to_window");
+//    stf_free_all(stf, "freeing window recipe");
+    stf_free_all(stf, "");
 }
 
 /* load stars from a rcp file into the given windows's gsl */
@@ -427,7 +428,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         g_object_set_data_full (G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
 
-    struct wcs *frame_wcs = & channel->fr->fim;
+//    struct wcs *frame_wcs = & channel->fr->fim;
 
     // update window_wcs from recipe file (just ra and dec?)
     if (window_wcs) {
@@ -498,14 +499,14 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 
 // check what happens when replacing old recipe
 
-    gpointer old_recipe = g_object_get_data(G_OBJECT(window), "recipe");
-    if (old_recipe) { // need to ref cat_stars in recipe as frames are phot'd so they don't get deleted
+//    gpointer old_recipe = g_object_get_data(G_OBJECT(window), "recipe");
+//    if (old_recipe) { // need to ref cat_stars in recipe as frames are phot'd so they don't get deleted
 
 //        gpointer *mbd = g_object_get_data(G_OBJECT(window), "mband_window");
 
 //        g_object_set_data(G_OBJECT(mbd), "mbds", NULL);
 //        g_object_set_data(G_OBJECT(window), "gui_star_list", NULL);
-    } else
+//    } else
         g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all_);
 
     merge_cat_star_list_to_window(window, rsl);
