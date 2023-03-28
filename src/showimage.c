@@ -1051,14 +1051,12 @@ void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
 int frame_to_channel(struct ccd_frame *fr, GtkWidget *window, char *chname)
 {
 //printf("showimage.frame_to_channel\n");
-printf("1\n");
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
 
     if (geom == NULL) {
 		geom = new_map_geometry();
         g_object_set_data_full(G_OBJECT(window), "geometry", geom, (GDestroyNotify)release_map_geometry);
 	}
-printf("2\n");
     struct image_channel *channel = g_object_get_data(G_OBJECT(window), chname);
 
     if (channel == NULL) {
@@ -1103,13 +1101,11 @@ d2_printf("frame to channel\n");
     if (fr->magic & FRAME_VALID_RGB) channel->color = 1;
 
     if (fr->stats.statsok && fr->pix_format != PIX_BYTE) channel->davg = fr->stats.cavg;
-printf("3\n");
 
     struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
     refresh_wcs(window, fr);
 
     channel->channel_changed = 1;
-printf("4\n");
 
     GtkWidget *darea = g_object_get_data(G_OBJECT(window), "darea");
 	if (darea) {
@@ -1130,7 +1126,6 @@ printf("4\n");
     update_fits_header_display(window);
 
 // update gsl binning from this frame
-printf("5\n");
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     get_gsl_binning_from_frame(gsl, fr);

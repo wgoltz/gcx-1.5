@@ -43,7 +43,7 @@
 #include "obsdata.h"
 #include "misc.h"
 
-static void close_star_edit( GtkWidget *widget, gpointer data );
+static void close_star_edit( GtkWidget *widget, gpointer dialog );
 
 /* make the checkboxes reflect the flags' values */
 static void star_edit_update_flags(GtkWidget *dialog, struct cat_star *cats)
@@ -208,15 +208,15 @@ static void gui_update_star(GtkWidget *dialog, struct cat_star *cats)
 
 
 /* remap catalog stars and redraw all stars */
-static void update_star_cb( GtkWidget *widget, gpointer data )
+static void update_star_cb( GtkWidget *widget, gpointer dialog )
 {
-	GtkWidget *dialog = data;
-	GtkWidget *im_window;
-	im_window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    GtkWidget *im_window = g_object_get_data(G_OBJECT(dialog), "im_window");
 	g_return_if_fail(im_window != NULL);
+
     redraw_cat_stars(im_window);
 	gtk_widget_queue_draw(im_window);
-    close_star_edit(widget, im_window);
+
+    close_star_edit(widget, dialog);
 }
 
 /* parse a double value from an editable; if a valid number is found,
@@ -532,11 +532,10 @@ static void mkref_cb( GtkWidget *widget, gpointer data )
 	update_star_edit(dialog);
 }
 
-static void close_star_edit( GtkWidget *widget, gpointer data )
+static void close_star_edit( GtkWidget *widget, gpointer dialog )
 {
-	g_return_if_fail(data != NULL);
-//	g_object_set_data(G_OBJECT(data), "star_edit_dialog", NULL);
-    gtk_widget_set_visible(widget, FALSE);
+    g_return_if_fail(dialog != NULL);
+    gtk_widget_set_visible(dialog, FALSE);
 }
 
 static gboolean activate_cb( GtkWidget *widget, gpointer data )
@@ -562,8 +561,8 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 		dialog = create_pstar();
 
         g_object_set_data(G_OBJECT(dialog), "im_window", window);
-//        g_object_set_data_full(G_OBJECT(window), "star_edit_dialog", dialog, (GDestroyNotify)(gtk_widget_destroy));
-        g_object_set_data(G_OBJECT(window), "star_edit_dialog", dialog);
+        g_object_set_data_full(G_OBJECT(window), "star_edit_dialog", dialog, (GDestroyNotify)(gtk_widget_destroy));
+//        g_object_set_data(G_OBJECT(window), "star_edit_dialog", dialog);
 
         set_named_callback(dialog, "pstar_ok_button", "clicked", update_star_cb);
         set_named_callback(dialog, "pstar_cancel_button", "clicked", cancel_edit_cb);
@@ -624,9 +623,9 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 
         set_named_callback(dialog, "pstar_center_button", "clicked", pstar_C_cb);
 
-        g_signal_connect (G_OBJECT (dialog), "destroy", G_CALLBACK (close_star_edit), window);
-//        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
-        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (close_star_edit), NULL);
+//        g_signal_connect (G_OBJECT (dialog), "destroy", G_CALLBACK (close_star_edit), dialog);
+        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
+//        g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (close_star_edit), NULL);
         g_object_set(G_OBJECT (dialog), "destroy-with-parent", TRUE, NULL);
 
 //		star_edit_set_star(dialog, cats);
@@ -642,6 +641,7 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
         gtk_widget_show(dialog);
         gtk_widget_set_visible(dialog, FALSE);
 	}
+
     star_edit_set_star(dialog, cats);
     update_star_edit(dialog);
 

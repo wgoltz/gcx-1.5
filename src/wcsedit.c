@@ -75,13 +75,13 @@ static void wcsedit_close( GtkWidget *widget, gpointer data )
     g_object_set_data(G_OBJECT(data), "wcs_dialog", NULL);
 }
 
-static void wcs_close_cb( GtkWidget *widget, gpointer data )
+static void wcs_close_cb( GtkWidget *widget, gpointer dialog )
 {
-//	GtkWidget *im_window;
-//	im_window = g_object_get_data(G_OBJECT(data), "im_window");
+//	GtkWidget *im_window = g_object_get_data(G_OBJECT(data), "im_window");
 //	g_return_if_fail(im_window != NULL);
-    gtk_widget_hide(widget);
-//    g_object_set_data(G_OBJECT(im_window), "wcs_dialog", NULL);
+
+//    GtkWidget *dialog = g_object_get_data(G_OBJECT(im_window), "wcs_dialog");
+    gtk_widget_hide(dialog);
 }
 
 static gpointer window_get_wcsedit(gpointer window) {

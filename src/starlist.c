@@ -397,7 +397,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 		else
 			gs->flags = STAR_TYPE_CAT;
 
-        cat_star_ref(cats, "merge_cat_star_list");
+        cat_star_ref(cats, "");
 		gs->s = cats;
 
         gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;

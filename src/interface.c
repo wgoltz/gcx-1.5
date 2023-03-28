@@ -342,39 +342,47 @@ GtkWidget* create_pstar (void)
   gtk_misc_set_padding (GTK_MISC (pstar_star_details_label), 3, 3);
 
   GtkWidget *pstar_hbuttonbox = gtk_hbutton_box_new ();
-  g_object_ref (pstar_hbuttonbox);
-  g_object_set_data_full (G_OBJECT (pstar), "pstar_hbuttonbox", pstar_hbuttonbox, (GDestroyNotify) g_object_unref);
+//  g_object_ref (pstar_hbuttonbox);
+//  g_object_set_data_full (G_OBJECT (pstar), "pstar_hbuttonbox", pstar_hbuttonbox, (GDestroyNotify) g_object_unref);
   gtk_widget_show (pstar_hbuttonbox);
   gtk_box_pack_start (GTK_BOX (pstar_info_vbox), pstar_hbuttonbox, FALSE, TRUE, 0);
+  gtk_button_box_set_layout(GTK_BUTTON_BOX(pstar_hbuttonbox), GTK_BUTTONBOX_SPREAD);
 
-  gtk_box_set_spacing (GTK_BOX (pstar_hbuttonbox), 0);
-  //gtk_button_box_set_child_ipadding (GTK_BUTTON_BOX (pstar_hbuttonbox), 6, 0);
+//  gtk_box_set_spacing (GTK_BOX (pstar_hbuttonbox), 0);
+//  gtk_button_box_set_child_ipadding (GTK_BUTTON_BOX (pstar_hbuttonbox), 6, 0);
+
+    GtkWidget *pstar_dummy_button = gtk_button_new_with_label ("dummy");
+    gtk_widget_show (pstar_dummy_button);
+    gtk_container_add (GTK_CONTAINER (pstar_hbuttonbox), pstar_dummy_button);
+    gtk_widget_set_tooltip_text (pstar_dummy_button, "dummy button for dum-dums");
 
   GtkWidget *pstar_ok_button = gtk_button_new_with_label ("OK");
   g_object_ref (pstar_ok_button);
   g_object_set_data_full (G_OBJECT (pstar), "pstar_ok_button", pstar_ok_button, (GDestroyNotify) g_object_unref);
   gtk_widget_show (pstar_ok_button);
   gtk_container_add (GTK_CONTAINER (pstar_hbuttonbox), pstar_ok_button);
-  gtk_widget_set_can_default (pstar_ok_button, TRUE);
   gtk_widget_set_tooltip_text (pstar_ok_button, "Accept changes and exit");
+
   gtk_widget_add_accelerator (pstar_ok_button, "clicked", pstar_accel_group, GDK_Return, 0, GTK_ACCEL_VISIBLE);
+  gtk_widget_set_can_default (pstar_ok_button, TRUE);
 
   GtkWidget *pstar_make_std_button = gtk_button_new_with_label ("Make Std");
   g_object_ref (pstar_make_std_button);
   g_object_set_data_full (G_OBJECT (pstar), "pstar_make_std_button", pstar_make_std_button, (GDestroyNotify) g_object_unref);
   gtk_widget_show (pstar_make_std_button);
   gtk_container_add (GTK_CONTAINER (pstar_hbuttonbox), pstar_make_std_button);
-  gtk_container_set_border_width (GTK_CONTAINER (pstar_make_std_button), 5);
-  gtk_widget_set_sensitive (pstar_make_std_button, FALSE);
+//  gtk_container_set_border_width (GTK_CONTAINER (pstar_make_std_button), 5);
   gtk_widget_set_tooltip_text (pstar_make_std_button, "Mark star as photometric standard");
+
   gtk_widget_add_accelerator (pstar_make_std_button, "clicked", pstar_accel_group, GDK_r, 0, GTK_ACCEL_VISIBLE);
+//  gtk_widget_set_sensitive (pstar_make_std_button, FALSE);
 
   GtkWidget *pstar_cancel_button = gtk_button_new_with_label ("Undo Edits");
   g_object_ref (pstar_cancel_button);
   g_object_set_data_full (G_OBJECT (pstar), "pstar_cancel_button", pstar_cancel_button, (GDestroyNotify) g_object_unref);
   gtk_widget_show (pstar_cancel_button);
   gtk_container_add (GTK_CONTAINER (pstar_hbuttonbox), pstar_cancel_button);
-  gtk_container_set_border_width (GTK_CONTAINER (pstar_cancel_button), 5);
+//  gtk_container_set_border_width (GTK_CONTAINER (pstar_cancel_button), 5);
   gtk_widget_set_tooltip_text (pstar_cancel_button, "Revert to initial values");
 
   gtk_widget_grab_focus (pstar_std_mag_entry);
@@ -1384,6 +1392,7 @@ GtkWidget* create_wcs_edit (void)
   GtkWidget *wcs_hbuttonbox = gtk_hbutton_box_new ();
   gtk_widget_show (wcs_hbuttonbox);
   gtk_box_pack_start (GTK_BOX (wcs_main_box), wcs_hbuttonbox, TRUE, TRUE, 0);
+  gtk_button_box_set_layout(GTK_BUTTON_BOX(wcs_hbuttonbox), GTK_BUTTONBOX_SPREAD);
 
   GtkWidget *wcs_ok_button = gtk_button_new_with_label ("Update");
   g_object_ref (wcs_ok_button);
