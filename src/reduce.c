@@ -1707,7 +1707,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
 
     gboolean return_ok;
 
-    if ( imf_load_frame(imf) ) return -1;
+    if ( imf_load_frame(imf) < 0 ) return -1;
 
     GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
 //    struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
@@ -1804,8 +1804,9 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
 
 int wcs_align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {  
-    imf_load_frame(imf);
-    imf_load_frame(ccdr->alignref);
+    if (imf_load_frame(imf) < 0) return -1;
+    if (imf_load_frame(ccdr->alignref) < 0) return -1;
+
     struct wcs *imf_wcs = &(imf->fr->fim);
     struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
 printf("2\n"); fflush(NULL);
@@ -1838,7 +1839,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
     gboolean return_ok = FALSE;
 
-    if ( imf_load_frame(imf) ) return -1;
+    if ( imf_load_frame(imf) < 0 ) return -1;
 
 //#define USE_CMUNIPACK_MATCH
 #ifdef USE_CMUNIPACK_MATCH
@@ -1885,29 +1886,34 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
         int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
 
         if (active == 2) { // match WCS
-            imf_load_frame(ccdr->alignref);
+            return_ok = imf_load_frame(ccdr->alignref) < 0;
+            if (return_ok) {
 
-            struct wcs *imf_wcs = &(imf->fr->fim);
-            struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
-printf("3\n"); fflush(NULL);
-            wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+                struct wcs *imf_wcs = &(imf->fr->fim);
+                struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
+                printf("3\n"); fflush(NULL);
+                wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
 
-            double d_rot = imf_wcs->rot - align_wcs->rot;
+                double d_rot = imf_wcs->rot - align_wcs->rot;
 
-            // assume TAN projection and xinc = yinc
-            double d_xref = (imf_wcs->xref - align_wcs->xref) / imf_wcs->xinc;
-            double d_yref = (imf_wcs->yref - align_wcs->yref) / imf_wcs->xinc * cos(degrad(imf_wcs->yref));
+                // assume TAN projection and xinc = yinc
+                double d_xref = (imf_wcs->xref - align_wcs->xref) / imf_wcs->xinc;
+                double d_yref = (imf_wcs->yref - align_wcs->yref) / imf_wcs->xinc * cos(degrad(imf_wcs->yref));
 
-            double s, c;
-            sincos(degrad(imf_wcs->rot), &s, &c);
+                double s, c;
+                sincos(degrad(imf_wcs->rot), &s, &c);
 
-            double dx = c * d_xref + s * d_yref;
-            double dy = c * d_yref - s * d_xref;
+                double dx = c * d_xref + s * d_yref;
+                double dy = c * d_yref - s * d_xref;
 
-            shift_frame(imf->fr, dx, dy);
-            rotate_frame(imf->fr, degrad(d_rot));
+                shift_frame(imf->fr, dx, dy);
+                rotate_frame(imf->fr, degrad(d_rot));
 
-            imf_release_frame(ccdr->alignref, "align_imf");
+                imf_release_frame(ccdr->alignref, "align_imf");
+
+            } else {
+                printf("align_imf: can't load alignment frame\n"); fflush(NULL);
+            }
 
         } else { // match stars
             int pass = 0;
@@ -1926,6 +1932,7 @@ printf("3\n"); fflush(NULL);
                     new_blur_kern(& blur_kn, 7, ccdr->blurv);
                     filter_frame_inplace(fr, blur_kn.kern, blur_kn.size);
                 }
+
             } else {
                 fr = imf->fr;
             }
@@ -1946,10 +1953,12 @@ printf("3\n"); fflush(NULL);
                 //         shift & rotate the actual fr
                 fsl = detect_frame_stars(fr);
 
-                if ((return_ok = (fsl != NULL))) {
+                return_ok = (fsl != NULL);
+                if (return_ok) {
                     int n = fastmatch(fsl, ccdr->align_stars);
 
-                    if ((return_ok = (n != 0))) {
+                    return_ok = (n != 0);
+                    if (return_ok) {
 
                         PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );
 
@@ -1994,7 +2003,8 @@ printf("3\n"); fflush(NULL);
 
                     }  else {
                         if (progress) (* progress)(" no match", data);
-                        return_ok = 0;
+
+                        printf("align_imf: n == 0\n"); fflush(NULL);
                     }
 
                     GSList *sl = fsl;
@@ -2004,7 +2014,11 @@ printf("3\n"); fflush(NULL);
                         sl = g_slist_next(sl);
                     }
                     g_slist_free(fsl);
+
+                } else {
+                    printf("align_imf: fsl == NULL\n"); fflush(NULL);
                 }
+
                 pass++;
             }
 
@@ -2032,7 +2046,7 @@ printf("3\n"); fflush(NULL);
 
 int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
-    if (imf_load_frame(imf)) return -1;
+    if (imf_load_frame(imf) < 0) return -1;
 
     gpointer window = ccdr->window;
     g_return_val_if_fail (window != NULL, -1);
@@ -2066,7 +2080,7 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
     GSList *sl = NULL;
     while (sl) {
         struct image_file *imf = sl->data;
-        if (imf_load_frame(imf)) return -1;
+        if (imf_load_frame(imf) < 0) return -1;
         
         remove_off_frame_stars (window);
         sl = sl->next;
@@ -2077,7 +2091,7 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
     
-    if (imf_load_frame(imf)) return -1;
+    if (imf_load_frame(imf) < 0) return -1;
 
     gpointer window = ccdr->window;
     g_return_val_if_fail (window != NULL, -1);
