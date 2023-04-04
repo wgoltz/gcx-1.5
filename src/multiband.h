@@ -20,6 +20,8 @@ struct o_star {
     GList *sobs;		/* list of star observations of this object */
 	double smag[MAX_MBANDS];/* standard magnitudes */
 	double smagerr[MAX_MBANDS]; /* errors */
+    struct accum *acc[MAX_MBANDS]; /* accumulators for calculating avg mags */
+    char *bname[MAX_MBANDS]; /* pointers to band names */
 	unsigned int data;	/* user data */
     int ref_count;
     struct cat_star *cats; /* point back to cat_star */
@@ -57,7 +59,7 @@ struct o_frame {
     int skip;		        /* this frame is marked deleted, and should not be used for anything or saved */
     GList *sobs;		        /* list of star observations in this frame */
 //	struct obs_data *obs;	/* the obs_data for the frame */
-    struct stf *stf;	    /* the stf made from the observation frame */
+    struct stf *stf;	    /* the stf from which the ofr was made */
     long band;		        /* index for the observation's band -1 if the frame has an invalid band */
     double zpoint;		    /* zeropoint of frame */
     double zpointerr;	    /* error of zerpoint */
@@ -134,7 +136,7 @@ struct mband_dataset {
 int mband_reduce(FILE *inf, FILE *outf);
 struct mband_dataset *mband_dataset_new(void);
 void mband_dataset_release(struct mband_dataset *mbds);
-double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res);
+double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res, int init_coeffs);
 void mband_dataset_set_ubvri(struct mband_dataset *mbds);
 void mband_dataset_set_bands_by_string(struct mband_dataset *mbds, char *bspec);
 void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, struct o_frame *ofr);

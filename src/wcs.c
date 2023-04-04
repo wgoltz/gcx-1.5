@@ -1137,7 +1137,7 @@ int auto_pairs(struct gui_star_list *gsl)
 //        }
 
 //      if (gs->s && (CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET)) { // any star marked as astromet
-        if (gs->s && ((TYPE_MASK_GSTAR(gs)) & TYPE_MASK_CATREF)) { // skips field stars?
+        if (gs->s && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF)) { // skips field stars?
             if (P_INT(AP_MOVE_TARGETS) && ((CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET) == 0)) continue;
 
             cat = g_slist_prepend(cat, gs);

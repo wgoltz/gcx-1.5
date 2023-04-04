@@ -127,6 +127,7 @@ extern gboolean sources_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer
 extern GSList *filter_selection(GSList *sl, guint type_mask, guint and_mask, guint or_mask);
 extern void search_remove_pair_from(struct gui_star *gs, struct gui_star_list *gsl);
 void remove_stars(GtkWidget *window, int type_mask, int flag_mask);
+void delete_stars(GtkWidget *window, int type_mask, int flag_mask);
 void remove_pairs(GtkWidget *window, int flag_mask);
 void redraw_cat_stars(GtkWidget *window);
 int update_gs_from_cats(GtkWidget *window, struct cat_star *cats);

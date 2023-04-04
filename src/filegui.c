@@ -507,8 +507,10 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //        g_object_set_data(G_OBJECT(mbd), "mbds", NULL);
 //        g_object_set_data(G_OBJECT(window), "gui_star_list", NULL);
 //    } else
-        g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all_);
 
+//    g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all_);
+    g_object_set_data(G_OBJECT(window), "recipe", stf); // don't call stf_free_all when reloading the same recipe
+                                                        // perhaps use ref/unref
     merge_cat_star_list_to_window(window, rsl);
     wcsedit_refresh(window);
     // wcsset == initial

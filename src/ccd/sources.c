@@ -58,7 +58,9 @@
 // values lower than min or larger than max are skipped
 static void thin_ring_stats(struct ccd_frame *fr, int x, int y, int r2, struct rstats *rs, double min, double max)
 {
-    *rs = (struct rstats) {0};
+    *rs = (struct rstats) { 0 };
+    rs->min = HUGE;
+    rs->max = -HUGE;
 
 	int nring = 0, nskipped = 0;
 
@@ -75,19 +77,16 @@ static void thin_ring_stats(struct ccd_frame *fr, int x, int y, int r2, struct r
     int ys = yc - r2;
     int ye = yc + r2 + 1;
 
-    int w = fr->w;
-
     if (xs < 0) xs = 0;
     if (ys < 0)	ys = 0;
 
-    if (xe >= w) xe = w - 1;
+    if (xe >= fr->w) xe = fr->w - 1;
     if (ye >= fr->h) ye = fr->h - 1;
 
 // walk the ring and collect statistics
     double sum = 0.0;
     double sumsq = 0.0;
-	rs->min = HUGE;
-	rs->max = -HUGE;
+
     int rsq1 = sqr(r2);
     int rsq2 = sqr(r2 + 1.001);
 
@@ -124,10 +123,13 @@ static void thin_ring_stats(struct ccd_frame *fr, int x, int y, int r2, struct r
     rs->all = nring + nskipped;
     rs->used = nring;
     rs->sum = sum;
-    rs->avg = sum / rs->used;
 
-    double sigma2 = sumsq / rs->used - sqr(rs->avg);
-    if (sigma2 > 0) rs->sigma = sqrt(sigma2);
+    if (rs->used) {
+        rs->avg = sum / rs->used;
+
+        double sigma2 = sumsq * rs->used - sum * sum;
+        rs->sigma = (sigma2 < 0) ? 0 : sqrt(sigma2) / rs->used;
+    }
 
     rs->median = dmedian(ring, nring);
 }
@@ -187,8 +189,9 @@ static void star_moments(struct ccd_frame *fr, double x, double y, double r, dou
 	for (iy = ys; iy < ye; iy++) {
 		for (ix = xs; ix < xe; ix++) {
 			v = get_pixel_luminence(fr, ix, iy);
-			if (((rn = sqr(ix - xc) + sqr(iy - yc)) > sqr(r)))
-				continue;
+
+            if (((rn = sqr(ix - xc) + sqr(iy - yc)) > sqr(r))) continue;
+
             if (v <= sky) {
 				nskipped ++;
 				continue;
@@ -297,7 +300,8 @@ static int star_radius(struct ccd_frame *fr, int x, int y, double peak, double s
 			return -1;
 			}*/
 
-		if (rsn.max > peak * 1.2) {// we are not at the peak
+//        if (rsn.max > peak * 1.2) {// we are not at the peak
+        if (rsn.max > peak * 1.3) {// we are not at the peak
 //			d4_printf("NP: %.0f (%d,%d) \n", rsn.max, rsn.max_x, rsn.max_y);
 			return -2;
 		}
@@ -671,10 +675,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
         int x;
         for (x = xs; x < xe; x++) {
             float dp = get_pixel_luminence(fr, x, y);
-            if (isnan(dp)) {
-                float *p = (float *)fr->dat + fr->w * y + x;
-                continue;
-            }
+
             double pk = dp;
 
             if (pk <= minpk) continue; // below detection threshold
@@ -699,7 +700,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 
             struct rstats rsn;
 
-#define skycut_OPTION1
+//#define skycut_OPTION1
 #ifdef skycut_OPTION1
             thin_ring_stats(fr, x, y, starr, &rsn, -HUGE, HUGE);
 #else
@@ -715,7 +716,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
             if (pk < skycut) continue; // below skycut
 
             // check that we have a few connected pixels above the cut
-            ring_stats(fr, 1.0 * x, 1.0 * y, 0, 2, QUAD1|QUAD2|QUAD3|QUAD4, &rsn, skycut, HUGE);
+            ring_stats(fr, x, y, 0, 2, QUAD1|QUAD2|QUAD3|QUAD4, &rsn, skycut, HUGE);
             if (rsn.used < NCONN) continue; // not connected
 
             struct star st;
@@ -723,7 +724,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 
             // get the star's centroid and flux
             struct moments m;
-            star_moments(fr, 1.0 * x, 1.0 * y, 1.0 * starr, sky, &m);
+            star_moments(fr, x, y, starr, sky, &m);
 
             // check star has enough flux
             if (m.sum <= min_flux) continue;
@@ -755,9 +756,10 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 #endif
 int i;
 for (i = 0; i < src->ns; i++) {
-	d3_printf("%.2f %.2f %.2f\n", src->s[i].flux, src->s[i].x, src->s[i].y);
+    printf("%.2f %.2f %.2f\n", src->s[i].flux, src->s[i].x, src->s[i].y);
 } 
-//d3_printf("\n%d sources found at SNR (%.f)\n", src->ns, sigmas);
+printf("\n%d sources found at SNR (%.f)\n", src->ns, sigmas);
+fflush(NULL);
 
 	return src->ns;
 }

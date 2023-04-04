@@ -304,7 +304,9 @@ static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, s
     char *obj = stf_find_string(ofr->stf, 1, SYM_OBSERVATION, SYM_OBJECT);
     if (obj) add_ofr_store_entry( OFR_OBJECT_COL, "%s", obj );
 
-    add_ofr_store_entry( OFR_BAND_COL, "%s", ofr->trans->bname);
+    if (ofr->trans)
+        add_ofr_store_entry( OFR_BAND_COL, "%s", ofr->trans->bname);
+
     add_ofr_store_entry( OFR_STATUS_COL, "%s%s", states[ofr->zpstate & ZP_STATE_MASK], ofr->as_zp_valid ? "-AV" : "" ); // clear as_zp_valid somewhere
     if (ofr->zpstate >= ZP_ALL_SKY) {
         add_ofr_store_entry( OFR_ZPOINT_COL, "%.3f", ofr->zpoint );
@@ -670,8 +672,9 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
         add_sob_store_entry( SOB_BAND_COL, "%s", sob->ofr->trans->bname );
     }
 
-    if ((sob->ofr->zpstate & ZP_STATE_MASK) != ZP_NOT_FITTED) {
-        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
+    if ((sob->ofr->zpstate & ZP_STATE_MASK) > ZP_FIT_ERR) {
+//        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
+        if (! (sob->flags & CPHOT_INVALID)) {
 
             char *format[] = { ">%.1f", "[%.3f]", "%.3f" };
             enum { format_err = -1, format_faint, format_tgt, format_std };
@@ -1514,20 +1517,20 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
         for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
             struct o_frame *ofr = O_FRAME(gl->data);
 
-            if (action != FIT_ZP_WTRANS) { // else default values from options or fitted values
-                if (first) {
-                    printf("fit using null transform\n"); fflush(NULL);
-                }
-                ofr->trans->k = 0.0;
-                ofr->trans->kerr = BIG_ERR;
-            } else {
-                if (first) {
-                    printf("fit using current transform k/err: %f/%f\n", ofr->trans->k, ofr->trans->kerr); fflush(NULL);
-                }
-            }
-            if (first) first = !first;
+//            if (action != FIT_ZP_WTRANS) { // else default values from options or fitted values
+//                if (first) {
+//                    printf("fit using null transform\n"); fflush(NULL);
+//                }
+//                ofr->trans->k = 0.0;
+//                ofr->trans->kerr = BIG_ERR;
+//            } else {
+//                if (first) {
+//                    printf("fit using current transform k/err: %f/%f\n", ofr->trans->k, ofr->trans->kerr); fflush(NULL);
+//                }
+//            }
+//            if (first) first = !first;
 
-            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
+            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, action != FIT_ZP_WTRANS);
 		}
 
         fit_progress("Transforming stars .. ", mband_dialog);
@@ -1688,6 +1691,7 @@ void add_to_mband(gpointer mband_dialog, char *fn)
 
 
 // add a single stf to mband dialog
+// dont need smags until fit zpoint
 struct o_frame *stf_to_mband(gpointer mband_dialog, struct stf *stf)
 {
     struct mband_dataset *mbds = dialog_get_mbds(mband_dialog);
@@ -1698,15 +1702,13 @@ struct o_frame *stf_to_mband(gpointer mband_dialog, struct stf *stf)
         mbds_printf(mband_dialog, "%s", last_err());
         return NULL;
     }
-//    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE)); // dont need mag source
-    mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
-    /* link frame for access by gui */
-//    ofr_link_frame(ofr, fr); // call ofr_link_imf outside
+    mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
     mbds_print_summary(mband_dialog);
     mb_rebuild_ofr_list(mband_dialog);
     mb_rebuild_bands_list(mband_dialog);
+
     return ofr;
 }
 

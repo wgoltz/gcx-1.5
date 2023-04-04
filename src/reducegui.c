@@ -297,7 +297,8 @@ static GtkWidget *make_image_processing(gpointer window)
     set_named_callback (G_OBJECT (dialog), "badpix_entry", "activate", G_CALLBACK (imf_red_activate_cb));
     set_named_callback (G_OBJECT (dialog), "recipe_entry", "activate", G_CALLBACK (imf_red_activate_cb));
 
-    set_named_callback (G_OBJECT (dialog), "align_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+// or something else?
+//    set_named_callback (G_OBJECT (dialog), "align_entry", "activate", G_CALLBACK (imf_red_activate_cb));
 
 	/* each page should remember its accelerators, we need to switch them
 	   (as they apply on the whole window) when switching pages */
@@ -1784,7 +1785,7 @@ static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer dialog)
 static void imf_red_activate_cb(GtkWidget *wid_entry, gpointer dialog)
 {
     int i;
-    for (i = 0; i < ALL_PROCESS_ENTRIES; i++) {
+    for (i = 0; i < ALL_PROCESS_ENTRIES; i++) {      
         if (wid_entry == g_object_get_data (G_OBJECT(dialog), process_entry[i].entry)) {
             set_named_checkb_val (dialog, process_entry[i].checkb, 1);
 // and reload the file

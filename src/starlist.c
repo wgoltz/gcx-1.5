@@ -714,6 +714,17 @@ void remove_stars(GtkWidget *window, int type_mask, int flag_mask)
 }
 
 
+/* delete stars matching one of type_mask and all of flag_mask
+ */
+void delete_stars(GtkWidget *window, int type_mask, int flag_mask)
+{
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) return;
+
+    delete_stars_of_type(gsl, type_mask, flag_mask);
+    gtk_widget_queue_draw(window);
+}
+
 /* toggle stars matching one of type_mask
  */
 void toggle_stars(GtkWidget *window, int type_mask)
@@ -865,7 +876,8 @@ void gui_star_release(struct gui_star *gs, char *msg)
 	if (gs->ref_count == 1) {
 //        printf("gui_star_release %p freed (%s)\n", gs, msg);
         char *new_msg = NULL;
-        str_join_varg(&new_msg, "%s (gui_star %p %d free)", msg, gs, gs->sort);
+        if (msg && *msg)
+            str_join_varg(&new_msg, "%s (gui_star %p %d free)", msg, gs, gs->sort);
 
         if(gs->label.label)
 			free(gs->label.label);
@@ -916,7 +928,7 @@ void gui_star_list_ref(struct gui_star_list *gsl)
 
 static void release_gui_star_from_list(gpointer gs, gpointer user_data)
 {
-    gui_star_release(GUI_STAR(gs), "release_gui_star_from_list");
+    gui_star_release(GUI_STAR(gs), "");
 }
 
 static void print_gs(gpointer p, gpointer user_data)

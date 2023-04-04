@@ -286,7 +286,7 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
 	sob->ost = ost;
     sob->cats = cats;
 	sob->ofr = ofr;
-    ofr->mbds = mbds;
+//    ofr->mbds = mbds; // set in mband_dataset_add_stf
 
 	star_obs_ref(sob);
     ost->sobs = g_list_prepend(ost->sobs, sob);
@@ -296,11 +296,12 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
 
 	mbds->sobs = g_list_prepend(mbds->sobs, sob);
 	sob->flags = cats->flags;
+// move out to fit_zpoint
 
-    double m = MAG_UNSET, me = BIG_ERR;
-    get_band_by_name(cats->imags, ofr->trans->bname, &m, &me);
-    sob->imag = m;
-    sob->imagerr = me;
+//    double m = MAG_UNSET, me = BIG_ERR;
+//    get_band_by_name(cats->imags, ofr->trans->bname, &m, &me);
+//    sob->imag = m;
+//    sob->imagerr = me;
 }
 
 void d3_print_decimal_string(char *c)
@@ -402,36 +403,38 @@ int mband_dataset_set_mag_source(struct mband_dataset *mbds, int ms)
 
 /* add data from a stf report to the dataset. prepend new alloced o_frame to mbds and return it, or NULL for error */
 struct o_frame* mband_dataset_add_stf(struct mband_dataset *mbds, struct stf *stf)
-{
-    char *filter = stf_find_string(stf, 1, SYM_OBSERVATION, SYM_FILTER);
-	if (filter == NULL) {
-		err_printf("no filter in stf, aborting add\n");
-        return NULL;
-	}
-
-    int band = mband_dataset_search_add_band(mbds, filter);
-	if (band < 0) {
-        err_printf("cannot use band %s (too many?) aborting add\n", filter);
-        return NULL;
-	}
-
+{    
     struct o_frame *ofr = calloc(1, sizeof(struct o_frame));
     if (ofr == NULL) return NULL;
 
-	ofr->stf = stf;
-	ofr->band = band;
-	ofr->trans = &mbds->trans[band];
-    ofr->ltrans = mbds->trans[band]; // dup bname?
-    ofr->zpoint = MAG_UNSET;
-    ofr->lmag = MAG_UNSET;
-	ofr->zpointerr = BIG_ERR;
-	ofr->zpstate = ZP_NOT_FITTED;
+    ofr->stf = stf;
+    ofr->mbds = mbds;
+
+// move to ofr_fit_zpoint
+
+//    char *filter = stf_find_string(stf, 1, SYM_OBSERVATION, SYM_FILTER);
+//    if (filter == NULL) {
+//        err_printf("no filter in stf, aborting add\n");
+//    }
+
+//    int band = mband_dataset_search_add_band(mbds, filter);
+//    if (band < 0) {
+//        err_printf("cannot use band %s (too many?) aborting add\n", filter);
+//    }
+
+//    ofr->band = band;
+//    ofr->trans = &mbds->trans[band];
+//    ofr->ltrans = mbds->trans[band]; // dup bname?
+//    ofr->zpoint = MAG_UNSET;
+//    ofr->lmag = MAG_UNSET;
+//    ofr->zpointerr = BIG_ERR;
+//    ofr->zpstate = ZP_NOT_FITTED;
 
     double v;
     if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_AIRMASS)) ofr->airmass = v;
     if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD)) ofr->mjd = v;
 
-    mbds->ofrs = g_list_prepend(mbds->ofrs, ofr); // ofr->sobs is NULL
+    mbds->ofrs = g_list_prepend(mbds->ofrs, ofr);
 
     return ofr;
 }
@@ -694,10 +697,68 @@ static double ofr_median_residual(struct o_frame *ofr)
 
 
 /* fit the zeropoint of the given frame; return the me1; if w_res = 1, the weights are reset */
-double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res)
+double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res, int init_coeffs)
 {
-	double res;
-	int i;
+// moved from mband_dataset_add_stf
+
+    char *stf_filter = stf_find_string(ofr->stf, 1, SYM_OBSERVATION, SYM_FILTER);
+    char *def_filter = P_STR(AP_IBAND_NAME);
+
+    if (def_filter[0] == 0 && P_INT(AP_FORCE_IBAND)) return BIG_ERR;
+
+    if (stf_filter == NULL) {
+        err_printf("no filter in stf, aborting add\n");
+        return BIG_ERR;
+    }
+
+    struct mband_dataset *mbds = ofr->mbds;
+    int band;
+    if (P_INT(AP_FORCE_IBAND))
+        band = mband_dataset_search_add_band(mbds, def_filter);
+    else
+        band = mband_dataset_search_add_band(mbds, stf_filter);
+
+    if (band < 0) {
+        err_printf("cannot use band %s (too many?) aborting add\n", stf_filter);
+        return BIG_ERR;
+    }
+
+    int ns = 0;
+    int n_unset = 0;
+    if (ofr->band != band) {
+        ofr->band = band;
+        ofr->trans = &mbds->trans[band];
+        ofr->ltrans = mbds->trans[band];
+        ofr->zpoint = MAG_UNSET;
+        ofr->lmag = MAG_UNSET;
+        ofr->zpointerr = BIG_ERR;
+        ofr->zpstate = ZP_NOT_FITTED;
+
+        // from mband_dataset_add_sob
+        GList *sl = ofr->sobs; // set sob imags for band from photometry
+
+        for (; sl != NULL; sl = sl->next) {
+            struct star_obs *sob = STAR_OBS(sl->data);
+            struct cat_star *cats = sob->cats;
+            if ((CATS_TYPE(cats) & (CATS_TYPE_APSTD | CATS_TYPE_APSTAR)) == 0) continue;
+
+            double m = MAG_UNSET, me = BIG_ERR;
+//            get_band_by_name(cats->imags, ofr->trans->bname, &m, &me);
+            get_band_by_name(cats->imags, stf_filter, &m, &me);
+            sob->imag = m;
+            sob->imagerr = me;
+            if (m == MAG_UNSET && me == BIG_ERR)
+                n_unset++;
+            ns ++;
+        }
+    }
+    if (init_coeffs) { // reset trans coeffs
+        ofr->trans->k = 0.0;
+        ofr->trans->kerr = BIG_ERR;
+    }
+
+//
+
 	struct transform *trans = ofr->trans;
 
 	if (w_res) {
@@ -711,8 +772,10 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res)
         ofr->zpoint = ofr_median_residual(ofr);
 		ofr_sob_reweight(ofr, trans, alpha, beta);
 	}
+
+    int i;
     for (i = 0; i < 16; i++) {
-		res = ofr_sob_residuals(ofr, trans);
+        double res = ofr_sob_residuals(ofr, trans);
         if (fabs(res) < SMALL_ERR) break;
 
         ofr->zpoint += res;
@@ -725,17 +788,22 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res)
 		} else {
 			ofr->zpstate = ZP_FIT_OK;
 		}
+
 	} else if ((ofr->vstars == 1) && (ofr->tnweight > 0)) {
 		ofr->zpstate = ZP_DIFF;
 		ofr->zpointerr = 1 / sqrt(ofr->tnweight);
+
 	} else {
 		ofr->zpstate = ZP_FIT_ERR;
 		ofr->zpointerr = BIG_ERR;
 	}
+
     if (ofr->zpoint != MAG_UNSET)
         ofr->lmag = ofr->zpoint - LMAG_FROM_ZP;
+
 	d4_printf("(%s) zeropoint fit: zp: %.5f  zperr %.3f  me1: %.3f  ns %d  no %d\n", 
           ofr->trans->bname, ofr->zpoint, ofr->zpointerr, ofr->me1, ofr->vstars, ofr->outliers);
+
 	return ofr->me1;
 }
 
@@ -760,7 +828,7 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
 
 			trans = ofr->trans;
 
-            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0));
+            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0), 0);
 		}
 
 		if (trans == NULL) {
@@ -824,7 +892,7 @@ void mbds_fit_band_old(GList *ofrs, int band, int (* progress)(char *msg, void *
 
                 if (ofr->band != band) continue;
 
-                ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0));
+                ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0), 0);
 			}
 			break;
         }
@@ -858,7 +926,7 @@ void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data
             trans = ofr->trans;
 
 //            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 0 /*(i == 0) ? 1 : 0*/);
-            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0) ? 1 : 0);
+            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), (i == 0) ? 1 : 0, 0);
         }
 
         if (trans == NULL) {
@@ -924,7 +992,7 @@ void mbds_fit_band(GList *ofrs, int band, int (* progress)(char *msg, void *data
 
                 if (ofr->band != band) continue;
 
-                ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 0);
+                ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 0, 0);
             }
             break;
         }
@@ -968,16 +1036,14 @@ void mbds_fit_all(GList *ofrs, int (* progress)(char *msg, void *data), void *da
 
 void mbds_smags_from_cmag_avgs(GList *ofrs)
 {
+    GList *o_star_list = NULL;
     GList *gl;
     for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
-        gboolean first_frame = (gl == ofrs);
-        gboolean last_frame = (g_list_next(gl) == NULL);
 
         struct o_frame *ofr = O_FRAME(gl->data);
 
         GList *sl;
-
-        for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) {
+        for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) { // sob lists differ for each frame
             struct star_obs *sob = STAR_OBS(sl->data);
             struct cat_star *cats = CAT_STAR(sob->cats);
 
@@ -986,37 +1052,53 @@ void mbds_smags_from_cmag_avgs(GList *ofrs)
             if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
             if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
-            if (first_frame) { // initialize acc
-                cats->n = 0;
-                cats->m = 0;
-                cats->me = 0;
-                cats->m2 = 0;
-                cats->bname = ofr->trans->bname;
-            }
-
 //            if (ofr->band < 0) continue; where should this go (if anywhere)
 
             // check cats
             if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
+            if (sob->mag == MAG_UNSET) continue;
 
-            if (sob->mag != MAG_UNSET) {
-                cats->m += sob->mag;
-                cats->me += sob->err;
-                cats->m2 += sob->mag * sob->mag;
-                cats->n++;
-            }
-
-            if (last_frame) {
-                if (cats->n) {
-                    double smag = cats->m / cats->n;
-                    double stddev = sqrt(cats->m2 / cats->n - sqr(cats->m / cats->n));
-                    // double serr = cats->me / cats->n;
-                    // cats->smags from smag, stddev
-                    update_band_by_name(&cats->smags, cats->bname, smag, stddev);
+            struct accum *acc = sob->ost->acc[ofr->band];
+            if (acc == NULL) {
+                acc = calloc(1, sizeof(struct accum));
+                if (acc) {
+                    o_star_list = g_list_prepend(o_star_list, sob->ost);
+                    sob->ost->acc[ofr->band] = acc;
+                    sob->ost->bname[ofr->band] = ofr->trans->bname;
                 }
+            }
+            if (acc) {
+                acc->m += sob->mag;
+                acc->me += sob->err;
+                acc->m2 += sob->mag * sob->mag;
+                acc->n++;
             }
         }
     }
+
+    GList *sl = o_star_list;
+    while (sl != NULL) {
+        struct o_star *ost = O_STAR(sl->data);
+        sl = g_list_next(sl);
+
+        int i;
+        for (i = 0; i < MAX_MBANDS; i++) {
+            struct accum *acc = ost->acc[i];
+            if (acc == NULL) continue;
+
+            if (acc->n > 2) {
+                double m = acc->m / acc->n;
+                double sigma2 = acc->m2 * acc->n - acc->m * acc->m;
+                double me = (sigma2 < 2) ? 0 : sqrt(sigma2) / (acc->n - 1.5);
+                update_band_by_name(&ost->cats->smags, ost->bname[i], m, me);
+            }
+
+            free(acc);
+            ost->acc[i] = NULL;
+            ost->bname[i] = NULL;
+        }
+    }
+    g_list_free(o_star_list);
 }
 
 /* setup the band system by parsing the given string

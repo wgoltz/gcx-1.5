@@ -113,26 +113,25 @@ double moffat_psf(struct psf *psf, double ovs, double s, double b)
 
 /* create a new psf (or aperture) of given size. the reference pixel is set in
    the middle. the psf data is not initialised.*/
-struct psf *psf_new(int w, int h)
+struct psf *psf_new(unsigned w, unsigned h)
 {
-	struct psf *psf;
-	float *f;
-	float **d;
-	int i;
+    if (w == 0 || h == 0) return NULL;
 
-    psf = calloc(1, sizeof(struct psf));
+    struct psf *psf = calloc(1, sizeof(struct psf));
 	g_assert(psf != NULL);
 
-    d = calloc(w, h * sizeof(float) + sizeof(float *));
+    float **d = calloc(w, h * sizeof(float) + sizeof(float *));
 	g_assert(d != NULL);
 
-    f = (float *)(d + w);
+    float *f = (float *)(d + w);
+
+    unsigned i;
     for (i = 0; i < w; i++) {// d[0..w-1] = [w, w+h, w+2h .. w+(w-1)h]
 		d[i] = f;
 		f += h;
 	}
 
-	psf->d = d;
+    psf->d = d;
 	psf->w = w;
 	psf->h = h;
 	psf->cx = w/2;
@@ -192,70 +191,77 @@ void make_circular_aperture(struct psf *apert, double r1)
 /* compute stats for the in-aperture pixels */
 void aperture_stats(struct ccd_frame *fr, struct psf *psf, double x, double y, struct stats *rs)
 {
-	int xs, xe, ys, ye;
-	float *vals;
-	int nvals;
-	int ix, iy;
-	int rx, ry;
-	int h_offset, w_offset;
-	float d;
-	rs->min = HUGE;
-	rs->max = -HUGE;
+    int xs = 0, ys = 0;
+    int xe = psf->w, ye = psf->h;
 
-	xs = ys = 0;
-    xe = psf->w;
-    ye = psf->h;
-	rx = floor(x + 0.5);
-	ry = floor(y + 0.5);
+    int rx = floor(x + 0.5);
+    int ry = floor(y + 0.5);
 
-//    if (rx < 0)	rx = 0;
-//    if (rx > fr->w - 1) rx = fr->w - 1;
+    if (rx < 0) rx = 0;
+    if (rx > fr->w - 1) rx = fr->w - 1;
 
-//    if (ry < 0) ry = 0;
-//    if (ry > fr->h - 1)	ry = fr->h - 1;
+    if (ry < 0) ry = 0;
+    if (ry > fr->h - 1) ry = fr->h - 1;
 
-    if (xs < psf->cx - rx) xs = psf->cx - rx;
-    if (ys < psf->cy - ry) ys = psf->cy - ry;
+    int w_offset = rx - psf->cx;
+    int h_offset = ry - psf->cy;
 
-    if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
-    if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
+    if (xs + w_offset < 0) xs = - w_offset;
+    if (ys + h_offset < 0) ys = - h_offset;
 
-//    if (xe - xs > psf->w) xe = xs + psf->w;
-//    if (ye - ys > psf->h) ye = ys + psf->h;
+    if (xe + w_offset > fr->w) xe = fr->w - w_offset;
+    if (ye + h_offset > fr->h) ye = fr->h - h_offset;
 
-    d4_printf("xs:%d xe:%d ys:%d ye:%d\n", xs, xe, ys, ye);
+    if (xe - xs > psf->w)
+        xe = xs + psf->w;
+    if (ye - ys > psf->h)
+        ye = ys + psf->h;
 
-	nvals = rs->sum = rs->sumsq = rs->all = 0;
+    *rs = (struct stats) { 0 };
 
-    vals = malloc(psf->h * psf->w * sizeof(float));
+    rs->min = HUGE;
+    rs->max = -HUGE;
+
+    if (xs < 0 || xe > psf->w || ys < 0 || ys > psf->h) {
+        printf("aperture_stats: bad limits xs:%d xe:%d ys:%d ye:%d\n", xs, xe, ys, ye);
+        fflush(NULL);
+    }
+
+    float *vals = malloc(psf->h * psf->w * sizeof(float));
 	g_assert(vals != NULL);
 
-	w_offset = rx - psf->cx;
-	h_offset = ry - psf->cy;
-	for (iy = ys; iy < ye; iy++) {
-		for (ix = xs; ix < xe; ix++) {
-			d = get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
-            if (psf->d [ix][iy] >= 0.5) {
+    int nvals = 0;
+    int ix, iy;
+    for (iy = ys; iy < ye; iy++) {
+		for (ix = xs; ix < xe; ix++) {            
+            float d = get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
+
+            if (psf->d [ix][iy] >= 0.5) { // set peak
                 vals [nvals++] = d;
 				if (d > rs->max) {
 					rs->max = d;
-					rs->max_x = rx + ix - psf->cx;
-					rs->max_y = ry + iy - psf->cy;
+                    rs->max_x = w_offset + ix;
+                    rs->max_y = h_offset + iy;
 				}
                 if (d < rs->min) rs->min = d;
 			}
+
             rs->sum += d * psf->d [ix][iy];
+// int v = d * psf->d [ix][iy] * 10;
+// printf("%4d ", v);
             rs->sumsq += sqr(d) * psf->d [ix][iy];
             rs->all += psf->d [ix][iy];
-		}
+        }
+// printf("\n"); fflush(NULL);
 	}
+
     rs->median = fmedian (vals, nvals);
+
 	if (rs->all != 0.0) {
         rs->avg = rs->sum / rs->all;
-        rs->sigma = sqrt (rs->sumsq / rs->all - sqr (rs->sum / rs->all));
-	} else {
-		rs->avg = rs->sigma = 0.0;
-	}
+        double sigma2 = rs->sumsq * rs->all - rs->sum * rs->sum;
+        rs->sigma = (sigma2 < 0) ? 0 : sqrt (sigma2) / rs->all;
+    }
     free(vals);
 }
 
@@ -264,30 +270,62 @@ void aperture_stats(struct ccd_frame *fr, struct psf *psf, double x, double y, s
 /* multiply the aperture by the pixel values */
 void aperture_multiply(struct ccd_frame *fr, struct psf *psf, double x, double y)
 {
-	int xs, xe, ys, ye;
-	int ix, iy;
-	int rx, ry;
-	int w_offset, h_offset;
+//	int xs, xe, ys, ye;
+//	int ix, iy;
+//	int rx, ry;
+//	int w_offset, h_offset;
 
-	xs = ys = 0;
-	xe = psf->w;
-	ye = psf->h;
-	rx = floor(x + 0.5);
-	ry = floor(y + 0.5);
+//	xs = ys = 0;
+//	xe = psf->w;
+//	ye = psf->h;
+//	rx = floor(x + 0.5);
+//	ry = floor(y + 0.5);
 
-    if (xs < psf->cx - rx) xs = psf->cx - rx;
-    if (ys < psf->cy - ry) ys = psf->cy - ry;
+//  if (xs < psf->cx - rx) xs = psf->cx - rx;
+//  if (ys < psf->cy - ry) ys = psf->cy - ry;
 
-    if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
-    if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
+//  if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
+//  if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
 
-	d4_printf("xs:%d xe:%d ys:%d ys:%d\n", xs, xe, ys, ye);
+//	d4_printf("xs:%d xe:%d ys:%d ys:%d\n", xs, xe, ys, ye);
 
-	w_offset = rx - psf->cx;
-	h_offset = ry - psf->cy;
+//	w_offset = rx - psf->cx;
+//	h_offset = ry - psf->cy;
+    int xs = 0, ys = 0;
+    int xe = psf->w, ye = psf->h;
+
+    int rx = floor(x + 0.5);
+    int ry = floor(y + 0.5);
+
+    if (rx < 0) rx = 0;
+    if (rx > fr->w - 1) rx = fr->w - 1;
+
+    if (ry < 0) ry = 0;
+    if (ry > fr->h - 1) ry = fr->h - 1;
+
+    int w_offset = rx - psf->cx;
+    int h_offset = ry - psf->cy;
+
+    if (xs + w_offset < 0) xs = - w_offset;
+    if (ys + h_offset < 0) ys = - h_offset;
+
+    if (xe + w_offset > fr->w) xe = fr->w - w_offset;
+    if (ye + h_offset > fr->h) ye = fr->h - h_offset;
+
+    if (xe - xs > psf->w)
+        xe = xs + psf->w;
+    if (ye - ys > psf->h)
+        ye = ys + psf->h;
+
+    if (xs < 0 || xe > psf->w || ys < 0 || ys > psf->h) {
+        printf("aperture_multiply: bad limits xs:%d xe:%d ys:%d ye:%d\n", xs, xe, ys, ye);
+        fflush(NULL);
+    }
+
+    int ix, iy;
 	for (iy = ys; iy < ye; iy++) {
 		for (ix = xs; ix < xe; ix++) {
-			psf->d[ix][iy] *= get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
+            psf->d[ix][iy] *= get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
 		}
 	}
 }
@@ -295,34 +333,65 @@ void aperture_multiply(struct ccd_frame *fr, struct psf *psf, double x, double y
 /* extract a patch from the frame into the psf */
 static void extract_patch(struct ccd_frame *fr, struct psf *psf, double x, double y)
 {
-	int xs, xe, ys, ye;
-	int ix, iy;
-	int rx, ry;
-	float d;
-	int w_offset, h_offset;
+//	int xs, xe, ys, ye;
+//	int ix, iy;
+//	int rx, ry;
+//	float d;
+//	int w_offset, h_offset;
 
-	xs = ys = 0;
-	xe = psf->w;
-	ye = psf->h;
-	rx = floor(x + 0.5);
-	ry = floor(y + 0.5);
+//	xs = ys = 0;
+//	xe = psf->w;
+//	ye = psf->h;
+//	rx = floor(x + 0.5);
+//	ry = floor(y + 0.5);
+
+//  if (xs < psf->cx - rx) xs = psf->cx - rx;
+//  if (ys < psf->cy - ry) ys = psf->cy - ry;
+
+//  if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
+//  if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
+
+//	w_offset = rx - psf->cx;
+//	h_offset = ry - psf->cy;
+
+    int xs = 0, ys = 0;
+    int xe = psf->w, ye = psf->h;
+
+    int rx = floor(x + 0.5);
+    int ry = floor(y + 0.5);
+
+    if (rx < 0) rx = 0;
+    if (rx > fr->w - 1) rx = fr->w - 1;
+
+    if (ry < 0) ry = 0;
+    if (ry > fr->h - 1) ry = fr->h - 1;
+
+    int w_offset = rx - psf->cx;
+    int h_offset = ry - psf->cy;
+
+    if (xs + w_offset < 0) xs = - w_offset;
+    if (ys + h_offset < 0) ys = - h_offset;
+
+    if (xe + w_offset > fr->w) xe = fr->w - w_offset;
+    if (ye + h_offset > fr->h) ye = fr->h - h_offset;
+
+    if (xe - xs > psf->w)
+        xe = xs + psf->w;
+    if (ye - ys > psf->h)
+        ye = ys + psf->h;
+
+    if (xs < 0 || xe > psf->w || ys < 0 || ys > psf->h) {
+        printf("extract_patch: bad limits xs:%d xe:%d ys:%d ye:%d\n", xs, xe, ys, ye);
+        fflush(NULL);
+    }
+
     psf->dx = 0.0;
     psf->dy = 0.0;
 
-    if (xs < psf->cx - rx) xs = psf->cx - rx;
-    if (ys < psf->cy - ry) ys = psf->cy - ry;
-
-    if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
-    if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
-
-	d4_printf("xs:%d xe:%d ys:%d ys:%d\n", xs, xe, ys, ye);
-
-	w_offset = rx - psf->cx;
-	h_offset = ry - psf->cy;
-
+    int ix, iy;
 	for (iy = ys; iy < ye; iy++) {
 		for (ix = xs; ix < xe; ix++) {
-			psf->d[ix][iy] = get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
+            psf->d[ix][iy] = get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
 //			d++;
 		}
 	}
@@ -377,34 +446,66 @@ void pixel_grow(struct psf *psf, int ix, int iy, int grow)
  * points > ht. the points are region-grown by grow pixels. return the number of points dodged */
 int dodge_high(struct ccd_frame *fr, struct psf *psf, double x, double y, double ht, int grow)
 {
-	int xs, xe, ys, ye;
-	int ix, iy, n = 0;
-	int w_offset, h_offset;
-	int rx, ry;
+//	int xs, xe, ys, ye;
+//	int ix, iy, n = 0;
+//	int w_offset, h_offset;
+//	int rx, ry;
 
-	xs = ys = 0;
-	xe = psf->w;
-	ye = psf->h;
+//  xs = ys = 0; // position within psf
+//	xe = psf->w;
+//	ye = psf->h;
 
-	rx = floor(x + 0.5);
-	ry = floor(y + 0.5);
+//  rx = floor(x + 0.5); // position within frame
+//	ry = floor(y + 0.5);
 
-    if (xs < psf->cx - rx) xs = psf->cx - rx;
-    if (ys < psf->cy - ry) ys = psf->cy - ry;
+//  if (xs < psf->cx - rx) xs = psf->cx - rx;
+//  if (ys < psf->cy - ry) ys = psf->cy - ry;
 
-    if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
-    if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
+//  if (xe > fr->w + psf->cx - rx) xe = fr->w + psf->cx - rx;
+//  if (ye > fr->h + psf->cy - ry) ye = fr->h + psf->cy - ry;
 
-	w_offset = rx - psf->cx;
-	h_offset = ry - psf->cy;
+//	w_offset = rx - psf->cx;
+//	h_offset = ry - psf->cy;
 
+    int xs = 0, ys = 0;
+    int xe = psf->w, ye = psf->h;
+
+    int rx = floor(x + 0.5);
+    int ry = floor(y + 0.5);
+
+    if (rx < 0) rx = 0;
+    if (rx > fr->w - 1) rx = fr->w - 1;
+
+    if (ry < 0) ry = 0;
+    if (ry > fr->h - 1) ry = fr->h - 1;
+
+    int w_offset = rx - psf->cx;
+    int h_offset = ry - psf->cy;
+
+    if (xs + w_offset < 0) xs = - w_offset;
+    if (ys + h_offset < 0) ys = - h_offset;
+
+    if (xe + w_offset > fr->w) xe = fr->w - w_offset;
+    if (ye + h_offset > fr->h) ye = fr->h - h_offset;
+
+    if (xe - xs > psf->w)
+        xe = xs + psf->w;
+    if (ye - ys > psf->h)
+        ye = ys + psf->h;
+
+    if (xs < 0 || xe > psf->w || ys < 0 || ys > psf->h) {
+        printf("dodge_high: bad limits xs:%d xe:%d ys:%d ye:%d\n", xs, xe, ys, ye);
+        fflush(NULL);
+    }
+
+    int n = 0;
+    int ix, iy;
 	for (iy = ys; iy < ye; iy++) {
 		for (ix = xs; ix < xe; ix++) {
-			if (get_pixel_luminence(fr, w_offset + ix, h_offset + iy) > ht) {
-				if (psf->d[ix][iy] > 0)
-					n++;
-				psf->d[ix][iy] = 0;
-				pixel_grow(psf, ix, iy, grow);
+            if (get_pixel_luminence(fr, w_offset + ix, h_offset + iy) > ht) {
+                if (psf->d[ix][iy] > 0)	n++;
+                psf->d[ix][iy] = 0;
+                pixel_grow(psf, ix, iy, grow);
 			}
 		}
 	}
@@ -426,36 +527,35 @@ static double get_binned_r1(struct ccd_frame *fr)
 
 int growth_curve(struct ccd_frame *fr, double x, double y, double grc[], int n)
 {
-    struct star s = { 0 };
-	int i, ret;
-	double mflux = 1;
-	struct stats stats;
-	double sky, flux;
-
     struct ap_params apdef;
 	ap_params_from_par(&apdef);
 
-    auto_adjust_photometry_rings_for_binning(&apdef, fr);
-    double r1 = get_binned_r1(fr);
+    struct star s = { 0 };
 
 	s.x = x;
 	s.y = y;
 	s.xerr = BIG_ERR;
 	s.yerr = BIG_ERR;
-	if (P_INT(AP_AUTO_CENTER)) {
+    if ((apdef.center = P_INT(AP_AUTO_CENTER))) {
 		center_star(fr, &s, P_DBL(AP_MAX_CENTER_ERR));
 	}
-	apdef.center = P_INT(AP_AUTO_CENTER);
-    ret = aperture_photometry(fr, &s, &apdef, NULL); // measure without scintillation
-	if (ret)
-		return ret;
+
+    int ret = aperture_photometry(fr, &s, &apdef, NULL); // measure without scintillation
+    if (ret) return ret;
+
 	apdef.center = 0;
 
-	sky = get_sky(fr, s.x, s.y, &apdef, NULL, &stats, NULL, NULL);
+    struct stats stats;
+    double sky = get_sky(fr, s.x, s.y, &apdef, NULL, &stats, NULL, NULL);
 
+    auto_adjust_photometry_rings_for_binning(&apdef, fr);
+    double r1 = get_binned_r1(fr);
+    double mflux = 1;
+
+    int i;
 	for (i = 0; i < n; i++) {
 		apdef.r1 = growth_radius(i);
-		flux = get_star(fr, s.x, s.y, &apdef, &stats, NULL);
+        double flux = get_star(fr, s.x, s.y, &apdef, &stats, NULL);
 		grc[i] = flux - stats.all * sky;
 		d4_printf("r:%.1f tflux:%.1f star_all:%.3f\n",
 			  apdef.r1, flux, stats.all);
@@ -623,38 +723,39 @@ int fit_1d_profile(struct rp_point *rpp, double *A, double *B, double *s, double
    the estimated error of the sky. if psf is non-null, use it to return the
    sky aperture function. */
 double get_sky(struct ccd_frame *fr, double x, double y, struct ap_params *p,
-	       double *err, struct stats *stats, struct psf **apert,
-	       double *allpixels)
+           double *err, struct stats *stats, struct psf **apert, double *allpixels)
 {
-	struct psf *psf;
-	int ret;
-	double so, th;
-	double s = 0.0, e = BIG_ERR;
-	double ap;
-
 	g_return_val_if_fail(stats != NULL, 0.0);
 
-	psf = psf_new((int) (2 + 2 * ceil(p->r3)), (int) (1 + 2 * ceil(p->r3)) );
+    struct psf *psf = psf_new(2 + 2 * ceil(p->r3), 1 + 2 * ceil(p->r3));
 	make_annular_aperture(psf, p->r2, p->r3);
 
 	aperture_stats(fr, psf, x, y, stats);
-    ap = stats->all;
+
+    if (allpixels) *allpixels = stats->all;
+
 	switch(p->sky_method) {
 	case APMET_KS:
-	case APMET_SYMODE:
-		do {
-            so = stats->sigma;
-            th = stats->median + p->sigmas * stats->sigma;
-			ret = dodge_high(fr, psf, x, y, th, p->grow);
-			aperture_stats(fr, psf, x, y, stats);
-			d4_printf("dodged %d>%.1f, aperture avg:%.1f median:%.1f sigma:%.1f\n",
-                  ret, th, stats->avg, stats->median, stats->sigma);
-//		} while (stats->sigma != so && stats->all > 10);
-d2_printf("psf.get_sky bug : %d stats->avg %f stats->sigma %f\n", ret, stats->avg, stats->sigma);
-        } while (ret != 0);
+    case APMET_SYMODE:
+        for (;;) {
+//            so = stats->sigma;
+            double th = stats->median + p->sigmas * stats->sigma;
+
+            int ret = dodge_high(fr, psf, x, y, th, p->grow);
+
+            aperture_stats(fr, psf, x, y, stats);
+            if (ret == 0) break;
+
+            //printf("dodged %d>%.1f, aperture avg:%.1f median:%.1f sigma:%.1f all: %.1f\n",
+            //                  ret, th, stats->avg, stats->median, stats->sigma, stats->all);
+            //fflush(NULL);
+            //		} while (stats->sigma != so && stats->all > 10);
+        }
 
 		break;
 	}
+
+    double s = 0.0, e = BIG_ERR;
 
 	switch(p->sky_method) {
 	case PAR_SKY_METHOD_AVERAGE:
@@ -677,14 +778,12 @@ d2_printf("psf.get_sky bug : %d stats->avg %f stats->sigma %f\n", ret, stats->av
 		err_printf("get_sky: unknown method %d\n", p->sky_method);
 		break;
 	}
-	if (apert)
-		*apert = psf;
-	else
-		psf_release(psf);
-	if (err)
-		*err = e;
-	if (allpixels)
-		*allpixels = ap;
+
+    if (apert) *apert = psf;
+    else psf_release(psf);
+
+    if (err) *err = e;
+
 	return s;
 }
 
@@ -699,7 +798,7 @@ double get_star(struct ccd_frame *fr, double x, double y, struct ap_params *p,
 	struct psf *psf;
 	double f;
 
-	psf = psf_new((int) (3 + 2 * ceil(p->r1)), (int) (3 + 2 * ceil(p->r1)));
+    psf = psf_new(3 + 2 * ceil(p->r1), 3 + 2 * ceil(p->r1));
 	psf->dx = x - floor(x + 0.5);
 	psf->dy = y - floor(y + 0.5);
 	make_circular_aperture(psf, p->r1);
@@ -746,6 +845,7 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
     s->aph.flux_err = sqrt(flux_err_sq);
     s->aph.pshot_noise = sqrt(phnsq);
     s->aph.rd_noise = sqrt(rdnsq);
+
     s->aph.star_err = sqrt(flux_err_sq + sqr(star_stats.all * sky_err));
 
     d4_printf(">>>>peak: %.1f sat_limit: %.1f\n", s->aph.star_max, p->sat_limit);
@@ -779,60 +879,51 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
 
 static float psf_subsample_pixel(struct psf *psf, double sub, double x, double y)
 {
-	double xc = x*sub + psf->cx + psf->dx - 0.5; /* center of superpixel in psf coords */
-	double yc = y*sub + psf->cy + psf->dy - 0.5;
+    double xc = x*sub + psf->cx + psf->dx - 0.5; /* x center of superpixel in psf coords */
 
-	int fx, lx;		/* first and last pixel considered */
-	float fxw, lxw;		/* weight of the first and last
-				   pixel (in-between the weight is 1) */
-	int fy, ly;
-	float fyw, lyw;
+    double p_minus = xc - sub / 2;
+    if (p_minus < 0) p_minus = 0;
 
-	double p;
-	float v;
-	int ix, iy, n = 0;
+    double p_plus = xc + sub / 2;
+    if (p_plus > psf->w - 1) p_plus = psf->w - 1;
 
-	p = xc - sub / 2;
-	if (p < 0)
-		p = 0;
-	fx = floor(p);
-	if (fx > psf->w - 1)
-		return 0.0;
-	fxw = 1.0 - (p - fx);
+    int fx = floor(p_minus); /* x position first and last pixel considered */
+    int lx = floor(p_plus);
 
-	p = xc + sub / 2;
-	if (p > psf->w - 1)
-		p = psf->w - 1;
-	lx = floor(p);
-	if (lx < 0)
-		return 0.0;
-	lxw = p - lx;
+    if (lx < 0 || fx > psf->w - 1) return 0.0;
 
-	p = yc - sub / 2;
-	if (p < 0)
-		p = 0;
-	fy = floor(p);
-	if (fy > psf->h - 1)
-		return 0.0;
-	fyw = 1.0 - (p - fy);
+    float fxw = 1.0 - (p_minus - fx); /* weight of the first and last pixel (in-between the weight is 1) */
+    float lxw = p_plus - lx;
 
-	p = yc + sub / 2;
-	if (p > psf->h - 1)
-		p = psf->h - 1;
-	ly = floor(p);
-	if (ly < 0)
-		return 0.0;
-	lyw = p - ly;
+    double yc = y*sub + psf->cy + psf->dy - 0.5; /* y center of superpixel in psf coords */
+
+    p_minus = yc - sub / 2;
+    if (p_minus < 0) p_minus = 0;
+
+    p_plus = yc + sub / 2;
+    if (p_plus > psf->h - 1) p_plus = psf->h - 1;
+
+    int fy = floor(p_minus);  /* y position first and last pixel considered */
+    int ly = floor(p_plus);
+
+    if (ly < 0 || fy > psf->h - 1) return 0.0;
+
+    float fyw = 1.0 - (p_minus - fy); /* y pos weights */
+    float lyw = p_plus - ly;
 
 
-	v = psf->d[fx][fy] * fxw * fyw + /* corners */
+    float v = psf->d[fx][fy] * fxw * fyw + /* corners */
 		psf->d[fx][ly] * fxw * lyw +
 		psf->d[lx][fy] * lxw * fyw +
 		psf->d[lx][ly] * lxw * lyw;
+
+    int ix, iy;
 	for (ix = fx + 1; ix < lx ; ix++) {
 		v += psf->d[ix][fy] * fyw; /* top/bot sides */
 		v += psf->d[ix][ly] * lyw;
 	}
+
+    int n = 0;
 	for (iy = fy + 1; iy < ly ; iy ++) {
 		v += psf->d[fx][iy] * fxw; /* left/right sides */
 		v += psf->d[lx][iy] * lxw;
@@ -1273,7 +1364,7 @@ void plot_sky_aperture(gpointer window, GSList *found)
 //	d3_printf("sky:%.1f err:%.3f %.0f/%0.f pixels\n", sky, err, rs.all, allp);
 //	aperture_multiply(i_ch->fr, psf, gs->x, gs->y);
 
-    psf = psf_new((int) (3 + 2 * ceil(r1)), (int) (3 + 2 * ceil(r1)));
+    psf = psf_new(3 + 2 * ceil(r1), 3 + 2 * ceil(r1));
 	psf->dx = gs->x - floor(gs->x + 0.5);
     psf->dy = gs->y - floor(gs->y + 0.5);
     make_circular_aperture(psf, r1);

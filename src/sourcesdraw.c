@@ -321,7 +321,7 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 		}
 	}
 
-	if (gs->flags & STAR_HIDDEN)
+    if (gs->flags & (STAR_HIDDEN | STAR_DELETED))
 		return;
 
     double lw = 0.5 + 0.7 * zoom;
@@ -743,7 +743,7 @@ GSList *search_stars_near_point(struct gui_star_list *gsl, double x, double y, i
 		sl = g_slist_next(sl);
 
         if (mask && (TYPE_MASK_GSTAR(gs) & mask) == 0) continue;
-        if (gs->flags & STAR_HIDDEN) continue;
+        if (gs->flags & (STAR_HIDDEN | STAR_DELETED)) continue;
         if ((TYPE_MASK_GSTAR(gs) & gsl->display_mask) == 0)	continue;
         if ((TYPE_MASK_GSTAR(gs) & gsl->select_mask) == 0) continue;
 

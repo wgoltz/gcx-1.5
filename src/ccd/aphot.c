@@ -233,14 +233,8 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 
     rs->sigma = 0;
     if ((pmin != pmax) && (nring - nskipped > 1)) {
-        double avg = sum / rs->used;
-        double sigma2 = sumsq / rs->used - avg * avg;
-        if (sigma2 < 0) {
-            printf("ring_stats: dodgy sigma %f %f %f\n", avg, sumsq, rs->used); fflush(NULL);
-            sigma2 = 0;
-        }
-
-        rs->sigma = sqrt(sigma2);
+        double sigma2 = sumsq * rs->used - sum * sum;
+        rs->sigma = (sigma2 < 0) ? 0 : sqrt(sigma2) / rs->used;
     }
 
 // walk the histogram and compute median

@@ -756,13 +756,13 @@ static void photometry_cb(gpointer window, guint action)
             struct o_frame *ofr = stf_to_mband(mbd, stf); // no imf to link to
 			return;
 
-        } else {
+        } else { // phot a single frame
             struct mband_dataset *mbds = mband_dataset_new();
             struct o_frame *ofr = mband_dataset_add_stf(mbds, stf);
 //            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
             mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
-            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
+            ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);
             ofr_transform_stars(ofr, mbds, 0, 0);
             if (3 * ofr->outliers > ofr->vstars)
                 info_printf(
@@ -883,7 +883,7 @@ char * phot_to_fd(gpointer window, FILE *fd, int format)
 //    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
     mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
-    ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
+    ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);
     ofr_transform_stars(ofr, mbds, 0, 0);
 
 	mbds_report_from_ofrs(mbds, fd, mbds->ofrs, format);

@@ -93,6 +93,12 @@ struct cats_astro {
 	char *catalog; 		/* name of catalog */
 };
 
+struct accum {
+    int n; /* number of observations for mean */
+    double m, m2, me; /* mean accumulators */
+    struct transform *trans; /* which band */
+};
+
 struct cat_star {
 	int ref_count;
 //	void *catt;	/* the catalog */
@@ -117,9 +123,6 @@ struct cat_star {
     char *smags; /* recipe standard mags and solved target mags */
     char *imags; /* solved instrumental magnitudes */
     void *data;
-    int n; /* number of observations for mean */
-    double m, m2, me; /* mean accumulators */
-    char *bname; /* band name for accumulators */
     struct gui_star *gs; /* pointer to gui_star */
 };
 

@@ -427,15 +427,16 @@ if (isnan(v))
 
     unsigned all = rw * rh;
 
-	st->avg = sum / (1.0 * all);
+    st->avg = sum / all;
 
-	st->avgs[0] = 4.0 * st->avgs[0] / (1.0 * all);
-	st->avgs[1] = 4.0 * st->avgs[1] / (1.0 * all);
-	st->avgs[2] = 4.0 * st->avgs[2] / (1.0 * all);
-	st->avgs[3] = 4.0 * st->avgs[3] / (1.0 * all);
+    double sigma2 = sumsq * all - sum * sum;
+    st->sigma = (sigma2 < 0) ? 0 : sqrt(sigma2) / all;
+
+    st->avgs[0] = 4.0 * st->avgs[0] / all;
+    st->avgs[1] = 4.0 * st->avgs[1] / all;
+    st->avgs[2] = 4.0 * st->avgs[2] / all;
+    st->avgs[3] = 4.0 * st->avgs[3] / all;
 	
-	st->sigma = sqrt(sumsq / (1.0 * all) - st->avg * st->avg);
-
 	st->hist.binmax = binmax;
 	st->hist.st = H_MIN - HIST_OFFSET;
 	st->hist.end = H_MAX - HIST_OFFSET;
@@ -494,7 +495,8 @@ if (isnan(v))
 
 	if (n != 0) {
 		st->cavg = sum / n;
-		st->csigma = 2 * sqrt(sumsq / n - sqr(sum / n));
+        double sigma2 = sumsq * n - sum * sum;
+        st->csigma = (sigma2 < 0) ? 0 : 2 * sqrt(sigma2) / n;
 	} else {
 		st->cavg = st->avg;
 		st->csigma = st->sigma;
@@ -1322,7 +1324,6 @@ int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1)
 	}
     fr->stats.statsok = 0;
 
-//	fr->exp.flat_noise = sqrt( sqr(fr1->exp.rdnoise) + mu / sqrt(fr1->exp.scale) ) / mu;
     fr->exp.flat_noise = sqrt( sqr(fr1->exp.rdnoise) + mu / sqrt(fr1->exp.scale) ) / mu;
 
 // TODO  take care of biases

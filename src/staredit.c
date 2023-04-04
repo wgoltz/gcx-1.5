@@ -103,10 +103,8 @@ void cat_star_release_cat_star(struct cat_star *cats)
  * "cat_star". A reference to the inital star is kept as "ocats" */
 void star_edit_set_star(GtkWidget *dialog, struct cat_star *cats)
 {
-//    cat_star_ref(cats, "star_edit_set_star");
     struct cat_star *ocats = cat_star_dup(cats);
     g_object_set_data_full(G_OBJECT(dialog), "ocats", ocats, (GDestroyNotify) cat_star_release_ocats);
-//    g_object_set_data_full(G_OBJECT(dialog), "cat_star", cats, (GDestroyNotify) cat_star_release_cat_star);
     g_object_set_data(G_OBJECT(dialog), "cat_star", cats);
 }
 
@@ -116,10 +114,8 @@ void update_star_edit(GtkWidget *dialog)
 {
     char *buf;
 
-    struct cat_star *last_cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
-    if (last_cats == NULL) return;
-
-    struct cat_star *cats = last_cats;
+    struct cat_star *cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
+    if (cats == NULL) return;
 
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
     struct star_obs *sob = sob_from_current_frame(window, cats);
@@ -496,8 +492,9 @@ static void cancel_edit_cb( GtkWidget *widget, gpointer data )
     cats->flags = ocats->flags;
     update_dynamic_string(&cats->name, ocats->name);
 	update_dynamic_string(&cats->comments, ocats->comments);
-	update_dynamic_string(&cats->smags, ocats->smags);
-	update_dynamic_string(&cats->imags, ocats->imags);
+    update_dynamic_string(&cats->cmags, ocats->cmags);
+    update_dynamic_string(&cats->smags, ocats->smags);
+    update_dynamic_string(&cats->imags, ocats->imags);
 
 	update_star_edit(dialog);
 	gui_update_star(dialog, cats);

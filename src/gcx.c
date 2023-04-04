@@ -752,11 +752,11 @@ int fake_main(int ac, char **av)
 //    debug_level = 3;
 
     int oc;
-	while ((oc = getopt_long(ac, av, shortopts, longopts, NULL)) > 0) {
+    while ((oc = getopt_long(ac, av, shortopts, longopts, NULL)) > 0) {
         main_ret = 0;
 
-		switch(oc) {
-// print help then finish options
+        switch(oc) {
+
         case ')': goto exit_main; //	test_query();
 
         case '`': doc_printf_par(stdout, PAR_FIRST, 0); goto exit_main;
@@ -770,7 +770,7 @@ int fake_main(int ac, char **av)
 
         case 'v': info_printf("GCX version %s\n", VERSION); goto exit_main;
 
-// set flag options
+            // set flag options
         case 'N': op_no_reduce = TRUE; continue;
 
         case 'i': interactive = TRUE; continue;
@@ -783,134 +783,140 @@ int fake_main(int ac, char **av)
 
         case '<': continue; //make_gpsf = 1;
 
-        default:
-            main_ret = 1;
-            if (optarg) {
-                switch(oc) {
+        }
 
-                case 'e': main_ret = extract_sources(optarg, outf); goto exit_main;
+        main_ret = 1;
 
-                case 'X': main_ret = extract_bad_pixels(optarg, outf); goto exit_main;
+        if (optarg) {
+            switch(oc) {
 
-                case '^': main_ret = mb_reduce(optarg, outf); goto exit_main;
+            case 'e': main_ret = extract_sources(optarg, outf); goto exit_main;
 
-                case 'C': main_ret = print_scint_table(optarg); goto exit_main;  // print scintillation table for aperture
+            case 'X': main_ret = extract_bad_pixels(optarg, outf); goto exit_main;
 
-                case '4': main_ret = catalog_file_convert(optarg, outf, mag_limit); goto exit_main;
+            case '^': main_ret = mb_reduce(optarg, outf); goto exit_main;
 
-                case '2': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = recipe_file_convert(optarg, outf); goto exit_main;
+            case 'C': main_ret = print_scint_table(optarg); goto exit_main;  // print scintillation table for aperture
 
-                case '6': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = recipe_aavso_convert(optarg, outf); goto exit_main;
+            case '4': main_ret = catalog_file_convert(optarg, outf, mag_limit); goto exit_main;
 
-                case 'T': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = report_convert(optarg, outf); goto exit_main;
+            case '2': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = recipe_file_convert(optarg, outf); goto exit_main;
 
-                case ']':
-                case '>': {
-                    char *endp = optarg;
-                    float box = strtof(optarg, &endp);
+            case '6': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = recipe_aavso_convert(optarg, outf); goto exit_main;
 
-                    if (endp != optarg && box > 0) {
-                        if (oc == ']')
-                            main_ret = make_tycho_rcp(obj, box, outf, mag_limit);
-                        else
-                            main_ret = cat_rcp(obj, QUERY_USNOB, outf);
-                    }
-                    goto exit_main;
+            case 'T': if (! (optarg[0] == '-' && optarg[1] == 0) ) main_ret = report_convert(optarg, outf); goto exit_main;
+
+            case ']':
+            case '>': {
+                char *endp = optarg;
+                float box = strtof(optarg, &endp);
+
+                if (endp != optarg && box > 0) {
+                    if (oc == ']')
+                        main_ret = make_tycho_rcp(obj, box, outf, mag_limit);
+                    else
+                        main_ret = cat_rcp(obj, QUERY_USNOB, outf);
                 }
-// report then finish options
-                case '9': sscanf(optarg, "%f", &mag_limit); continue;
+                goto exit_main;
+            }
+                // report then finish options
+            case '9': sscanf(optarg, "%f", &mag_limit); continue;
 
-//                case '8': extrf = strdup(optarg); batch = TRUE; continue;
+                //                case '8': extrf = strdup(optarg); batch = TRUE; continue;
 
-                case '0': if (!mergef) mergef = strdup(optarg); op_recipe_file = TRUE; continue;
+            case '0': if (!mergef) mergef = strdup(optarg); op_recipe_file = TRUE; continue;
 
-                case '_': if (!tobj) tobj = strdup(optarg); op_recipe_file = TRUE; continue; // set target object name
+            case '_': if (!tobj) tobj = strdup(optarg); op_recipe_file = TRUE; continue; // set target object name
 
-                case 'D': sscanf(optarg, "%d", &debug_level); continue;
+            case 'D': sscanf(optarg, "%d", &debug_level); continue;
 
-                case 'O': if (!of) of = strdup(optarg); continue;
+            case 'O': if (!of) of = strdup(optarg); continue;
 
-                case 'o': if (!outf) outf = strdup(optarg); continue;
+            case 'o': if (!outf) outf = strdup(optarg); continue;
 
-                case 'j': if (!obj) obj = strdup(optarg); continue; // interactive = TRUE;
+            case 'j': if (!obj) obj = strdup(optarg); continue; // interactive = TRUE;
 
-                case 'S': if ( set_par_by_name(optarg) ) err_printf("error setting %s\n", optarg); continue;
+            case 'S': if ( set_par_by_name(optarg) ) err_printf("error setting %s\n", optarg); continue;
 
-                case 'r': if (!rcname) rcname = strdup(optarg); load_par_file(rcname, PAR_NULL); continue; // load param file
+            case 'r': if (!rcname) rcname = strdup(optarg); load_par_file(rcname, PAR_NULL); continue; // load param file
+            }
 
-                default:
-                    if (ccdr == NULL) ccdr = ccd_reduce_new();
-// setup ccdr
-                    switch(oc) {
+            if (ccdr == NULL) ccdr = ccd_reduce_new();
+            // setup ccdr
 
-                    case 'p': ccdr->recipe = strdup(optarg); continue;// batch = TRUE; // set recipe file, interactive
+            switch(oc) {
 
-                    case 'u': ccdr->ops |= IMG_OP_INPLACE; update_files = TRUE; continue;
+            case 'p': ccdr->recipe = strdup(optarg); continue;// batch = TRUE; // set recipe file, interactive
 
-                    case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
+            case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
+                ccdr->alignref = image_file_new();
+                ccdr->alignref->filename = strdup(optarg);
+                continue;
 
-                    case 'F': ccdr->ops |= (IMG_OP_STACK & IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
+            case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
+                ccdr->bias = image_file_new();
+                ccdr->bias->filename = strdup(optarg);
+                continue;
 
-                    case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
+            case 'f':
+                ccdr->flat = image_file_new();
+                ccdr->flat->filename = strdup(optarg);
+                ccdr->ops |= IMG_OP_FLAT;
+                batch = TRUE;
+                continue;
 
-                    case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
-                        ccdr->alignref = image_file_new();
-                        ccdr->alignref->filename = strdup(optarg);
-                        continue;
+            case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
+                ccdr->dark = image_file_new();
+                ccdr->dark->filename = strdup(optarg);
+                continue;
 
-                    case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
-                        ccdr->bias = image_file_new();
-                        ccdr->bias->filename = strdup(optarg);
-                        continue;
+            case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
+                ccdr->bad_pix_map = bad_pix_map_new();
+                ccdr->bad_pix_map->filename = strdup(optarg);
+                continue;
 
-                    case 'f':
-                        ccdr->flat = image_file_new();
-                        ccdr->flat->filename = strdup(optarg);
-                        ccdr->ops |= IMG_OP_FLAT;
-                        batch = TRUE;
-                        continue;
+            case 'P': run_phot = REP_STAR_ALL|REP_FMT_DATASET; batch = TRUE; // set recipe file, batch run
+                ccdr->recipe = strdup(optarg);
+                continue;
 
-                    case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
-                        ccdr->dark = image_file_new();
-                        ccdr->dark->filename = strdup(optarg);
-                        continue;
+            case 'V': run_phot = REP_STAR_TGT|REP_FMT_AAVSO; batch = TRUE; // set recipe file, batch run aavso
+                ccdr->recipe = strdup(optarg);
+                continue;
+            }
+            //                    default:
+            if (oc == 'G' || oc == 'M' || oc == 'A') {
+                char *endp;
+                double v = strtod(optarg, &endp);
 
-                    case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
-                        ccdr->bad_pix_map = bad_pix_map_new();
-                        ccdr->bad_pix_map->filename = strdup(optarg);
-                        continue;
+                if (endp != optarg) {
+                    batch = TRUE;
+                    switch (oc) {
 
-                    case 'P': run_phot = REP_STAR_ALL|REP_FMT_DATASET; batch = TRUE; // set recipe file, batch run
-                        ccdr->recipe = strdup(optarg);
-                        continue;
+                    case 'G': ccdr->blurv = v; ccdr->ops |= IMG_OP_BLUR; continue;
 
-                    case 'V': run_phot = REP_STAR_TGT|REP_FMT_AAVSO; batch = TRUE; // set recipe file, batch run aavso
-                        ccdr->recipe = strdup(optarg);
-                        continue;
+                    case 'M': ccdr->mulv = v; ccdr->ops |= IMG_OP_MUL; continue;
 
-                    default:
-                        if (oc == 'G' || oc == 'M' || oc == 'A') {
-                            char *endp;
-                            double v = strtod(optarg, &endp);
-
-                            if (endp != optarg) {
-                                batch = TRUE;
-                                switch (oc) {
-
-                                case 'G': ccdr->blurv = v; ccdr->ops |= IMG_OP_BLUR; continue;
-
-                                case 'M': ccdr->mulv = v; ccdr->ops |= IMG_OP_MUL; continue;
-
-                                case 'A': ccdr->addv = v; ccdr->ops |= IMG_OP_ADD; continue;
-                                }
-                            }
-                        } else {
-                            printf("unrecognized option \'%c\'\n", oc); continue;
-                        }
+                    case 'A': ccdr->addv = v; ccdr->ops |= IMG_OP_ADD; continue;
                     }
                 }
             }
+
+        } else if (oc == 'u' || oc == 's' || oc == 'F' || oc == 'c') {
+            if (ccdr == NULL) ccdr = ccd_reduce_new();
+
+            switch (oc) {
+            case 'u': ccdr->ops |= IMG_OP_INPLACE; update_files = TRUE; continue;
+
+            case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
+
+            case 'F': ccdr->ops |= (IMG_OP_STACK & IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
+
+            case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
+
+            }
         }
+
+        printf("unrecognized option \'%c\'\n", oc); continue;
     }
 
 
@@ -998,8 +1004,7 @@ int fake_main(int ac, char **av)
         }
 	}
 
-    interactive = interactive || imfl;
-//    interactive = TRUE;
+//    interactive = interactive || imfl;
 
     if (interactive) {
 

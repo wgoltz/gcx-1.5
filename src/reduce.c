@@ -2133,22 +2133,21 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
         }
 
 // remove this bit? move to mband calls?
-        if ( ccdr->multiband && ! (ccdr->ops & IMG_QUICKPHOT) ) {
+        if ( ccdr->multiband && ! (ccdr->ops & IMG_QUICKPHOT) ) { // add frame to ccdr->mbds
 
             struct o_frame *ofr = stf_to_mband (ccdr->multiband, stf);
             if (ofr) ofr_link_imf(ofr, imf);
 
-        } else {
+        } else { // create mbds, fit, report, release mbds for a single frame
             struct mband_dataset *mbds = mband_dataset_new ();
 
             d3_printf ("mbds: %p\n", mbds);
 
             struct o_frame *ofr = mband_dataset_add_stf (mbds, stf);
             d3_printf ("mbds has %d frames\n", g_list_length (mbds->ofrs)); // should be 1
-//            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
             mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
-            ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1);
+            ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);
             ofr_transform_stars (ofr, mbds, 0, 0);
 
             if (3 * ofr->outliers > ofr->vstars)

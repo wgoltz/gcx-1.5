@@ -643,7 +643,6 @@ struct cat_star *cat_star_dup(struct cat_star *cats)
     if (cats->cmags) new_cats->cmags = strdup(cats->cmags);
     if (cats->smags) new_cats->smags = strdup(cats->smags);
     if (cats->name) new_cats->name = strdup(cats->name);
-    if (cats->bname) new_cats->bname = strdup(cats->bname);
 
     if (cats->astro != NULL) {
         new_cats->astro = malloc(sizeof(struct cats_astro));
@@ -653,7 +652,7 @@ struct cat_star *cat_star_dup(struct cat_star *cats)
             if (cats->astro->catalog) new_cats->astro->catalog = strdup(cats->astro->catalog);
         }
     }
-    new_cats->gs = NULL;
+//    new_cats->gs = NULL;
 
     return new_cats;
 }
@@ -687,13 +686,6 @@ struct cat_star *cat_star_release(struct cat_star *cats, char *msg)
             if (cats->astro->catalog) free(cats->astro->catalog);
 			free(cats->astro);
         }
-// gs might have already been released
-//        if (cats->gs) {// gs->s should point to cats
-//            if (cats->gs->s != cats)
-//                printf("bad gs pointer %p\n", cats->gs->s);
-//            else
-//                cats->gs->s = NULL;
-//        }
 
         free(cats);
         fflush(NULL);
@@ -991,9 +983,7 @@ if (isnan(me))
 int update_band_by_name(char **mags, char *band, double mag, double err)
 {
     if (band == NULL) return -1;
-if (isnan(err)) {
-    printf("isnan\n"); fflush(NULL);
-}
+
 //printf("catalogs.update_band_by_name update_band: old mags is: |%s|\n", *mags);
 
 	if (*mags == NULL || *mags[0] == 0) {

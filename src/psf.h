@@ -14,7 +14,7 @@ struct psf {
 	int ref_count;
 	int w;			/* width */
 	int h;			/* height */
-	int cx;			/* reference pixel */
+    int cx;			/* frame reference pixel */
 	int cy;
 	double dx;		/* reference position within the reference pixel */
 	double dy;

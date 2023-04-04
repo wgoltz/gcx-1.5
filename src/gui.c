@@ -1365,7 +1365,8 @@ void act_stars_rm_all (GtkAction *action, gpointer window)
 
 void act_stars_rm_selected (GtkAction *action, gpointer window)
 {
-	remove_stars(window, TYPE_MASK_ALL, STAR_SELECTED);
+//    remove_stars(window, TYPE_MASK_ALL, STAR_SELECTED);
+    delete_stars(window, TYPE_MASK_ALL, STAR_SELECTED);
 }
 
 void act_stars_toggle_detected (GtkAction *action, gpointer window)

@@ -351,10 +351,10 @@ GtkWidget* create_pstar (void)
 //  gtk_box_set_spacing (GTK_BOX (pstar_hbuttonbox), 0);
 //  gtk_button_box_set_child_ipadding (GTK_BUTTON_BOX (pstar_hbuttonbox), 6, 0);
 
-    GtkWidget *pstar_dummy_button = gtk_button_new_with_label ("dummy");
-    gtk_widget_show (pstar_dummy_button);
-    gtk_container_add (GTK_CONTAINER (pstar_hbuttonbox), pstar_dummy_button);
-    gtk_widget_set_tooltip_text (pstar_dummy_button, "dummy button for dum-dums");
+//    GtkWidget *pstar_dummy_button = gtk_button_new_with_label ("dummy");
+//    gtk_widget_show (pstar_dummy_button);
+//    gtk_container_add (GTK_CONTAINER (pstar_hbuttonbox), pstar_dummy_button);
+//    gtk_widget_set_tooltip_text (pstar_dummy_button, "dummy button for dum-dums");
 
   GtkWidget *pstar_ok_button = gtk_button_new_with_label ("OK");
   g_object_ref (pstar_ok_button);
