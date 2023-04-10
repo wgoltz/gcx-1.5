@@ -747,6 +747,7 @@ int fake_main(int ac, char **av)
 
     /* user option to run otherwise batch jobs in interactive mode */
     gboolean interactive = (ac == 1);
+printf("ac %d\n", ac);
 
     debug_level = 0;
 //    debug_level = 3;
@@ -985,10 +986,9 @@ int fake_main(int ac, char **av)
         }
     }
 
+printf ("batch %s interactive %s\n", batch ? "TRUE" : "FALSE", interactive ? "TRUE" : "FALSE");
     if (ccdr) {
 		if (batch && !interactive) {
-//printf("gcx.main batch & !interactive\n");
-
             if ((outf && outf[0]) || update_files) {
                 if (imfl == NULL) {
                     err_printf("No frames to process, exiting\n");
@@ -1006,7 +1006,7 @@ int fake_main(int ac, char **av)
 
 //    interactive = interactive || imfl;
 
-    if (interactive) {
+    if (interactive && main_ret == 0) {
 
         main_ret = 1;
 
