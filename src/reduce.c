@@ -2104,7 +2104,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
     } else {
         wcs = g_object_get_data (G_OBJECT(window), "wcs_of_window");
 
-        if (imf->fr->fim.wcsset == WCS_VALID) {
+        if (imf->fr->fim.wcsset == WCS_VALID) { // change to imf->fim.wcsset
             wcs_clone(wcs, &imf->fr->fim);
         } else {
             match_field_in_window_quiet (window);
@@ -2138,14 +2138,19 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
             struct o_frame *ofr = stf_to_mband (ccdr->multiband, stf);
             if (ofr) ofr_link_imf(ofr, imf);
 
-        } else { // create mbds, fit, report, release mbds for a single frame
+        } else { // phot a single frame
             struct mband_dataset *mbds = mband_dataset_new ();
 
             d3_printf ("mbds: %p\n", mbds);
 
             struct o_frame *ofr = mband_dataset_add_stf (mbds, stf);
             d3_printf ("mbds has %d frames\n", g_list_length (mbds->ofrs)); // should be 1
+            if (ofr) ofr_link_imf(ofr, imf);
+
             mband_dataset_add_sobs_to_ofr(mbds, ofr);
+
+            mband_dataset_set_mag_source(mbds, MAG_SOURCE_CMAGS);
+            mbds->mag_source = MAG_SOURCE_CMAGS;
 
             ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);
             ofr_transform_stars (ofr, mbds, 0, 0);
@@ -2160,7 +2165,8 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
             d3_printf("mbds has %d frames\n", g_list_length (mbds->ofrs));
 
-            char *ret = mbds_short_result (ofr); // report first target star
+            char *ret = mbds_short_result (ofr);
+//            log_msg(ret, dialog);
 
             if (ret) {
                 printf ("%s\n", ret); fflush(NULL);

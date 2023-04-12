@@ -665,14 +665,16 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
     double m1 = (trans.c1 >= 0) ? sob->ost->smag[trans.c1] : MAG_UNSET;
     double m2 = (trans.c2 >= 0) ? sob->ost->smag[trans.c2] : MAG_UNSET;
 
-    if ((m1 != MAG_UNSET) && (m2 != MAG_UNSET) && bname1 && bname2) {
-        add_sob_store_entry( SOB_BAND_COL, "%s(%s-%s)", sob->ofr->trans->bname, bname1, bname2 );
-        add_sob_store_entry( SOB_COLOR_COL, "%.3f", m1 - m2 );
-    } else {
-        add_sob_store_entry( SOB_BAND_COL, "%s", sob->ofr->trans->bname );
+    if (sob->ofr->trans) {
+        if ((m1 != MAG_UNSET) && (m2 != MAG_UNSET) && bname1 && bname2) {
+            add_sob_store_entry( SOB_BAND_COL, "%s(%s-%s)", sob->ofr->trans->bname, bname1, bname2 );
+            add_sob_store_entry( SOB_COLOR_COL, "%.3f", m1 - m2 );
+        } else {
+            add_sob_store_entry( SOB_BAND_COL, "%s", sob->ofr->trans->bname );
+        }
     }
 
-    if ((sob->ofr->zpstate & ZP_STATE_MASK) > ZP_FIT_ERR) {
+//    if ((sob->ofr->zpstate & ZP_STATE_MASK) > ZP_FIT_ERR) {
 //        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
         if (! (sob->flags & CPHOT_INVALID)) {
 
@@ -720,7 +722,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
                 add_sob_store_entry( SOB_IMAG_ERR, "%.4f", sob->imagerr );
             }
         }
-    }
+//    }
 
     if ((sob->ofr->zpstate & ZP_STATE_MASK) >= ZP_ALL_SKY && sob->nweight > 0.0) {
         add_sob_store_entry( SOB_RESIDUAL_COL, "%7.3f", sob->residual );
@@ -747,12 +749,12 @@ static void sobs_to_sob_list(GtkWidget *sob_list, GList *sol)
         struct star_obs *sob = STAR_OBS(sl->data);
         sl = g_list_next(sl);
 
-        if ((sob->ofr->zpstate & ZP_STATE_MASK) != ZP_NOT_FITTED) {
+//        if ((sob->ofr->zpstate & ZP_STATE_MASK) != ZP_NOT_FITTED) {
             if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
                 gtk_list_store_prepend(GTK_LIST_STORE(sob_store), &iter);
                 sob_store_set_row_vals(GTK_LIST_STORE(sob_store), &iter, sob);
             }
-        }
+//        }
     }
 }
 
@@ -1448,18 +1450,8 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
     g_return_if_fail(mbds != NULL);
 
-    int ms = -1;
-    if (action == FIT_ZPOINTS_CMAGS)
-        ms = MAG_SOURCE_CMAGS;
-
-    if (action == FIT_ZPOINTS_SMAGS)
-        ms = MAG_SOURCE_SMAGS;
-
-    if (ms != -1) mband_dataset_set_mag_source(mbds, ms);
-
-    if (mbds->mag_source == -1) {
-        err_printf("fit_cb: no mag source set!\n");
-        return;
+    if (action == FIT_ZPOINTS_CMAGS || action == FIT_ZPOINTS_SMAGS) {
+        mband_dataset_set_mag_source(mbds, (action == FIT_ZPOINTS_CMAGS) ? MAG_SOURCE_CMAGS : MAG_SOURCE_SMAGS);
     }
 
 // how to set FIT_ZP_WTRANS ?
@@ -1513,7 +1505,6 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     case FIT_ZP_WTRANS:
         fit_progress(message, mband_dialog);
 
-        gboolean first = TRUE;
         for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
             struct o_frame *ofr = O_FRAME(gl->data);
 
@@ -1533,7 +1524,7 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
             ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, action != FIT_ZP_WTRANS);
 		}
 
-        fit_progress("Transforming stars .. ", mband_dialog);
+//        fit_progress("Transforming stars .. ", mband_dialog);
 
         for (gl = ofrs; gl != NULL; gl = g_list_next(gl)) {
             struct o_frame *ofr = O_FRAME(gl->data);
@@ -1564,6 +1555,7 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
 		break;
 
     case FIT_SET_AVS: {
+        fit_progress("Setting smags from averages of cmag fit .. ", mband_dialog);
         mbds_smags_from_cmag_avgs(ofrs);
 
         break;

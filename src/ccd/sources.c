@@ -128,7 +128,7 @@ static void thin_ring_stats(struct ccd_frame *fr, int x, int y, int r2, struct r
         rs->avg = sum / rs->used;
 
         double sigma2 = sumsq * rs->used - sum * sum;
-        rs->sigma = (sigma2 < 0) ? 0 : sqrt(sigma2) / rs->used;
+        rs->sigma = (rs->used < 2) ? 0 : sqrt(sigma2) / (rs->used - 1.5);
     }
 
     rs->median = dmedian(ring, nring);
@@ -754,12 +754,12 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 #ifdef MY_CHECK_MULTIPLE
 	qsort(src->s, src->ns, sizeof(struct star), compare_flux);
 #endif
-int i;
-for (i = 0; i < src->ns; i++) {
-    printf("%.2f %.2f %.2f\n", src->s[i].flux, src->s[i].x, src->s[i].y);
-} 
-printf("\n%d sources found at SNR (%.f)\n", src->ns, sigmas);
-fflush(NULL);
+//int i;
+//for (i = 0; i < src->ns; i++) {
+//    printf("%.2f %.2f %.2f\n", src->s[i].flux, src->s[i].x, src->s[i].y);
+//}
+//printf("\n%d sources found at SNR (%.f)\n", src->ns, sigmas);
+//fflush(NULL);
 
 	return src->ns;
 }

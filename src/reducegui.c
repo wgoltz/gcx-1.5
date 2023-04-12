@@ -63,7 +63,7 @@
 
 
 static int progress_pr(char *msg, void *dialog);
-static int log_msg(char *msg, void *dialog);
+int log_msg(char *msg, void *dialog);
 
 static void imf_display_cb(GtkAction *action, gpointer dialog);
 static void imf_prev_cb(GtkAction *action, gpointer dialog);
@@ -1070,7 +1070,7 @@ static void list_button_cb(GtkWidget *wid, GdkEventButton *event, gpointer dialo
 */
 
 
-static int log_msg(char *msg, void *dialog)
+int log_msg(char *msg, void *dialog)
 {
 	GtkWidget *text;
     GtkTextIter iter;
@@ -1252,25 +1252,12 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 	if (get_named_checkb_val(dialog, "phot_en_checkb")) {
 		if (ccdr->wcs) {
             ccdr->wcs = wcs_release(ccdr->wcs);
-//			ccdr->wcs = NULL;
 		}
         if (ccdr->recipe) {
             free(ccdr->recipe);
-            ccdr->recipe = NULL;
         }
 
         ccdr->recipe = named_entry_text(dialog, "recipe_entry");
-//        char *text = named_entry_text(dialog, "recipe_entry");
-//        if (text) {
-//            char *p = text;
-//            while (*p) // skip leading spaces
-//                if (*p == ' ') p++;
-//                else break;
-
-//            if (*p) ccdr->recipe = strdup(p);
-
-//            free(text);
-//        }
 
 		if (get_named_checkb_val(dialog, "phot_reuse_wcs_checkb")) {
             struct wcs *wcs = g_object_get_data(G_OBJECT(ccdr->window), "wcs_of_window");
@@ -1289,6 +1276,13 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 	} else {
 		ccdr->ops &= ~(IMG_OP_PHOT | IMG_OP_PHOT_REUSE_WCS);
 	}
+
+    char *text = named_entry_text(dialog, "recipe_entry");
+    if (text) {
+        if (ccdr->recipe && strcmp(text, ccdr->recipe)) free(ccdr->recipe);
+
+        ccdr->recipe = text;
+    }
 
 	if (get_named_checkb_val(dialog, "demosaic_checkb")) {
 		ccdr->ops |= IMG_OP_DEMOSAIC;
@@ -1575,31 +1569,24 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 static void ccdred_one_cb(GtkAction *action, gpointer dialog)
 {
     struct image_file *imf = current_imf (dialog);
-    if (imf == NULL || imf->flags & IMG_SKIP) {
-//        select_next_imf (dialog);
-        return;
-    }
+    if (imf == NULL || imf->flags & IMG_SKIP) return;
 
-    GtkWidget *im_window = g_object_get_data (G_OBJECT(dialog), "im_window");
-    g_return_if_fail (im_window != NULL);
-
-    struct image_file_list *imfl = g_object_get_data (G_OBJECT(dialog), "imfl");
-	g_return_if_fail (imfl != NULL);
-
-//    ccdr = dialog_set_ccdr(G_OBJECT(dialog), NULL);
     struct ccd_reduce *ccdr = g_object_get_data (G_OBJECT(dialog), "ccdred");
 	g_return_if_fail (ccdr != NULL);
 
-//    if (ccdr->bg == 0.0) ccdr->ops &= ~CCDR_BG_VAL_SET;
     dialog_to_ccdr (dialog, ccdr);
 
     GtkWidget *menubar = g_object_get_data (G_OBJECT(dialog), "menubar");
     gtk_widget_set_sensitive (menubar, 0);
 
     if ( (ccdr->ops & IMG_OP_PHOT) && (ccdr->multiband == NULL) ) {
+        GtkWidget *im_window = g_object_get_data (G_OBJECT(dialog), "im_window");
+        g_return_if_fail (im_window != NULL);
+
         ccdr->multiband = get_mband_from_window(im_window);
         g_object_set_data_full(G_OBJECT(dialog), "mband_window", ccdr->multiband, (GDestroyNotify)(g_object_unref));
     }
+
     imf_display_cb (NULL, dialog);
 
     int ret = reduce_one_frame (imf, ccdr, progress_pr, dialog);
@@ -1632,9 +1619,6 @@ d2_printf("reducegui.ccdred_one_cb unload: phot and not align\n");
 		}
 	}
     update_selected_mband_status_label (dialog); // run finish
-//    select_next_imf (dialog);
-
-//    if ((ccdr->ops & IMG_OP_PHOT)) imf_display_cb (NULL, dialog);
 
     gtk_widget_set_sensitive (menubar, 1);
 }
@@ -1643,50 +1627,28 @@ d2_printf("reducegui.ccdred_one_cb unload: phot and not align\n");
 static void ccdred_qphotone_cb(GtkAction *action, gpointer dialog)
 {
     struct image_file *imf = current_imf(dialog);
-	if (imf == NULL || imf->flags & IMG_SKIP) {
-//		select_next_imf(dialog);
-		return;
-	}
+    if (imf == NULL || imf->flags & IMG_SKIP) return;
 
-    struct image_file_list *imfl = g_object_get_data(G_OBJECT(dialog), "imfl");
-	g_return_if_fail (imfl != NULL);
-
-//    ccdr = dialog_set_ccdr(G_OBJECT(dialog), NULL);
     struct ccd_reduce *ccdr = g_object_get_data(G_OBJECT(dialog), "ccdred");
 	g_return_if_fail (ccdr != NULL);
 
-//   if (ccdr->bg == 0.0) ccdr->ops &= ~CCDR_BG_VAL_SET;
-    dialog_to_ccdr (dialog, ccdr);
-
-    if (!(ccdr->ops & IMG_OP_PHOT)) {
-        error_beep ();
-        log_msg ("\nPlease enable photometry in the setup tab\n", dialog);
-		return;
-	}
-
-    // check that outf is set
-    char *outf = named_entry_text (dialog, "output_file_entry");
-    if (outf == NULL) {
-        error_beep ();
-        log_msg ("\nPlease set name for output file in CCDR setup\n", dialog);
-        return;
-    }
-    d4_printf ("outf is |%s|\n", outf);
-    free(outf); // do something with outf ?
+    dialog_to_ccdr (dialog, ccdr); // setup ccdr to reduce single frame
 
     GtkWidget *menubar = g_object_get_data (G_OBJECT(dialog), "menubar");
     gtk_widget_set_sensitive (menubar, 0);
 
-	ccdr->ops |= IMG_QUICKPHOT;
+    ccdr->ops |= (IMG_OP_PHOT | IMG_QUICKPHOT);
+
+    imf_display_cb (NULL, dialog);
+
     reduce_one_frame (imf, ccdr, progress_pr, dialog);
 
     imf_display_cb (NULL, dialog);
-//    if (!(ccdr->ops & IMG_OP_PHOT))	imf_display_cb(NULL, dialog);
 
 	ccdr->ops &= ~IMG_QUICKPHOT;
-	imf->flags &= ~IMG_OP_PHOT;
+//	imf->flags &= ~IMG_OP_PHOT;
 
-    update_selected_mband_status_label (dialog); // qphotone
+    update_selected_mband_status_label (dialog);
 
     gtk_widget_set_sensitive (menubar, 1);
 }

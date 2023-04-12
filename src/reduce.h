@@ -120,5 +120,6 @@ void refresh_wcs(gpointer window, struct ccd_frame *fr);
 void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_list *imfl);
 void window_add_files(GSList *files, gpointer window); /* add list of file names */
 void window_add_frames(GSList *frames, gpointer window); /* add list of frame pointers */
+int log_msg(char *msg, void *dialog);
 
 #endif

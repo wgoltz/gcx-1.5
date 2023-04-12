@@ -170,6 +170,7 @@ int center_star(struct ccd_frame *fr, struct star *st, double max_ce)
 }
 
 static int found = 0;
+char *rgb_filter_names[] = { NULL, NULL, "TR", "TG", "TB" };
 
 /* measure instrumental magnitudes for the stars in the stf. */
 static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, struct ap_params *ap)
@@ -181,10 +182,10 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
     ap->exp = fr->exp;
 
     char *filter = stf_find_string (stf, 1, SYM_OBSERVATION, SYM_FILTER);
-	if (filter == NULL) {
-		err_printf("no filter in stf, aborting aphot\n");
-		return -1;
-	}
+    if (filter == NULL) {
+        err_printf("no filter in stf, aborting aphot\n");
+        return -1;
+    }
 
     GList *asl = stf_find_glist (stf, 0, SYM_STARS);
 	if (asl == NULL) {
@@ -246,7 +247,6 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         if (ap->center) {
 			if (center_star(fr, &s, P_DBL(AP_MAX_CENTER_ERR))) {
 				cats->flags |= CPHOT_NOT_FOUND;
-// set limit mag here?
                 continue;
             }
             cats->flags |= CPHOT_CENTERED;
@@ -293,16 +293,22 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         cats->sky = s.aph.sky;
 		cats->flags |= INFO_SKY;
 
+//printf("stf_aphot %s %d star_err %.5g flux_err %.5g sky_err %.5g\n", cats->name, cats->gs->sort,
+//       s.aph.star_err, s.aph.flux_err, s.aph.sky_err);
+//fflush(NULL);
+
         while (TRUE) { // fix me
             double imag = s.aph.absmag;
             double imag_err = sqrt (sqr (s.aph.magerr) + sqr (s.aph.scint)); // add scintillation
 
             switch (fr->active_plane) {
-                 case PLANE_RED:   filter = "TR"; break;
-                 case PLANE_GREEN: filter = "TG"; break;
-                 case PLANE_BLUE:  filter = "TB"; break;
+            case PLANE_RED:
+            case PLANE_GREEN:
+            case PLANE_BLUE:  filter = rgb_filter_names[fr->active_plane];
+                break;
             }
-//printf("photometry.stf_aphot %s imag %0.4f imag_err %0.4f\n", filter, imag, imag_err);
+            //printf("photometry.stf_aphot %s imag %0.4f imag_err %0.4f\n", filter, imag, imag_err);
+
             update_band_by_name(&cats->imags, filter, imag, imag_err);
 
             fr->active_plane = color_plane_iter(fr, fr->active_plane);
@@ -564,7 +570,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
 	}
 
     // do the photometry
-    stf_aphot (stf, fr, wcs, &apdef);
+    stf_aphot (stf, fr, wcs, &apdef); // aphot results are in cats->imags for single plane images or in imags for rgb images
 
     // update gui stars positions    
     for (asl = stf_find_glist (stf, 0, SYM_STARS); asl != NULL; asl = asl->next) {
@@ -748,12 +754,12 @@ static void photometry_cb(gpointer window, guint action)
 			return;
 
         } else if ((action & PHOT_OUTPUT_MASK) == PHOT_TO_MBDS) {
-            gpointer mbd = g_object_get_data(G_OBJECT(window), "mband_window");
-			if (mbd == NULL) {
+            gpointer mbds = g_object_get_data(G_OBJECT(window), "mband_window");
+            if (mbds == NULL) {
 				act_control_mband(NULL, window);
-				mbd = g_object_get_data(G_OBJECT(window), "mband_window");
+                mbds = g_object_get_data(G_OBJECT(window), "mband_window");
 			}
-            struct o_frame *ofr = stf_to_mband(mbd, stf); // no imf to link to
+            struct o_frame *ofr = stf_to_mband(mbds, stf); // no imf to link to
 			return;
 
         } else { // phot a single frame

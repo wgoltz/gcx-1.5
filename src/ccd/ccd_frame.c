@@ -430,7 +430,7 @@ if (isnan(v))
     st->avg = sum / all;
 
     double sigma2 = sumsq * all - sum * sum;
-    st->sigma = (sigma2 < 0) ? 0 : sqrt(sigma2) / all;
+    st->sigma = (all < 2) ? 0 : sqrt(sigma2) / (all - 1.5);
 
     st->avgs[0] = 4.0 * st->avgs[0] / all;
     st->avgs[1] = 4.0 * st->avgs[1] / all;
@@ -496,7 +496,7 @@ if (isnan(v))
 	if (n != 0) {
 		st->cavg = sum / n;
         double sigma2 = sumsq * n - sum * sum;
-        st->csigma = (sigma2 < 0) ? 0 : 2 * sqrt(sigma2) / n;
+        st->csigma = (n < 2) ? 0 : 2 * sqrt(sigma2) / (n - 1.5);
 	} else {
 		st->cavg = st->avg;
 		st->csigma = st->sigma;

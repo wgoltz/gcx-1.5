@@ -260,7 +260,7 @@ void aperture_stats(struct ccd_frame *fr, struct psf *psf, double x, double y, s
 	if (rs->all != 0.0) {
         rs->avg = rs->sum / rs->all;
         double sigma2 = rs->sumsq * rs->all - rs->sum * rs->sum;
-        rs->sigma = (sigma2 < 0) ? 0 : sqrt (sigma2) / rs->all;
+        rs->sigma = (rs->all < 2) ? 0 : sqrt (sigma2) / (rs->all - 1.5);
     }
     free(vals);
 }
@@ -849,9 +849,6 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
     s->aph.star_err = sqrt(flux_err_sq + sqr(star_stats.all * sky_err));
 
     d4_printf(">>>>peak: %.1f sat_limit: %.1f\n", s->aph.star_max, p->sat_limit);
-
-
-//	d3_printf("get star: star_err %.5g flux_err %.5g sky_err %.5g\n", s->aph.star_err, s->aph.flux_err, s->aph.sky_err);
 
     if (s->aph.star < 3 * s->aph.star_err)
         s->aph.flags |= AP_FAINT;

@@ -365,7 +365,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 
         else {
             cat_star_release(CAT_STAR(gs->s), "merge_cat_star_list");
-            cat_star_ref(acats, "merge_cat_star_list (acats)");
+            cat_star_ref(acats, "");
             gs->s = acats;
 
             if (CATS_TYPE(acats) == CATS_TYPE_APSTAR) {

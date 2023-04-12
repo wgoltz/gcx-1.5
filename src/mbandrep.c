@@ -317,22 +317,23 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
 /* report one target from the frame in a malloced string */
 char * mbds_short_result(struct o_frame *ofr)
 {
-	GList *sl;
     char *rep = NULL;
 
 	d3_printf("qr\n");
 	g_return_val_if_fail(ofr != NULL, NULL);
 
 	ofr_to_stf_cats(ofr);
+
+    asprintf(&rep, "frame %s eladu %.3f rdnoise %.3f", ofr->fr_name, P_DBL(OBS_DEFAULT_ELADU), P_DBL(OBS_DEFAULT_RDNOISE));
+    str_join_varg(&rep, "\noutliers %d fit_me1 %.3f", ofr->outliers, ofr->me1);
+
+    GList *sl;
 	for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) {
         struct star_obs *sob = STAR_OBS(sl->data);
         if ( CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR ) continue;
 
         char *line = NULL;
-        asprintf(&line, "%s: %s=%.3f/%.3f  %d outliers, fit me1=%.2g",
-                         sob->cats->name, ofr->trans->bname,
-                         sob->mag, sob->err,
-                         ofr->outliers, ofr->me1);
+        asprintf(&line, "%s: %s=%.3f/%.3f", sob->cats->name, ofr->trans->bname, sob->mag, sob->err);
 
         int flags = sob->flags & CPHOT_MASK & ~CPHOT_NO_COLOR;
         if (flags) {

@@ -41,4 +41,7 @@ void XE_to_xy(struct wcs *wcs, double X, double E, double *x, double *y);
 void xy_to_XE(struct wcs *wcs, double x, double y, double *X, double *E);
 int plate_solve(struct wcs *wcs, struct fit_pair fpairs[], int n, int model);
 
+// from wcsedit.c
+extern gpointer window_get_wcsedit(gpointer window);
+
 #endif

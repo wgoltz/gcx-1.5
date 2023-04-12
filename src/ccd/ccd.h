@@ -542,7 +542,6 @@ struct ctrans {
 	double b[MAX_ORDER+1][MAX_ORDER+1];
 };
 
-
 //define inline functions for performance-critical stuff
 enum {
 	PLANE_NULL  = 0,

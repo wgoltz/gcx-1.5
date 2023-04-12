@@ -431,7 +431,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //    struct wcs *frame_wcs = & channel->fr->fim;
 
     // update window_wcs from recipe file (just ra and dec?)
-    if (window_wcs) {
+    if (window_wcs && window_wcs->wcsset < WCS_VALID) {
 //        if ((window_wcs->wcsset < WCS_VALID) || (window_wcs->flags & WCS_HINTED)) {
 //            //printf("filegui.load_rcp_to_window try wcs from rcp\n");
 //            window_wcs->xrefpix = channel->fr->w / 2;

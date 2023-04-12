@@ -122,8 +122,11 @@ struct cat_star {
     char *cmags; /* catalog magnitudes - initial mags for creating recipe */
     char *smags; /* recipe standard mags and solved target mags */
     char *imags; /* solved instrumental magnitudes */
+    double phot_imag;
+    double phot_imagerr;
+    char *phot_band;
+    struct gui_star *gs; /* point to gui_star */
     void *data;
-    struct gui_star *gs; /* pointer to gui_star */
 };
 
 #define CATALOG(x) ((struct catalog *)(x))

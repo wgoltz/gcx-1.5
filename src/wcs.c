@@ -175,6 +175,10 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 //        wcs_transform_from_frame (fr, fr_wcs);
 
     struct wcs *fr_wcs = & fr->fim;
+    struct wcs *imf_wcs = (fr->imf && fr->imf->fim) ? fr->imf->fim : NULL;
+
+    if (imf_wcs && imf_wcs->wcsset > fr_wcs->wcsset)
+        wcs_clone(fr_wcs, imf_wcs);
 
     if (fr_wcs->wcsset < WCS_VALID) {
 
@@ -210,8 +214,13 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
     wcs_clone(window_wcs, fr_wcs);
 
-    if (fr_wcs->wcsset != WCS_VALID) // ?
+    if (fr_wcs->wcsset == WCS_INITIAL) // ?
         window_wcs->flags |= WCS_HINTED;
+
+    if (imf_wcs && imf_wcs->wcsset < fr_wcs->wcsset)
+        wcs_clone(imf_wcs, fr_wcs);
+
+    wcs_to_fits_header(fr);
 }
 
 /* creation/deletion of wcs
@@ -988,7 +997,7 @@ int window_fit_wcs(GtkWidget *window)
         return -1;
     }
 
-    gpointer dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
+    gpointer dialog = window_get_wcsedit(window);
     if (dialog == NULL) return -1;
 
     double scale = 1.0;
@@ -1070,7 +1079,7 @@ int window_fit_wcs(GtkWidget *window)
     wcs_clone(frame_wcs, window_wcs);
     struct image_file *imf = fr->imf;
     if (imf != NULL) {
-        if (!imf->fim) imf->fim = wcs_new();
+        if (imf->fim == NULL) imf->fim = wcs_new();
         if (imf->fim) wcs_clone(imf->fim, frame_wcs);
     }
 
@@ -1210,7 +1219,7 @@ struct gui_star * find_cc(struct gui_star *fa, struct gui_star *fb,
 	ymax = y + MATCH_TOL;
 
 	while (cat != NULL) {
-		cc = GUI_STAR(cat->data);
+        cc = GUI_STAR(cat->data);
 		cat = g_slist_next(cat);
 //		d3_printf("----- cc: %.1f %.1f\n", cc->x, cc->y);
 		if (cc->x > xmax || cc->x < xmin || cc->y < ymin || cc->y > ymax)

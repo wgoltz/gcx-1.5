@@ -84,7 +84,7 @@ static void wcs_close_cb( GtkWidget *widget, gpointer dialog )
     gtk_widget_hide(dialog);
 }
 
-static gpointer window_get_wcsedit(gpointer window) {
+gpointer window_get_wcsedit(gpointer window) {
     gpointer dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
     if (dialog) return dialog;
 
@@ -217,7 +217,7 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
  */
 void wcsedit_refresh(gpointer window)
 {
-    GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
+    GtkWidget *dialog = window_get_wcsedit(window);
     if (dialog == NULL) return;
 
 //d2_printf("wcsedit.wcsedit_refresh\n");

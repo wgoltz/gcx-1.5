@@ -305,7 +305,7 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
     fprintf(dfp, "set xlabel 'Days from JD %.1f'\n", jdi);
 	fprintf(dfp, "set ylabel 'Magnitude'\n");
 	fprintf(dfp, "set title 'Fitted Frame Zeropoints'\n");
-//	fprintf(dfp, "set format x \"%%.3f\"\n");
+    fprintf(dfp, "set format x \"%%.4f\"\n");
 	fprintf(dfp, "set xtics autofreq\n");
     fprintf(dfp, "set yrange [:] reverse\n");
 //	fprintf(dfp, "set title '%s: band:%s mjd=%.6f'\n",
@@ -592,7 +592,7 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 
         if ((ofr->band == -1) || (ofr->band == band)) {
 
-            if ((CATS_TYPE(sob->cats) & (CATS_TYPE_APSTAR | CATS_TYPE_APSTD)) == 0) continue;
+            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR && CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 //            if (sob->ost->smag[band] == MAG_UNSET) continue;
 
             double m = sob->imag + sob->ofr->zpoint;
@@ -609,7 +609,8 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 	}
 	if (n > 0) {
         if (avg) *avg = sum/n;
-        if (sigma) *sigma = sqrt(sumsq/n - sqr(sum/n));
+        double sigma2 = sumsq * n - sum * sum;
+        if (sigma) *sigma = (n < 2) ? 0 : sqrt(sigma2)/(n - 1.5);
         if (merr) *merr = esum/n;
 	}
     if (min) *min = mi;
@@ -669,10 +670,10 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 
             if ((m != MAG_UNSET) && (me < BIG_ERR)) {
                 if (sob->flags & CPHOT_CENTERED) {
-                    str_join_varg(&data->pos, "\n%.7f %.3f %.3f", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
+                    str_join_varg(&data->pos, "\n%.7f %.4f %.4f", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
                     n_pos++;
                 } else if (sob->flags & CPHOT_NOT_FOUND) {
-                    str_join_varg(&data->neg, "\n%.7f %.3f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
+                    str_join_varg(&data->neg, "\n%.7f %.4f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
                     n_neg++;
                 }
             }
@@ -710,8 +711,8 @@ static void plot_sol(struct plot_sol_data *data, GList *sol)
 
         int ns = sol_stats(sob->ost->sobs, ofr->band, &avg, &sigma, &min, &max, &merr);
 
-        if (ns == 0) {
-            str_join_varg(&data->plot, ", '' title '%s(%s) not detected' ps 0", sob->cats->name, ofr->trans->bname);
+        if (ns == 0) { // move to end of string, but do we need it anyway?
+//            str_join_varg(&data->plot, ", '' title '%s(%s) not detected' ps 0", sob->cats->name, ofr->trans->bname);
 
         } else {
             int result = plot_sol_obs(data, sob->ost->sobs);
