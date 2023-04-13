@@ -446,6 +446,8 @@ static void ofr_sob_initial_weights(struct o_frame *ofr, struct transform *trans
         if (ofr->band < 0) continue;
         if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;        
         if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
+        if (sob->cats->gs->flags & STAR_DELETED)
+            continue;
 
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
         if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;

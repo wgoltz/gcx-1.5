@@ -85,9 +85,6 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
         }
     }
 
-    double scale;
-    gboolean have_scale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
-
     double lat;
     gboolean have_lat = (fits_get_double (fr, P_STR(FN_LATITUDE), &lat) > 0);
     if (! have_lat) {
@@ -106,9 +103,6 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
     gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
     if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
 
-    double rot;
-    gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
-
 // now set frame fim
     struct wcs *wcs = & fr->fim;
 
@@ -120,14 +114,7 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->xrefpix = fr->w / 2;
     wcs->yrefpix = fr->h / 2;
 
-    if (have_rot) wcs->rot = rot;
     if (have_eq) wcs->equinox = eq;
-
-    if (have_scale) {
-        wcs->xinc = - scale / 3600.0;
-        wcs->yinc = - scale / 3600.0;
-        wcs->flags |= WCS_HAVE_SCALE;
-    } // else wcs->flags &= ~WCS_HAVE_SCALE; // reuse scale
 
     if (have_pos) {
         wcs->xref = ra;
@@ -140,6 +127,25 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
         wcs->lat = lat;
         wcs->flags |= WCS_LOC_VALID;
     } // else wcs->flags &= ~WCS_LOC_VALID; // reuse loc
+
+    if (wcs_transform_from_frame (fr, &fr->fim) == 0) {
+        wcs->flags |= WCS_HAVE_SCALE | WCS_HAVE_POS;
+
+    } else {
+        double scale;
+        gboolean have_scale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
+
+        if (have_scale) {
+            wcs->xinc = - scale / 3600.0;
+            wcs->yinc = - scale / 3600.0;
+            wcs->flags |= WCS_HAVE_SCALE;
+        } // else wcs->flags &= ~WCS_HAVE_SCALE; // reuse scale
+
+        double rot;
+        gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
+
+        if (have_rot) wcs->rot = rot;
+    }
 }
 
 static void fits_local_params_to_fim(struct ccd_frame *fr)
@@ -206,10 +212,11 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
                 fr_wcs->lng = window_wcs->lng;
                 fr_wcs->flags |= WCS_LOC_VALID;
             }
-            if ((fr_wcs->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
-                    == (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
-                fr_wcs->wcsset = WCS_INITIAL;
         }
+        if ((fr_wcs->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+                == (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+
+            fr_wcs->wcsset = WCS_INITIAL;
     }
 
     wcs_clone(window_wcs, fr_wcs);

@@ -40,6 +40,7 @@
 #include "catalogs.h"
 #include "obsdata.h"
 #include "params.h"
+#include "wcs.h"
 
 #include "sidereal_time.h"
 
@@ -321,7 +322,7 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
 
     double norm = sqrt((sqr(cd[0][0]) + sqr(cd[1][1])) / 2);
 
-// fill in fim fields and pc from cd
+// xinc and yinc need to be multiplied by scale (if set)
     fim->xinc = cd[0][0] > 0 ? norm / cos(r) : -norm / cos(r);
     fim->yinc = cd[1][1] > 0 ? norm / cos(r) : -norm / cos(r);
     fim->rot = raddeg(r);
@@ -379,8 +380,8 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
 // if (have_PC == 15) && (have_xinc && have_yinc && have_rot) find an average ?
 
     if (! (have_xinc && have_yinc)) {
-        fim->xinc = 0;
-        fim->yinc = 0;
+        fim->xinc = INV_DBL;
+        fim->yinc = INV_DBL;
     }
 
     return (have_PC == 15) || (have_xinc && have_yinc) ? 1 : 0;

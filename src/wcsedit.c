@@ -402,7 +402,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 	}
 
     if (have_scale) {
-        if ((wcs->flags & WCS_HAVE_SCALE) != 0) {
+        if (wcs->flags & WCS_HAVE_SCALE) {
             int sign;
 
             double xs = -scale;

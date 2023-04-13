@@ -224,6 +224,11 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
 //        hd->rmeta.color_matrix = 0;
     }
 
+    hd->fim.xinc = INV_DBL;
+    hd->fim.yinc = INV_DBL;
+    hd->fim.xref = INV_DBL;
+    hd->fim.yref = INV_DBL;
+
     if (fr && fr->fim.wcsset) { // clone wcs from fr
         wcs_clone(& hd->fim, & fr->fim);
     }

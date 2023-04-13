@@ -1261,7 +1261,7 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 		if (get_named_checkb_val(dialog, "phot_reuse_wcs_checkb")) {
             struct wcs *wcs = g_object_get_data(G_OBJECT(ccdr->window), "wcs_of_window");
-            if ( wcs && wcs->wcsset > WCS_INITIAL ) { //= WCS_VALID ) {
+            if ( wcs && (wcs->wcsset == WCS_VALID) ) {
                 if (! ccdr->wcs) ccdr->wcs = wcs_new();
                 wcs_clone(ccdr->wcs, wcs);
 				ccdr->ops |= IMG_OP_PHOT_REUSE_WCS;
@@ -1538,6 +1538,7 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 
             imf->fr = fr;
             fr->imf = imf;
+            wcs_clone(imf->fim, &fr->fim);
 //            get_frame(imf->fr, "ccdred_run_cb");
 
             if (outf) {

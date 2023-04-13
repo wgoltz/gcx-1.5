@@ -423,7 +423,9 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
 
         imf->fr = fr;
         fr->imf = imf;
+
         imf->flags |= IMG_LOADED;
+
         reloaded = 1;
     }
 
@@ -431,18 +433,6 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
 
     rescan_fits_exp(fr, &(fr->exp));
     if (! fr->stats.statsok) frame_stats(fr);
-
-//// only for "light" images
-    struct wcs *wcs = &(fr->fim);
-    if (imf->fim && (imf->fim->wcsset == WCS_VALID)) { // valid wcs
-        wcs_clone(wcs, imf->fim);
-    } else {
-        wcs->wcsset = WCS_INITIAL;
-        if (wcs_transform_from_frame(fr, wcs) != 0) {
-            wcs->wcsset = WCS_INVALID;
-        }
-    }
-////
 
 //printf("reduce.imf_load_frame return ok\n");
     return reloaded;
@@ -471,6 +461,7 @@ void imf_release_frame(struct image_file *imf, char *msg)
 
 void imf_unload(struct image_file *imf)
 {
+    wcs_clone(imf->fim, &imf->fr->fim);
     imf->flags &= ~IMG_LOADED;
 }
 
@@ -1684,19 +1675,18 @@ void refresh_wcs(gpointer window, struct ccd_frame *fr) {
         g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
 
-    wcs_from_frame(fr, window_wcs);
+    if (fr->imf) {
+        struct wcs *imf_wcs = fr->imf->fim;
+        if (imf_wcs->wcsset > fr->fim.wcsset) {
+            wcs_clone(&fr->fim, imf_wcs);
+            wcs_clone(window_wcs, imf_wcs);
+        } else {
+            wcs_from_frame(fr, window_wcs);
+        }
 
-//    struct wcs *frame_wcs = & fr->fim;
-//    if (frame_wcs->wcsset) { // copy frame wcs to window
-//        wcs_clone(window_wcs, frame_wcs);
-//        window_wcs->flags &= ~WCS_HINTED;
-//    } else { // use window wcs as first guess for frame
-//        wcs_from_frame(fr, window_wcs); // update window wcs from fits frame fields
-//        unsigned int flags = frame_wcs->flags;
-////        window_wcs->wcsset = WCS_INITIAL;
-//        wcs_clone(frame_wcs, window_wcs);
-//        frame_wcs->flags = flags | WCS_HINTED;
-//    }
+    } else {
+        printf("refresh_wcs no imf\n");
+    }
 
     wcsedit_refresh(window);
 }
@@ -2259,6 +2249,8 @@ struct image_file* add_image_frame_to_list(struct image_file_list *imfl, struct 
 
     imf->filename = strdup(fr->name);
     imf->fr = fr;
+
+    wcs_clone(imf->fim, &fr->fim);
     imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED;
 
     imfl->imlist = g_list_append(imfl->imlist, imf);

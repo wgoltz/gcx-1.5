@@ -461,8 +461,8 @@ static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
 
         fr->fim.xinc = - spp / 3600.0;
         fr->fim.yinc = - spp / 3600.0;
-        if (P_INT(OBS_FLIPPED))	fr->fim.yinc = -fr->fim.yinc;
 
+        if (P_INT(OBS_FLIPPED))	fr->fim.yinc = -fr->fim.yinc;
     }
     cat_star_release(cats, "set_wcs_from_object");
 
