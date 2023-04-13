@@ -747,7 +747,6 @@ int fake_main(int ac, char **av)
 
     /* user option to run otherwise batch jobs in interactive mode */
     gboolean interactive = (ac == 1);
-printf("ac %d\n", ac);
 
     debug_level = 0;
 //    debug_level = 3;
@@ -910,7 +909,7 @@ printf("ac %d\n", ac);
 
             case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
 
-            case 'F': ccdr->ops |= (IMG_OP_STACK & IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
+            case 'F': ccdr->ops |= (IMG_OP_STACK | IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
 
             case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
 
@@ -986,7 +985,6 @@ printf("ac %d\n", ac);
         }
     }
 
-printf ("batch %s interactive %s\n", batch ? "TRUE" : "FALSE", interactive ? "TRUE" : "FALSE");
     if (ccdr) {
 		if (batch && !interactive) {
             if ((outf && outf[0]) || update_files) {
