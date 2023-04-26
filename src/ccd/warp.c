@@ -911,7 +911,7 @@ int make_gaussian(float sigma, int size, float *kern)
 	sum = 0;
 	for (y = 0; y < mid + 1; y++)
 		for(x = 0; x < mid + 1; x++) {
-			v = exp(- sqrt(1.0 * (sqr(x) + sqr(y))) / sigma);
+            v = exp(- sqrt(sqr(x) + sqr(y)) / sigma);
 
             //			d3_printf("x%d y%d v%.2f\n", x, y, v);
 			if (x == 0 && y == 0)

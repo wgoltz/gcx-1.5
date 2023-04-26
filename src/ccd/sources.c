@@ -126,9 +126,7 @@ static void thin_ring_stats(struct ccd_frame *fr, int x, int y, int r2, struct r
 
     if (rs->used) {
         rs->avg = sum / rs->used;
-
-        double sigma2 = sumsq * rs->used - sum * sum;
-        rs->sigma = (rs->used < 2) ? 0 : sqrt(sigma2) / (rs->used - 1.5);
+        rs->sigma = SIGMA(sumsq, sum, rs->used);
     }
 
     rs->median = dmedian(ring, nring);

@@ -39,8 +39,7 @@
 #include "obsdata.h"
 #include "sidereal_time.h"
 #include "misc.h"
-#include "match.h"
-#include "warpaffine.h"
+#include "reduce.h"
 
 //#define CHECK_WCS_CLOSURE
 
@@ -128,6 +127,14 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
         wcs->flags |= WCS_LOC_VALID;
     } // else wcs->flags &= ~WCS_LOC_VALID; // reuse loc
 
+    int bin_x = 1;
+    fits_get_int(fr, P_STR(FN_BIN_X), &bin_x);
+
+    int bin_y = 1;
+    fits_get_int(fr, P_STR(FN_BIN_X), &bin_y);
+
+    wcs->binning = sqrt(bin_x * bin_y);
+
     if (wcs_transform_from_frame (fr, &fr->fim) == 0) {
         wcs->flags |= WCS_HAVE_SCALE | WCS_HAVE_POS;
 
@@ -157,8 +164,9 @@ static void fits_local_params_to_fim(struct ccd_frame *fr)
         double pixsize_on_flen = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
         if (fabs(scale - pixsize_on_flen) / (scale + pixsize_on_flen) > 0.01)
             err_printf("scale derived from (OBS_PIXSZ / OBS_FLEN) differs from (OBS_SECPIX)\n");
-        wcs->xinc = - scale / 3600.0;
-        wcs->yinc = - scale / 3600.0;
+
+        wcs->xinc = - scale / 3600.0 * wcs->binning;
+        wcs->yinc = - scale / 3600.0 * wcs->binning;
         wcs->flags |= WCS_HAVE_SCALE;
     }
 
@@ -189,40 +197,38 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
     if (fr_wcs->wcsset < WCS_VALID) {
 
         if (fr_wcs->wcsset == WCS_INVALID) { // reload everything
-            wcs_clone(fr_wcs, window_wcs);
+//            wcs_clone(fr_wcs, window_wcs);
 
             fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
             fits_local_params_to_fim(fr); // fill in from locals
         }
-
-        if (window_wcs->flags & (WCS_EDITED | WCS_HINTED)) { // pickup stuff from previous frame/wcsedit
+// have lost hinted flag
+//        if (window_wcs->flags & (WCS_EDITED | WCS_HINTED)) { // pickup stuff from previous frame/wcsedit
             // whatelse needs to be copied?
-            if (window_wcs->flags & WCS_HAVE_POS) {
+            if (window_wcs->flags & WCS_HAVE_POS && ((fr_wcs->flags & WCS_HAVE_POS) == 0)) {
                 fr_wcs->xref = window_wcs->xref;
                 fr_wcs->yref = window_wcs->yref;
                 fr_wcs->flags |= WCS_HAVE_POS;
             }
-            if (window_wcs->flags & WCS_HAVE_SCALE) {
+            if (window_wcs->flags & WCS_HAVE_SCALE && ((fr_wcs->flags & WCS_HAVE_SCALE) == 0)) {
                 fr_wcs->xinc = window_wcs->xinc;
                 fr_wcs->yinc = window_wcs->yinc;
                 fr_wcs->flags |= WCS_HAVE_SCALE;
             }
-            if (window_wcs->flags & WCS_LOC_VALID) {
+            if (window_wcs->flags & WCS_LOC_VALID && ((fr_wcs->flags & WCS_LOC_VALID) == 0)) {
                 fr_wcs->lat = window_wcs->lat;
                 fr_wcs->lng = window_wcs->lng;
                 fr_wcs->flags |= WCS_LOC_VALID;
             }
-        }
-        if ((fr_wcs->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
-                == (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+//        }
 
-            fr_wcs->wcsset = WCS_INITIAL;
+        if (WCS_HAVE_INITIAL(fr_wcs)) fr_wcs->wcsset = WCS_INITIAL;
     }
 
     wcs_clone(window_wcs, fr_wcs);
 
-    if (fr_wcs->wcsset == WCS_INITIAL) // ?
-        window_wcs->flags |= WCS_HINTED;
+//    if (fr_wcs->wcsset == WCS_INITIAL) // ?
+    window_wcs->flags |= WCS_HINTED;
 
     if (imf_wcs && imf_wcs->wcsset < fr_wcs->wcsset)
         wcs_clone(imf_wcs, fr_wcs);
@@ -280,9 +286,11 @@ struct wcs *wcs_release(struct wcs *wcs)
 void wcs_clone(struct wcs *dst, struct wcs *src)
 {
     if (src == dst) return;
+
     int rc = dst->ref_count;
-//    memcpy(dst, src, sizeof(struct wcs));
+
     *dst = *src;
+
     dst->ref_count = rc;
 }
 
@@ -503,15 +511,26 @@ static void pairs_change_wcs(GSList *pairs, struct wcs *wcs)
 void cat_change_wcs(GSList *sl, struct wcs *wcs)
 {
 //printf("cat_change_wcs wcs->xinc * wcs->yinc < 0 %s\n", wcs->xinc * wcs->yinc < 0 ? "Yes" : "No"); fflush(NULL);
+    if ((wcs->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS)) == 0) return;
+
 	while (sl != NULL) {
         struct gui_star *gs = GUI_STAR(sl->data);
         sl = g_slist_next(sl);
 
-		if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) && gs->s != NULL) {
+        if (gs->flags & STAR_DELETED) continue;
+        if (gs->s == NULL) continue;
+
+        if (GSTAR_IN(gs, SELECT_CATREF)) {
             struct cat_star *cats = CAT_STAR(gs->s);
+
 //printf("%d %s\n", gs->sort, cats->name); fflush(NULL);
-//            wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
             cats_xypix(wcs, cats, &(gs->x), &(gs->y));
+
+            // mark/unmark STAR_IGNORE according to distance of star from center of field (assume wcs is close)
+            if (fabs(gs->x / wcs->w - 0.5) > 0.5 || fabs(gs->y / wcs->h - 0.5) > 0.5)
+                gs->flags |= STAR_IGNORE;
+            else
+                gs->flags &= ~STAR_IGNORE;
 		}
 	}
 }
@@ -647,10 +666,8 @@ double pairs_fit(GSList *pairs, double *dxo, double *dyo, double *dso, double *d
  //   double dx, dy, ds, dt;
  //   pairs_fit_params(pairs, &dx, &dy, &ds, &dt);
 
-    if (! (dxo || dyo || dso || dto) ) return 0;
-
     struct ms_acc *acc = get_ms_acc();
-    if (! acc) return 0;
+    if (! acc) return -1;
 
     GSList *sl = pairs;
 
@@ -658,12 +675,12 @@ double pairs_fit(GSList *pairs, double *dxo, double *dyo, double *dso, double *d
         struct gui_star *gs = GUI_STAR(sl->data);
         sl = g_slist_next(sl);
 
-        if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) == 0) {
+        if ( ! GSTAR_IN(gs, SELECT_FRSTAR)) {
 //            err_printf("pairs_cs_diff: first star in pair must be a frstar \n");
             continue;
         }
         struct gui_star *gsp = GUI_STAR(gs->pair);
-        if ((TYPE_MASK_GSTAR(gsp) & (TYPE_MASK_CATREF | TYPE_MASK_ALIGN)) == 0) {
+        if ( ! GSTAR_IN(gsp, SELECT_CATREF | SELECT_ALIGN) ) {
 //            err_printf("pairs_cs_diff: second star in pair must be a catref \n");
             continue;
         }
@@ -694,8 +711,8 @@ double pairs_fit(GSList *pairs, double *dxo, double *dyo, double *dso, double *d
             st *= ds;
         }
 
-        if (dxo) *dxo = (ct * acc->x + st * acc->y - acc->xp) / n;
-        if (dyo) *dyo = (ct * acc->y - st * acc->x - acc->yp) / n;
+        *dxo = (ct * acc->x + st * acc->y - acc->xp) / n;
+        *dyo = (ct * acc->y - st * acc->x - acc->yp) / n;
 
         fit_err = sqrt((sqr(acc->xp - acc->x) + sqr(acc->yp - acc->y)) / n);
     }
@@ -716,209 +733,30 @@ static double angular_diff(double t, double ct)
 	return diff;
 }
 
-/* Calculate dx, dy, ds and dt for a set of pairs
-   If dso == NULL scale is not fitted; if dto == NULL rotation is not fitted */
-
-static int pairs_cs_diff(GSList *pairs, double *dxo, double *dyo, double *dso, double *dto)
-{
-    double fit_err = pairs_fit(pairs, dxo, dyo, dso, dto);
-
-    if ( dso || dto ) { /* scale/rotate */
-        double dt = 0.0;
-        double ds = 0.0;
-        double st_weights = 0.0;
-
-        GSList *sl = pairs;
-        while (sl != NULL) {
-            struct gui_star *gs = GUI_STAR(sl->data);
-            if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) == 0) {
-                err_printf("pairs_cs_diff: first star in pair must be a frstar \n");
-                return -1;
-            }
-            struct gui_star *gsp = GUI_STAR(gs->pair);
-            if ((TYPE_MASK_GSTAR(gsp) & (TYPE_MASK_CATREF | TYPE_MASK_ALIGN)) == 0) {
-                err_printf("pairs_cs_diff: second star in pair must be a catref \n");
-                return -1;
-            }
-
-            sl = g_slist_next(sl);
-
-            GSList *nsl = sl;
-            if (nsl == NULL) nsl = pairs;
-
-            struct gui_star *ngs = GUI_STAR(nsl->data);
-            struct gui_star *ngsp = GUI_STAR(ngs->pair);
-
-            double s = gui_star_distance(gs, ngs);
-            double sp = gui_star_distance(gsp, ngsp);
-
-            if (s < MIN_DIST_RS || sp < MIN_DIST_RS) continue; /* skip this one for rot/scale calculations */
-
-            double t = atan2(ngs->y - gs->y, ngs->x - gs->x);
-            double tp = atan2(ngsp->y - gsp->y, ngsp->x - gsp->x);
-
-            st_weights += sqr(sp);
-
-            if (dto) dt += sqr(sp) * angular_diff(t, tp);
-            if (dso) ds += sqr(sp) * (s / sp);
-        }
-
-        if (st_weights == 0) {
-            dt = 0;
-            ds = 1.0;
-        } else {
-            dt = dt / st_weights;
-            ds = ds / st_weights;
-        }
-
-        if (dso) *dso = ds;
-        if (dto) *dto = dt;
-    }
-
-    return 0;
-}
-
-int pairs_cs_diff_old(GSList *pairs, double *dxo, double *dyo, double *dso, double *dto)
-{
-    double fit_err = pairs_fit(pairs, dxo, dyo, dso, dto);
-
-    if ( dso || dto ) { /* scale/rotate */
-        double dt = 0.0;
-        double ds = 0.0;
-        double st_weights = 0.0;
-
-        GSList *sl = pairs;
-        while (sl != NULL) {
-            struct gui_star *gs = GUI_STAR(sl->data);
-            if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) == 0) {
-                err_printf("pairs_cs_diff: first star in pair must be a frstar \n");
-                return -1;
-            }
-            struct gui_star *gsp = GUI_STAR(gs->pair);
-            if ((TYPE_MASK_GSTAR(gsp) & (TYPE_MASK_CATREF | TYPE_MASK_ALIGN)) == 0) {
-                err_printf("pairs_cs_diff: second star in pair must be a catref \n");
-                return -1;
-            }
-
-            sl = g_slist_next(sl);
-
-            GSList *nsl = sl;
-            if (nsl == NULL) nsl = pairs;
-
-            struct gui_star *ngs = GUI_STAR(nsl->data);
-            struct gui_star *ngsp = GUI_STAR(ngs->pair);
-
-            double s = gui_star_distance(gs, ngs);
-            double sp = gui_star_distance(gsp, ngsp);
-
-            if (s < MIN_DIST_RS || sp < MIN_DIST_RS) continue; /* skip this one for rot/scale calculations */
-
-            double t = atan2(ngs->y - gs->y, ngs->x - gs->x);
-            double tp = atan2(ngsp->y - gsp->y, ngsp->x - gsp->x);
-
-            st_weights += sqr(sp);
-
-            if (dto) dt += sqr(sp) * angular_diff(t, tp);
-            if (dso) ds += sqr(sp) * (s / sp);
-        }
-
-        if (st_weights == 0) {
-            dt = 0;
-            ds = 1.0;
-        } else {
-            dt = dt / st_weights;
-            ds = ds / st_weights;
-        }
-
-        if (dso) *dso = ds;
-        if (dto) *dto = dt;
-    }
-/*
-    if ( dxo || dyo ) { // translate
-        double dx = 0.0;
-        double dy = 0.0;
-        double xy_weights = 0.0;
-
-        GSList *sl = pairs;
-        while (sl != NULL) {
-            struct gui_star *gs = GUI_STAR(sl->data);
-            if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) == 0) {
-                err_printf("pairs_cs_diff: first star in pair must be a frstar \n");
-                return -1;
-            }
-            struct gui_star *gsp = GUI_STAR(gs->pair);
-            if ((TYPE_MASK_GSTAR(gsp) & (TYPE_MASK_CATREF | TYPE_MASK_ALIGN)) == 0) {
-                err_printf("pairs_cs_diff: second star in pair must be a catref \n");
-                return -1;
-            }
-
-            double gx = gs->x;
-            double gy = gs->y;
-
-            if (dto) rot_vect(&gx, &gy, - *dto);
-            if (dso) {
-                gx /= *dso;
-                gy /= *dso;
-            }
-
-            dx += gx - gsp->x;
-            dy += gy - gsp->y;
-            xy_weights += 1.0;
-
-            sl = g_slist_next(sl);
-        }
-
-        dx /= xy_weights;
-        dy /= xy_weights;
-
-        if (dxo) *dxo = dx;
-        if (dyo) *dyo = dy;
-    }
-*/
-	return 0;
-}
-
 
 /* take a list of pairs and change wcs for best pair fit */
 /* returns -1 if there was a problem trying to fit */
-static int fit_pairs_xy_old(GSList *pairs, struct wcs *wcs, int scale_en, int rot_en)
+static double fit_pairs_xy(GSList *pairs, struct wcs *wcs, gboolean scale_en, gboolean rot_en)
 {
-    double dx = 0.0;
-    double dy = 0.0;
-    double dt = 0.0;
-	double ds = 0.0;
-	int ret;
+    double dx = 0, dy = 0, ds = 1, dt = 0;
+    double ret = pairs_fit(pairs, &dx, &dy, (scale_en) ? &ds : NULL, (rot_en) ? &dt : NULL);
 
-    if ((ret = pairs_cs_diff(pairs, &dx, &dy, scale_en ? &ds : NULL, rot_en ? &dt : NULL))) return ret;
+    if (ret == 0) return 0;    
 
-	clamp_double(&ds, 1 - MAX_SE, 1 + MAX_SE);
-    adjust_wcs(wcs, dx, dy, ds, dt);
+    if (scale_en) clamp_double(&ds, 1 - MAX_SE, 1 + MAX_SE);
 
-	return 0;
-}
-
-static double fit_pairs_xy(GSList *pairs, struct wcs *wcs, int scale_en, int rot_en)
-{
-    double dx = 0.0;
-    double dy = 0.0;
-    double dt = 0.0;
-    double ds = 1.0;
-    double ret = pairs_fit(pairs, &dx, &dy, scale_en ? &ds : NULL, rot_en ? &dt : NULL);
-
-    if (ret == 0) return 0;
-
-//	clamp_double(&ds, 1 - MAX_SE, 1 + MAX_SE);
     adjust_wcs(wcs, dx, dy, ds, dt);
 
     return ret;
 }
 
 /* fit wcs pairs the "old" way */
-static void fit_pairs_old(GSList *pairs, struct wcs *wcs, int scale_en, int rot_en)
+static void fit_pairs_old(GSList *pairs, struct wcs *wcs, gboolean scale_en, gboolean rot_en)
 {
 	int iteration = 0;
 	double fit_err = HUGE;
 //printf("wcs.fit_pairs_old\n");
+printf("fit_pairs_old\n"); fflush(NULL);
 	while (iteration < MAX_ITER) {
 //printf("iteration: %d err: %f\n", iteration, fit_err);
 		iteration ++;
@@ -949,13 +787,13 @@ static int fit_pairs(GSList *pairs, struct wcs *wcs)
 		struct gui_star *gs, *cgs;
 		struct cat_star *cats;
 		gs = GUI_STAR(p->data);
-		if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) == 0) {
-			err_printf("fit_pairs: first star in pair must be a frstar \n");
+        if ( ! GSTAR_IN(gs, SELECT_FRSTAR)) {
+            err_printf("fit_pairs: first star in pair must be a frstar\n");
 			ret = -1;
 			goto fexit;
 		}
 		cgs = GUI_STAR(gs->pair);
-		if ( ((TYPE_MASK_GSTAR(cgs) & (TYPE_MASK_CATREF)) == 0) || (cgs->s == NULL) ) {
+        if ( ! GSTAR_IN(cgs, SELECT_CATREF) || (cgs->s == NULL) ) {
 			err_printf("fit_pairs: second star in pair must be a catref \n");
 			ret = -1;
 			goto fexit;
@@ -1007,9 +845,6 @@ int window_fit_wcs(GtkWidget *window)
     gpointer dialog = window_get_wcsedit(window);
     if (dialog == NULL) return -1;
 
-    double scale = 1.0;
-    double rot = 0.0;
-
     int lock_scale = get_named_checkb_val(dialog, "wcs_lock_scale_checkb");
     int lock_rot = get_named_checkb_val(dialog, "wcs_lock_rot_checkb");
 
@@ -1023,7 +858,7 @@ int window_fit_wcs(GtkWidget *window)
 			pairs = g_slist_append(pairs, gs);
 
             struct gui_star *cgs = GUI_STAR(gs->pair);
-			if ((TYPE_MASK_GSTAR(cgs) & (TYPE_MASK_CATREF)) && (cgs->s != NULL)) {
+            if (GSTAR_IN(cgs, SELECT_CATREF) && (cgs->s != NULL)) {
 				if (CAT_STAR(cgs->s)->perr < BIG_ERR)
 					goodpairs = g_slist_append(goodpairs, gs);
 			}
@@ -1051,10 +886,8 @@ int window_fit_wcs(GtkWidget *window)
     int rot_en = (lock_rot == 0);
 
     window_wcs->fit_err = HUGE;
-	if (npairs >= 2) {
-        if (fit_pairs(pairs, window_wcs) < 0)
-            fit_pairs_old(pairs, window_wcs, scale_en, rot_en);
-	}
+    if (npairs >= 2 && fit_pairs(pairs, window_wcs) < 0)
+        fit_pairs_old(pairs, window_wcs, scale_en, rot_en);
 
     char *buf;
     double ra_err = HUGE, de_err = HUGE;
@@ -1084,6 +917,7 @@ int window_fit_wcs(GtkWidget *window)
     struct wcs *frame_wcs = & fr->fim;
 
     wcs_clone(frame_wcs, window_wcs);
+
     struct image_file *imf = fr->imf;
     if (imf != NULL) {
         if (imf->fim == NULL) imf->fim = wcs_new();
@@ -1111,7 +945,7 @@ void print_list(GSList *gsl) {
 		struct gui_star *gs;
 		gs = GUI_STAR(sl->data);
 printf("\n%08x ", TYPE_MASK_GSTAR(gs));
-		if ((TYPE_MASK_GSTAR(gs)) & TYPE_MASK_CATREF) {
+        if (GSTAR_IN(gs, SELECT_CATREF)) {
             if (gs->s == NULL) continue;
 
             if (P_INT(AP_MOVE_TARGETS) && ((CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET) == 0)) continue;
@@ -1119,7 +953,7 @@ printf("\n%08x ", TYPE_MASK_GSTAR(gs));
 printf("cat star");
 			continue;
 		}
-		if ((TYPE_MASK_GSTAR(gs)) & TYPE_MASK_ALIGN) {
+        if (GSTAR_IN(gs, SELECT_ALIGN)) {
 printf("align star");
 			continue;
 		}
@@ -1137,14 +971,14 @@ int auto_pairs(struct gui_star_list *gsl)
     GSList *sl;
 	int ret;
 
-// TYPE_MASK_ALIGN doesn't get used
-//    cat = filter_selection(gsl->sl, (TYPE_MASK_CATREF | TYPE_MASK_ALIGN), 0, 0);
+// SELECT_ALIGN doesn't get used
+//    cat = filter_selection(gsl->sl, (SELECT_CATREF | SELECT_ALIGN), 0, 0);
 
     for (sl = gsl->sl; sl != NULL; sl = sl->next) {
         struct gui_star *gs = GUI_STAR(sl->data);
         if (gs == NULL) continue;
 
-//        if ((TYPE_MASK_GSTAR(gs)) & TYPE_MASK_CATREF) {
+//        if (TYPE_MASK_GSTAR(gs) & SELECT_CATREF) {
 //            if (gs->s == NULL) continue;
 //            if (P_INT(AP_MOVE_TARGETS) && ((CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET) == 0)) continue;
 
@@ -1153,17 +987,26 @@ int auto_pairs(struct gui_star_list *gsl)
 //        }
 
 //      if (gs->s && (CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET)) { // any star marked as astromet
-        if (gs->s && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF)) { // skips field stars?
-            if (P_INT(AP_MOVE_TARGETS) && ((CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET) == 0)) continue;
+        if (gs->flags & (STAR_IGNORE | STAR_DELETED)) continue;
+        if (gs->s == NULL) continue;
+
+        struct cat_star *cats = gs->s;
+
+//        printf("auto_pairs: %d TYPE_MASK_GSTAR(gs) %08x %s\n", gs->sort, TYPE_MASK_GSTAR(gs), cats->name);
+//        fflush(NULL);
+
+        if (GSTAR_IN(gs, SELECT_CATREF)) { // skips field stars?
+
+            if (P_INT(AP_MOVE_TARGETS) && (cats->flags & CATS_FLAG_ASTROMET) == 0) continue;
 
             cat = g_slist_prepend(cat, gs);
         }
     }
 
-    d3_printf("matching to %d cat stars\n", g_slist_length(cat));
+printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
     cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare_size);
 
-	field = filter_selection(gsl->sl, TYPE_MASK_FRSTAR, 0, 0);
+    field = filter_selection(gsl->sl, SELECT_FRSTAR, 0, 0);
     field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
 //    for (sl = cat; sl != NULL; sl = sl->next) {
@@ -1501,6 +1344,8 @@ int fastmatch(GSList *field, GSList *cat)
 
     } else {        
         while (g_slist_length(field) >= 2) { /* loop dropping the first star in the list */
+            while (gtk_events_pending ()) gtk_main_iteration ();
+
             ret = match_from(field, cat);
 
             if (ret > max) max = ret;

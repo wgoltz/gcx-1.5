@@ -91,7 +91,7 @@ void star_edit_update_entry(GtkWidget *dialog, char *entry_name, char *text)
 
 void cat_star_release_ocats(struct cat_star *cats)
 {
-    cat_star_release(cats, "");
+    cat_star_release(cats, "cat_star_release_ocats");
 }
 
 void cat_star_release_cat_star(struct cat_star *cats)
@@ -701,10 +701,10 @@ d3_printf("making cats\n");
             cat_star_ref(cats, "do_star_edit"); // try this
 
 			if (make_std) {
-                gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTD;
+                gs->type = STAR_TYPE_APSTD;
 				cats->flags = CATS_TYPE_APSTD;
 			} else {
-                gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_SREF;
+                gs->type = STAR_TYPE_SREF;
 			}
 
 		} else {
@@ -717,7 +717,7 @@ d3_printf("making cats\n");
         cats->pos[POS_Y] = gs->y;
     }
 	if (make_std) {
-        gs->flags = (gs->flags & ~STAR_TYPE_MASK) | STAR_TYPE_APSTD;
+        gs->type = STAR_TYPE_APSTD;
 		star_make_std(cats);
 		gtk_widget_queue_draw(window);
 		return;
@@ -731,7 +731,7 @@ d3_printf("making cats\n");
 void star_edit_dialog(GtkWidget *window, GSList *found)
 {
 	GSList *sel;
-	sel = filter_selection(found, TYPE_MASK_CATREF, 0, 0);
+    sel = filter_selection(found, SELECT_CATREF, 0, 0);
 	if (sel == NULL) {
         if (modal_yes_no("This star type cannot be edited.\nConvert to field star?", NULL))
             do_edit_star(window, found, 0);
@@ -797,7 +797,7 @@ printf("wcs_clone 5\n"); fflush(NULL);
                 }
                 return;
             }
-            remove_stars(window, TYPE_MASK_ALL, 0);
+            remove_stars(window, STAR_TYPE_ALL, 0);
         }
     }
 d2_printf("staredit.add_star_from_catalog after remove_stars, set wcsset to WCS_INITIAL\n");

@@ -259,8 +259,7 @@ void aperture_stats(struct ccd_frame *fr, struct psf *psf, double x, double y, s
 
 	if (rs->all != 0.0) {
         rs->avg = rs->sum / rs->all;
-        double sigma2 = rs->sumsq * rs->all - rs->sum * rs->sum;
-        rs->sigma = (rs->all < 2) ? 0 : sqrt (sigma2) / (rs->all - 1.5);
+        rs->sigma = SIGMA(rs->sumsq, rs->sum, rs->all);
     }
     free(vals);
 }
@@ -548,8 +547,8 @@ int growth_curve(struct ccd_frame *fr, double x, double y, double grc[], int n)
     struct stats stats;
     double sky = get_sky(fr, s.x, s.y, &apdef, NULL, &stats, NULL, NULL);
 
-    auto_adjust_photometry_rings_for_binning(&apdef, fr);
-    double r1 = get_binned_r1(fr);
+//    auto_adjust_photometry_rings_for_binning(&apdef, fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(fr);
     double mflux = 1;
 
     int i;
@@ -850,10 +849,8 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
 
     d4_printf(">>>>peak: %.1f sat_limit: %.1f\n", s->aph.star_max, p->sat_limit);
 
-    if (s->aph.star < 3 * s->aph.star_err)
-        s->aph.flags |= AP_FAINT;
-    if (s->aph.star_max > p->sat_limit)
-        s->aph.flags |= AP_BURNOUT;
+    if (s->aph.star < 3 * s->aph.star_err) s->aph.flags |= AP_FAINT;
+    if (s->aph.star_max > p->sat_limit) s->aph.flags |= AP_BURNOUT;
 
 // clip to protect the logarithms
     if (s->aph.star < MIN_STAR)	s->aph.star = MIN_STAR;
@@ -1130,7 +1127,7 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
 {
 	g_return_val_if_fail(fr != NULL, -1);
 
-    double r1 = get_binned_r1(fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(fr);
 
     char *preamble = NULL;
 
@@ -1172,9 +1169,12 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
 
         char *name = NULL;
 
-		if (gs->s)
-            name = strdup(CAT_STAR(gs->s)->name);
-		else
+        if (gs->s) {
+            struct cat_star *cats = CAT_STAR(gs->s);
+            if (CATS_TYPE(cats) == CATS_TYPE_APSTAR)
+                name = strdup(CAT_STAR(gs->s)->name);
+        }
+        if (name == NULL)
             asprintf(&name, "x%.0fy%.0f", gs->x, gs->y);
 
         str_join_varg(&name, " (FWHM:%.1f peak:%.0f sky:%.1f)", FWHMSIG * s, peak, sky);
@@ -1264,7 +1264,7 @@ void print_star_measures(gpointer window, GSList *found)
 	if (found == NULL)
 		return;
 
-    double r1 = get_binned_r1(i_ch->fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(i_ch->fr);
 
 	gs = GUI_STAR(found->data);
 
@@ -1353,7 +1353,7 @@ void plot_sky_aperture(gpointer window, GSList *found)
 
     if (found == NULL) return;
 
-    double r1 = get_binned_r1(i_ch->fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(i_ch->fr);
 
 	gs = GUI_STAR(found->data);
 
@@ -1395,7 +1395,7 @@ void plot_sky_histogram(gpointer window, GSList *found)
 
     if (found == NULL) return;
 
-    double r1 = get_binned_r1(i_ch->fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(i_ch->fr);
 
 	gs = GUI_STAR(found->data);
 

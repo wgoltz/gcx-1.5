@@ -234,7 +234,7 @@ void wcsedit_refresh(gpointer window)
 
     // refresh gui stars
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
+    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs); // cat star is released before this
 
     gtk_widget_queue_draw(window);
 }

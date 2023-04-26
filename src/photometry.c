@@ -275,12 +275,9 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 		cats->pos[POS_YERR] = s.yerr * s.aph.star_err/s.aph.star;
 		cats->flags |= INFO_POS;
 
-        if (s.aph.flags & AP_STAR_SKIP)
-            cats->flags |= CPHOT_BADPIX;
-        if (s.aph.flags & AP_BURNOUT)
-            cats->flags |= CPHOT_BURNED;
-        if (s.aph.flags & AP_FAINT)
-            cats->flags |= CPHOT_FAINT;
+        if (s.aph.flags & AP_STAR_SKIP) cats->flags |= CPHOT_BADPIX;
+        if (s.aph.flags & AP_BURNOUT) cats->flags |= CPHOT_BURNED;
+        if (s.aph.flags & AP_FAINT) cats->flags |= CPHOT_FAINT;
 
 		cats->noise[NOISE_SKY] = s.aph.sky_err * s.aph.star_all / s.aph.star;
         cats->noise[NOISE_READ] = s.aph.rd_noise / s.aph.star;
@@ -516,7 +513,7 @@ static void stf_keep_good_phot(struct stf *stf)
 struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gsl, struct ccd_frame *fr)
 {
     // make cat star list from gui star list
-    GSList *apsl = gui_stars_of_type(gsl, TYPE_MASK_PHOT);
+    GSList *apsl = gui_stars_of_type(gsl, SELECT_PHOT);
     if (g_slist_length (apsl) == 0) {
 		err_printf_sb2(window, "in photometry.run_phot: No phot stars\n");
 		return  NULL;
@@ -545,7 +542,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
     // set up photometry params
     struct ap_params apdef;
     ap_params_from_par (&apdef);    
-    auto_adjust_photometry_rings_for_binning(&apdef, fr);
+//    auto_adjust_photometry_rings_for_binning(&apdef, fr);
 
     // create stf: should have same sort order as gui_star_list->sl
     struct stf *stf = build_stf_from_frame (wcs, asl, fr, &apdef);

@@ -89,8 +89,9 @@ struct gui_star *detect_guide_star(struct ccd_frame *fr, struct region *reg)
 	gs->x = src->s[gsi].x;
 	gs->y = src->s[gsi].y;
 	gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
-	gs->flags = STAR_TYPE_ALIGN;
-	gs->s = (struct star *)g_malloc(sizeof(struct star));
+//    GSTAR_SET_TYPE(gs, STAR_TYPE_ALIGN);
+    gs->type = STAR_TYPE_ALIGN;
+    gs->s = (struct star *)g_malloc(sizeof(struct star));
 	*STAR(gs->s) = src->s[gsi];
 	STAR(gs->s)->ref_count = 1;
 	release_sources(src);

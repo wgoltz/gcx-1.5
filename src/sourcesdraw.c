@@ -117,12 +117,12 @@ void gui_star_list_update_colors(struct gui_star_list *gsl)
 
 void get_gsl_binning_from_frame(struct gui_star_list *gsl, struct ccd_frame *fr)
 {
-    if (gsl) {
-        if (fr && (fr->exp.bin_x > 0) && (fr->exp.bin_x == fr->exp.bin_y))
-            gsl->binning = fr->exp.bin_x;
-        else
-            gsl->binning = 1;
-    }
+//    if (gsl) {
+//        if (fr && (fr->exp.bin_x > 0) && (fr->exp.bin_x == fr->exp.bin_y))
+//            gsl->binning = fr->exp.bin_x;
+//        else
+//            gsl->binning = 1;
+//    }
 }
 
 void auto_adjust_photometry_rings_for_binning(struct ap_params *ap, struct ccd_frame *fr)
@@ -286,17 +286,29 @@ static void set_foreground_color (cairo_t *cr, int color)
 	cairo_set_source_rgb (cr, colors[color].red, colors[color].green, colors[color].blue);
 }
 
+int gstar_type(struct gui_star *gs)
+{
+    unsigned flags = gs->flags & STAR_TYPE_ALL;
+    if (flags == 0) return -1;
+
+    int type = 0;
+    while ((1 << type) != flags) type++;
+
+    return type;
+}
+
 static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_list *gsl, double zoom)
 {
-	int type;
+
     double ix, iy, isz;
-    double size = gs->size / gsl->binning;
+    double size = gs->size; // / gsl->binning;
 
+    int type = gs->type;
 
-    type = gs->flags & STAR_TYPE_MASK;
+//    type = gs->flags & STAR_TYPE_ALL;
 
-	if (type > STAR_TYPES - 1)
-		type = STAR_TYPES - 1;
+//	if (type > STAR_TYPES - 1)
+//		type = STAR_TYPES - 1;
 
 	if (gs->flags & STAR_SELECTED)
 		set_foreground_color (cr, gsl->selected_color);
@@ -307,7 +319,7 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
     iy = (gs->y + 1) * zoom;
 
 	if (gsl->shape[type] == STAR_SHAPE_APHOT) {
-        isz = 2 * zoom / gsl->binning;
+        isz = 2 * zoom; // / gsl->binning;
 	} else if (gsl->shape[type] == STAR_SHAPE_BLOB) {
         isz = size; // gs->size;
 	} else {
@@ -405,7 +417,7 @@ static void draw_gui_star(struct gui_star *gs, GtkWidget *window)
     struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
     if (i_channel == NULL) return;
 
-    get_gsl_binning_from_frame(gsl, i_channel->fr);
+//    get_gsl_binning_from_frame(gsl, i_channel->fr);
 
     cairo_t *cr = gdk_cairo_create (darea->window);
 
@@ -431,7 +443,7 @@ static void draw_star_list(GSList *stars, GtkWidget *window)
     struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
     if (i_channel == NULL) return;
 
-    get_gsl_binning_from_frame(gsl, i_channel->fr);
+//    get_gsl_binning_from_frame(gsl, i_channel->fr);
 
     cairo_t *cr = gdk_cairo_create (darea->window);
 
@@ -457,7 +469,7 @@ void draw_sources_hook(GtkWidget *darea, GtkWidget *window, GdkRectangle *area)
     struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
     if (i_channel == NULL) return;
 
-    get_gsl_binning_from_frame(gsl, i_channel->fr);
+//    get_gsl_binning_from_frame(gsl, i_channel->fr);
 
 	gui_star_list_update_colors(gsl);
 
@@ -471,13 +483,13 @@ void draw_sources_hook(GtkWidget *darea, GtkWidget *window, GdkRectangle *area)
 	while (sl != NULL) {
         struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
-        double size = gs->size / gsl->binning;
+        double size = gs->size; // / gsl->binning;
 
 //        if (gs->flags & STAR_DELETED) {
 //            printf("draw_sources_hook star deleted\n"); fflush(NULL);
 //            continue;
 //        }
-        if (!(TYPE_MASK_GSTAR(gs) & gsl->display_mask))	continue;
+        if (! GSTAR_IN(gs, gsl->display_mask))	continue;
 
         int ix = (gs->x + 0.5) * geom->zoom;
         int iy = (gs->y + 0.5) * geom->zoom;
@@ -539,6 +551,7 @@ void find_stars_cb(gpointer window, guint action)
 	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
 
 //	d3_printf("find_stars_cb action %d\n", action);
+    wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
 	switch(action) {
 	case ADD_STARS_GSC:
@@ -559,8 +572,8 @@ void find_stars_cb(gpointer window, guint action)
 		clamp_double(&radius, 1.0, P_DBL(SD_GSC_MAX_RADIUS));
         add_stars_from_gsc(gsl, wcs, radius, P_DBL(SD_GSC_MAX_MAG), P_INT(SD_GSC_MAX_STARS));
 
-		gsl->display_mask |= TYPE_MASK_CATREF;
-		gsl->select_mask |= TYPE_MASK_CATREF;
+        gsl->display_mask |= SELECT_CATREF;
+        gsl->select_mask |= SELECT_CATREF;
 		break;
 	case ADD_STARS_TYCHO2:
 		if (i_ch == NULL || i_ch->fr == NULL)
@@ -600,8 +613,8 @@ void find_stars_cb(gpointer window, guint action)
 
 		free(csl);
 
-		gsl->display_mask |= TYPE_MASK_CATREF;
-		gsl->select_mask |= TYPE_MASK_CATREF;
+        gsl->display_mask |= SELECT_CATREF;
+        gsl->select_mask |= SELECT_CATREF;
 		break;
 	case ADD_STARS_DETECT:
 		if (i_ch == NULL || i_ch->fr == NULL)
@@ -645,7 +658,7 @@ void find_stars_cb(gpointer window, guint action)
 			} else {
 				gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 			}
-			gs->flags = STAR_TYPE_SIMPLE;
+            gs->type = STAR_TYPE_SIMPLE;
 
             gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 			gsl->sl = g_slist_prepend(gsl->sl, gs);
@@ -673,8 +686,8 @@ void find_stars_cb(gpointer window, guint action)
 			attach_star_list(gsl, window);
 		}
 		add_star_from_frame_header(i_ch->fr, gsl, wcs);
-		gsl->display_mask |= TYPE_MASK_CATREF;
-		gsl->select_mask |= TYPE_MASK_CATREF;
+        gsl->display_mask |= SELECT_CATREF;
+        gsl->select_mask |= SELECT_CATREF;
 		break;
 	case ADD_FROM_CATALOG:
 		add_star_from_catalog(window);
@@ -742,10 +755,12 @@ GSList *search_stars_near_point(struct gui_star_list *gsl, double x, double y, i
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
 
-        if (mask && (TYPE_MASK_GSTAR(gs) & mask) == 0) continue;
-        if (gs->flags & (STAR_HIDDEN | STAR_DELETED)) continue;
-        if ((TYPE_MASK_GSTAR(gs) & gsl->display_mask) == 0)	continue;
-        if ((TYPE_MASK_GSTAR(gs) & gsl->select_mask) == 0) continue;
+        if (gs->flags & (STAR_HIDDEN | STAR_DELETED | STAR_IGNORE)) continue;
+
+        if (mask && ! GSTAR_IN(gs, mask) ) continue;
+
+        if ( ! GSTAR_IN(gs, gsl->display_mask) ) continue;
+        if ( ! GSTAR_IN(gs, gsl->select_mask) ) continue;
 
 		if (star_near_point(gs, x, y)) {
 			ret_sl = g_slist_prepend(ret_sl, gs);
@@ -772,9 +787,10 @@ GSList *gui_stars_selection(struct gui_star_list *gsl, int type_mask)
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
 
-        if (type_mask && (TYPE_MASK_GSTAR(gs) & type_mask) == 0) continue;
-        if ((TYPE_MASK_GSTAR(gs) & gsl->display_mask) == 0)	continue;
-        if ((TYPE_MASK_GSTAR(gs) & gsl->select_mask) == 0) continue;
+//        if (type_mask && ! GSTAR_IN(gs, type_mask) ) continue;
+        if ( ! GSTAR_IN(gs, type_mask) ) continue;
+        if ( ! GSTAR_IN(gs, gsl->display_mask) ) continue;
+        if ( ! GSTAR_IN(gs, gsl->select_mask) ) continue;
 
         if (gs->flags & STAR_SELECTED) ret_sl = g_slist_prepend(ret_sl, gs);
 	}
@@ -793,7 +809,7 @@ GSList *gui_stars_of_type(struct gui_star_list *gsl, int type_mask)
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
 
-        if (!(TYPE_MASK_GSTAR(gs) & type_mask)) continue;
+        if ( ! GSTAR_IN(gs, type_mask) ) continue;
 
         ret_sl = g_slist_prepend(ret_sl, gs);
 	}
@@ -914,7 +930,7 @@ static void select_star_single(struct gui_star_list *gsl, struct gui_star *gsi, 
         struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
 
-        if (TYPE_MASK_GSTAR(gs) & type_mask) gs->flags &= ~STAR_SELECTED;
+        if (GSTAR_IN(gs, type_mask)) gs->flags &= ~STAR_SELECTED;
 
         if (gs == gsi) gs->flags |= STAR_SELECTED;
 	}
@@ -922,12 +938,11 @@ static void select_star_single(struct gui_star_list *gsl, struct gui_star *gsi, 
 
 static struct gui_star *get_pairable_star(GSList *sl)
 {
-	struct gui_star *gs=NULL;
 	while (sl != NULL) {
-		gs = GUI_STAR(sl->data);
-		if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF)
-		    && (!(gs->flags & STAR_HAS_PAIR)))
-			return gs;
+        struct gui_star *gs = GUI_STAR(sl->data);
+
+        if (GSTAR_IN(gs, SELECT_CATREF) && (!(gs->flags & STAR_HAS_PAIR))) return gs;
+
 		sl = g_slist_next(sl);
 	}
 	return NULL;
@@ -977,7 +992,7 @@ static void try_unmark_star(GtkWidget *window, GSList *found)
 		gs = GUI_STAR(sl->data);
         sl = g_slist_next(sl);
 
-//		if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) {
+//		if (TYPE_MASK_GSTAR(gs) & SELECT_FRSTAR) {
             remove_star(gsl, gs);
 //			break;
 //		}
@@ -1006,27 +1021,27 @@ static void try_attach_pair(GtkWidget *window, GSList *found)
 		return;
 	}
 
-	selection = gui_stars_selection(gsl, TYPE_MASK_ALL);
+    selection = gui_stars_selection(gsl, STAR_TYPE_ALL);
 
 	sl = found;
 	while (sl != NULL) {
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
-		if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) {
+        if (GSTAR_IN(gs, SELECT_CATREF)) {
 			/* try to find possible unpaired match first */
-			pair = filter_selection(selection, TYPE_MASK_FRSTAR, 0, STAR_HAS_PAIR);
+            pair = filter_selection(selection, SELECT_FRSTAR, 0, STAR_HAS_PAIR);
 			if (pair != NULL)
 				break;
-			pair = filter_selection(selection, TYPE_MASK_FRSTAR, 0, 0);
+            pair = filter_selection(selection, SELECT_FRSTAR, 0, 0);
 			if (pair != NULL)
 				break;
 		}
-		if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) {
+        if (GSTAR_IN(gs, SELECT_FRSTAR)) {
 			/* try to find possible unpaired match first */
-			pair = filter_selection(selection, TYPE_MASK_CATREF, 0, STAR_HAS_PAIR);
+            pair = filter_selection(selection, SELECT_CATREF, 0, STAR_HAS_PAIR);
 			if (pair != NULL)
 				break;
-			pair = filter_selection(selection, TYPE_MASK_CATREF, 0, 0);
+            pair = filter_selection(selection, SELECT_CATREF, 0, 0);
 			if (pair != NULL)
 				break;
 		}
@@ -1038,7 +1053,7 @@ static void try_attach_pair(GtkWidget *window, GSList *found)
 		return;
 	}
 
-	if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) {
+    if (GSTAR_IN(gs, SELECT_CATREF)) {
 		cat_gs = gs;
 		gs = GUI_STAR(pair->data);
 		g_slist_free(pair);
@@ -1074,7 +1089,7 @@ static void move_star(GtkWidget *window, GSList *found)
 		return;
 	}
 
-	selection = gui_stars_selection(gsl, TYPE_MASK_ALL);
+    selection = gui_stars_selection(gsl, STAR_TYPE_ALL);
 
 	if (g_slist_length(selection) != 1) {
 		error_beep();
@@ -1091,7 +1106,7 @@ static void move_star(GtkWidget *window, GSList *found)
 		gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
 
-		if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) {
+        if (GSTAR_IN(gs, SELECT_CATREF)) {
 
             if (gs->s == NULL) continue;
             if (CAT_STAR(gs->s)->flags & CATS_FLAG_ASTROMET) continue;
@@ -1126,7 +1141,7 @@ static void print_star(struct gui_star *gs)
 {
     d3_printf("gui_star x:%.1f y:%.1f size:%.1f flags %x\n", gs->x, gs->y, gs->size, gs->flags);
     if (gs->s) {
-        if (TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_CAT)) {
+        if (gs->type == STAR_TYPE_CAT) {
             struct cat_star *cats = CAT_STAR(gs->s);
 
             d3_printf("         ra:%.5f dec:%.5f mag:%.1f name %16s\n",
@@ -1164,7 +1179,7 @@ void plot_profile(GtkWidget *window, GSList *found)
     if (i_ch == NULL || i_ch->fr == NULL)
 		return;
 
-	selection = gui_stars_selection(gsl, TYPE_MASK_ALL);
+    selection = gui_stars_selection(gsl, STAR_TYPE_ALL);
 	if (found) {
 		ret = do_plot_profile(i_ch->fr, found);
 	} else if (selection) {
@@ -1322,9 +1337,9 @@ GSList *filter_selection(GSList *sl, guint type_mask, guint and_mask, guint or_m
 		sl = g_slist_next(sl);
 
 //        if (gs->flags & STAR_DELETED) continue;
-        if ( ((TYPE_MASK_GSTAR(gs) & type_mask) != 0) &&
-             ((and_mask & gs->flags) == and_mask) &&
-             ((or_mask | gs->flags) == or_mask) ) {
+printf("filter_selection: %d TYPE_MASK_GSTAR(gs) %08x type_mask %08x %d\n", gs->sort, TYPE_MASK_GSTAR(gs), type_mask, gstar_type(gs) );
+fflush(NULL);
+        if ( GSTAR_IN(gs, type_mask) && ((and_mask & gs->flags) == and_mask) && ((or_mask | gs->flags) == or_mask) ) {
             filter = g_slist_prepend(filter, gs);
         }
     }
@@ -1349,7 +1364,7 @@ static void do_sources_popup(GtkWidget *window, GtkWidget *star_popup,
 
 	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
-    selection = get_selection_from_window(GTK_WIDGET(window), TYPE_MASK_ALL);
+    selection = get_selection_from_window(GTK_WIDGET(window), STAR_TYPE_ALL);
 
 /* see if any stars under cursor are selected - if so, keep them in 'push'*/
 	sl = found;
@@ -1380,26 +1395,26 @@ static void do_sources_popup(GtkWidget *window, GtkWidget *star_popup,
 			//mkstdp = 1;
 			editp = 1;
 		}
-		if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF) {
+        if (GSTAR_IN(gs, SELECT_CATREF)) {
 
 			editp = 1;
 #if 0
 			mkstdp = 1;
-			if (TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_APSTD))
+            if (GSTAR_IS_TYPE(gs, STAR_TYPE_APSTD))
 				mkstdp = 0;
 #endif
 
 			/* see if we have a possible pair in the selection */
-			pair = filter_selection(selection, TYPE_MASK_FRSTAR, 0, 0);
+            pair = filter_selection(selection, SELECT_FRSTAR, 0, 0);
 			if (pair != NULL)
 				pairp = 1;
 			g_slist_free(pair);
 		}
-		if (TYPE_MASK_GSTAR(gs) & TYPE_MASK_FRSTAR) {
+        if (GSTAR_IN(gs, SELECT_FRSTAR)) {
 			unmarkp = 1;
 			/* see if we have a possible pair in the selection */
 			print_stars(window, selection);
-			pair = filter_selection(selection, TYPE_MASK_CATREF, 0, 0);
+            pair = filter_selection(selection, SELECT_CATREF, 0, 0);
 			if (pair != NULL)
 				pairp = 1;
 			g_slist_free(pair);
@@ -1459,7 +1474,7 @@ static void single_selection_gs(GtkWidget *window, struct gui_star *gs)
 {
 	GSList *selection = NULL;
 
-	selection = get_selection_from_window(GTK_WIDGET(window), TYPE_MASK_ALL);
+    selection = get_selection_from_window(GTK_WIDGET(window), STAR_TYPE_ALL);
 	if (selection != NULL) {
 		toggle_selection(window, selection);
 		g_slist_free(selection);
@@ -1475,7 +1490,7 @@ void gsl_unselect_all(GtkWidget *window)
 {
 	GSList *selection = NULL;
 
-    selection = get_selection_from_window(GTK_WIDGET(window), TYPE_MASK_ALL);
+    selection = get_selection_from_window(GTK_WIDGET(window), STAR_TYPE_ALL);
 	if (selection != NULL) {
 		toggle_selection(window, selection);
 		g_slist_free(selection);
@@ -1511,7 +1526,7 @@ static void single_selection(GtkWidget *window, GSList *stars)
 		gs = GUI_STAR(sl->data);
 	}
 //	gs->flags &= ~STAR_SELECTED;
-	selection = get_selection_from_window(GTK_WIDGET(window), TYPE_MASK_ALL);
+    selection = get_selection_from_window(GTK_WIDGET(window), STAR_TYPE_ALL);
 	toggle_selection(window, selection);
 	g_slist_free(selection);
 	gs->flags |= STAR_SELECTED;
@@ -1556,14 +1571,14 @@ static void detect_add_star(GtkWidget *window, double x, double y)
 		gs->y = s.y;
 		gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 
-		gs->flags = STAR_TYPE_USEL;
+        gs->type = STAR_TYPE_USEL;
 
         gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
 
 		gsl->display_mask |= TYPE_MASK(STAR_TYPE_USEL);
 //        gsl->select_mask |= TYPE_MASK(STAR_TYPE_USEL);
-        gsl->select_mask |= TYPE_MASK_ALL; // all star types
+        gsl->select_mask |= STAR_TYPE_ALL; // all star types
 
 		single_selection_gs(window, gs);
 	}
@@ -1577,7 +1592,7 @@ static char *sprint_star(struct gui_star *gs, struct wcs *wcs)
     if (gs->s) {
         struct cat_star *cats = CAT_STAR(gs->s);
 
-        if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF)) {
+        if (GSTAR_IN(gs, SELECT_CATREF)) {
             char *ras = degrees_to_hms_pr(cats->ra, 2);
             char *decs = degrees_to_dms_pr(cats->dec, 1);
             if (ras && decs) {
@@ -1698,7 +1713,7 @@ static void edit_star_hook(struct gui_star *gs, GtkWidget *window)
 {
     if (gs == NULL) return;
 
-    struct cat_star *cats = (TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_CAT)) ? CAT_STAR(gs->s) : NULL;
+    struct cat_star *cats = (gs->type == STAR_TYPE_CAT) ? CAT_STAR(gs->s) : NULL;
     if (cats == NULL) return;
 
     GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
@@ -1723,7 +1738,7 @@ static void show_star_data(GSList *found, GtkWidget *window)
 
     struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
-	filter = filter_selection(found, TYPE_MASK_ALL, STAR_SELECTED, 0);
+    filter = filter_selection(found, STAR_TYPE_ALL, STAR_SELECTED, 0);
 	if (filter != NULL) {
         buf = sprint_star(GUI_STAR(filter->data), wcs);
 		g_slist_free(filter);
@@ -1764,7 +1779,7 @@ gint sources_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer window)
 
         if (event->state & GDK_CONTROL_MASK) {
             d4_printf("ctrl-1\n");
-			filt = filter_selection(found, TYPE_MASK_FRSTAR, 0, 0);
+            filt = filter_selection(found, SELECT_FRSTAR, 0, 0);
 
             if ( filt == NULL )
                 detect_add_star(window, event->x, event->y);
@@ -1837,7 +1852,7 @@ void act_stars_edit (GtkAction *action, gpointer window)
 {
 	GSList *sl = NULL;
 
-	sl = get_selection_from_window(window, TYPE_MASK_ALL);
+    sl = get_selection_from_window(window, STAR_TYPE_ALL);
 	if (sl == NULL) {
 		err_printf_sb2(window, "No stars selected");
 		return;

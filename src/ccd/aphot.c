@@ -233,8 +233,7 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 
     rs->sigma = 0;
     if ((pmin != pmax) && (nring - nskipped > 1)) {
-        double sigma2 = sumsq * rs->used - sum * sum;
-        rs->sigma = (rs->used < 2) ? 0 : sqrt(sigma2) / (rs->used - 1.5);
+        rs->sigma = SIGMA(sumsq, sum, rs->used);
     }
 
 // walk the histogram and compute median
@@ -450,8 +449,10 @@ static double aperture_centroid(struct ccd_frame *fr, double r, double x, double
 			*cx = sx / sum;
 		if (cy)
 			*cy = sy / sum;
-		xw = sqrt(xsq / sum - sqr(sx/sum));
-		yw = sqrt(ysq / sum - sqr(sy/sum));
+        xw = SIGMA(xsq, sx, sum);
+        yw = SIGMA(ysq, sy, sum);
+//        xw = sqrt(xsq / sum - sqr(sx/sum));
+//        yw = sqrt(ysq / sum - sqr(sy/sum));
 		if (xw < 2)
 			xw = 2;
 		if (yw < 2)
@@ -475,24 +476,17 @@ static int ap_get_star(struct ccd_frame *fr, struct star *s, struct ap_params *p
 
     s->aph.tflux = aperture_flux(fr, p->r1, s->x, s->y, &s->aph.star_min, &s->aph.star_max, &s->aph.star_all, &fsq);
 
-//    double phnsq = fabs(s->aph.tflux - fr->exp.bias * s->aph.star_all) / fr->exp.scale; // total photon shot noise
-
     double phnsq  = fabs(s->aph.tflux - fr->exp.bias * s->aph.star_all) / fr->exp.scale; // total photon shot noise
     double flnsq = sqr(fr->exp.flat_noise) * fsq;
     double rdnsq = sqr(fr->exp.rdnoise) * s->aph.star_all;
-
-//    s->aph.flux_err = sqrt(sqr(fr->exp.rdnoise) * s->aph.star_all + phnsq + flnsq);
-//    s->aph.rd_noise = fr->exp.rdnoise * sqrt(s->aph.star_all);
 
     s->aph.flux_err = sqrt(phnsq + rdnsq + flnsq);
 
     s->aph.pshot_noise = sqrt(phnsq);
     s->aph.rd_noise = sqrt(rdnsq);
 
-    if (s->aph.star_max > p->sat_limit)
-        s->aph.flags |= AP_BURNOUT;
-    else if (s->aph.star_max > p->sat_limit / 2)
-        s->aph.flags |= AP_BRIGHT;
+    if (s->aph.star_max > p->sat_limit) s->aph.flags |= AP_BURNOUT;
+    else if (s->aph.star_max > p->sat_limit / 2) s->aph.flags |= AP_BRIGHT;
 
 //	d3_printf("flux %.4g pixels %.3f pshotn %.4f fluxerr %.4f flat %.4f\n", s->aph.tflux, 
 //		  s->aph.star_all, phn, s->aph.flux_err, sqrt(flnsq));

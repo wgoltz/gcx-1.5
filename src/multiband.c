@@ -1088,8 +1088,7 @@ void mbds_smags_from_cmag_avgs(GList *ofrs)
 
             if (acc->n > 2) {
                 double m = acc->m / acc->n;
-                double sigma2 = acc->m2 * acc->n - acc->m * acc->m;
-                double me = (acc->n < 2) ? 0 : sqrt(sigma2) / (acc->n - 1.5);
+                double me = SIGMA(acc->m2, acc->m, acc->n);
                 update_band_by_name(&ost->cats->smags, ost->bname[i], m, me);
             }
 

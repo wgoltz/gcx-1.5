@@ -609,8 +609,7 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 	}
 	if (n > 0) {
         if (avg) *avg = sum/n;
-        double sigma2 = sumsq * n - sum * sum;
-        if (sigma) *sigma = (n < 2) ? 0 : sqrt(sigma2)/(n - 1.5);
+        if (sigma) *sigma = SIGMA(sumsq, sum, n);
         if (merr) *merr = esum/n;
 	}
     if (min) *min = mi;

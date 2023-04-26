@@ -488,9 +488,11 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //                window_wcs->rot = 0;
 //            }
             if (havera && havedec) { // && havescale) {
-                printf("load_recipe_to_window wcsset = WCS_INITIAL\n"); fflush(NULL);
-                window_wcs->wcsset = WCS_INITIAL;
+//                printf("load_recipe_to_window wcsset = WCS_INITIAL\n"); fflush(NULL);
+//                window_wcs->wcsset = WCS_INITIAL;
+                window_wcs->flags |= WCS_HAVE_POS;
             }
+            if (WCS_HAVE_INITIAL(window_wcs)) window_wcs->wcsset = WCS_INITIAL;
 //        }
 	}
 
@@ -556,7 +558,7 @@ int load_gsc2_to_window(gpointer window, char *name)
 	}
 
 	if (ret >= 0) {
-//		remove_stars(window, TYPE_MASK_PHOT, 0);
+//		remove_stars(window, SELECT_PHOT, 0);
 		add_cat_stars_to_window(window, csl, ret);
 	}
 	return ret;

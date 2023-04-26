@@ -420,42 +420,25 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
 	g_return_if_fail(fr != NULL);
 	g_return_if_fail(exp != NULL);
 
-//    if (fits_get_int(fr, P_STR(FN_BINX), &exp->bin_x) > 0) exp->datavalid = 1;
-//    if (fits_get_int(fr, P_STR(FN_BINY), &exp->bin_y) > 0) exp->datavalid = 1;
+    exp->bin_x = 1;
+    fits_get_int(fr, P_STR(FN_BIN_X), &exp->bin_x);
 
-    double eladu = P_DBL(OBS_DEFAULT_ELADU);
-    if (! P_INT(OBS_FORCE_DEFAULT)) {
-        if (fits_get_double(fr, P_STR(FN_ELADU), &eladu) > 0)
-            d1_printf("using eladu=%.1f from %s\n", eladu, P_STR(FN_ELADU));
-    }
-//        else {
-//            exp->scale = P_DBL(OBS_DEFAULT_ELADU);
-//            if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
-//                exp->scale = exp->scale / exp->bin_x;
-//            update = TRUE;
-//        }
-    exp->scale = eladu;
+    exp->bin_y = 1;
+    fits_get_int(fr, P_STR(FN_BIN_Y), &exp->bin_y);
 
-    double rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
-    if (! P_INT(OBS_FORCE_DEFAULT)) {
-        if (fits_get_double(fr, P_STR(FN_RDNOISE), &rdnoise) > 0)
-            d1_printf("using rdnoise=%.1f from %s\n", rdnoise, P_STR(FN_RDNOISE));
-    }
-//    else {
-//        exp->rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
-//        if ((exp->bin_x > 1) && (exp->bin_y == exp->bin_x))
-//            exp->rdnoise = exp->rdnoise / exp->bin_x;
-//        update = TRUE;
-//    }
-    exp->rdnoise = rdnoise;
+    exp->scale = P_DBL(OBS_DEFAULT_ELADU); // default eladu is unbinned
+    if (fits_get_double(fr, P_STR(FN_ELADU), &exp->scale) <= 0)
+        exp->scale /= exp->bin_x * exp->bin_y; // no eladu in frame: set scale to binned default eladu
+
+    exp->rdnoise = P_DBL(OBS_DEFAULT_RDNOISE); // default rdnoise is unbinned
+    if (fits_get_double(fr, P_STR(FN_RDNOISE), &exp->rdnoise) <= 0)
+        exp->rdnoise /= sqrt(exp->bin_x * exp->bin_y); // no rdnoise in frame: set rdnoise to binned default rdnoise
 
     exp->flat_noise = 0;
-    if (fits_get_double(fr, P_STR(FN_FLNOISE), &exp->flat_noise) > 0)
-		d1_printf("using flnoise=%.1f from %s\n", exp->flat_noise, P_STR(FN_FLNOISE));
+    fits_get_double(fr, P_STR(FN_FLNOISE), &exp->flat_noise);
 
 	exp->bias = 0;
-    if (fits_get_double(fr, P_STR(FN_DCBIAS), &exp->bias) > 0)
-        d1_printf("using dcbias=%.1f from %s\n", exp->bias, P_STR(FN_DCBIAS));
+    fits_get_double(fr, P_STR(FN_DCBIAS), &exp->bias);
 
 // temporary: catch wrong values
 //    if ((fabs(exp->scale - 0.95) < 0.01) && (fabs(exp->rdnoise - 2.23) < 0.01)) {
@@ -484,10 +467,12 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
 }
 
 /* push the noise data from exp into the header fields of fr */
-void noise_to_fits_header(struct ccd_frame *fr, struct exp_data *exp)
+void noise_to_fits_header(struct ccd_frame *fr)
 {
     char *line;
-    line = NULL; asprintf(&line, "%20.3f / ELECTRONS / ADU", exp->scale);
+    struct exp_data *exp = &fr->exp;
+
+    line = NULL; asprintf(&line, "%20.3f / ELECTRONS / ADU", exp->scale); // scale and rdnoise are binned
     if (line) fits_add_keyword(fr, P_STR(FN_ELADU), line), free(line);
 
     line = NULL; asprintf(&line, "%20.3f / READ NOISE IN ADUs", exp->rdnoise);

@@ -1116,7 +1116,7 @@ d2_printf("frame to channel\n");
 	}
 
 	gtk_window_set_title (GTK_WINDOW (window), fr->name);
-    remove_stars(window, TYPE_MASK_FRSTAR, 0);
+    remove_stars(window, SELECT_FRSTAR, 0);
 
     redraw_cat_stars(window);
 
@@ -1128,7 +1128,7 @@ d2_printf("frame to channel\n");
 // update gsl binning from this frame
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    get_gsl_binning_from_frame(gsl, fr);
+//    get_gsl_binning_from_frame(gsl, fr);
 
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 

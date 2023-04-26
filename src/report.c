@@ -331,7 +331,7 @@ void report_to_table(FILE *inf, FILE *outf, char *format)
 		if (opt & TAB_OPTION_RESSTATS && nres > 0) {
 			fprintf(outf, "# residuals min:%.3f max:%.3f avg:%.4f sd:%.4f\n",
 				minres, maxres, sumres / nres, 
-				sqrt((sumsqres - sqr(sumres) / nres) / nres));
+                SIGMA(sumsqres, sumres, nres));
 
 		}
         stf_free_all(stf, "report_to_table");

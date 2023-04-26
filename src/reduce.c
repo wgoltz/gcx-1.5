@@ -617,11 +617,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->flags & IMG_OP_BIAS) ) {
 
-            if ( ccdr->bias->fr && (sub_frames(imf->fr, ccdr->bias->fr) == 0) )
+            if ( ccdr->bias->fr && (sub_frames(imf->fr, ccdr->bias->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'BIAS FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'BIASSUB'");
+                noise_to_fits_header(imf->fr);
 
-            else
+            } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
@@ -636,10 +637,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->flags & IMG_OP_DARK) ) {
 
-            if ( ccdr->dark->fr && (sub_frames(imf->fr, ccdr->dark->fr) == 0) )
+            if ( ccdr->dark->fr && (sub_frames(imf->fr, ccdr->dark->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'DARK FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'DARKSUB'");
-            else
+                noise_to_fits_header(imf->fr);
+
+            } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
@@ -654,10 +657,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if (! (imf->flags & IMG_OP_FLAT) ) {
 
-            if ( ccdr->flat->fr && (flat_frame(imf->fr, ccdr->flat->fr) == 0) )
+            if ( ccdr->flat->fr && (flat_frame(imf->fr, ccdr->flat->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'FLAT FIELDED'");
                 fits_add_history(imf->fr, "'FLATTED'");
-            else
+                noise_to_fits_header(imf->fr);
+
+            } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
@@ -705,6 +710,8 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             lb = NULL; asprintf(&lb, "'ARITHMETIC P <- P * %.3f + %.3f'", m, a);
             if (lb) fits_add_history(imf->fr, lb), free(lb);
 
+            noise_to_fits_header(imf->fr);
+
         } else REPORT( " (already_done)" )
 
         imf->flags |= (ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD)) | IMG_DIRTY;
@@ -737,6 +744,8 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                     scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.median); // median poorly estimated for low signals
 //                    scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.avg);
             }
+
+            noise_to_fits_header(imf->fr);
 
         } else REPORT( " (already_done)" )
 
@@ -1438,7 +1447,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		b += imf->fr->exp.bias;
         rdnsq += sqr(imf->fr->exp.rdnoise);
 		fln += imf->fr->exp.flat_noise;
-		sc += imf->fr->exp.scale;
+        sc += imf->fr->exp.scale;
 	}
 	if (nf == 0) {
         err_printf("stack_frames: No frames to stack\n");
@@ -1515,7 +1524,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             fr->exp.bias = b / nf;
 
             if (fr->exp.bias != 0.0) scale_shift_frame(fr, 1.0, -fr->exp.bias);
-            noise_to_fits_header(fr, &(fr->exp));
+            noise_to_fits_header(fr);
 
             if (fr->name) free(fr->name);
             fr->name = strdup("stack result");
@@ -1595,8 +1604,8 @@ static GSList *detect_frame_stars(struct ccd_frame *fr)
 		} else {
 			gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 		}
-		gs->flags = STAR_TYPE_SIMPLE;
-		as = g_slist_prepend(as, gs);
+        gs->type = STAR_TYPE_SIMPLE;
+        as = g_slist_prepend(as, gs);
 	}
 	as = g_slist_reverse(as);
 	d3_printf("found %d alignment stars\n", src->ns);
@@ -1643,7 +1652,8 @@ d3_printf("load alignment stars");
             as = ccdr->align_stars;
             while (as != NULL) {
                 gs = GUI_STAR(as->data);
-                gs->flags = STAR_TYPE_ALIGN;
+                gs->type = STAR_TYPE_ALIGN;
+
                 as = g_slist_next(as);
             }
             ccdr->ops |= CCDR_ALIGN_STARS; // turn on alignment

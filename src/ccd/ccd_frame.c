@@ -167,6 +167,10 @@ struct ccd_frame *new_frame_fr(struct ccd_frame* fr, unsigned size_x, unsigned s
 
         new_fr->alignment_mask = NULL;
 	}
+
+    new_fr->fim.w = new_fr->w;
+    new_fr->fim.h = new_fr->h;
+
     return new_fr;
 
 err_exit:
@@ -180,10 +184,7 @@ err_exit:
 // the magic and geometry fields set. It assumes 16bits/pix.
 struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsigned size_y)
 {
-	struct ccd_frame *hd;
-    void *var = NULL;
-
-    hd = calloc(1, sizeof(struct ccd_frame) );
+    struct ccd_frame *hd = calloc(1, sizeof(struct ccd_frame) );
     if (hd == NULL)	return NULL;
 
     if (fr != NULL)
@@ -194,6 +195,7 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
     if (size_x != 0) hd->w = size_x;
     if (size_y != 0) hd->h = size_y;
 
+    void *var = NULL;
 	if (hd->nvar) { //we need to alloc space for variables
         var = malloc(hd->nvar * sizeof(FITS_row));
 		if (var == NULL) {
@@ -434,8 +436,7 @@ if (isnan(v))
 
     st->avg = sum / all;
 
-    double sigma2 = sumsq * all - sum * sum;
-    st->sigma = (all < 2) ? 0 : sqrt(sigma2) / (all - 1.5);
+    st->sigma = SIGMA(sumsq, sum, all);
 
     st->avgs[0] = 4.0 * st->avgs[0] / all;
     st->avgs[1] = 4.0 * st->avgs[1] / all;
@@ -481,16 +482,15 @@ if (isnan(v))
             }
         }
 // here ?
-        n += hdata[i];
-        sum += hdata[i] * bv;
-        sumsq += hdata[i] * bv * bv;
-
-        if (b > e) break;
-// or here ?
 //        n += hdata[i];
 //        sum += hdata[i] * bv;
 //        sumsq += hdata[i] * bv * bv;
 
+        if (b > e) break;
+// or here ?
+        n += hdata[i];
+        sum += hdata[i] * bv;
+        sumsq += hdata[i] * bv * bv;
 	}
 //	i = is;
     st->hist.cst = is;
@@ -500,9 +500,8 @@ if (isnan(v))
 
 	if (n != 0) {
 		st->cavg = sum / n;
-        double sigma2 = sumsq * n - sum * sum;
-        st->csigma = (n < 2) ? 0 : 2 * sqrt(sigma2) / (n - 1.5);
-	} else {
+        st->csigma = 2 * SIGMA(sumsq, sum, n);
+    } else {
 		st->cavg = st->avg;
 		st->csigma = st->sigma;
 	}
@@ -794,8 +793,12 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     // initialize hd
     hd->var = var;
     hd->nvar = nvar;
+
     hd->w = width;
     hd->h = height;
+    hd->fim.w = hd->w;
+    hd->fim.h = hd->h;
+
     hd->stats.zero = bz;
     hd->stats.scale = bs;
 

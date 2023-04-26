@@ -277,7 +277,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
         sl = gsl->sl;
         for (; sl != NULL; sl = sl->next) {
             gs = GUI_STAR(sl->data);
-            if (gs->s && (TYPE_MASK_GSTAR(gs) & TYPE_MASK_CATREF))
+            if (gs->s && (TYPE_MASK_GSTAR(gs) & SELECT_CATREF))
                 ssl = g_list_prepend(ssl, gs->s);
         }
     }

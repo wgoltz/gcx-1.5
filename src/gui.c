@@ -1340,9 +1340,9 @@ int window_auto_pairs(gpointer window)
     if (gsl->sl == NULL) return -1;
 
 	info_printf_sb2(window, "Looking for Star Pairs...");
-    while (gtk_events_pending ()) gtk_main_iteration ();
 
 	remove_pairs(window, 0);
+    // check initial wcs and ignore stars in gsl that are too far away
     int ret = auto_pairs(gsl);
 	if (ret < 1) {
 		info_printf_sb2(window, "%s\n", last_err());
@@ -1360,13 +1360,13 @@ void act_stars_auto_pairs (GtkAction *action, gpointer window)
 
 void act_stars_rm_all (GtkAction *action, gpointer window)
 {
-	remove_stars (window, TYPE_MASK_ALL, 0);
+    remove_stars (window, STAR_TYPE_ALL, 0);
 }
 
 void act_stars_rm_selected (GtkAction *action, gpointer window)
 {
-//    remove_stars(window, TYPE_MASK_ALL, STAR_SELECTED);
-    delete_stars(window, TYPE_MASK_ALL, STAR_SELECTED);
+//    remove_stars(window, STAR_TYPE_ALL, STAR_SELECTED);
+    delete_stars(window, STAR_TYPE_ALL, STAR_SELECTED);
 }
 
 void act_stars_toggle_detected (GtkAction *action, gpointer window)
@@ -1386,7 +1386,7 @@ void act_stars_toggle_field (GtkAction *action, gpointer window)
 
 void act_stars_toggle_catalog (GtkAction *action, gpointer window)
 {
-    draw_stars_of_type_window(window, TYPE_MASK_CATREF, toggle_draw);
+    draw_stars_of_type_window(window, SELECT_CATREF, toggle_draw);
 }
 
 void act_stars_rm_detected (GtkAction *action, gpointer window)

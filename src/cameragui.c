@@ -612,10 +612,11 @@ static int expose_indi_cb(GtkWidget *dialog)
         fits_get_double(fr, "FN_RDNOISE", &rdnoise);
 
         // adjust for binning
-        exp->scale = eladu / sqrt(exp->bin_x * exp->bin_y);
-        exp->rdnoise = rdnoise / sqrt(exp->bin_x * exp->bin_y);
+//        exp->scale = eladu / sqrt(exp->bin_x * exp->bin_y);
+        exp->scale = eladu; // / exp->bin_x * exp->bin_y;
+        exp->rdnoise = rdnoise; // / sqrt(exp->bin_x * exp->bin_y);
 
-        noise_to_fits_header(fr, exp);
+        noise_to_fits_header(fr);
 
         frame_stats(fr);
         frame_to_channel(fr, main_window, "i_channel");

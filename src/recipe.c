@@ -75,7 +75,8 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
             (gs->x < 0 || gs->x > w || gs->y < 0 || gs->y > h) ) continue;
 
 		if (flags & MKRCP_DET) {
-			if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_SIMPLE)) != 0) {
+//            if (GSTAR_IS_TYPE(gs, STAR_TYPE_SIMPLE)) {
+            if (gs->type == STAR_TYPE_SIMPLE) {
                 double ra, dec;
 				wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
 
@@ -94,7 +95,8 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 			}
 		}
 		if (flags & MKRCP_USER) {			
-			if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_USEL)) != 0) {
+// if (GSTAR_IS_TYPE(gs, STAR_TYPE_USEL)) {
+            if (gs->type == STAR_TYPE_USEL) {
                 double ra, dec;
 				wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
 
@@ -114,7 +116,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 		}
         if (gs->s) {
             if (flags & MKRCP_FIELD) {
-                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_SREF)) != 0) {
+                if (gs->type == STAR_TYPE_SREF) {
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe field");
@@ -124,7 +126,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                 }
             }
             if (flags & MKRCP_CAT) {
-                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_CAT)) != 0) {
+                if (gs->type == STAR_TYPE_CAT) {
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe cat");
@@ -134,7 +136,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                 }
             }
             if (flags & MKRCP_STD) {
-                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_APSTD)) != 0) {
+                if (gs->type == STAR_TYPE_APSTD) {
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe std");
@@ -143,7 +145,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                 }
             }
             if (flags & MKRCP_TGT) {
-                if ((TYPE_MASK_GSTAR(gs) & TYPE_MASK(STAR_TYPE_APSTAR)) != 0) {
+                if (gs->type == STAR_TYPE_APSTAR) {
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     if (target == NULL) target = cats->name;

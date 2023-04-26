@@ -2,6 +2,7 @@
 #define _IMGLIST_H_
 
 #include <gtk/gtk.h>
+#include "ccd/ccd.h"
 
 /* an image file we may or may not have already loaded into memory; 
    we generally keep a GList of those around */

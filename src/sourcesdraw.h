@@ -18,6 +18,19 @@ struct label {
 	char *label;	/* label of marker. freed when gui_star is deleted */
 };
 
+/* gui_star types */
+typedef enum {
+    STAR_TYPE_SIMPLE, /* simple star, with no additional info */
+    STAR_TYPE_SREF, /* field star (cat star) */
+    STAR_TYPE_APSTD, /* photometry standard star (cat star) */
+    STAR_TYPE_APSTAR, /* a photometry target star (cat star) */
+    STAR_TYPE_CAT, /* a generic object */
+    STAR_TYPE_USEL, /* simple star, marked by the user */
+    STAR_TYPE_ALIGN, /* a star used for frame alignment */
+    STAR_TYPE_MOVING, /* its moving between frames */
+    STAR_TYPES // 8
+} star_type;
+
 /* the structure that holds the source markers we display */
 struct gui_star {
     int sort; /* gui_star_list sorted by sort value, prepend new gs: sort(new gs) = sort(first gs) + 1 */
@@ -26,6 +39,7 @@ struct gui_star {
 	double y;
 	double size;	/* half-size of marker in pixels at zoom=1 */
     guint flags;	/* flags (selection, type, etc) */
+    star_type type;
 	struct label label;
 	struct gui_star *pair; /* pointer to this star's pair
 				* pair is unref'd when gui_star is deleted */
@@ -37,26 +51,18 @@ struct gui_star {
 			 * is deleted, star is unref'd */
 };
 
-#define STAR_TYPES 8
+/* gui_star type bits (8 bits) */
+#define STAR_TYPE_ALL 0x000000ff
 
-/* bit fields for the gui_star flags */
-#define STAR_TYPE_MASK 0x0f /* type field */
+#define TYPE_MASK(type) (1 << (type)) /* convert gui_star type to gui_star flag bit */
 
-#define STAR_TYPE_SIMPLE 0x00 /* simple star, with no additional info */
-#define STAR_TYPE_USEL 0x05 /* simple star, marked by the user */
-#define STAR_TYPE_MOVING 0x08 /* its moving between frames */
-/* cat stars below */
-#define STAR_TYPE_SREF 0x01 /* field star (cat star) */
-#define STAR_TYPE_APSTD 0x02 /* photometry standard star (cat star) */
-#define STAR_TYPE_APSTAR 0x03 /* a photometry target star (cat star) */
-#define STAR_TYPE_CAT 0x04 /* a generic object */
-#define STAR_TYPE_ALIGN 0x06 /* a star used for frame alignment */
-
+/* star flags */
 #define STAR_SELECTED 0x100 /* star is selected and should be rendered as such */
 #define STAR_SHOW_LABEL 0x200 /* star should hide it's label */
 #define STAR_HAS_PAIR 0x400 /* star is referenced by a pair */
 #define STAR_HIDDEN 0x800 /* star is hidden from display */
 #define STAR_DELETED 0x1000 /* discard star */
+#define STAR_IGNORE 0x2000 /* skip this star */
 
 
 #define DEFAULT_MAX_SIZE 100
@@ -72,7 +78,7 @@ struct gui_star_list {
 	int max_size; /* the max size of a complete star (label included)
 		       * in pixels, used to quickly sort out the stars to redraw
 		       * and check closely for selection */
-    int binning; /* adjust size for binned frames */
+//    int binning; /* adjust size for binned frames */
 	GSList *sl;	/* the star list. When gui_star_list is deleted, all elements of
 			 * sl are unref's and the list is freed */
 };
@@ -84,29 +90,39 @@ struct gui_star_list {
 #define STAR_SHAPE_DIAMOND 4
 #define STAR_SHAPE_CROSS 5
 
-/* return the mask for a star type */
-#define TYPE_MASK(type) (1 << (type))
 /* return the type mask from a gui_star pointer */
-#define TYPE_MASK_GSTAR(gs) (1 << (((gs)->flags) & STAR_TYPE_MASK))
+//#define TYPE_MASK_GSTAR(gs) (1 << (((gs)->flags) & STAR_TYPE_ALL))
+#define TYPE_MASK_GSTAR(gs) (((gs)->flags) & STAR_TYPE_ALL)
+
+//#define GSTAR_SET_TYPE(gs, type) ( (gs)->flags = ((gs)->flags & ~STAR_TYPE_ALL) | TYPE_MASK((type)) )
+//#define GSTAR_IS_TYPE(gs, type) ( ((gs)->flags & TYPE_MASK(type)) == TYPE_MASK(type) )
+//#define GSTAR_IN(gs, select) ( ((gs)->flags & (select)) != 0 )
+
+// these don't work
+//#define GSTAR_SET_TYPE(gs, type) ((gs)->type = (type))
+//#define GSTAR_IS_TYPE(gs, type) ((gs)->type == (type))
+#define GSTAR_IN(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
+#define GSTAR_TYPE(gs) ((gs)->type)
 
 /* type mask for catalog and reference stars */
-#define TYPE_MASK_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
+#define SELECT_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
 /* type mask for stars that are specific to a particular frame */
-#define TYPE_MASK_FRSTAR (TYPE_MASK(STAR_TYPE_SIMPLE)|TYPE_MASK(STAR_TYPE_USEL))
+#define SELECT_FRSTAR (TYPE_MASK(STAR_TYPE_SIMPLE)|TYPE_MASK(STAR_TYPE_USEL))
 /* type mask for stars that paticipate in photometry */
-#define TYPE_MASK_PHOT (TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
-/* all types */
-#define TYPE_MASK_ALL (0x0000ffff)
+#define SELECT_PHOT (TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
 /* align stars */
-#define TYPE_MASK_ALIGN (TYPE_MASK(STAR_TYPE_ALIGN))
+#define SELECT_ALIGN (TYPE_MASK(STAR_TYPE_ALIGN))
 
 /* macros for casting */
 #define GUI_STAR(x) ((struct gui_star *)(x))
 #define STAR(x) ((struct star *)(x))
 
+
 /* function prototypes */
 
 /* from sourcesdraw.c */
+//int gstar_type(struct gui_star *gs);
+
 void gsl_unselect_all(GtkWidget *window);
 extern void find_stars_cb(gpointer window, guint action);
 

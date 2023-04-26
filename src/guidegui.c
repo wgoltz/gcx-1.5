@@ -328,7 +328,8 @@ static void find_guide_star_cb( GtkWidget *widget, gpointer window)
 	}
 	if (sl != NULL) {
         gs = GUI_STAR(sl->data);
-        gs->flags = STAR_TYPE_ALIGN;
+//        GSTAR_SET_TYPE(gs, STAR_TYPE_ALIGN);
+        gs->type = STAR_TYPE_ALIGN;
 		gsl->display_mask |= TYPE_MASK(STAR_TYPE_ALIGN);
 		gsl->select_mask |= TYPE_MASK(STAR_TYPE_ALIGN);
 

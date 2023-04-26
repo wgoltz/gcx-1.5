@@ -44,7 +44,7 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *fim);
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) ;
 double obs_current_hour_angle(struct obs_data *obs);
 double obs_current_airmass(struct obs_data *obs);
-void noise_to_fits_header(struct ccd_frame *fr, struct exp_data *exp);
+void noise_to_fits_header(struct ccd_frame *fr);
 char *extract_catname(char *text, char **oname);
 struct cat_star *get_object_by_name(char *name);
 void wcs_to_fits_header(struct ccd_frame *fr);

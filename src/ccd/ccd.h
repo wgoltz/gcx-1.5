@@ -52,6 +52,18 @@
 #define PI 3.141592653589793
 #endif
 
+static inline double SIGMA(double sum2, double sum, double n)
+{
+    double sigma2 = sum2 * n - sum * sum;
+    double sigma = (n < 2 || sigma2 < 0) ? 0 : sqrt(sigma2) / (n - 1.5);
+//    if (sigma > 0)
+//        printf("SIGMA: %.f %f %f\n", n, sum / n, sigma);
+//    else
+//        printf("NULL sigma: n %.f\n", n);
+//    fflush(NULL);
+    return sigma;
+}
+
 #define FITS_HCOLS 80
 
 typedef char FITS_row[FITS_HCOLS];
@@ -150,6 +162,10 @@ struct im_stats {
 #define WCS_HAVE_SCALE 0x40 // have xinc and yinc
 #define WCS_EDITED 0x80 // updated values in wcsedit
 
+#define WCS_HAVE_INITIAL(wcs) \
+    (((wcs)->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID)) == (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+
+
 struct wcs{
 	int ref_count;
 	int wcsset;	/* non-zero when following are ok */
@@ -160,6 +176,8 @@ struct wcs{
 	double yrefpix;	/* y reference pixel */
 	double xinc;	/* x coordinate increment (deg) */
 	double yinc;	/* y coordinate increment (deg) */
+    int binning;
+    int w, h; /* frame size for bounds checking */
 	double rot;	/* rotation (deg)  (from N through E) */
 	double pc[2][2];/* linear matrix transform (used together with xinc, yinc
 			   when the full linear model is enabled.
@@ -349,7 +367,7 @@ struct ccd_frame {
 // structure describing a star photometrically (as a result of aperture photometry)
 struct ph_star {
 	double absmag; 	// absolute magnitude of star
-	double magerr; 	// estimated magnitude error (1sigma)
+    double magerr; 	// estimated magnitude error (sigma)
 			// excludes scintillation
 
 	double sky_all;	// total number of pixels contributing to the sky measurement
@@ -694,7 +712,8 @@ extern void range (double *v, double r);
 enum {
     DMS_DECI,
     DMS_SEXA
-} dms_type;
+};
+
 extern int dms_to_degrees(char *decs, double *deg);
 
 extern char *degrees_to_dms_pr(double deg, int prec);
