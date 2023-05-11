@@ -620,7 +620,6 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             if ( ccdr->bias->fr && (sub_frames(imf->fr, ccdr->bias->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'BIAS FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'BIASSUB'");
-                noise_to_fits_header(imf->fr);
 
             } else
                 REPORT( " (FAILED)" )
@@ -640,7 +639,6 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             if ( ccdr->dark->fr && (sub_frames(imf->fr, ccdr->dark->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'DARK FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'DARKSUB'");
-                noise_to_fits_header(imf->fr);
 
             } else
                 REPORT( " (FAILED)" )
@@ -660,7 +658,6 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             if ( ccdr->flat->fr && (flat_frame(imf->fr, ccdr->flat->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'FLAT FIELDED'");
                 fits_add_history(imf->fr, "'FLATTED'");
-                noise_to_fits_header(imf->fr);
 
             } else
                 REPORT( " (FAILED)" )
@@ -710,8 +707,6 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             lb = NULL; asprintf(&lb, "'ARITHMETIC P <- P * %.3f + %.3f'", m, a);
             if (lb) fits_add_history(imf->fr, lb), free(lb);
 
-            noise_to_fits_header(imf->fr);
-
         } else REPORT( " (already_done)" )
 
         imf->flags |= (ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD)) | IMG_DIRTY;
@@ -745,14 +740,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                    scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.avg);
             }
 
-            noise_to_fits_header(imf->fr);
-
         } else REPORT( " (already_done)" )
 
         imf->flags |= (ccdr->ops & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) | IMG_DIRTY;
     }
 
-//    noise_to_fits_header(imf->fr, &(imf->fr->exp)); // only for camera exposures
+    noise_to_fits_header(imf->fr);
 
     if ( ccdr->ops & IMG_OP_DEMOSAIC ) {
         REPORT( " demosaic" )
@@ -1419,7 +1412,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		 int (* progress)(char *msg, void *data), void *data)
 {
 	int nf = 0;
-    double b = 0.0, rdnsq = 0.0, fln = 0.0, sc = 0.0;
+    double b = 0, rdnsq = 0, fln = 0, sc = 0;
 
 //printf("reduce.stack_frames\n");
 /* calculate output w/h */
@@ -1446,7 +1439,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 		nf ++;
 		b += imf->fr->exp.bias;
         rdnsq += sqr(imf->fr->exp.rdnoise);
-		fln += imf->fr->exp.flat_noise;
+        fln += imf->fr->exp.flat_noise;
         sc += imf->fr->exp.scale;
 	}
 	if (nf == 0) {
@@ -1518,7 +1511,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 
         } else {
             do_stack_time(imfl, fr, progress, data);
-            fr->exp.rdnoise = sqrt(rdnsq) / nf / eff;
+            fr->exp.rdnoise = sqrt(rdnsq) / nf / eff;   // sum n frames
             fr->exp.flat_noise = fln / nf;
             fr->exp.scale = sc;
             fr->exp.bias = b / nf;
@@ -1688,9 +1681,12 @@ void refresh_wcs(gpointer window, struct ccd_frame *fr) {
     if (fr->imf) {
         struct wcs *imf_wcs = fr->imf->fim;
         if (imf_wcs->wcsset > fr->fim.wcsset) {
-            wcs_clone(&fr->fim, imf_wcs);
-            wcs_clone(window_wcs, imf_wcs);
+            if (imf_wcs->wcsset >= window_wcs->wcsset) {
+                wcs_clone(&fr->fim, imf_wcs);
+                wcs_clone(window_wcs, imf_wcs);
+            }
         } else {
+            window_wcs->flags |= WCS_HINTED;
             wcs_from_frame(fr, window_wcs);
         }
 
@@ -2259,6 +2255,7 @@ struct image_file* add_image_frame_to_list(struct image_file_list *imfl, struct 
 
     imf->filename = strdup(fr->name);
     imf->fr = fr;
+    fr->imf = imf;
 
     wcs_clone(imf->fim, &fr->fim);
     imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED;

@@ -152,7 +152,8 @@ int center_star(struct ccd_frame *fr, struct star *st, double max_ce)
     if (st->x < 0 || st->x > fr->w || st->y < 0 || st->y > fr->h) return -1;
 
 //printf("Star near %.4g %.4g ", st->x, st->y);
-    get_star_near (fr, (int) round(st->x), (int) round(st->y), 0, &sf);
+    if (get_star_near (fr, (int) round(st->x), (int) round(st->y), 0, &sf) < 0) return -1;
+
 //printf("found at %.4g %.4g ", sf.x, sf.y) ;
     if ( distance (st->x, st->y, sf.x, sf.y) > max_ce ) {
 		st->xerr = BIG_ERR;
@@ -680,13 +681,11 @@ int stf_centering_stats(struct stf *stf, struct wcs *wcs, double *rms, double *m
 /* photometry callback from menu; report goes to stdout */
 static void photometry_cb(gpointer window, guint action)
 {
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_chan == NULL || i_chan->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
         err_printf_sb2(window, "No frame - load a frame\n");
 		return;
     }
-
-    struct ccd_frame *fr = i_chan->fr;
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 
@@ -852,13 +851,11 @@ void act_phot_to_stdout (GtkAction *action, gpointer window)
  * a 'short' result (malloced string) is returned (NULL for an error) */
 char * phot_to_fd(gpointer window, FILE *fd, int format)
 {	
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_chan == NULL || i_chan->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
 		err_printf("No frame\n");
 		return NULL;
     }
-
-    struct ccd_frame *fr = i_chan->fr;
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {

@@ -46,6 +46,7 @@
 #include "interface.h"
 #include "wcs.h"
 #include "misc.h"
+#include "reduce.h"
 
 static void stop_autobutton_cb( GtkWidget *widget, gpointer data );
 static void wcs_activate_cb( GtkWidget *widget, gpointer data );
@@ -389,7 +390,8 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
         wcs->yref = dec;
     }
 
-    if (have_ra && have_dec) wcs->flags |= WCS_HAVE_POS;
+    if (have_ra && have_dec)
+        wcs->flags |= WCS_HAVE_POS;
 
     if (fabs(rot - wcs->rot) > 1.0 / 9900) {
         chg |= 4;
@@ -497,35 +499,40 @@ static int wcsedit_refresh_parent(gpointer dialog)
 }
 
 // set wcs validation
-static void wcs_set_validation(gpointer window, int valid)
+void wcs_set_validation(gpointer window, int valid)
 {
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-    struct ccd_frame *fr = i_chan->fr;
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
     struct wcs *frame_wcs = & fr->fim;
 
     struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 
     window_wcs->wcsset = valid;
     wcs_clone(frame_wcs, window_wcs); // copy window_wcs to frame
+    if (fr->imf) wcs_clone(fr->imf->fim, window_wcs);
 
-    wcs_to_fits_header(fr); // update frame header
+    if (valid == WCS_VALID) wcs_to_fits_header(fr); // update frame header
+
     wcsedit_refresh(window);
 }
 
 static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
 {
    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-   struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-   if (i_chan == NULL) return;
+   if (window == NULL) return;
 
-   struct ccd_frame *fr = i_chan->fr;
+   struct ccd_frame *fr = window_get_current_frame(window);
+   if (fr == NULL) return;
+
    struct wcs *frame_wcs = & fr->fim;
 
    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    wcs_clone(frame_wcs, window_wcs);
 
-    if ((frame_wcs->xref != INV_DBL) && (frame_wcs->yref != INV_DBL))
+    if (WCS_HAVE_INITIAL(window_wcs))
         wcs_set_validation(window, WCS_INITIAL);
+
+//    wcs_clone(frame_wcs, window_wcs);
 
     wcsedit_refresh_parent(dialog);
 }
@@ -597,11 +604,12 @@ void act_wcs_reload (GtkAction *action, gpointer window)
 {
 //printf("wcsedit.act_wcs_reload\n");
     struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (wcs == NULL) return;
 
-    if (wcs == NULL || i_chan == NULL || i_chan->fr == NULL) return;
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
 
-    wcs_from_frame(i_chan->fr, wcs);
+    wcs_from_frame(fr, wcs);
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);

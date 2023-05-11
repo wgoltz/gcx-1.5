@@ -168,9 +168,6 @@ struct ccd_frame *new_frame_fr(struct ccd_frame* fr, unsigned size_x, unsigned s
         new_fr->alignment_mask = NULL;
 	}
 
-    new_fr->fim.w = new_fr->w;
-    new_fr->fim.h = new_fr->h;
-
     return new_fr;
 
 err_exit:
@@ -500,7 +497,8 @@ if (isnan(v))
 
 	if (n != 0) {
 		st->cavg = sum / n;
-        st->csigma = 2 * SIGMA(sumsq, sum, n);
+// try this:
+        st->csigma = 2.8 * SIGMA(sumsq, sum, n); // guess
     } else {
 		st->cavg = st->avg;
 		st->csigma = st->sigma;
@@ -796,8 +794,6 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 
     hd->w = width;
     hd->h = height;
-    hd->fim.w = hd->w;
-    hd->fim.h = hd->h;
 
     hd->stats.zero = bz;
     hd->stats.scale = bs;
@@ -834,6 +830,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     int out_size = block_size >> (inbytes_per_pixel / sizeof(short));
 
     int nt = 10; // control printing of error messages for out of scale pixels
+    float f_sum = 0, r_sum = 0, g_sum = 0, b_sum = 0;
 
     unsigned j = 0;
     do {
@@ -845,7 +842,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
         int k = rd->fnread (v, 1, block_size, fp);
         if (k != block_size) {
             err_printf("data is short, got %d, expected %d!\n", k, block_size);
-			break;
+            break;
 		}
 
         int i;
@@ -892,21 +889,58 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 				}
 				break;
 			}
+
 			if (naxis == 3) {
 				if (j < frame) {
+                    r_sum += f;
                     *r_data++ = f;
 				}
 				else if (j < 2 * frame) {
+                    g_sum += f;
                     *g_data++ = f;
 				} else {
+                    b_sum += f;
                     *b_data++ = f;
 				}
 			} else {
+                f_sum += f;
                 *data++ = f;
 			}
             j++; if (j == all) break;
 		}
     } while (j < all);
+
+// try this
+    if (j < all) {
+        float favg = f_sum / j;
+        unsigned j0 = j;
+
+        if (naxis == 3) {
+            if (j < frame) {
+                favg = r_sum / j0;
+            } else if (j < 2 * frame) {
+                favg = g_sum / j0;
+            } else {
+                favg = b_sum / j0;
+            }
+        }
+
+        while (j++ < all) {
+            if (naxis == 3) {
+                if (j % frame == 0) favg = ((j == frame) ? g_sum : b_sum) / j0;
+
+                if (j < frame) {
+                    *r_data++ = favg;
+                } else if (j < 2 * frame) {
+                    *g_data++ = favg;
+                } else {
+                    *b_data++ = favg;
+                }
+            } else {
+                *data++ = favg;
+            }
+        }
+    }
 
 //	d3_printf("B");
 	if (naxis == 3) {
@@ -1462,7 +1496,9 @@ int sub_frames (struct ccd_frame *fr, struct ccd_frame *fr1)
 
 // compute noise data
 	fr->exp.bias = fr->exp.bias - fr1->exp.bias;
-	fr->exp.rdnoise = sqrt(sqr(fr->exp.rdnoise) + sqr(fr1->exp.rdnoise));
+// try this
+    fr->exp.rdnoise = sqrt(sqr(fr->exp.rdnoise) + sqr(fr1->exp.rdnoise));
+//    fr->exp.rdnoise = fr->exp.rdnoise + fr1->exp.rdnoise;
     fr->stats.statsok = 0;
 //	d3_printf("read noise is: %.1f %.1f\n", fr1->exp.rdnoise, fr->exp.rdnoise);
 	return 0;

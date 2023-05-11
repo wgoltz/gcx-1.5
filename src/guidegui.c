@@ -184,7 +184,7 @@ static GtkWidget *get_main_menu_bar(GtkWidget *window)
  * mouse button event callback. It is normally called after the callback in
  * sourcesdraw has decided not to act on the click
  */
-static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer data)
+static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer window)
 {
 //	printf("button press : %f %f state %08x button %08x \n",
 //	       event->x, event->y, event->state, event->button);
@@ -215,7 +215,7 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer d
 	if (event->button == 1) {
         if (event->state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)) return FALSE;
 
-        struct map_geometry *geom = g_object_get_data(G_OBJECT(data), "geometry");
+        struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
         if (geom == NULL)
             return FALSE;
 
@@ -228,35 +228,35 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer d
         reg.ys = y - 10;
 		reg.w = 20;
 		reg.h = 20;
-        struct image_channel *i_ch = g_object_get_data(G_OBJECT(data), "i_channel");
-        if (i_ch) {
-            struct gui_star *gs = detect_guide_star(i_ch->fr, &reg);
+        struct ccd_frame *fr = window_get_current_frame(window);
+        if (fr) {
+            struct gui_star *gs = detect_guide_star(fr, &reg);
             if (gs) {
-                struct gui_star_list *gsl = g_object_get_data(G_OBJECT(data), "gui_star_list");
+                struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
                 if (gsl != NULL)
                     remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_ALIGN), 0);
 
                 GSList *sl = NULL;
                 sl = g_slist_prepend(sl, gs);
-                add_gui_stars_to_window(data, sl);
+                add_gui_stars_to_window(window, sl);
 
                 info_printf("guide star at %.1f %.1f\n", gs->x, gs->y);
-                struct guider *guider = g_object_get_data(G_OBJECT(data), "guider");
+                struct guider *guider = g_object_get_data(G_OBJECT(window), "guider");
                 if (guider == NULL) {
                     guider = guider_new();
-                    g_object_set_data_full(G_OBJECT(data), "guider", guider, (GDestroyNotify)guider_release);
+                    g_object_set_data_full(G_OBJECT(window), "guider", guider, (GDestroyNotify)guider_release);
                 }
-                guider_set_target(guider, i_ch->fr, gs);
+                guider_set_target(guider, fr, gs);
                 gui_star_release(gs, "");
 
-                gtk_widget_queue_draw(data);
+                gtk_widget_queue_draw(window);
 
                 g_slist_free(sl);
             }
 //            show_region_stats(data, event->x, event->y);
         }
 	}
-    show_region_stats(data, event->x, event->y);
+    show_region_stats(window, event->x, event->y);
 	return TRUE;
 }
 
@@ -307,25 +307,23 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer d
 /* find a guide star from the image */
 /* if we have user stars, we use the first of them; otherwise we search for stars */
 static void find_guide_star_cb( GtkWidget *widget, gpointer window)
-{
-	struct image_channel *i_ch;
-	GSList *sl = NULL;
-	struct guider *guider;
-	struct gui_star *gs = NULL;
-	struct gui_star_list *gsl;
-	int found = 0;
+{	
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+
 	if (gsl != NULL)
 		remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_ALIGN), 0);
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_ch == NULL || i_ch->fr == NULL) {
-		err_printf("no image\n");
-		return;
-	}
+
+    GSList *sl = NULL;
 	if (gsl != NULL) {
 		sl = filter_selection(gsl->sl, TYPE_MASK(STAR_TYPE_USEL), 0, 0);
 	}
+
+    struct gui_star *gs;
+    int found = 0;
+
 	if (sl != NULL) {
         gs = GUI_STAR(sl->data);
 //        GSTAR_SET_TYPE(gs, STAR_TYPE_ALIGN);
@@ -339,7 +337,7 @@ static void find_guide_star_cb( GtkWidget *widget, gpointer window)
             found = 1;
         }
 	} else {
-		gs = detect_guide_star(i_ch->fr, NULL);
+        gs = detect_guide_star(fr, NULL);
 		if (gs) {
 			sl = g_slist_prepend(sl, gs);
 			add_gui_stars_to_window(window, sl);
@@ -352,13 +350,13 @@ static void find_guide_star_cb( GtkWidget *widget, gpointer window)
     if (sl)	g_slist_free(sl);
 
 	if (found) {
-		guider = g_object_get_data(G_OBJECT(window), "guider");
+        struct guider *guider = g_object_get_data(G_OBJECT(window), "guider");
 		if (guider == NULL) {
 			guider = guider_new();
 			g_object_set_data_full(G_OBJECT(window), "guider",
 						 guider, (GDestroyNotify)guider_release);
 		}
-		guider_set_target(guider, i_ch->fr, gs);
+        guider_set_target(guider, fr, gs);
 
 		gtk_widget_queue_draw(window);
 	}
@@ -652,32 +650,27 @@ void guide_adjust_mount( GtkWidget *window, struct guider *guider, struct tele_t
  */
 void guide_image_update(GtkWidget *window)
 {
-	double dx, dy, derr;
-	GtkWidget *run_button;
-	GtkWidget *calibrate_button;
-	GtkWidget *main_window;
-	struct tele_t *tele;
-	struct guider *guider;
-	struct image_channel *i_channel;
-	struct star s;
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(window), "image_window");
 
-	main_window = g_object_get_data(G_OBJECT(window), "image_window");
+    struct tele_t *tele = tele_find(main_window);
+    struct guider *guider = g_object_get_data(G_OBJECT(window), "guider");
+    struct ccd_frame *fr = window_get_current_frame(window);
 
-	guider = g_object_get_data(G_OBJECT(window), "guider");
-	tele = tele_find(main_window);
-	run_button = g_object_get_data(G_OBJECT(window), "guide_run");
-	calibrate_button = g_object_get_data(G_OBJECT(window), "guide_calibrate");
+    GtkWidget *run_button = g_object_get_data(G_OBJECT(window), "guide_run");
+    GtkWidget *calibrate_button = g_object_get_data(G_OBJECT(window), "guide_calibrate");
 
-	i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (tele == NULL || guider == NULL || ! i_channel->fr) {
+    if (tele == NULL || guider == NULL || fr == NULL) {
 		/* No guide-star yet */
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (run_button), 0);
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (calibrate_button), 0);
 		return;
-	}
-	if(! follow_star(i_channel->fr, 20, STAR(guider->gs->s), &s)) {
-		if (guide_star_position_centroid(i_channel->fr,
-					 s.x, s.y, &dx, &dy, &derr) >= 0) {
+    }
+
+    struct star s;
+    if (follow_star(fr, 20, STAR(guider->gs->s), &s) == 0) {
+
+        double dx, dy, derr;
+        if (guide_star_position_centroid(fr, s.x, s.y, &dx, &dy, &derr) >= 0) {
 			double delta_x = (s.x + dx) - (guider->xtgt + guider->xbias);
 			double delta_y = (s.y + dy) - (guider->ytgt + guider->ybias);
 			d1_printf("moved: (%f, %f) -> (%f, %f) = (%f, %f), err: %f\n",
@@ -711,32 +704,23 @@ void guide_image_update(GtkWidget *window)
  */
 gboolean gbox_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer window)
 {
-	struct map_cache *cache = NULL;
-	struct image_channel *i_channel;
-	struct guider *guider;
-	int s, x, y;
-	void *ret;
-
-	cache = g_object_get_data(G_OBJECT(window), "gbox_cache");
+    struct map_cache *cache = g_object_get_data(G_OBJECT(window), "gbox_cache");
 	if (cache == NULL) {
 		cache = new_map_cache(cache, GUIDE_BOX_SIZE * GUIDE_BOX_SIZE, MAP_CACHE_GRAY);
-		g_object_set_data_full(G_OBJECT(window), "gbox_cache",
-					 cache, (GDestroyNotify)release_map_cache);
+        g_object_set_data_full(G_OBJECT(window), "gbox_cache", cache, (GDestroyNotify)release_map_cache);
 	}
-	ret = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (ret == NULL) /* no channel */
-		return TRUE;
-	i_channel = ret;
-	if (i_channel->fr == NULL) /* no frame */
-		return TRUE;
-	guider = g_object_get_data(G_OBJECT(window), "guider");
 
-	if (P_INT(GUIDE_BOX_ZOOM) < 1)
-		P_INT(GUIDE_BOX_ZOOM) = 1;
-	if (P_INT(GUIDE_BOX_ZOOM) > 16)
-		P_INT(GUIDE_BOX_ZOOM) = 16;
-	s = GUIDE_BOX_SIZE / P_INT(GUIDE_BOX_ZOOM);
+    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (i_channel == NULL || i_channel->fr == NULL) return TRUE; /* no channel/frame */
 
+    struct guider *guider = g_object_get_data(G_OBJECT(window), "guider");
+
+    if (P_INT(GUIDE_BOX_ZOOM) < 1) P_INT(GUIDE_BOX_ZOOM) = 1;
+    if (P_INT(GUIDE_BOX_ZOOM) > 16) P_INT(GUIDE_BOX_ZOOM) = 16;
+
+    int s = GUIDE_BOX_SIZE / P_INT(GUIDE_BOX_ZOOM);
+
+    int x, y;
 	if (guider == NULL) {
 		x = i_channel->fr->w / 2;
 		y = i_channel->fr->h / 2;
@@ -744,12 +728,10 @@ gboolean gbox_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer windo
 		x = (guider->xtgt);
 		y = (guider->ytgt);
 	}
+
 	cache->cache_valid = 0; /* until we fix all update failures */
 	if (!cache->cache_valid) {
-		image_box_to_cache(cache, i_channel, P_INT(GUIDE_BOX_ZOOM),
-				   x - s / 2 - 1,
-				   y - s / 2 - 1,
-				   s+1, s+1);
+        image_box_to_cache(cache, i_channel, P_INT(GUIDE_BOX_ZOOM), x - s / 2 - 1, y - s / 2 - 1, s + 1, s + 1);
 		cache->x = - ((s / 2 + 2) * P_INT(GUIDE_BOX_ZOOM) - GUIDE_BOX_SIZE / 2);
 		cache->y = cache->x;
 	}

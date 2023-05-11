@@ -177,7 +177,6 @@ struct wcs{
 	double xinc;	/* x coordinate increment (deg) */
 	double yinc;	/* y coordinate increment (deg) */
     int binning;
-    int w, h; /* frame size for bounds checking */
 	double rot;	/* rotation (deg)  (from N through E) */
 	double pc[2][2];/* linear matrix transform (used together with xinc, yinc
 			   when the full linear model is enabled.
@@ -640,10 +639,8 @@ int fits_get_int(struct ccd_frame *fr, char *kwd, int *v);
 int sub_frames (struct ccd_frame *fr, struct ccd_frame *fr1);
 
 
-struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned,
-				  char *default_cfa);
-struct ccd_frame *read_fits_file_from_mem(const unsigned char *data, unsigned long len, char *fn,
-                                     int force_unsigned, char *default_cfa);
+struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned, char *default_cfa);
+struct ccd_frame *read_fits_file_from_mem(const unsigned char *data, unsigned long len, char *fn, int force_unsigned, char *default_cfa);
 
 extern float *get_color_plane(struct ccd_frame *fr, int plane_iter);
 extern float **get_color_planeptr(struct ccd_frame *fr, int plane_iter);

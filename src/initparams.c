@@ -584,10 +584,10 @@ void init_ptable(void)
 			    "Used to annotate frames' fits header, and for "
                 "scintillation calculations. (meters above sea level)");
 
-    add_par_double(OBS_TIME_ZONE, PAR_OBS_DEFAULTS, PREC_1, "timezone", "Time zone of observing site", 0);
+    add_par_double(OBS_TIME_ZONE, PAR_OBS_DEFAULTS, PREC_2, "timezone", "Time zone of observing site", 0);
     set_par_description(OBS_TIME_ZONE, "Correct obs times to UT if the observations have been recorded as local time. (hours)");
 
-    add_par_double(OBS_TIME_OFFSET, PAR_OBS_DEFAULTS, PREC_1, "timeoffset", "Offset of DATE_TIME to exposure centre", -0.5);
+    add_par_double(OBS_TIME_OFFSET, PAR_OBS_DEFAULTS, PREC_2, "timeoffset", "Offset of DATE_TIME to exposure centre", -0.5);
     set_par_description(OBS_TIME_OFFSET, "Correct frames DATE_TIME to get true center of exposure in units of exposure time. "
                         "i.e. if recorded time is end of exposure, -0.5: center of exposure, 0: start of exposure, 0.5");
 
@@ -1148,7 +1148,16 @@ void init_ptable(void)
     set_par_description(SYNTH_OVSAMPLE, "Oversampling factor when generating the reference psf.");
 
     add_par_double(SYNTH_SKYLEVEL, PAR_SYNTH, 0, "sky_level", "Sky Level", 0);
-    set_par_description(SYNTH_SKYLEVEL, "Sky level for synthesized frame.");
+    set_par_description(SYNTH_SKYLEVEL, "Sky level (cavg from reduced frame we are synthesizing).");
+
+    add_par_double(SYNTH_FLATNOISE, PAR_SYNTH, 0, "flat_noise", "Flat noise", 0);
+    set_par_description(SYNTH_FLATNOISE, "Flat noise (from reduced frame we are synthesizing).");
+
+    add_par_double(SYNTH_MEAN, PAR_SYNTH, 0, "gauss_mean", "gaussian mean", 0);
+    set_par_description(SYNTH_MEAN, "mean for gaussian component.");
+
+    add_par_double(SYNTH_SIGMA, PAR_SYNTH, 0, "gauss_sigma", "gaussian sigma", 0);
+    set_par_description(SYNTH_SIGMA, "sigma for gaussian component.");
 
     add_par_int(SYNTH_ADDNOISE, PAR_SYNTH, FMT_BOOL, "add_noise", "Add Noise", FALSE);
     set_par_description(SYNTH_ADDNOISE, "Add noise to synthesized frame.");

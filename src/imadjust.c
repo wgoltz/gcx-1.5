@@ -79,8 +79,7 @@ void channel_set_lut_from_gamma(struct image_channel *channel);
 static gint hist_motion_event_cb (GtkWidget *darea, GdkEventMotion *event, gpointer window)
 {
     int x, y;
-	GdkModifierType state;
-	static int ox, oy;
+    GdkModifierType state;
 
 	if (event->is_hint)
 		gdk_window_get_pointer (event->window, &x, &y, &state);
@@ -90,6 +89,8 @@ static gint hist_motion_event_cb (GtkWidget *darea, GdkEventMotion *event, gpoin
 		y = event->y;
 		state = event->state;
 	}
+
+    static int ox, oy;
 
 //	d3_printf("motion %d %d state %d\n", x - ox, y - oy, state);
 //	show_xy_status(window, 1.0 * x, 1.0 * y);
@@ -114,8 +115,7 @@ static gint hist_motion_event_cb (GtkWidget *darea, GdkEventMotion *event, gpoin
 		}
 */
         if (dx || dy) {
-			struct image_channel *channel;
-			channel = g_object_get_data(G_OBJECT(window), "i_channel");
+            struct image_channel *channel = g_object_get_data(G_OBJECT(window), "i_channel");
 			if (channel == NULL) {
 				err_printf("hist_motion_event_cb: no i_channel\n");
 				return FALSE;
@@ -123,9 +123,13 @@ static gint hist_motion_event_cb (GtkWidget *darea, GdkEventMotion *event, gpoin
             channel->avg_at = x / (1.0 * darea->allocation.width);
             drag_adjust_cuts(window, dx, dy);
         }
+    } else { // try this to set initial ox and oy
+        ox = x;
+        oy = y;
     }
-	ox = x;
-	oy = y;
+
+    ox = x;
+    oy = y;
 
 	return TRUE;
 }
@@ -424,24 +428,18 @@ void act_view_pan_cursor (GtkAction *action, gpointer window)
  * display image stats in status bar
  * does not use action or menu_item
  */
-void stats_cb(gpointer data, guint action)
+void stats_cb(gpointer window, guint action)
 {
-    struct image_channel *i_channel = g_object_get_data(G_OBJECT(data), "i_channel");
-    if (i_channel == NULL) return; /* no channel */
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return; /* no frame */
 
-    if (i_channel->fr == NULL) return; /* no frame */
-
-    if (! i_channel->fr->stats.statsok) frame_stats(i_channel->fr);
+    if (! fr->stats.statsok) frame_stats(fr);
 
     double exptime;
-    fits_get_double (i_channel->fr, P_STR(FN_EXPTIME), &exptime);
+    fits_get_double (fr, P_STR(FN_EXPTIME), &exptime);
 
-    info_printf_sb2(data, "JDcenter %.6f Exp: %.3g Size: %d x %d cavg:%.1f csigma:%.1f min:%.1f max:%.1f",
-        frame_jdate(i_channel->fr),
-        exptime,
-        i_channel->fr->w, i_channel->fr->h,
-		i_channel->fr->stats.cavg, i_channel->fr->stats.csigma,
-		i_channel->fr->stats.min, i_channel->fr->stats.max );
+    info_printf_sb2(window, "JDcenter %.6f Exp: %.3g Size: %d x %d cavg:%.1f csigma:%.1f min:%.1f max:%.1f",
+        frame_jdate(fr), exptime, fr->w, fr->h,	fr->stats.cavg, fr->stats.csigma, fr->stats.min, fr->stats.max );
 }
 
 /*
@@ -452,12 +450,7 @@ void show_region_stats(GtkWidget *window, double x, double y) // are x and y eve
 {
     char *buf = NULL;
 
-	struct rstats rs;
-
-    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
-    if (i_channel == NULL) return;
-
-    struct ccd_frame *fr = i_channel->fr;
+    struct ccd_frame *fr = window_get_current_frame(window);
     if (fr == NULL) return;
 
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
@@ -471,6 +464,8 @@ void show_region_stats(GtkWidget *window, double x, double y) // are x and y eve
 
     if (fr->pix_format == PIX_FLOAT) {
         float val = get_pixel_luminence(fr, xi, yi);
+
+        struct rstats rs;
         ring_stats(fr, x, y, 0, 10, 0xf, &rs, -HUGE, HUGE);
 
         if (fr->magic & FRAME_VALID_RGB) {
@@ -786,19 +781,16 @@ static void draw_histogram(GtkWidget *darea, GdkRectangle *area, struct image_ch
 
 gboolean histogram_expose_cb(GtkWidget *darea, GdkEventExpose *event, gpointer dialog)
 {
-	struct image_channel *channel;
-	GtkWidget *ckb;
-	double low, high;
 	int logh = 0;
 
-	channel = g_object_get_data(G_OBJECT(dialog), "i_channel");
+    struct image_channel *channel = g_object_get_data(G_OBJECT(dialog), "i_channel");
     if (channel == NULL) return 0 ; /* no channel */
 
-	ckb = g_object_get_data(G_OBJECT(dialog), "log_hist_check");
+    GtkWidget *ckb = g_object_get_data(G_OBJECT(dialog), "log_hist_check");
     if (ckb != NULL) logh = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(ckb));
 
-	low = channel->lcut - (channel->hcut - channel->lcut) * (1 / CUTS_FACTOR - 1) / 2;
-	high = channel->hcut + (channel->hcut - channel->lcut) * (1 / CUTS_FACTOR - 1) / 2;;
+    double low = channel->lcut - (channel->hcut - channel->lcut) * (1 / CUTS_FACTOR - 1) / 2;
+    double high = channel->hcut + (channel->hcut - channel->lcut) * (1 / CUTS_FACTOR - 1) / 2;;
 
 	draw_histogram(darea, &event->area, channel, low, high, logh);
 

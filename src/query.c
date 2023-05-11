@@ -1591,36 +1591,31 @@ static GList *remove_duplicates(GList *list) {
 
 static void cds_query(gpointer window, guint action)
 {
-	GtkWidget *logw;
-	struct wcs *wcs;
-	struct image_channel *i_ch;
-	double w, h;
-	GList *tsl = NULL;
-
 	g_return_if_fail(action < QUERY_CATALOGS);
 
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-
-	if (i_ch == NULL || i_ch->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
 		err_printf_sb2(window, "Load a frame or create a new one before loading stars");
 		error_beep();
 		return;
 	}
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		err_printf_sb2(window, "Set an initial WCS before loading stars");
 		error_beep();
 		return;
 	}
+
 /* not used
-	w = 60.0*fabs(i_ch->fr->w * wcs->xinc);
-	h = 60.0*fabs(i_ch->fr->h * wcs->yinc);
+    w = 60.0*fabs(fr->w * wcs->xinc);
+    h = 60.0*fabs(fr->h * wcs->yinc);
 
 
     clamp_double(&w, 1.0, 2 * P_DBL(QUERY_MAX_RADIUS));
 	clamp_double(&h, 1.0, 2 * P_DBL(QUERY_MAX_RADIUS));
 */
-	logw = create_query_log_window();
+    GtkWidget *logw = create_query_log_window();
     g_object_set_data_full(G_OBJECT(window), "cdsquery", logw, (GDestroyNotify)(gtk_widget_destroy));
 	g_object_set_data(G_OBJECT(logw), "im_window", window);
     g_signal_connect (G_OBJECT (logw), "delete_event", G_CALLBACK (delete_cdsquery), window);
@@ -1631,10 +1626,10 @@ static void cds_query(gpointer window, guint action)
 //	else
 
 /* something strange happening here */
-    tsl = query_catalog(action, wcs->xref, wcs->yref, logw_print, logw);
+    GList *tsl = query_catalog(action, wcs->xref, wcs->yref, logw_print, logw);
 /*
-    double xc = wcs->xrefpix + i_ch->fr->w / 2;
-    double yc = wcs->yrefpix + i_ch->fr->h / 2;
+    double xc = wcs->xrefpix + fr->w / 2;
+    double yc = wcs->yrefpix + fr->h / 2;
     double xpos, ypos;
     wcs_worldpos(wcs, xc, yc, &xpos, &ypos);
 

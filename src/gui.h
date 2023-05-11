@@ -38,7 +38,6 @@ struct image_channel {
 	int channel_changed; /* when anyhting is changed in the map, setting this */
 			 /* flag will ask for the map cache to be redrawn */
 	struct ccd_frame *fr; /* the actual image of the channel */
-    struct image_file *imf;
 	struct map_cache *cache; /* image cache */
 	int color;		/* display a color image */
     int x, y, width, height; /* pixel values for displayed area */
@@ -73,6 +72,9 @@ struct map_geometry {
 gboolean button_press_cb(GtkWidget *widget, GdkEventButton *event, gpointer scw);
 gboolean motion_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer scw);
 void get_screen_center(gpointer im_window, double *xc, double *yc);
+struct ccd_frame *window_get_current_frame(gpointer window);
+void window_get_current_frame_size(gpointer window, int *w, int *h);
+
 
 /* function prototypes */
 /* from showimage.c */

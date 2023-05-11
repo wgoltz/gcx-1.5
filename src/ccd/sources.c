@@ -481,26 +481,16 @@ int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_f
 // returns 0 if a star was found, negative otherwise
 int follow_star(struct ccd_frame *fr, double r, struct star *os, struct star *s)
 {
-	int ret;
-
 // try to locate the star
-	ret = locate_star(fr, os->x, os->y, r, 0.7*os->flux, s);
-	if (ret != 0)
-		return ret;
-	return 0;
+    return locate_star(fr, os->x, os->y, r, 0.7*os->flux, s);
 }
 
 // find a star near the specified point, with it's flux larger than min_flux
 // returns 0 if a star was found, negative otherwise
 int get_star_near(struct ccd_frame *fr, int x, int y, double min_flux, struct star *s)
 {
-	int ret;
-
 // try to locate the star
-	ret = locate_star(fr, x*1.0, y*1.0, 10.0, min_flux, s);
-	if (ret != 0)
-		return ret;
-	return 0;
+    return locate_star(fr, x*1.0, y*1.0, 10.0, min_flux, s);
 }
 
 // search for a place to insert star; return position

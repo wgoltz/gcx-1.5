@@ -176,23 +176,19 @@ static int star_first_moments(struct ccd_frame *fr, double x, double y,
 int guide_star_position_centroid(struct ccd_frame *fr, double x, double y, 
 				 double *dx, double *dy, double *derr)
 {
-	struct star s;
-    int ret = get_star_near(fr, x, y, 10.0, &s);
+    *dx = 0;
+    *dy = 0;
+    *derr = 0;
 
-	if (ret) {
-		*dx = 0;
-		*dy = 0;
-		*derr = 0;
-		return -1;
-	}
+	struct star s;
+    if (! get_star_near(fr, x, y, 10.0, &s)) return -1;
 
     double d = sqrt(sqr(x - s.x) + sqr(y - s.y));
     double cx = s.x, cy = s.y;
 
-    double nsq, snr;
+    gboolean xy_close_to_centroid = (d < 0.7 * P_INT(GUIDE_CENTROID_AREA));
 
-    ret = (d < 0.7 * P_INT(GUIDE_CENTROID_AREA));
-    if (ret) {
+    if (xy_close_to_centroid) {
         /* we recalculate the centroid using a fixed area around the target */
 
         int npix;
@@ -201,8 +197,9 @@ int guide_star_position_centroid(struct ccd_frame *fr, double x, double y,
         star_first_moments(fr, x, y, P_INT(GUIDE_CENTROID_AREA), &cx, &cy, &flux, &npix);
 //        nsq = fabs(s.flux - s.sky * npix) / fr->exp.scale + npix * sqr(fr->exp.rdnoise);
 
-        nsq = fabs(s.flux - s.sky * npix) / fr->exp.scale + npix * sqr(fr->exp.rdnoise);
-        snr = fabs(flux - s.sky * npix) / sqrt(nsq);
+        double nsq = fabs(s.flux - s.sky * npix) / fr->exp.scale + npix * sqr(fr->exp.rdnoise);
+        double snr = fabs(flux - s.sky * npix) / sqrt(nsq);
+
         *derr = 0.42 * s.fwhm / snr;
 
     } else {
@@ -210,16 +207,18 @@ int guide_star_position_centroid(struct ccd_frame *fr, double x, double y,
 
 //		snr = fabs(s.flux) / sqrt((fabs(s.flux)) / (fr->exp.scale) + s.npix * sqr(fr->exp.rdnoise));
 
-        nsq = fabs(s.flux) / fr->exp.scale + s.npix * sqr(fr->exp.rdnoise);
-        snr = fabs(s.flux) / sqrt(nsq);
+        double nsq = fabs(s.flux) / fr->exp.scale + s.npix * sqr(fr->exp.rdnoise);
+        double snr = fabs(s.flux) / sqrt(nsq);
 
         *derr = 4 * 0.42 * s.fwhm / snr;
         /* we quadruple the error to account for the fact that the star
          * does not use the same centroid area as the ref position */
     }
+
     *dx = cx - x;
     *dy = cy - y;
-    return ret;
+
+    return xy_close_to_centroid;
 
 //	if (d > 0.7 * P_INT(GUIDE_CENTROID_AREA)) {
 //		/* we just use the position from get_star, as it's not possible to use the same area for centroiding */

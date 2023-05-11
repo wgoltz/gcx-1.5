@@ -1013,8 +1013,8 @@ void multistar_subtract(double p[], void *rmodel)
 
 void do_fit_psf(gpointer window, GSList *found)
 {
-    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_ch == NULL || i_ch->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
 		err_printf_sb2(window, "No image\n");
 		error_beep();
 		return;
@@ -1029,11 +1029,11 @@ void do_fit_psf(gpointer window, GSList *found)
 
     struct stats stats;
 
-    float sky = get_sky(i_ch->fr, gs->x, gs->y, &apdef, NULL, &stats, NULL, NULL);
-    float flux = get_star(i_ch->fr, gs->x, gs->y, &apdef, &stats, NULL);
+    float sky = get_sky(fr, gs->x, gs->y, &apdef, NULL, &stats, NULL, NULL);
+    float flux = get_star(fr, gs->x, gs->y, &apdef, &stats, NULL);
 
     struct psf *patch = psf_new(30, 30);
-	extract_patch(i_ch->fr, patch, gs->x, gs->y);
+    extract_patch(fr, patch, gs->x, gs->y);
     plot_psf(patch);
 //    plot_sky_aperture(window, found);
 /*
@@ -1249,29 +1249,27 @@ void print_star_measures(gpointer window, GSList *found)
 	int nrp;
     char *name;
 	double peak, sky, flux, err;
-	struct image_channel *i_ch;
 	double A, s;
 
 	g_return_if_fail(window != NULL);
 
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_ch == NULL || i_ch->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
 		err_printf_sb2(window, "No image\n");
 		error_beep();
 		return;
 	}
 
-	if (found == NULL)
-		return;
+    if (found == NULL) return;
 
-    double r1 = P_DBL(AP_R1); // get_binned_r1(i_ch->fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(fr);
 
 	gs = GUI_STAR(found->data);
 
     nrp = sqr(4 * ceil(r1));
 	rpp = malloc(nrp * sizeof(struct rp_point));
 
-    if (radial_profile(i_ch->fr, gs->x, gs->y, 2 * r1, rpp, nrp, &peak, &flux, &sky, &err) <= 0) {
+    if (radial_profile(fr, gs->x, gs->y, 2 * r1, rpp, nrp, &peak, &flux, &sky, &err) <= 0) {
 		err_printf_sb2(window, "Bad star (too close to edge?)\n");
 		error_beep();
         free(rpp);
@@ -1336,16 +1334,12 @@ void plot_psf(struct psf *psf)
 }
 
 void plot_sky_aperture(gpointer window, GSList *found)
-{
-	struct psf *psf;
-	struct gui_star *gs;
-	struct image_channel *i_ch;
+{	
 //	struct stats rs;
 //	double sky, err, allp;
 
-
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_ch == NULL || i_ch->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
 		err_printf_sb2(window, "No image\n");
 		error_beep();
 		return;
@@ -1355,18 +1349,18 @@ void plot_sky_aperture(gpointer window, GSList *found)
 
     double r1 = P_DBL(AP_R1); // get_binned_r1(i_ch->fr);
 
-	gs = GUI_STAR(found->data);
+    struct gui_star *gs = GUI_STAR(found->data);
 
 //	sky = get_sky(i_ch->fr, gs->x, gs->y, &err, &rs, &psf, &allp);
 //	d3_printf("sky:%.1f err:%.3f %.0f/%0.f pixels\n", sky, err, rs.all, allp);
 //	aperture_multiply(i_ch->fr, psf, gs->x, gs->y);
 
-    psf = psf_new(3 + 2 * ceil(r1), 3 + 2 * ceil(r1));
+    struct psf *psf = psf_new(3 + 2 * ceil(r1), 3 + 2 * ceil(r1));
 	psf->dx = gs->x - floor(gs->x + 0.5);
     psf->dy = gs->y - floor(gs->y + 0.5);
     make_circular_aperture(psf, r1);
 
-	aperture_multiply(i_ch->fr, psf, gs->x, gs->y);
+    aperture_multiply(fr, psf, gs->x, gs->y);
 
 	plot_psf(psf);
 	psf_release(psf);
@@ -1375,19 +1369,10 @@ void plot_sky_aperture(gpointer window, GSList *found)
 
 void plot_sky_histogram(gpointer window, GSList *found)
 {
-	struct gui_star *gs;
-	struct rp_point *rpp = NULL;
-	int nrp;
-	FILE *dfp;
-	int pop, i;
-	double peak, sky, flux, err;
-	struct image_channel *i_ch;
-	struct rstats *rs;
-
 	g_return_if_fail(window != NULL);
 
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_ch == NULL || i_ch->fr == NULL) {
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
 		err_printf_sb2(window, "No image\n");
 		error_beep();
 		return;
@@ -1395,29 +1380,32 @@ void plot_sky_histogram(gpointer window, GSList *found)
 
     if (found == NULL) return;
 
-    double r1 = P_DBL(AP_R1); // get_binned_r1(i_ch->fr);
+    double r1 = P_DBL(AP_R1); // get_binned_r1(fr);
 
-	gs = GUI_STAR(found->data);
+    struct gui_star *gs = GUI_STAR(found->data);
 
-    nrp = sqr(4 * ceil(r1));
-	rpp = malloc(nrp * sizeof(struct rp_point));
+    int nrp = sqr(4 * ceil(r1));
+    struct rp_point *rpp = malloc(nrp * sizeof(struct rp_point));
 
-    if (radial_profile(i_ch->fr, gs->x, gs->y, 2 * r1, rpp, nrp, &peak, &flux, &sky, &err) <= 0) {
+    double peak, sky, flux, err;
+    if (radial_profile(fr, gs->x, gs->y, 2 * r1, rpp, nrp, &peak, &flux, &sky, &err) <= 0) {
 		err_printf_sb2(window, "Bad star (too close to edge?)\n");
 		error_beep();
         free(rpp);
 		return;
 	}
-	rs = malloc(sizeof(struct rstats));
-    ring_stats(i_ch->fr, gs->x, gs->y, P_DBL(AP_R2), P_DBL(AP_R3), ALLQUADS, rs, -HUGE, HUGE);
 
-	pop = open_plot(&dfp, NULL);
+    struct rstats *rs = malloc(sizeof(struct rstats));
+    ring_stats(fr, gs->x, gs->y, P_DBL(AP_R2), P_DBL(AP_R3), ALLQUADS, rs, -HUGE, HUGE);
+
+    FILE *dfp;
+    int pop = open_plot(&dfp, NULL);
 	if (pop >= 0) {
 		int s, e;
 		int w, m=0, all=0, iy=0;
 		double is, n;
 
-
+        int i;
 		for (i = 0; i < H_SIZE; i++) {
 			all += rs->h[i];
 		}

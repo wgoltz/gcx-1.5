@@ -196,42 +196,48 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
     if (fr_wcs->wcsset < WCS_VALID) {
 
-        if (fr_wcs->wcsset == WCS_INVALID) { // reload everything
-//            wcs_clone(fr_wcs, window_wcs);
+        if (fr_wcs->wcsset == WCS_INVALID) { // reload everything, ignore hints
+            fr_wcs->flags = 0;
 
             fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
             fits_local_params_to_fim(fr); // fill in from locals
-        }
-// have lost hinted flag
-//        if (window_wcs->flags & (WCS_EDITED | WCS_HINTED)) { // pickup stuff from previous frame/wcsedit
-            // whatelse needs to be copied?
-            if (window_wcs->flags & WCS_HAVE_POS && ((fr_wcs->flags & WCS_HAVE_POS) == 0)) {
+
+            // if unset: copy pos, scale and loc from window_wcs, if they are set there
+            if ((fr_wcs->flags & WCS_HAVE_POS) == 0 && (window_wcs->flags & WCS_HAVE_POS)) {
                 fr_wcs->xref = window_wcs->xref;
                 fr_wcs->yref = window_wcs->yref;
                 fr_wcs->flags |= WCS_HAVE_POS;
             }
-            if (window_wcs->flags & WCS_HAVE_SCALE && ((fr_wcs->flags & WCS_HAVE_SCALE) == 0)) {
+            if ((fr_wcs->flags & WCS_HAVE_SCALE) == 0 && (window_wcs->flags & WCS_HAVE_SCALE)) {
                 fr_wcs->xinc = window_wcs->xinc;
                 fr_wcs->yinc = window_wcs->yinc;
                 fr_wcs->flags |= WCS_HAVE_SCALE;
             }
-            if (window_wcs->flags & WCS_LOC_VALID && ((fr_wcs->flags & WCS_LOC_VALID) == 0)) {
+            if ((fr_wcs->flags & WCS_LOC_VALID) == 0 && (window_wcs->flags & WCS_LOC_VALID)) {
                 fr_wcs->lat = window_wcs->lat;
                 fr_wcs->lng = window_wcs->lng;
                 fr_wcs->flags |= WCS_LOC_VALID;
             }
-//        }
 
-        if (WCS_HAVE_INITIAL(fr_wcs)) fr_wcs->wcsset = WCS_INITIAL;
+            if (window_wcs->wcsset == WCS_VALID)
+                fr_wcs->rot = window_wcs->rot;
+
+            if (WCS_HAVE_INITIAL(fr_wcs)) {
+                fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
+                fr_wcs->flags |= WCS_HINTED; // not yet validated
+            }
+        }              
     }
 
-    wcs_clone(window_wcs, fr_wcs);
+    if (fr_wcs->wcsset > WCS_INVALID) { // && window_wcs->flags & WCS_HINTED) {
+        wcs_clone(window_wcs, fr_wcs);
+
+        if (imf_wcs)
+            wcs_clone(imf_wcs, fr_wcs);
+    }
 
 //    if (fr_wcs->wcsset == WCS_INITIAL) // ?
     window_wcs->flags |= WCS_HINTED;
-
-    if (imf_wcs && imf_wcs->wcsset < fr_wcs->wcsset)
-        wcs_clone(imf_wcs, fr_wcs);
 
     wcs_to_fits_header(fr);
 }
@@ -469,6 +475,7 @@ double gui_star_distance(struct gui_star *gs1, struct gui_star *gs2)
 	return sqrt(sqr(gs1->x - gs2->x) + sqr(gs1->y - gs2->y));
 }
 
+
 /* in-place rotation about origin (angle in degrees) */
 static void rot_vect(double *x, double *y, double a)
 {
@@ -525,12 +532,6 @@ void cat_change_wcs(GSList *sl, struct wcs *wcs)
 
 //printf("%d %s\n", gs->sort, cats->name); fflush(NULL);
             cats_xypix(wcs, cats, &(gs->x), &(gs->y));
-
-            // mark/unmark STAR_IGNORE according to distance of star from center of field (assume wcs is close)
-            if (fabs(gs->x / wcs->w - 0.5) > 0.5 || fabs(gs->y / wcs->h - 0.5) > 0.5)
-                gs->flags |= STAR_IGNORE;
-            else
-                gs->flags &= ~STAR_IGNORE;
 		}
 	}
 }
@@ -910,10 +911,9 @@ int window_fit_wcs(GtkWidget *window)
     if (buf) info_printf_sb2(window, buf), free(buf);
     cat_change_wcs(gsl->sl, window_wcs);
 
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-    if (i_chan == NULL || i_chan->fr == NULL) return 0;
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return -1;
 
-    struct ccd_frame *fr = i_chan->fr;
     struct wcs *frame_wcs = & fr->fim;
 
     wcs_clone(frame_wcs, window_wcs);

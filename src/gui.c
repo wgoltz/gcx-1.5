@@ -1440,3 +1440,25 @@ void show_xy_status(GtkWidget *window, double x, double y)
 	info_printf_sb2(window, "%.0f, %.0f", x, y);
 }
 
+struct ccd_frame *window_get_current_frame(gpointer window)
+{
+    struct image_channel *channel = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (channel == NULL || channel->fr == NULL) {
+        err_printf("no image\n");
+        return NULL;
+    }
+    return channel->fr;
+}
+
+void window_get_current_frame_size(gpointer window, int *w, int *h)
+{
+    *w = -1;
+    *h = -1;
+    struct image_channel *channel = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (channel == NULL || channel->fr == NULL) {
+        err_printf("no image\n");
+    } else {
+        *w = channel->fr->w;
+        *h = channel->fr->h;
+    }
+}

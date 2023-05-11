@@ -80,10 +80,10 @@ void update_fits_header_display(gpointer window)
 {
     GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "fits_window");
     if (dialog && gtk_widget_get_visible(dialog)) {
-        struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-        if (i_chan && i_chan->fr) {
-             update_fits_header_dialog(dialog, i_chan->fr);
-        }
+        struct ccd_frame *fr = window_get_current_frame(window);
+        if (fr == NULL) return;
+
+        update_fits_header_dialog(dialog, fr);
     }
 }
 

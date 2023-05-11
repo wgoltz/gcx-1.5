@@ -323,18 +323,14 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
     if (name == NULL) return -1;
 //printf("file_gui.load_recipe_to_window looking for '%s'\n", name);
 
-    struct image_channel *channel = g_object_get_data(G_OBJECT(window), "i_channel");
-    if (channel == NULL || channel->fr == NULL) {
-        err_printf("no image - cannot load/create dynamic recipe\n");
-        return -1;
-    }
+    struct ccd_frame *fr = window_get_current_frame(window);
 
     char *obj = NULL;
     if (object) {
         if (object[0])
             obj = strdup(object);
     } else {
-        obj = fits_get_string(channel->fr, P_STR(FN_OBJECT));
+        obj = fits_get_string(fr, P_STR(FN_OBJECT));
     }
 
 //    if (obj == NULL) err_printf("no object - cannot load/create dynamic recipe\n");
@@ -376,9 +372,9 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 
     if (strcmp(name, "_TYCHO_") == 0) { // figure out field size
 //        if (window_wcs->flags & WCS_HINTED) {
-//			stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w / 1800), 20);
+//			stf = make_tyc_stf(obj, fabs(100.0 * fr->w / 1800), 20);
 //		} else {
-//            stf = make_tyc_stf(obj, fabs(100.0 * channel->fr->w * window_wcs->xinc), 20);
+//            stf = make_tyc_stf(obj, fabs(100.0 * fr->w * window_wcs->xinc), 20);
 //		}
     } else {
 		/* just load the specified file */
@@ -428,14 +424,14 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         g_object_set_data_full (G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
     }
 
-//    struct wcs *frame_wcs = & channel->fr->fim;
+//    struct wcs *frame_wcs = & fr->fim;
 
     // update window_wcs from recipe file (just ra and dec?)
     if (window_wcs && window_wcs->wcsset < WCS_VALID) {
 //        if ((window_wcs->wcsset < WCS_VALID) || (window_wcs->flags & WCS_HINTED)) {
 //            //printf("filegui.load_rcp_to_window try wcs from rcp\n");
-//            window_wcs->xrefpix = channel->fr->w / 2;
-//            window_wcs->yrefpix = channel->fr->h / 2;
+//            window_wcs->xrefpix = fr->w / 2;
+//            window_wcs->yrefpix = fr->h / 2;
 
 //            window_wcs->equinox = 2000.0;
             double v;
@@ -466,7 +462,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //            if (window_wcs->wcsset < WCS_INITIAL) {
 //                double scale;
 
-//                havescale = (fits_get_double(channel->fr, P_STR(FN_SECPIX), &scale) > 0);
+//                havescale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
 //                if (! havescale)
 //                    havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
 //                if (! havescale) {
@@ -476,8 +472,8 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //                }
 
 //                if (havescale) {
-//                    if ((channel->fr->exp.bin_x > 1) && (channel->fr->exp.bin_y == channel->fr->exp.bin_x))
-//                        scale *= channel->fr->exp.bin_x;
+//                    if ((fr->exp.bin_x > 1) && (fr->exp.bin_y == fr->exp.bin_x))
+//                        scale *= fr->exp.bin_x;
 
 //                    window_wcs->xinc = - scale / 3600.0;
 //                    window_wcs->yinc = - scale / 3600.0;
@@ -492,7 +488,8 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //                window_wcs->wcsset = WCS_INITIAL;
                 window_wcs->flags |= WCS_HAVE_POS;
             }
-            if (WCS_HAVE_INITIAL(window_wcs)) window_wcs->wcsset = WCS_INITIAL;
+            if (WCS_HAVE_INITIAL(window_wcs))
+                wcs_set_validation(window, WCS_INITIAL);
 //        }
 	}
 

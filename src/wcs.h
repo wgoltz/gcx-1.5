@@ -43,5 +43,6 @@ int plate_solve(struct wcs *wcs, struct fit_pair fpairs[], int n, int model);
 
 // from wcsedit.c
 extern gpointer window_get_wcsedit(gpointer window);
+extern void wcs_set_validation(gpointer window, int valid);
 
 #endif

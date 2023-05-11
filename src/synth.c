@@ -250,92 +250,83 @@ mag = 0;
 /* menu callback */
 void act_stars_add_synthetic (GtkAction *action, gpointer window)
 {
-	struct image_channel *i_ch;
-	struct wcs *wcs;
-	struct gui_star_list *gsl;
-	struct gui_star *gs;
-	GList *ssl = NULL;
-	GSList *sl;
+    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (i_ch == NULL) return;
+// start with dark frame
+    struct ccd_frame *dark_fr = i_ch->fr;
+    if (dark_fr == NULL) return;
 
-	i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-	if (i_ch == NULL || i_ch->fr == NULL)
-		return;
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		err_printf_sb2(window, "Need a WCS to Create Synthetic Stars");
 		error_beep();
 		return;
 	}
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 //	if (gsl == NULL) {
 //		err_printf_sb2(window, "Need Some Catalog Stars");
 //		error_beep();
 //		return;
 //	}
+
+    GList *ssl = NULL;
     if (gsl) {
-        sl = gsl->sl;
-        for (; sl != NULL; sl = sl->next) {
-            gs = GUI_STAR(sl->data);
-            if (gs->s && (TYPE_MASK_GSTAR(gs) & SELECT_CATREF))
+        GSList *sl;
+        for (sl = gsl->sl; sl != NULL; sl = sl->next) {
+            struct gui_star *gs = GUI_STAR(sl->data);
+            if (gs->s && (GSTAR_IN(gs, SELECT_CATREF)))
                 ssl = g_list_prepend(ssl, gs->s);
         }
     }
 
-    struct ccd_frame *fr = i_ch->fr;
-
     if (P_INT(SYNTH_ADDNOISE)) {
 
-// assume start with a dark frame
+// start with a dark frame
 // assume largish counts so noise distribution is gaussian
 // monochrome image only
 
-        if (! fr->stats.statsok)
-            frame_stats(fr);
+        if (! dark_fr->stats.statsok) frame_stats(dark_fr);
 
 //        struct exp_data exp;
 //        rescan_fits_exp(fr, &exp);
+//        double dark_noise = 0;
+//        if (dark_fr->stats.csigma > dark_fr->exp.rdnoise)
+//            dark_noise = sqrt(sqr(dark_fr->stats.csigma) - sqr(dark_fr->exp.rdnoise));
 
-        double dark_adu, sky_adu, offset_adu;
+// dark value inferred from dark frame noise
+        double dark_adu = dark_fr->stats.csigma - dark_fr->exp.rdnoise;
 
-        if ((dark_adu = fr->stats.csigma - fr->exp.rdnoise) < 0) {
-            dark_adu = 0;
-            offset_adu = 0;
-        } else {
-            // dark value inferred from dark frame noise
-            offset_adu = fr->stats.cavg - dark_adu;
-        }
-        sky_adu = P_DBL(SYNTH_SKYLEVEL);
+        double sky_adu = P_DBL(SYNTH_SKYLEVEL);
+        double flat_noise = P_DBL(SYNTH_FLATNOISE);
+        int w = dark_fr->w;
+        int h = dark_fr->h;
 
-        struct ccd_frame *star_fr = new_frame_fr(fr, fr->w, fr->h);
+        struct ccd_frame *star_fr = new_frame_fr(dark_fr, w, h);
         if (ssl) synth_stars_to_frame(star_fr, wcs, ssl);
 
-        float *dat = fr->dat;
-        float *star_dat = star_fr->dat;
+        float *dark = dark_fr->dat;
+        float *star = star_fr->dat;
+
         int i;
-        for (i = 0; i < fr->w * fr->h; i++, dat++, star_dat++) {
+        for (i = 0; i < w * h; i++, dark++, star++) {
+            double poisson_adu = dark_adu + sky_adu + *star;
 
-            double signal_adu = dark_adu + sky_adu + *star_dat;
+            // add noise to poisson_adu
+            poisson_adu = gauss(poisson_adu, sqrt(poisson_adu + sqr(flat_noise * poisson_adu)));
 
-            double signal_el = signal_adu * fr->exp.scale;
+            double other_noise_adu = gauss(P_DBL(SYNTH_MEAN), P_DBL(SYNTH_SIGMA));
 
-            double noise_el = sqrt(signal_el) + fr->exp.rdnoise * fr->exp.scale;
-
-            // synthesize noise
-            double noise_adu = (gauss(signal_el, noise_el) - signal_el) / fr->exp.scale;
-
-            // residual noise from dark frame
-            double residual_adu = *dat - fr->stats.cavg;
-
-            *dat = offset_adu + signal_adu + residual_adu + noise_adu;
+            *dark = *dark + poisson_adu + other_noise_adu;
         }
+
         release_frame(star_fr, "act_stars_add_synthetic");
 
     } else {
-        synth_stars_to_frame(fr, wcs, ssl);
+        synth_stars_to_frame(dark_fr, wcs, ssl);
     }
 
-    frame_stats(fr);
+    frame_stats(dark_fr);
 	i_ch->channel_changed = 1;
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 	g_list_free(ssl);

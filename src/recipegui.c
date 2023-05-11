@@ -168,14 +168,6 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
 	g_return_if_fail(window != NULL);
 
-    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-
-    int w = 0, h = 0;
-	if (i_ch != NULL && i_ch->fr != NULL) {
-		w = i_ch->fr->w;
-		h = i_ch->fr->h;
-	}
-
     struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
 	if (wcs == NULL) {
 		err_printf_sb2(window, "Cannot create a recipe without a wcs");
@@ -201,8 +193,8 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     if (fn2 == NULL) fn2 = strdup(fn);
     free(fn);
 
-    FILE *rfp;
-	if ((rfp = fopen(fn2, "r")) != NULL) { /* file exists */
+    FILE *rfp = fopen(fn2, "r");
+    if (rfp != NULL) { /* file exists */
         char *qu = NULL;
 
         asprintf(&qu, "File %s exists\nOverwrite?", fn2);
@@ -232,6 +224,11 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     char *seq = named_entry_text(dialog, "seq_entry");
     int flags = get_recipe_flags(dialog);
 
+    struct ccd_frame *fr = window_get_current_frame(window);
+
+    int w = (fr) ? fr->w : 0;
+    int h = (fr) ? fr->h : 0;
+
     struct stf *rcp = create_recipe(gsl->sl, wcs, flags, comment, target, seq, w, h);
 
 	if (rcp == NULL) {
@@ -241,16 +238,16 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
 		stf_fprint(rfp, rcp, 0, 0);
 
         GList *stars = stf_find_glist(rcp, 0, SYM_STARS);
-		info_printf_sb2(window, "recipe", 10000,
-				"Wrote %d star(s) to %s\n", g_list_length(stars), fn2);
+        info_printf_sb2(window, "recipe", 10000, "Wrote %d star(s) to %s\n", g_list_length(stars), fn2);
 	}
+
 	fclose(rfp);
 	free(fn2);
     free(comment);
     free(target);
     free(seq);
-	if (rcp != NULL)
-		gtk_widget_hide(dialog);
+
+    if (rcp != NULL) gtk_widget_hide(dialog);
 }
 
 static void browse_cb( GtkWidget *widget, gpointer dialog)
