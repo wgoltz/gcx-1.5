@@ -1252,9 +1252,12 @@ int write_fits_frame(struct ccd_frame *fr, char *filename)
 
     if (is_zip_name(filename)) {
         char *fn = strdup(filename);
-        drop_dot_extension(fn);
+//        drop_dot_extension(fn);
+        fn[has_extension(fn)] = 0;
+
         int res = write_gz_fits_frame(fr, fn);
         free(fn);
+
         return res;
 
     } else

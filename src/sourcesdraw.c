@@ -549,21 +549,19 @@ void find_stars_cb(gpointer window, guint action)
 	int nstars;
 
     struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL && action != ADD_FROM_CATALOG) return;
 
 //	d3_printf("find_stars_cb action %d\n", action);
-    wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    wcs = window_get_wcs(window);
 
 	switch(action) {
 	case ADD_STARS_GSC:
-        if (fr == NULL) return;
-
-		wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-		if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-			err_printf_sb2(window, "Need an Initial WCS to Load GSC Stars");
-			error_beep();
-			return;
-		}
-		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+        if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
+            err_printf_sb2(window, "Need an Initial WCS to Load GSC Stars");
+            error_beep();
+            return;
+        }
+        gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 		if (gsl == NULL) {
 			gsl = gui_star_list_new();
 			attach_star_list(gsl, window);
@@ -577,14 +575,11 @@ void find_stars_cb(gpointer window, guint action)
 		break;
 
 	case ADD_STARS_TYCHO2:
-        if (fr == NULL) return;
-
-		wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-		if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-			err_printf_sb2(window, "Need an initial WCS to load Tycho2 stars");
-			error_beep();
-			return;
-		}
+        if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
+            err_printf_sb2(window, "Need an initial WCS to load Tycho2 stars");
+            error_beep();
+            return;
+        }
 		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 		if (gsl == NULL) {
 			gsl = gui_star_list_new();
@@ -619,8 +614,6 @@ void find_stars_cb(gpointer window, guint action)
 		break;
 
 	case ADD_STARS_DETECT:
-        if (fr == NULL)	return;
-
 		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 		if (gsl == NULL) {
 			gsl = gui_star_list_new();
@@ -675,14 +668,11 @@ void find_stars_cb(gpointer window, guint action)
 		break;
 
 	case ADD_STARS_OBJECT:
-        if (fr == NULL) return;
-
-		wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-		if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-			err_printf_sb2(window, "Need an Initial WCS to Load objects");
-			error_beep();
-			return;
-		}
+        if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
+            err_printf_sb2(window, "Need an Initial WCS to Load objects");
+            error_beep();
+            return;
+        }
 		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 		if (gsl == NULL) {
 			gsl = gui_star_list_new();
@@ -929,7 +919,7 @@ void redraw_cat_stars(GtkWidget *window)
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL) return;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
 
 	cat_change_wcs(gsl->sl, wcs);
@@ -1151,7 +1141,7 @@ static void move_star(GtkWidget *window, GSList *found)
 
     struct cat_star *cats = CAT_STAR(cat_gs->s);
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    wcs = window_get_wcs(window);
     if (wcs) wcs_worldpos(wcs, gs->x, gs->y, &cats->ra, &cats->dec);
 
 	gtk_widget_queue_draw(window);
@@ -1384,7 +1374,7 @@ static void do_sources_popup(GtkWidget *window, GtkWidget *star_popup,
 	g_slist_free (push);
 	push = NULL;
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    wcs = window_get_wcs(window);
 
     selection = get_selection_from_window(GTK_WIDGET(window), STAR_TYPE_ALL);
 
@@ -1751,7 +1741,7 @@ static void show_star_data(GSList *found, GtkWidget *window)
 
     if ( ! found ) return;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 
     filter = filter_selection(found, STAR_TYPE_ALL, STAR_SELECTED, 0);
 	if (filter != NULL) {

@@ -34,6 +34,8 @@ void pairs_fit_errxy(GSList *pairs, struct wcs *wcs, double *ra_err, double *de_
 void cats_xypix (struct wcs *wcs, struct cat_star *cats, double *xpix, double *ypix);
 void adjust_wcs(struct wcs *wcs, double dx, double dy, double ds, double dtheta);
 double pairs_fit(GSList *pairs, double *dxo, double *dyo, double *dso, double *dto);
+void refresh_wcs(gpointer window);
+struct wcs *window_get_wcs(gpointer window);
 
 /* from plate.c */
 

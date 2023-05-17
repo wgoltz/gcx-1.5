@@ -25,6 +25,7 @@ int drop_dot_extension(char *fn);
 int is_zip_name(char *fn);
 int has_extension(char *fn);
 int get_seq(char *fn);
+char *save_name(char *in_file_name, char *file_name_stub, int *seq);
 
 double angular_dist(double a, double b);
 void update_timer(struct timeval *tv_old);

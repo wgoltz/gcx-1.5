@@ -1600,7 +1600,7 @@ static void cds_query(gpointer window, guint action)
 		return;
 	}
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		err_printf_sb2(window, "Set an initial WCS before loading stars");
 		error_beep();

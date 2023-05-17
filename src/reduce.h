@@ -114,8 +114,6 @@ int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(ch
 void free_alignment_stars(struct ccd_reduce *ccdr);
 int imf_check_reload(struct image_file *imf);
 
-void refresh_wcs(gpointer window, struct ccd_frame *fr);
-
 /* from reducegui.h */
 
 void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_list *imfl);

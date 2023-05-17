@@ -38,6 +38,7 @@
 #include "tele_indi.h"
 #include "catalogs.h"
 #include "gui.h"
+#include "filegui.h"
 #include "obsdata.h"
 #include "params.h"
 
@@ -528,7 +529,7 @@ static int do_ckpoint_cmd (char *args, GtkWidget *dialog)
 		err_printf("No obs data for centering\n");
 		return OBS_CMD_ERROR;
 	}
-	wcs = g_object_get_data(G_OBJECT(imw), "wcs_of_window");
+    wcs = window_get_wcs(imw);
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		err_printf("No wcs for centering\n");
 		return OBS_CMD_ERROR;
@@ -780,7 +781,7 @@ static void browse_cb( GtkWidget *widget, gpointer dialog)
 	entry = g_object_get_data(G_OBJECT(dialog), "obs_list_fname");
 	g_return_if_fail(entry != NULL);
 
-    file_select_to_entry(dialog, entry, "Select Obslist File Name", "", "*.obs", 1);
+    file_select_to_entry(dialog, entry, "Select Obslist File Name", "", "*.obs", 1, F_OPEN);
 }
 
 

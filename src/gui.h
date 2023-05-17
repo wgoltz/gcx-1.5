@@ -75,7 +75,6 @@ void get_screen_center(gpointer im_window, double *xc, double *yc);
 struct ccd_frame *window_get_current_frame(gpointer window);
 void window_get_current_frame_size(gpointer window, int *w, int *h);
 
-
 /* function prototypes */
 /* from showimage.c */
 extern gboolean image_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer data);

@@ -508,7 +508,7 @@ static GtkWidget *create_skyview(gpointer window)
     g_signal_connect(G_OBJECT(g_object_get_data(G_OBJECT(skyview), "skyview_cancel")), "clicked", G_CALLBACK(skyview_cancel), skyview);
 
 	/* fill in defaults */
-	struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	if (wcs) {
 		static char buf[64];
 		snprintf(buf, 64, "%.5f, %.5f", wcs->xref, wcs->yref);

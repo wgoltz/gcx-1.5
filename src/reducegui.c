@@ -1260,7 +1260,7 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         ccdr->recipe = named_entry_text(dialog, "recipe_entry");
 
 		if (get_named_checkb_val(dialog, "phot_reuse_wcs_checkb")) {
-            struct wcs *wcs = g_object_get_data(G_OBJECT(ccdr->window), "wcs_of_window");
+            struct wcs *wcs = window_get_wcs(ccdr->window);
             if ( wcs && (wcs->wcsset == WCS_VALID) ) {
                 if (! ccdr->wcs) ccdr->wcs = wcs_new();
                 wcs_clone(ccdr->wcs, wcs);
@@ -1680,13 +1680,13 @@ static void show_align_cb(GtkAction *action, gpointer dialog)
 
 
 #define PROCESS_ENTRIES { \
-    {"dark_entry", "dark_browse", "dark_checkb", "Select dark frame", ""}, \
-    {"flat_entry", "flat_browse", "flat_checkb", "Select flat frame", ""}, \
-    {"bias_entry", "bias_browse", "bias_checkb", "Select bias frame", ""}, \
-    {"align_entry", "align_browse", "align_checkb", "Select alignment reference frame", ""}, \
-    {"recipe_entry", "recipe_browse", "recipe_checkb", "Select recipe file", ""}, \
-    {"badpix_entry", "badpix_browse", "badpix_checkb", "Select bad pixel file", ""}, \
-    {"output_file_entry", "output_file_browse", "output_file_checkb", "Select output file/dir", ""} \
+    {"dark_entry", "dark_browse", "dark_checkb", "Select dark frame", "", F_OPEN}, \
+    {"flat_entry", "flat_browse", "flat_checkb", "Select flat frame", "", F_OPEN}, \
+    {"bias_entry", "bias_browse", "bias_checkb", "Select bias frame", "", F_OPEN}, \
+    {"align_entry", "align_browse", "align_checkb", "Select alignment reference frame", "", F_OPEN}, \
+    {"recipe_entry", "recipe_browse", "recipe_checkb", "Select recipe file", "", F_OPEN}, \
+    {"badpix_entry", "badpix_browse", "badpix_checkb", "Select bad pixel file", "", F_OPEN}, \
+    {"output_file_entry", "output_file_browse", "output_file_checkb", "Select output file/dir", "", F_SAVE} \
 }
 
 enum {
@@ -1706,6 +1706,7 @@ struct {
     char *checkb;
     char *message;
     char *name;
+    int open_or_save;
 } process_entry[] = PROCESS_ENTRIES;
 
 
@@ -1718,7 +1719,8 @@ static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer dialog)
         if (wid_browse == g_object_get_data(G_OBJECT(dialog), process_entry[i].browse)) {
             wid_entry = g_object_get_data(G_OBJECT(dialog), process_entry[i].entry);
             g_return_if_fail(wid_entry != NULL);
-            file_select_to_entry (dialog, wid_entry, process_entry[i].message, process_entry[i].name, "*", 1);
+            file_select_to_entry (dialog, wid_entry, process_entry[i].message,
+                                  process_entry[i].name, "*", 1, process_entry[i].open_or_save);
             break;
         }
     }

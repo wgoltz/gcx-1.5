@@ -418,7 +418,6 @@ GtkWidget* create_camera_control (void)
   GtkWidget *label33;
   GtkObject *cooler_tempset_spin_adj;
   GtkWidget *cooler_tempset_spin;
-  GtkWidget *cooler_temp_entry;
   GtkWidget *table24;
   GtkWidget *label13;
   GtkWidget *vbox24;
@@ -447,8 +446,7 @@ GtkWidget* create_camera_control (void)
   GtkWidget *label86;
   GtkWidget *statuslabel;
 
-  GtkWidget *adjustment;
-  GtkWidget *entry;
+  GtkObject *adjustment;
   GtkWidget *hbox;
   GtkWidget *vbox;
   GtkWidget *table;
@@ -501,10 +499,10 @@ GtkWidget* create_camera_control (void)
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "img_size_combo_box", item, (GDestroyNotify) g_object_unref);
 
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX(item), "Full Size");
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX(item), "Half Size");
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX(item), "Quarter Size");
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX(item), "Eighth Size");
+  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Full Size");
+  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Half Size");
+  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Quarter Size");
+  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Eighth Size");
   gtk_combo_box_set_active(GTK_COMBO_BOX (item), 0);
 
   TABLE_ATTACH(table, item, 1, 0, 1, 1);
@@ -710,9 +708,9 @@ GtkWidget* create_camera_control (void)
   item = gtk_combo_box_entry_new_text ();
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "obs_list_fname_combo", item, (GDestroyNotify) g_object_unref);
-  entry = GTK_WIDGET (GTK_BIN (item)->child);
-  g_object_ref (entry);
-  g_object_set_data_full (G_OBJECT (camera_control), "obs_list_fname", entry, (GDestroyNotify) g_object_unref);
+  item = GTK_WIDGET (GTK_BIN (item)->child);
+  g_object_ref (item);
+  g_object_set_data_full (G_OBJECT (camera_control), "obs_list_fname", item, (GDestroyNotify) g_object_unref);
 
   TABLE_ATTACH(table, item, 1, 0, 1, 1);
 
@@ -775,17 +773,14 @@ GtkWidget* create_camera_control (void)
   hbox = gtk_hbox_new (FALSE, 0);
   gtk_box_pack_start (GTK_BOX (vbox), hbox, TRUE, TRUE, 0);
 
-  item = gtk_combo_box_entry_new_text ();
+  item = gtk_entry_new ();
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "file_combo", item, (GDestroyNotify) g_object_unref);
-  entry = GTK_WIDGET (GTK_BIN(item)->child);
-  g_object_ref (entry);
-  g_object_set_data_full (G_OBJECT (camera_control), "file_entry", entry, (GDestroyNotify) g_object_unref);
-  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, TRUE, 0);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_file_entry", item, (GDestroyNotify) g_object_unref);
+  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);
 
   item = gtk_button_new_with_label (" ... ");
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "file_browse", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "exp_file_browse", item, (GDestroyNotify) g_object_unref);
   gtk_container_set_border_width (GTK_CONTAINER (item), 2);
   gtk_widget_set_tooltip_text (item, "Browse");
   gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, TRUE, 0);
@@ -857,7 +852,7 @@ GtkWidget* create_camera_control (void)
   gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (item), "Preview");
   gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (item), "Save");
   gtk_combo_box_text_append_text (GTK_COMBO_BOX_TEXT (item), "Stream");
-  gtk_combo_box_set_active (GTK_COMBO_BOX_TEXT (item), 0);
+  gtk_combo_box_set_active (GTK_COMBO_BOX (item), 0);
   gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
   item = gtk_toggle_button_new_with_label("Run");
@@ -912,13 +907,13 @@ GtkWidget* create_camera_control (void)
                     (GtkAttachOptions) (0), 0, 0);
   gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (cooler_tempset_spin), TRUE);
 
-  cooler_temp_entry = gtk_entry_new ();
-  g_object_ref (cooler_temp_entry);
-  g_object_set_data_full (G_OBJECT (camera_control), "cooler_temp_entry", cooler_temp_entry, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (cooler_temp_entry);
-  gtk_table_attach (GTK_TABLE (table8), cooler_temp_entry, 0, 1, 1, 2, (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
+  item = gtk_entry_new ();
+  g_object_ref (item);
+  g_object_set_data_full (G_OBJECT (camera_control), "cooler_temp_entry", item, (GDestroyNotify) g_object_unref);
+  gtk_widget_show (item);
+  gtk_table_attach (GTK_TABLE (table8), item, 0, 1, 1, 2, (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
                     (GtkAttachOptions) (0), 0, 0);
-  gtk_editable_set_editable (GTK_EDITABLE (cooler_temp_entry), FALSE);
+  gtk_editable_set_editable (GTK_EDITABLE (item), FALSE);
 
   table24 = gtk_table_new (2, 2, FALSE);
   g_object_ref (table24);
@@ -2478,7 +2473,7 @@ GtkWidget* create_image_processing (void)
  item = gtk_entry_new ();
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "output_file_entry", item, (GDestroyNotify) g_object_unref);
- gtk_widget_set_tooltip_text (item, "Output file name, file name stud or directory name");
+ gtk_widget_set_tooltip_text (item, "Output file name, file name stub or directory name");
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);
 
  item = gtk_button_new_with_label (" ... ");
@@ -2925,7 +2920,7 @@ GtkWidget* create_image_processing (void)
   g_object_set_data_full (G_OBJECT (image_processing), "output_file_entry", output_file_entry, (GDestroyNotify) g_object_unref);
   gtk_widget_show (output_file_entry);
   gtk_box_pack_start (GTK_BOX (hbox28), output_file_entry, TRUE, TRUE, 0);
-  gtk_widget_set_tooltip_text (output_file_entry, "Output file name, file name stud or directory name");
+  gtk_widget_set_tooltip_text (output_file_entry, "Output file name, file name stub or directory name");
 
   output_file_browse = gtk_button_new_with_label (" ... ");
   g_object_ref (output_file_browse);

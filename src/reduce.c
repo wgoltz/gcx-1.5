@@ -243,14 +243,16 @@ static int save_image_file_to_dir(struct image_file *imf, char *dir, int (* prog
     return ret;
 }
 
-/* outf is a "stud" to a file name; the function adds sequence numbers to it; files
+/* outf is a "stub" to a file name; the function adds sequence numbers to it; files
  * are not overwritten, the sequence is just incremented until a new slot is
  * found; sequences are searched from seq up; seq is updated
  * if seq is NULL, no sequence number is appended, and outf becomes the filename
  * calls progress with a short progress message from time to time. If progress returns
- * a non-zero value, abort remaining operations and return an error (non-zero) */
+ * a non-zero value, abort remaining operations and return an error (non-zero)
+ * append any extensions after seq
+ * if stub is zippish, zip the output */
 
-static int save_image_file_to_stud(struct image_file *imf, char *outf, int *seq, int (* progress)(char *msg, void *data), void *data)
+static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq, int (* progress)(char *msg, void *data), void *data)
 {
 	g_return_val_if_fail(imf != NULL, -1);
 	g_return_val_if_fail(imf->fr != NULL, -1);
@@ -258,24 +260,19 @@ static int save_image_file_to_stud(struct image_file *imf, char *outf, int *seq,
 
     if (imf->flags & IMG_SKIP) return 0;
 
-    gboolean zipped = (is_zip_name(imf->filename) > 0);
+    gboolean zipped = (is_zip_name(outf) > 0);
 
-    char *outf_copy = strdup(outf);
-
-    char *fn = NULL;
-    if (seq != NULL) {
-        check_seq_number(outf_copy, seq);
-        asprintf(&fn, (zipped) ? "%s%03d.gz" : "%s%03d", outf_copy, *seq);
-	} else {
-        asprintf(&fn, (zipped) ? "%s.gz" : "%s", outf_copy);
-	}
-    free(outf_copy);
-
-    PROGRESS_MESSAGE( "saving %s\n", fn );
+    char *fn = save_name(imf->filename, outf, seq);
 
     int res = -1;
     if (fn) {
-        res = write_fits_frame(imf->fr, fn);
+
+        PROGRESS_MESSAGE( "saving %s%s\n", fn, (zipped) ? "(zipped)" : "");
+
+        if (zipped)
+            res = write_gz_fits_frame(imf->fr, fn);
+        else
+            res = write_fits_frame(imf->fr, fn);
 
         free(fn);
     }
@@ -307,7 +304,7 @@ int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
     if ( ! ret && S_ISDIR(st.st_mode) ) {
 		return save_image_file_to_dir(imf, outf, progress, data);
 	} else {
-		return save_image_file_to_stud(imf, outf, seq, progress, data);
+        return save_image_file_to_stub(imf, outf, seq, progress, data);
 	}
     if (progress) (* progress)("mock save\n", data);
 
@@ -1671,31 +1668,6 @@ d3_printf("load alignment stars");
     return g_slist_length (ccdr->align_stars);
 }
 
-void refresh_wcs(gpointer window, struct ccd_frame *fr) {
-    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (window_wcs == NULL) {
-        window_wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
-    }
-
-    if (fr->imf) {
-        struct wcs *imf_wcs = fr->imf->fim;
-        if (imf_wcs->wcsset > fr->fim.wcsset) {
-            if (imf_wcs->wcsset >= window_wcs->wcsset) {
-                wcs_clone(&fr->fim, imf_wcs);
-                wcs_clone(window_wcs, imf_wcs);
-            }
-        } else {
-            window_wcs->flags |= WCS_HINTED;
-            wcs_from_frame(fr, window_wcs);
-        }
-
-    } else {
-        printf("refresh_wcs no imf\n");
-    }
-
-    wcsedit_refresh(window);
-}
 
 int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
 {
@@ -2056,7 +2028,7 @@ int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(ch
 
     } else {
         match_field_in_window_quiet (window);
-        wcs = g_object_get_data (G_OBJECT(window), "wcs_of_window");
+        wcs = window_get_wcs(window);
     }
 
     gboolean result_ok = ( wcs && wcs->wcsset == WCS_VALID );
@@ -2098,7 +2070,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
     if (ccdr->ops & IMG_OP_PHOT_REUSE_WCS) {
         wcs = ccdr->wcs;
     } else {
-        wcs = g_object_get_data (G_OBJECT(window), "wcs_of_window");
+        wcs = window_get_wcs(window);
 
         if (imf->fr->fim.wcsset == WCS_VALID) { // change to imf->fim.wcsset
             wcs_clone(wcs, &imf->fr->fim);

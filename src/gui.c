@@ -800,7 +800,7 @@ static GtkActionEntry image_actions[] = {
 	{ "stars-add-detect",  NULL, "_Detect Sources",        "S",          NULL, G_CALLBACK (act_stars_add_detected)  },
 	{ "stars-show-target", NULL, "Show Tar_get",           "T",          NULL, G_CALLBACK (act_stars_show_target) },
 	{ "stars-add-catalog", NULL, "Add From _Catalog",      "A",          NULL, G_CALLBACK (act_stars_add_catalog) },
-	{ "stars-synthetic",   NULL, "_Create Synthetic Stars", NULL,        NULL, G_CALLBACK (act_stars_add_synthetic)   },
+    { "stars-synthetic",   NULL, "Add _Synthetic Stars", "<control>A", NULL, G_CALLBACK (act_stars_add_synthetic)   },
 	{ "stars-edit",        NULL, "_Edit",                  "<control>E", NULL, G_CALLBACK (act_stars_edit)        },
     { "stars-rm-selected", NULL, "Remove Selecte_d",       "<control>D", NULL, G_CALLBACK (act_stars_rm_selected) },
     { "stars-toggle-detected", NULL, "Toggle Detected _Stars", "<shift>S",   NULL, G_CALLBACK (act_stars_toggle_detected) },

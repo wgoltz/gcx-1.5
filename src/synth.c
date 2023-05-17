@@ -256,7 +256,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
     struct ccd_frame *dark_fr = i_ch->fr;
     if (dark_fr == NULL) return;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		err_printf_sb2(window, "Need a WCS to Create Synthetic Stars");
 		error_beep();
@@ -330,5 +330,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 	i_ch->channel_changed = 1;
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 	g_list_free(ssl);
+
+    stats_cb(window, 0);
 }
 

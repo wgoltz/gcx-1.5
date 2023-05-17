@@ -147,11 +147,9 @@ void act_control_wcs (GtkAction *action, gpointer window)
     GtkWidget *dialog = window_get_wcsedit(window);
     if (dialog == NULL) return;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (wcs == NULL) {
-        wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
-    }
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL) return;
+
     wcsedit_from_wcs(dialog, wcs);
 
     gtk_widget_show(dialog);
@@ -222,7 +220,7 @@ void wcsedit_refresh(gpointer window)
     if (dialog == NULL) return;
 
 //d2_printf("wcsedit.wcsedit_refresh\n");
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
 
     int frame_flipped = (wcs->wcsset != WCS_INVALID) && (wcs->xinc * wcs->yinc < 0);
@@ -249,7 +247,7 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
         struct ccd_frame *fr = i_chan->fr;
         struct wcs *frame_wcs = &(fr->fim);
 
-        struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+        struct wcs *window_wcs = window_get_wcs(window);
 
 //        int flip_field = get_named_checkb_val(dialog, "wcs_flip_field_checkb");
 
@@ -484,7 +482,7 @@ static int wcsedit_refresh_parent(gpointer dialog)
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
     g_return_val_if_fail(window != NULL, 0);
 
-    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *window_wcs = window_get_wcs(window);
     g_return_val_if_fail(window_wcs != NULL, 0);
 
     int ret = wcsedit_to_wcs(dialog, window_wcs);
@@ -506,7 +504,7 @@ void wcs_set_validation(gpointer window, int valid)
 
     struct wcs *frame_wcs = & fr->fim;
 
-    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *window_wcs = window_get_wcs(window);
 
     window_wcs->wcsset = valid;
     wcs_clone(frame_wcs, window_wcs); // copy window_wcs to frame
@@ -527,8 +525,8 @@ static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
 
    struct wcs *frame_wcs = & fr->fim;
 
-   struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-
+   struct wcs *window_wcs =window_get_wcs(window);
+// xrefpix, yrefpix  unset for new frame
     if (WCS_HAVE_INITIAL(window_wcs))
         wcs_set_validation(window, WCS_INITIAL);
 
@@ -603,7 +601,7 @@ void act_wcs_fit_pairs (GtkAction *action, gpointer window)
 void act_wcs_reload (GtkAction *action, gpointer window)
 {
 //printf("wcsedit.act_wcs_reload\n");
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
 
     struct ccd_frame *fr = window_get_current_frame(window);
@@ -636,7 +634,7 @@ int match_field_in_window(gpointer window)
 {
 	act_wcs_auto (NULL, window);
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	if (wcs == NULL) {
 		err_printf("No WCS found\n");
 		return -1;
@@ -654,7 +652,7 @@ int match_field_in_window_quiet(gpointer window)
 {
 	struct wcs *wcs;
 	act_wcs_quiet_auto (NULL, window);
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    wcs = window_get_wcs(window);
 	if (wcs == NULL) {
 		err_printf("No WCS found\n");
 		return -1;
@@ -686,7 +684,7 @@ static void move(int move_x, int move_y, gpointer dialog)
     gpointer window = g_object_get_data(G_OBJECT(dialog), "im_window");
     if (window == NULL) return;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
 
     int btnstate = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(step_button));

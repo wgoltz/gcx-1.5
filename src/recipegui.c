@@ -168,7 +168,7 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
 	g_return_if_fail(window != NULL);
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	if (wcs == NULL) {
 		err_printf_sb2(window, "Cannot create a recipe without a wcs");
 		error_beep();
@@ -256,5 +256,5 @@ static void browse_cb( GtkWidget *widget, gpointer dialog)
 
 	entry = g_object_get_data(G_OBJECT(dialog), "recipe_file_entry");
 	g_return_if_fail(entry != NULL);
-    file_select_to_entry(dialog, entry, "Select Recipe File Name", "", "*.rcp", 0);
+    file_select_to_entry(dialog, entry, "Select Recipe File Name", "", "*.rcp", 0, F_OPEN);
 }

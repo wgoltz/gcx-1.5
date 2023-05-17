@@ -48,6 +48,7 @@
 #include "interface.h"
 #include "misc.h"
 #include "libindiclient/indigui.h"
+#include "filegui.h"
 
 #define AUTO_FILE_FORMAT "%s%03d"
 #define AUTO_FILE_GZ_FORMAT "%s%03d.gz"
@@ -365,16 +366,15 @@ void save_frame_auto_name(struct ccd_frame *fr, GtkWidget *dialog)
 {
 	auto_filename(dialog);
 
-    char *text = named_entry_text(dialog, "file_entry");
+    char *text = named_entry_text(dialog, "exp_file_entry");
     if (text == NULL) {
         text = strdup(DEFAULT_FRAME_NAME);
-		named_entry_set(dialog, "file_entry", text);
+        named_entry_set(dialog, "exp_file_entry", text);
 	}
 
-    wcs_to_fits_header(fr); // what is this supposed to be doing?
+    wcs_to_fits_header(fr); // ?
 
-//    int seq = named_spin_get_value(dialog, "file_seqn_spin");
-    int seq = 1;
+    int seq = named_spin_get_value(dialog, "file_seqn_spin");
 	check_seq_number(text, &seq);
 
     gboolean zipped = (get_named_checkb_val(GTK_WIDGET(dialog), "exp_compress_checkb") > 0);
@@ -689,7 +689,7 @@ static char *postfix_XXX(char *filename) {
 static void setup_streaming(struct camera_t *camera, GtkWidget *dialog)
 {
     // set local file name
-    char *full_name = named_entry_text(dialog, "file_entry");
+    char *full_name = named_entry_text(dialog, "exp_file_entry");
     char *filename = NULL;
     char *dirpath = NULL;
     if (full_name) {
@@ -857,10 +857,10 @@ static void auto_filename(GtkWidget *dialog)
         return;
     }
 
-    char *text = named_entry_text(dialog, "file_entry");
+    char *text = named_entry_text(dialog, "exp_file_entry");
 //    if (get_named_checkb_val(dialog, "img_dark_checkb")) { // get dark frame sequence number
 //		if (text == NULL || strcmp(text, DEFAULT_DARK_NAME)) {
-//			named_entry_set(dialog, "file_entry", DEFAULT_DARK_NAME);
+//			named_entry_set(dialog, "exp_file_entry", DEFAULT_DARK_NAME);
 //			check_seq_number(DEFAULT_DARK_NAME, &seq);
 ////			named_spin_set(dialog, "file_seqn_spin", seq);
 //		}
@@ -876,7 +876,7 @@ static void auto_filename(GtkWidget *dialog)
 
     if (name) {
         if (text == NULL || strcmp(text, name)) {
-            named_entry_set(dialog, "file_entry", name);
+            named_entry_set(dialog, "exp_file_entry", name);
             check_seq_number(name, &seq);
             //		named_spin_set(dialog, "file_seqn_spin", seq);
         }
@@ -1079,6 +1079,15 @@ static void img_run_cb( GtkWidget *widget, gpointer dialog )
     }
 }
 
+static void img_file_browse_cb( GtkWidget *widget, gpointer dialog )
+{
+    GtkWidget *entry = g_object_get_data(G_OBJECT(dialog), "exp_file_entry");
+    g_return_if_fail(entry != NULL);
+
+    char *default_name = "image_XXX.gz";
+    file_select_to_entry (dialog, entry, "Save frame as ...", default_name, "*", 1, F_SAVE);
+}
+
 /* send an abort slew message */
 static void scope_abort_cb( GtkWidget *widget, gpointer dialog )
 {
@@ -1182,22 +1191,16 @@ int goto_dialog_obs(GtkWidget *dialog)
  * has been submitted, and does not wait for movement to complete */
 static int scope_auto_cb( GtkWidget *widget, gpointer dialog )
 {
-	struct wcs *wcs;
-	GtkWidget *imw;
-	struct obs_data *obs;
-	struct tele_t *tele;
-
-    imw = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *imw = g_object_get_data(G_OBJECT(dialog), "image_window");
 	g_return_val_if_fail(imw != NULL, -1);
-	tele = tele_find(imw);
-	if (! tele)
-		return -1;
 
-    obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
-	if (obs == NULL)
-		return -1;
+    struct tele_t *tele = tele_find(imw);
+    if (! tele) return -1;
 
-	wcs = g_object_get_data(G_OBJECT(imw), "wcs_of_window");
+    struct obs_data *obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
+    if (obs == NULL) return -1;
+
+    struct wcs *wcs = window_get_wcs(imw);
 	g_return_val_if_fail(wcs != NULL, -1);
 	g_return_val_if_fail(wcs->wcsset != WCS_INVALID, -1);
 
@@ -1304,6 +1307,7 @@ void cam_set_callbacks(GtkWidget *dialog)
 
     set_named_callback(dialog, "exp_mode_combo", "changed", img_mode_changed_cb);
     set_named_callback(dialog, "exp_run_button", "toggled", img_run_cb);
+    set_named_callback(dialog, "exp_file_browse", "clicked", img_file_browse_cb);
 
     //set_named_callback(dialog, "exp_spin", "changed", img_changed_cb);
 
@@ -1330,7 +1334,8 @@ void cam_set_callbacks(GtkWidget *dialog)
 //	set_named_callback(dialog, "obs_epoch_entry", "activate", obsdata_cb);
 //    set_named_callback(dialog, "obs_epoch_entry", "focus-out-event", obsdata_focus_out_cb);
 
-	set_named_callback(dialog, "obs_list_fname", "activate", obs_list_fname_cb);
+// lookup object when exp_file_entry changes
+    set_named_callback(dialog, "obs_list_fname", "activate", obs_list_fname_cb);
 
 	obs_list_callbacks(dialog);
 }

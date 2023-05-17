@@ -1102,8 +1102,8 @@ d2_printf("frame to channel\n");
 
     if (fr->stats.statsok && fr->pix_format != PIX_BYTE) channel->davg = fr->stats.cavg;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    refresh_wcs(window, fr);
+    struct wcs *wcs = window_get_wcs(window);
+    refresh_wcs(window);
 
     channel->channel_changed = 1;
 

@@ -418,7 +418,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
 /* return the number of stars added or a negative error */
 int merge_cat_star_list_to_window(gpointer window, GList *addsl)
 {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 		err_printf("merge_cat_star_list_to_window: invalid wcs\n");
 		return -1;
@@ -496,7 +496,7 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 /* it keeps a reference to the cat_stars without ref-ing them */
 int add_cat_stars_to_window(gpointer window, struct cat_star **catsl, int n)
 {
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 
 	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
 /* we unref the cat stars, so the caller shouldn't */
@@ -592,7 +592,7 @@ int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	g_return_val_if_fail(gsl != NULL, -2);
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
 	g_return_val_if_fail(wcs != NULL, -2);
 
     struct gui_star *gs = cats->gs;

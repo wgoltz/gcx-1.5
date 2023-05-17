@@ -145,11 +145,198 @@ int is_zip_name(char *fn)
 {
     int len = strlen(fn);
     if (len < 3) return 0;
-    if (strcasecmp(fn + len - 3, ".gz") == 0) return 2;
+
     if (strcasecmp(fn + len - 2, ".z") == 0) return 1;
+    if (strcasecmp(fn + len - 3, ".gz") == 0) return 2;
     if (strcasecmp(fn + len - 4, ".zip") == 0) return 3;
     if (strcasecmp(fn + len - 4, ".bz2") == 0) return 3;
 
+    return 0;
+}
+
+// drop extension by converting last '.' (if found) to 0
+int drop_dot_extension(char *fn)
+{
+    int i = strlen(fn);
+    while (i > 0) {
+        if (fn[i] == '_') return -1; // exclude underscores
+        if (fn[i] >= '0' && fn[i] <= '9') return -1; // exclude numeric
+        if (fn[i] == '.') {
+            fn[i--] = 0;
+            break;
+        }
+        i--;
+    }
+    return i;
+}
+
+// return position of '.' of (last) extension
+int has_extension(char *fn)
+{
+    char *p = fn + strlen(fn);
+    while (--p >= fn) {
+        if (*p == '_') return -1; // exclude extens with underscore
+        if (*p >= '0' && *p <= '9') return -1; // exclude numbers
+
+        if (*p == '.') break;
+    }
+    return (int) (p - fn); // if > 0 : the position of '.' in extension
+}
+
+// return numeric sequence number at end of filename
+int get_seq(char *fn)
+{
+    char *p = fn + strlen(fn);
+    int i = 0;
+    while (--p >= fn) {
+        if (!(*p >= '0' && *p <= '9')) break;
+        i++;
+    }
+    if (i) {
+        p++;
+        char *endp = p;
+        unsigned res = strtoul(p, &endp, 10);
+        if (endp != p) return -1;
+        return res;
+    }
+    return -1;
+}
+
+// get start of seq slot defined by the X positions at end of name: name(X..X)
+// return seq slot size (number of Xs) or zero (append to end)
+int get_seq_slot(char **seq_slot)
+{
+    if (seq_slot == NULL || *seq_slot == 0) return -1;
+
+    char *pend = *seq_slot + strlen(*seq_slot);
+    char *p = pend;
+    while (*(--p) == 'X') { }
+    p++;
+    *seq_slot = p;
+    return pend - p;
+}
+
+// auto generate ouput file name
+// in_file: in_name(.extens)(.zippish) (drop extensions to get name)
+// file_name_stub: (path/)(out_name or _)(X..X)(.extens)(.zippish)
+// if out_name = '_', out_name = in_name
+// seq = NULL ignore sequence
+// otherwise replace X..X (no 'X' - just append) with seq and increment seq
+// tackon .extens, drop .zippish
+
+char *save_name(char *in_full_name, char *file_name_stub, int *seq)
+{
+    char *in_copy = strdup(in_full_name);
+
+    char *in_file_name = basename(in_copy);
+    int extens = has_extension(in_file_name);
+
+    gboolean in_zipped = (is_zip_name(in_file_name) > 0);
+
+    if (in_zipped) { // drop zip extens
+        in_file_name[extens] = 0;
+        extens = has_extension(in_file_name);
+    }
+    if (extens > 0) in_file_name[extens] = 0; // drop other extens
+
+    char *out_copy = strdup(file_name_stub);
+    extens = has_extension(out_copy);
+
+    gboolean out_zipped = (is_zip_name(out_copy) > 0);
+
+    if (out_zipped) { // drop zip extens
+        out_copy[extens] = 0;
+        extens = has_extension(out_copy);
+    }
+    if (extens > 0) out_copy[extens] = 0; // drop other extens
+
+    char *seq_slot = out_copy;
+    int seq_size = get_seq_slot(&seq_slot);
+    if (seq_size >= 0) *seq_slot = 0;
+
+    char *out_file_name = basename(out_copy);
+
+    if (strcmp(out_file_name, "_") == 0) out_file_name = in_file_name;
+
+    char *fn = NULL;
+
+    char *dir_copy = strdup(file_name_stub);
+    char *dir_name = dirname(dir_copy);
+    if (dir_name)
+        str_join_varg(&fn, "%s/%s", dir_name, out_file_name);
+    else
+        str_join_str(&fn, "%s", out_file_name);
+
+    if (out_file_name != in_file_name && seq) {
+        if (seq_size > 0)
+            str_join_varg(&fn, "%0*d", seq_size, *seq);
+        else
+            str_join_varg(&fn, "%.d", *seq);
+
+        (*seq)++;
+    }
+
+    free(dir_copy);
+    free(in_copy);
+
+    if (extens > 0) str_join_str(&fn, ".%s", & out_copy[extens + 1]);
+
+    free(out_copy);
+
+    return fn;
+}
+
+
+/* check if the supplied name+seq number is already used; return a free
+ * sequence number (and return 1) if that is the case */
+int check_seq_number(char *file, int *sqn)
+{
+    char *fcopy = strdup(file);
+    DIR *dir = opendir(dirname(fcopy));
+    if (dir == NULL)
+        /* no directory, but we still return ok,
+         * since the point here is to make sure we
+         * don;t overwrite files */
+        d3_printf("check_seq_number: funny dir: %s\n", fcopy);
+
+
+    free(fcopy);
+    if (dir == NULL) return 0;
+
+    fcopy = strdup(file);
+
+    // drop extensions
+    int extens;
+    while ((extens = has_extension(file)) > 0) fcopy[extens] = 0;
+
+    char *fn = basename(fcopy);
+    int sz = strlen(fn);
+
+    // strip numeric suffix
+    char *p = fn + sz - 1;
+    while (p > fn) {
+        if (*p >= '0' && *p <= '9')
+           p--;
+        else
+           break;
+    }
+    if (p >= fn) sz = p - fn + 1;
+
+    int lseq = 0;
+
+    struct dirent * entry;
+    while ((entry = readdir(dir))) {
+        if (strncmp(entry->d_name, fn, sz)) continue;
+        int n = strtol(entry->d_name + sz, NULL, 10);
+        if (n > lseq) lseq = n;
+    }
+    free(fcopy);
+    closedir(dir);
+    if (*sqn <= lseq) {
+        d3_printf("check_seq_number: adjusting sqn to %d\n", lseq + 1);
+        *sqn = lseq + 1;
+        return -1;
+    }
     return 0;
 }
 
@@ -219,86 +406,6 @@ char *named_entry_text(GtkWidget *dialog, char *name)
 	return text;
 }
 
-// auto generate ouput file name
-// tackon basename of in_file_name to out_file_stub (dir or name)
-// add _num if stub is a name: drop extens, add _num, add extens (auto zip if extens is zippish ?)
-char *save_name(char *in_file_name, char *out_file_stub)
-{
-    char *in_copy = NULL;
-    if (in_file_name == NULL || *in_file_name == 0)
-        in_copy = strdup("no name");
-    else
-        in_copy = strdup(in_file_name);
-
-    char *fn0 = basename(in_copy);
-    gboolean zipped = (is_zip_name(fn0) > 0);
-
-    char *fn = strdup(fn0);
-    char *extens = NULL;
-
-    // drop zip extension
-    if (zipped) drop_dot_extension(fn);
-
-    int i = has_extension(fn);
-    if (i > 0) {
-        extens = strdup(fn + i); // maybe multiple extens?
-        fn[i] = 0; // drop extens
-    }
-    int seq = get_seq(fn);
-
-    // build outfile name
-//    if (seq > 0)
-//    char *out_file = str_join_str(out_file_stub, "%s", )
-
-
-    free(in_copy);
-}
-
-
-/* check if the supplied name+seq number is already used; return a free
- * sequence number (and return 1) if that is the case */
-int check_seq_number(char *file, int *sqn)
-{
-    char *fcopy = strdup(file);
-    DIR *dir = opendir(dirname(fcopy));
-    if (dir == NULL)
-		/* no directory, but we still return ok,
-		 * since the point here is to make sure we
-		 * don;t overwrite files */
-        d3_printf("check_seq_number: funny dir: %s\n", fcopy);
-
-    free(fcopy);
-    if (dir == NULL) return 0;
-
-    char *fn = basename(file);
-    int sz = strlen(fn);
-
-    // strip numeric suffix
-    int p = sz - 1;
-    while (p > 0) {
-        if (fn[p] >= '0' && fn[p] <= '9')
-           p--;
-        else
-           break;
-    }
-    if (p >= 0) sz = p + 1;
-
-    int lseq = 0;
-
-    struct dirent * entry;
-	while ((entry = readdir(dir))) {
-        if (strncmp(entry->d_name, fn, sz)) continue;
-        int n = strtol(entry->d_name + sz, NULL, 10);
-        if (n > lseq) lseq = n;
-	}
-	closedir(dir);
-	if (*sqn <= lseq) {
-        d3_printf("check_seq_number: adjusting sqn to %d\n", lseq + 1);
-		*sqn = lseq + 1;
-		return -1;
-	}
-	return 0;
-}
 
 /* set the spin named name under dialog to the given value */
 void named_spin_set(GtkWidget *dialog, char *name, double val)
@@ -385,47 +492,6 @@ double angular_dist(double a, double b)
 	return d;
 }
 
-// drop extension by converting last '.' (if found) to 0
-int drop_dot_extension(char *fn)
-{
-    int i = strlen(fn);
-    while (i > 0) {
-        if (fn[i] == '.') {
-            fn[i--] = 0;
-            break;
-        }
-        i--;
-    }
-    return i;
-}
-
-// return position of '.' of (last) extension
-int has_extension(char *fn)
-{
-    char *p = fn + strlen(fn);
-    while (--p >= fn)
-        if (*p == '.') break;
-    return (int) (p - fn);
-}
-
-// return numeric sequence number at end of filename
-int get_seq(char *fn)
-{
-    char *p = fn + strlen(fn);
-    int i = 0;
-    while (--p >= fn) {
-        if (!(*p >= '0' && *p <= '9')) break;
-        i++;
-    }
-    if (i) {
-        p++;
-        char *endp = p;
-        unsigned res = strtoul(p, &endp, 10);
-        if (endp != p) return -1;
-        return res;
-    }
-    return -1;
-}
 
 /* general interval timer functions */
 void update_timer(struct timeval *tv_old)

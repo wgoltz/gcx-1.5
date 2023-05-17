@@ -218,6 +218,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         }
 
         struct cat_star *cats = CAT_STAR(sl->data);
+        if (cats->gs && GUI_STAR(cats->gs)->flags & (STAR_DELETED | STAR_IGNORE)) continue;
 
         cats->flags &= ~CPHOT_MASK;
 
@@ -694,7 +695,7 @@ static void photometry_cb(gpointer window, guint action)
 		return;
 	}
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
     if (! (wcs && wcs->wcsset == WCS_VALID) ) {
         err_printf_sb2(window, "Invalid wcs - ensure frame has validated wcs\n");
 		return;
@@ -863,8 +864,8 @@ char * phot_to_fd(gpointer window, FILE *fd, int format)
 		return NULL;
 	}
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (! (wcs && wcs->wcsset == WCS_VALID) ) {
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL || wcs->wcsset < WCS_VALID) {
 		err_printf("Invalid wcs\n");
 		return NULL;
 	}

@@ -3,6 +3,9 @@
 
 #include <gtk/gtk.h>
 
+#define F_OPEN GTK_FILE_CHOOSER_ACTION_OPEN
+#define F_SAVE GTK_FILE_CHOOSER_ACTION_SAVE
+
 typedef void (* get_file_list_type) (GSList *fl, gpointer window);
 typedef void (* get_file_type) (char *fn, gpointer window, unsigned arg);
 
@@ -10,7 +13,7 @@ typedef void (* get_file_type) (char *fn, gpointer window, unsigned arg);
 int load_rcp_to_window(gpointer window, char *rcpf, char *object);
 char *find_file_in_path(char *pattern, char *path);
 char *add_extension(char *fn, char *ext);
-void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *name, char *filter, int activate);
+void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *name, char *filter, int activate, int open_or_save);
 int file_is_zipped(char *fn);
 void file_select_list(gpointer data, char *title, char *filter, get_file_list_type fl);
 void file_select(gpointer data, char *title, char *filter, get_file_type cb, unsigned arg);

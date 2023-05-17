@@ -379,7 +379,7 @@ static void move(int move_x, int move_y, gpointer dialog)
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
     if (geom == NULL) return;
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
 
     struct cat_star *cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
@@ -675,7 +675,7 @@ void do_edit_star(GtkWidget *window, GSList *found, int make_std)
 	g_return_if_fail(window != NULL);
     g_return_if_fail(found != NULL);
 
-	wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
+    wcs = window_get_wcs(window);
 
     gs = GUI_STAR(found->data); // handle first star only
 
@@ -772,12 +772,8 @@ void add_star_from_catalog(gpointer window)
         fr = i_ch->fr;
     }
 
-    struct wcs *wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (wcs == NULL) {
-        d4_printf("new window wcs for frame\n");
-        wcs = wcs_new();
-        g_object_set_data_full(G_OBJECT(window), "wcs_of_window", wcs, (GDestroyNotify)wcs_release);
-	}
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL) return;
 
     gboolean keep_scale = FALSE;
 

@@ -55,9 +55,6 @@
 
 #define FILE_FILTER_SZ 255
 
-#define F_OPEN GTK_FILE_CHOOSER_ACTION_OPEN
-#define F_SAVE GTK_FILE_CHOOSER_ACTION_SAVE
-
 /* file actions */
 #define FILE_OPEN 1
 #define FILE_CLOSE 2
@@ -141,6 +138,7 @@ GtkWidget *create_file_chooser(char *title, GtkFileChooserAction chooser_type, s
 
     gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(chooser), (chooser_type == F_OPEN) ? TRUE : FALSE);
 //    gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(chooser), last_path);
+    gtk_file_chooser_set_create_folders (GTK_FILE_CHOOSER(chooser), (chooser_type == F_SAVE) ? TRUE : FALSE);
 
     g_object_set_data(G_OBJECT(fa->window), fa->name, chooser);
     g_object_set_data_full(G_OBJECT(chooser), "file_action", fa, (GDestroyNotify) free);
@@ -418,11 +416,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
     // get wcs
     // initialize if new
     // set ra, dec
-    struct wcs *window_wcs = g_object_get_data(G_OBJECT(window), "wcs_of_window");
-    if (window_wcs == NULL) {
-        window_wcs = wcs_new();
-        g_object_set_data_full (G_OBJECT(window), "wcs_of_window", window_wcs, (GDestroyNotify)wcs_release);
-    }
+    struct wcs *window_wcs = window_get_wcs(window);
 
 //    struct wcs *frame_wcs = & fr->fim;
 
@@ -488,10 +482,16 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 //                window_wcs->wcsset = WCS_INITIAL;
                 window_wcs->flags |= WCS_HAVE_POS;
             }
-            if (WCS_HAVE_INITIAL(window_wcs))
+            if (WCS_HAVE_INITIAL(window_wcs)) {
                 wcs_set_validation(window, WCS_INITIAL);
+            //    cat_change_wcs(rsl, window_wcs); requires gui_star_list
+
+                wcs_clone(& fr->fim, window_wcs);
+            }
 //        }
 	}
+
+    wcsedit_refresh(window);
 
     GList *rsl = stf_find_glist(stf, 0, SYM_STARS);
     if (rsl == NULL) return -1;
@@ -511,7 +511,6 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
     g_object_set_data(G_OBJECT(window), "recipe", stf); // don't call stf_free_all when reloading the same recipe
                                                         // perhaps use ref/unref
     merge_cat_star_list_to_window(window, rsl);
-    wcsedit_refresh(window);
     // wcsset == initial
 
     return g_list_length(rsl);
@@ -686,7 +685,7 @@ static void get_file(GtkWidget *chooser, gpointer user_data)
 /* make the file selector set the text in entry */
 /* if activate is true, the activate signal is emitted for the entry
  * when the user presses ok in the file dialog */
-void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *name, char *filter, int activate)
+void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *name, char *filter, int activate, int open_or_save)
 {
 	GtkWidget *window = data;
 	GtkWidget *chooser;
@@ -702,7 +701,7 @@ void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *na
 	fa->arg1 = activate;
 
     if (title == NULL) title = "Select file";
-    chooser = create_file_chooser(title, F_OPEN, fa);
+    chooser = create_file_chooser(title, open_or_save, fa);
 
 //    fa->file_filter[0] = 0;
 //	if (filter != NULL)	strncpy(fa->file_filter, filter, FILE_FILTER_SZ);
@@ -717,7 +716,7 @@ void file_select_to_entry(gpointer data, GtkWidget *entry, char *title, char *na
     }
 
     if (nm)
-        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(chooser), lastopen);
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(chooser), nm);
     else
         gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(chooser), "filename.fits");
 }
