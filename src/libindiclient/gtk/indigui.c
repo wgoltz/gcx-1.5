@@ -584,12 +584,15 @@ static void indigui_create_switch_combobox(struct indi_prop_t *iprop, int num_pr
     gtk_combo_box_set_entry_text_column(GTK_COMBO_BOX (box), 0);
 
     gtk_table_attach(GTK_TABLE (iprop->widget),	box, 0, 1, 0, 1,
-		(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+//		(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0); here
+        GTK_FILL, GTK_FILL, 0, 0);
+
 
     unsigned long signal = g_signal_connect(G_OBJECT (box), "changed", G_CALLBACK (indigui_send_switch_combobox_cb), iprop);
 	indigui_prop_add_signal(iprop, box, signal);
 }
 
+#define TABLE_WIDTH 3
 
 static void indigui_create_switch_button(struct indi_prop_t *iprop, int num_props, int type)
 {
@@ -598,16 +601,26 @@ static void indigui_create_switch_button(struct indi_prop_t *iprop, int num_prop
 	indi_list *isl;
 	unsigned long signal;
 
+    int n = il_length(iprop->elems);
+
+    if (n > TABLE_WIDTH * 5) { // only one scr_win allowed like this
+        GtkWidget *scr_win = gtk_scrolled_window_new(NULL, NULL);
+        gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scr_win), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+        gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scr_win), iprop->widget);
+        gtk_widget_set_size_request(scr_win, -1, 200);
+        g_object_set_data_full(G_OBJECT(iprop->widget), "_scr_win", scr_win, (GDestroyNotify)g_object_unref);
+    }
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl), pos++) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
-
 		if (type == SWITCH_BUTTON)
 			button = gtk_toggle_button_new_with_label(elem->label);
 		else
 			button = gtk_check_button_new_with_label(elem->label);
 
-        gtk_table_attach(GTK_TABLE (iprop->widget), button,	pos % 4, (pos % 4) + 1, pos / 4, (pos / 4) + 1,
-			(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+        gtk_table_attach(GTK_TABLE (iprop->widget), button,
+            pos % TABLE_WIDTH, (pos % TABLE_WIDTH) + 1, pos / TABLE_WIDTH, (pos / TABLE_WIDTH) + 1,
+            (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+
         g_object_ref(button);
         g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, button, (GDestroyNotify)g_object_unref);
 		if (elem->value.set) {
@@ -650,7 +663,7 @@ static void indigui_build_prop_widget(struct indi_prop_t *iprop)
 	GtkWidget *state_label;
     int num_props  = il_length(iprop->elems);
 
-	iprop->widget = gtk_table_new(num_props, 4, FALSE);
+    iprop->widget = gtk_table_new(num_props, TABLE_WIDTH, FALSE);
 	state_label = gtk_led_new(0x000000);
 	indigui_set_state(state_label, iprop->state);
 	
@@ -688,7 +701,7 @@ void indigui_add_prop(struct indi_device_t *idev, const char *groupname, struct 
 
 	page = (GtkWidget *)g_object_get_data(G_OBJECT (idev->window), groupname);
 	if (! page) {
-		page = gtk_table_new(1, 4, FALSE);
+        page = gtk_table_new(1, TABLE_WIDTH, FALSE);
 
         GtkWidget *groupname_label = gtk_label_new(groupname);
         gtk_notebook_append_page(GTK_NOTEBOOK (idev->window), page, groupname_label);
@@ -699,13 +712,25 @@ void indigui_add_prop(struct indi_device_t *idev, const char *groupname, struct 
 	next_free_row = (long) g_object_get_data(G_OBJECT (page), "next-free-row");
 
 	indigui_build_prop_widget(iprop);
+
     gtk_table_attach(GTK_TABLE (page), GTK_WIDGET (g_object_get_data( G_OBJECT (iprop->widget), "_state")),
         0, 1, next_free_row, next_free_row + 1,	GTK_FILL, GTK_FILL, 20, 10);
     gtk_table_attach(GTK_TABLE (page), GTK_WIDGET (g_object_get_data( G_OBJECT (iprop->widget), "_name")),
         1, 2, next_free_row, next_free_row + 1,	GTK_FILL, GTK_FILL, 20, 10);
-    gtk_table_attach(GTK_TABLE (page), GTK_WIDGET(iprop->widget), 2, 3, next_free_row, next_free_row + 1,
-		(GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
-	g_object_set_data(G_OBJECT (page), "next-free-row", (gpointer) (next_free_row + 1));
+
+    // if iprop->widget is scrollwindow give it extra space
+    GtkWidget *scr_win = GTK_WIDGET (g_object_get_data( G_OBJECT (iprop->widget), "_scr_win"));
+
+    if (scr_win)
+        gtk_table_attach(GTK_TABLE (page), scr_win, 2, 3, next_free_row, next_free_row + 4,
+           (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 20);
+    else
+        gtk_table_attach(GTK_TABLE (page), iprop->widget, 2, 3, next_free_row, next_free_row + 1,
+           (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+
+    if (scr_win) next_free_row += 3;
+
+    g_object_set_data(G_OBJECT (page), "next-free-row", (gpointer) (next_free_row + 1));
     gtk_widget_show_all(page);
 }
 
@@ -765,7 +790,7 @@ void *indigui_create_window(struct indi_t *indi)
 	g_object_unref (ui);
 
     GtkWidget *scr = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scr), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scr), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 
     gtk_box_pack_start(GTK_BOX (vbox), scr, TRUE, TRUE, 0);
 //    gtk_container_add(GTK_CONTAINER (vbox), GTK_WIDGET (scr));
@@ -775,12 +800,13 @@ void *indigui_create_window(struct indi_t *indi)
 	notebook = gtk_notebook_new();
     g_object_ref(notebook);
     gtk_notebook_set_scrollable(GTK_NOTEBOOK (notebook), TRUE);
+    gtk_notebook_set_tab_pos(GTK_NOTEBOOK (notebook), GTK_POS_LEFT);
     g_object_set_data_full(G_OBJECT (window), "notebook", notebook, (GDestroyNotify)g_object_unref);
 
     gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scr), notebook);
 
 	textscroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(textscroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(textscroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 
     gtk_box_pack_start(GTK_BOX(vbox), textscroll, FALSE, TRUE, 0);
 
@@ -796,7 +822,7 @@ void *indigui_create_window(struct indi_t *indi)
     gtk_container_add(GTK_CONTAINER (textscroll), textview);
 
 	gtk_window_set_title (GTK_WINDOW (window), "INDI Options");
-	gtk_window_set_default_size (GTK_WINDOW (window), 640, 400);
+    gtk_window_set_default_size (GTK_WINDOW (window), 1200, 400);
 
 // do: comera_find(window, "MAIN_CAMERA") somewhere
 	return window;
