@@ -164,12 +164,12 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
         wcs->flags |= WCS_HAVE_SCALE;
 
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+
+        double rot;
+        gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
+
+        if (have_rot) wcs->rot = rot;
     }
-
-    double rot;
-    gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
-
-    if (have_rot) wcs->rot = rot;
 }
 
 
@@ -221,6 +221,7 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
             if ((fr_wcs->flags & WCS_HAVE_SCALE) == 0 && (window_wcs->flags & WCS_HAVE_SCALE)) {
                 fr_wcs->xinc = window_wcs->xinc;
                 fr_wcs->yinc = window_wcs->yinc;
+                fr_wcs->rot = window_wcs->rot;
                 fr_wcs->flags |= WCS_HAVE_SCALE;
             }
             if ((fr_wcs->flags & WCS_LOC_VALID) == 0 && (window_wcs->flags & WCS_LOC_VALID)) {
@@ -228,9 +229,6 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
                 fr_wcs->lng = window_wcs->lng;
                 fr_wcs->flags |= WCS_LOC_VALID;
             }
-
-            if (window_wcs->wcsset != WCS_INVALID)
-                fr_wcs->rot = window_wcs->rot;
 
             if (WCS_HAVE_INITIAL(fr_wcs)) {
                 fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs

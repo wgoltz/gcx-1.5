@@ -639,16 +639,18 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
     if (s) gtk_list_store_set(sob_store, iter, (i), s, -1), free(s); \
 }
 
+    if (sob->flags & CPHOT_INVALID) return;
+
     gtk_list_store_set(sob_store, iter, SOB_POINTER_COL, sob, -1);
-// mband crashes here bad sob when run photometry on new frames or just rerun
+    // mband crashes here bad sob when run photometry on new frames or just rerun
     add_sob_store_entry( SOB_NAME_COL, "%s", sob->cats->name );
 
     char *v = "";
     switch (CATS_TYPE(sob->cats)) {
-        case CATS_TYPE_APSTD  : v = "Std"; break;
-        case CATS_TYPE_APSTAR :	v = "Tgt"; break;
-        case CATS_TYPE_CAT    : v = "Obj"; break;
-        case CATS_TYPE_SREF   : v = "Field"; break;
+    case CATS_TYPE_APSTD  : v = "Std"; break;
+    case CATS_TYPE_APSTAR :	v = "Tgt"; break;
+    case CATS_TYPE_CAT    : v = "Obj"; break;
+    case CATS_TYPE_SREF   : v = "Field"; break;
     }
 
     add_sob_store_entry( SOB_TYPE_COL, "%s", v );
@@ -676,53 +678,54 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
 
 //    if ((sob->ofr->zpstate & ZP_STATE_MASK) > ZP_FIT_ERR) {
 //        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
-        if (! (sob->flags & CPHOT_INVALID)) {
+// if (! (sob->flags & CPHOT_INVALID)) {
 
-            char *format[] = { ">%.1f", "[%.3f]", "%.3f" };
-            enum { format_err = -1, format_faint, format_tgt, format_std };
+    char *format[] = { ">%.1f", "[%.3f]", "%.3f" };
+    enum { format_err = -1, format_faint, format_tgt, format_std };
 
-            double m = MAG_UNSET;
-            double me = BIG_ERR;
-            int fix = format_err;
+    double m = MAG_UNSET;
+    double me = BIG_ERR;
+    int fix = format_err;
 
-            if (sob->flags & CPHOT_NOT_FOUND) {
-                if (sob->ofr->lmag != MAG_UNSET) {
-                    m = sob->ofr->lmag;
-                    fix = format_faint;
-                }
+    if (sob->flags & CPHOT_NOT_FOUND) {
+        if (sob->ofr->lmag != MAG_UNSET) {
+            m = sob->ofr->lmag;
+            fix = format_faint;
+        }
 
-            } else {
-                if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
-                    if (band >= 0) {
-                        if (sob->nweight != 0) {
-                            m = sob->ost->smag[band];
-                            me = DEFAULT_ERR(sob->ost->smagerr[band]);
-                            fix = format_std;
+    } else {
+        if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+            if (band >= 0) {
+                if (sob->nweight != 0) {
+                    m = sob->ost->smag[band];
+                    me = DEFAULT_ERR(sob->ost->smagerr[band]);
+                    fix = format_std;
 
-                        } else if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
-                            m = sob->imag + sob->ofr->zpoint;
-                            me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
-                            fix = format_tgt;
-                        }
-                    }
-
-                } else {
-                    m = sob->mag;
-                    me = sob->err;
+                } else if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
+                    m = sob->imag + sob->ofr->zpoint;
+                    me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
                     fix = format_tgt;
                 }
             }
-            if (fix != format_err) {
-                add_sob_store_entry( SOB_SMAG_COL, format[fix], m );
-                if (fix != format_faint) add_sob_store_entry( SOB_SERR_COL, "%.3f", me );
-            }
 
-            if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
-                add_sob_store_entry( SOB_IMAG_COL, "%.3f", sob->imag );
-                add_sob_store_entry( SOB_IMAG_ERR, "%.4f", sob->imagerr );
-            }
+        } else {
+            m = sob->mag;
+            me = sob->err;
+            fix = format_tgt;
         }
+    }
+    if (fix != format_err) {
+        add_sob_store_entry( SOB_SMAG_COL, format[fix], m );
+        if (fix != format_faint) add_sob_store_entry( SOB_SERR_COL, "%.3f", me );
+    }
+
+    if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
+        add_sob_store_entry( SOB_IMAG_COL, "%.3f", sob->imag );
+        add_sob_store_entry( SOB_IMAG_ERR, "%.4f", sob->imagerr );
+    }
+
 //    }
+
 
     if ((sob->ofr->zpstate & ZP_STATE_MASK) >= ZP_ALL_SKY && sob->nweight > 0.0) {
         add_sob_store_entry( SOB_RESIDUAL_COL, "%7.3f", sob->residual );

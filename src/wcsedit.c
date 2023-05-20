@@ -412,6 +412,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
                 chg |= 16;
                 wcs->xinc = xs / 3600.0;
             }
+            wcs->xinc = - sign * fabs(wcs->xinc);
 
             double ys = -scale;
             sign = signbit(ys * wcs->yinc) ? -1 : 1;
@@ -420,7 +421,6 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
                 chg |= 16;
                 wcs->yinc = ys / 3600.0;
             }
-
             wcs->yinc = - sign * fabs(wcs->yinc);
 
         } else {

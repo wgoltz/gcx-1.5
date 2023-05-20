@@ -218,9 +218,13 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         }
 
         struct cat_star *cats = CAT_STAR(sl->data);
-        if (cats->gs && GUI_STAR(cats->gs)->flags & (STAR_DELETED | STAR_IGNORE)) continue;
 
         cats->flags &= ~CPHOT_MASK;
+
+        if (cats->gs && GUI_STAR(cats->gs)->flags & (STAR_DELETED | STAR_IGNORE)) {
+            cats->flags |= CPHOT_INVALID;
+            continue;
+        }
 
         double x, y;
 		cats_xypix(wcs, cats, &x, &y);
@@ -228,7 +232,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         cats->pos[POS_X] = x;
         cats->pos[POS_Y] = y;
 
-        if (! star_in_frame (fr, x, y, rm)) { // need to also add offset if frame has been realigned
+        if (! star_in_frame (fr, x, y, rm)) {
 			cats->flags |= CPHOT_INVALID;
 			continue;
 		}
