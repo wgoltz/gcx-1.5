@@ -40,7 +40,7 @@
 //#include "x11ops.h"
 
 // parameters for source extraction
-#define	MAXSR		10 //50		// max star radius
+#define	MAXSR		50		// max star radius
 #define	MINSR		2		// min star radius 
 #define	SKYR		2		// measure sky @ starr
 #define	MINSEP		5 //3		// min star separation
@@ -289,7 +289,7 @@ static int star_radius(struct ccd_frame *fr, int x, int y, double peak, double s
     double hm = (peak - sky) / 2 + sky;
 
     int rn;
-	for (rn = 1; rn < MAXSR; rn++) {
+    for (rn = 1; rn < MAXSR; rn++) {
         struct rstats rsn;
         thin_ring_stats(fr, x, y, rn, &rsn, -HUGE, HUGE);
 
@@ -677,6 +677,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 
             // now check if the star is valid
             double fwhm;
+
             int starr = star_radius(fr, x, y, pk, minpk, &fwhm);
             if (starr < 0) continue; // not at a peak
 
@@ -734,8 +735,8 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 			if (check_multiple(src, &st)) {
 //d3_printf("candidates so far: %d\n", candidates);
 				candidates = 0;
-				insert_star(src, &st);
-			}
+                insert_star(src, &st);
+            }
 		}
 	}
 

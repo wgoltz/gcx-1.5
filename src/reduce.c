@@ -1578,7 +1578,7 @@ static GSList *detect_frame_stars(struct ccd_frame *fr)
     GSList *as = NULL;
     int i;
     for (i = 0; i < src->ns; i++) {
-        if (src->s[i].peak > P_DBL(AP_SATURATION)) continue;
+//        if (src->s[i].peak > P_DBL(AP_SATURATION)) continue;
 
         if (set_ref) {
             ref_flux = src->s[i].flux;

@@ -634,8 +634,8 @@ void find_stars_cb(gpointer window, guint action)
 		remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
 /* now add to the list */
 		for (i = 0; i < src->ns; i++) {
-			if (src->s[i].peak > P_DBL(AP_SATURATION))
-				continue;
+//			if (src->s[i].peak > P_DBL(AP_SATURATION))
+//				continue;
 			ref_flux = src->s[i].flux;
 			ref_fwhm = src->s[i].fwhm;
 			break;
@@ -643,8 +643,8 @@ void find_stars_cb(gpointer window, guint action)
 
 		nstars = 0;
 		for (i = 0; i < src->ns; i++) {
-			if (src->s[i].peak > P_DBL(AP_SATURATION))
-				continue;
+//			if (src->s[i].peak > P_DBL(AP_SATURATION))
+//				continue;
 			gs = gui_star_new();
 			gs->x = src->s[i].x;
 			gs->y = src->s[i].y;
