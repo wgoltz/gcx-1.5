@@ -1543,9 +1543,11 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 
             if (outf) {
                 if (get_named_checkb_val(dialog, "clip_checkb"))
-                    save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
+//                    save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
+                    save_clipped_image_file(imf, outf, 0, NULL, progress_pr, dialog);
                 else
-                    save_image_file (imf, outf, 0, &seq, progress_pr, dialog);
+//                    save_image_file (imf, outf, 0, &seq, progress_pr, dialog);
+                    save_image_file (imf, outf, 0, NULL, progress_pr, dialog);
 
 //                if (fr->name) free(fr->name);
 //                fr->name = strdup(imf->filename);
