@@ -408,9 +408,8 @@ int imf_load_frame(struct image_file *imf)
 
     struct ccd_frame *fr = imf->fr;
 
-    int reloaded = 0;
-    if (imf_check_reload(imf) > 0) {
-d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
+    int reloaded = imf_check_reload(imf);
+    if (reloaded > 0) {
         fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
 
         if (fr == NULL) {
@@ -422,13 +421,16 @@ d2_printf("reduce.imf_load_frame reading %s\n", imf->filename);
         fr->imf = imf;
 
         imf->flags |= IMG_LOADED;
-
-        reloaded = 1;
     }
 
-    get_frame(imf->fr, "imf_load_frame");
+    get_frame(fr, "imf_load_frame");
 
     rescan_fits_exp(fr, &(fr->exp));
+
+    if (reloaded > 0) {
+        struct wcs *wcs = &fr->fim;
+        wcs_transform_from_frame (fr, wcs);
+    }
     if (! fr->stats.statsok) frame_stats(fr);
 
 //printf("reduce.imf_load_frame return ok\n");
@@ -1777,8 +1779,8 @@ int wcs_align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
 
     struct wcs *imf_wcs = &(imf->fr->fim);
     struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
-printf("2\n"); fflush(NULL);
-    wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+
+//    wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
 
     double d_rot = imf_wcs->rot - align_wcs->rot;
 
@@ -1809,192 +1811,152 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
     if ( imf_load_frame(imf) < 0 ) return -1;
 
-//#define USE_CMUNIPACK_MATCH
-#ifdef USE_CMUNIPACK_MATCH
-    {
-        GSList *fsl = detect_frame_stars(imf->fr);
+    GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
+    //        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
 
-        return_ok = (fsl != NULL);
-        if (return_ok) {
+    GtkWidget *align_combo = g_object_get_data(G_OBJECT(ccdred), "align_combo");
+    int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
 
-            CmpackMatch *cfg = cmpack_match_init(ccdr->alignref->fr->w, ccdr->alignref->fr->h, ccdr->align_stars);
-
-            return_ok = (cfg != NULL) && (cmpack_match(cfg, imf->fr->w, imf->fr->h, fsl) == 0);
-            if (return_ok) {
-                double dx, dy;
-
-                cmpack_match_get_offset(cfg, &dx, &dy);
-                shift_frame(imf->fr, -dx, -dy);
-
-                PROGRESS_MESSAGE( snprintf(msg, 255, " [%.1f, %.1f]", dx, dy) )
-
-            } else {
-
-                PROGRESS_MESSAGE( snprintf(msg, 255, " no match") )
-
-            }
-            if (cfg) cmpack_match_destroy(cfg);
+    if (active == 2) { // match WCS
+        if (imf_load_frame(ccdr->alignref) < 0) {
+            imf_release_frame(imf, "");
+            printf("align_imf: can't load alignment frame\n"); fflush(NULL);
+            return -1;
         }
 
-        GSList *sl = fsl;
-        while (sl) {
-            struct gui_star *gs = GUI_STAR(sl->data);
-            gui_star_release(gs);
-            sl = g_slist_next(sl);
+        struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
+        //        wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+
+        struct wcs *imf_wcs = &(imf->fr->fim);
+        //                wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+
+        double d_rot = imf_wcs->rot - align_wcs->rot;
+
+        // assume TAN projection and xinc = yinc
+        double d_xref = (imf_wcs->xref - align_wcs->xref) / imf_wcs->xinc;
+        double d_yref = (imf_wcs->yref - align_wcs->yref) / imf_wcs->xinc * cos(degrad(imf_wcs->yref));
+
+        double s, c;
+        sincos(degrad(imf_wcs->rot), &s, &c);
+
+        double dx = c * d_xref + s * d_yref;
+        double dy = c * d_yref - s * d_xref;
+
+        shift_frame(imf->fr, dx, dy);
+        rotate_frame(imf->fr, degrad(d_rot));
+
+        imf_release_frame(ccdr->alignref, "align_imf");
+
+    } else { // match stars
+        int pass = 0;
+        return_ok = (pass == 0);
+
+        struct ccd_frame *fr = NULL;
+
+        int rotate = get_named_checkb_val(ccdred, "align_rotate");
+        int smooth = get_named_checkb_val(ccdred, "align_smooth");
+
+        if (rotate || smooth) {
+            fr = clone_frame(imf->fr); // make a copy to work on
+            if (smooth) { // blur the copy
+                struct blur_kern blur_kn;
+                blur_kn.kern = NULL;
+                new_blur_kern(& blur_kn, 7, ccdr->blurv);
+                filter_frame_inplace(fr, blur_kn.kern, blur_kn.size);
+            }
+
+        } else {
+            fr = imf->fr;
         }
-        g_slist_free(fsl);
-    }
 
-#else
-    {
-        GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
-//        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
+        if (! rotate) pass = 1; // skip rotation pass
 
-        GtkWidget *align_combo = g_object_get_data(G_OBJECT(ccdred), "align_combo");
-        int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
+        double dx, dy, dtheta = 0, dt = 0;
+        while ((pass < 2) && return_ok) { // need two passes because rotate_frame introduces a shift
+            GSList *fsl = NULL;
 
-        if (active == 2) { // match WCS
-            return_ok = imf_load_frame(ccdr->alignref) < 0;
+            // pass 0: if rotate:
+            //             find stars in copy of fr
+            //             rotate the copy
+            // pass 1: if rotate:
+            //             find stars in rotated copy
+            //         otherwise:
+            //             find stars in the actual fr
+            //         shift & rotate the actual fr
+            fsl = detect_frame_stars(fr);
+
+            return_ok = (fsl != NULL);
             if (return_ok) {
+                int n = fastmatch(fsl, ccdr->align_stars);
 
-                struct wcs *imf_wcs = &(imf->fr->fim);
-                struct wcs *align_wcs = &(ccdr->alignref->fr->fim);
-                printf("3\n"); fflush(NULL);
-                wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
-
-                double d_rot = imf_wcs->rot - align_wcs->rot;
-
-                // assume TAN projection and xinc = yinc
-                double d_xref = (imf_wcs->xref - align_wcs->xref) / imf_wcs->xinc;
-                double d_yref = (imf_wcs->yref - align_wcs->yref) / imf_wcs->xinc * cos(degrad(imf_wcs->yref));
-
-                double s, c;
-                sincos(degrad(imf_wcs->rot), &s, &c);
-
-                double dx = c * d_xref + s * d_yref;
-                double dy = c * d_yref - s * d_xref;
-
-                shift_frame(imf->fr, dx, dy);
-                rotate_frame(imf->fr, degrad(d_rot));
-
-                imf_release_frame(ccdr->alignref, "align_imf");
-
-            } else {
-                printf("align_imf: can't load alignment frame\n"); fflush(NULL);
-            }
-
-        } else { // match stars
-            int pass = 0;
-            return_ok = (pass == 0);
-
-            struct ccd_frame *fr = NULL;
-
-            int rotate = get_named_checkb_val(ccdred, "align_rotate");
-            int smooth = get_named_checkb_val(ccdred, "align_smooth");
-
-            if (rotate || smooth) {
-                fr = clone_frame(imf->fr); // make a copy to work on
-                if (smooth) { // blur the copy
-                    struct blur_kern blur_kn;
-                    blur_kn.kern = NULL;
-                    new_blur_kern(& blur_kn, 7, ccdr->blurv);
-                    filter_frame_inplace(fr, blur_kn.kern, blur_kn.size);
-                }
-
-            } else {
-                fr = imf->fr;
-            }
-
-            if (! rotate) pass = 1; // skip rotation pass
-
-            double dx, dy, dtheta = 0, dt = 0;
-            while ((pass < 2) && return_ok) { // need two passes because rotate_frame introduces a shift
-                GSList *fsl = NULL;
-
-                // pass 0: if rotate:
-                //             find stars in copy of fr
-                //             rotate the copy
-                // pass 1: if rotate:
-                //             find stars in rotated copy
-                //         otherwise:
-                //             find stars in the actual fr
-                //         shift & rotate the actual fr
-                fsl = detect_frame_stars(fr);
-
-                return_ok = (fsl != NULL);
+                return_ok = (n != 0);
                 if (return_ok) {
-                    int n = fastmatch(fsl, ccdr->align_stars);
 
-                    return_ok = (n != 0);
-                    if (return_ok) {
+                    PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );
 
-                        PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );
-
-                        GSList *pairs = NULL;
-
-                        GSList *sl = fsl;
-                        while (sl) {
-                            struct gui_star *gs = GUI_STAR(sl->data);
-                            if (gs->flags & STAR_HAS_PAIR && gs->pair) pairs = g_slist_prepend(pairs, gs);
-
-                            sl = g_slist_next(sl);
-                        }
-
-                        if (pairs) {
-                            if (pass == 0) { // rotate copy of fr
-                                pairs_fit(pairs, &dx, &dy, NULL, &dtheta);
-
-                                PROGRESS_MESSAGE( " (rotate)[%.2f]", dtheta );
-
-                                dt = degrad(dtheta);
-                                rotate_frame(fr, -dt);
-
-                            } else { // rotate and shift actual fr
-                                pairs_fit(pairs, &dx, &dy, NULL, NULL);
-
-                                PROGRESS_MESSAGE( " (x,y)[%.1f, %.1f]", dx, dy );
-
-                                if (rotate) rotate_frame(imf->fr, -dt);
-
-                                shift_frame(imf->fr, -dx, -dy);
-
-                                struct wcs *wcs = & imf->fr->fim;
-                                if (wcs->wcsset == WCS_VALID) {
-                                    adjust_wcs(wcs, 0, 0, 1, -dtheta);
-                                    adjust_wcs(wcs, -dx, -dy, 1, 0);
-                                    wcs_to_fits_header(imf->fr); // not quite correct
-                                }
-                            }
-
-                            g_slist_free(pairs);
-                        }
-
-                    }  else {
-                        if (progress) (* progress)(" no match", data);
-
-                        printf("align_imf: n == 0\n"); fflush(NULL);
-                    }
+                    GSList *pairs = NULL;
 
                     GSList *sl = fsl;
                     while (sl) {
                         struct gui_star *gs = GUI_STAR(sl->data);
-                        gui_star_release(gs, "align_imf");
+                        if (gs->flags & STAR_HAS_PAIR && gs->pair) pairs = g_slist_prepend(pairs, gs);
+
                         sl = g_slist_next(sl);
                     }
-                    g_slist_free(fsl);
 
-                } else {
-                    printf("align_imf: fsl == NULL\n"); fflush(NULL);
+                    if (pairs) {
+                        if (pass == 0) { // rotate copy of fr
+                            pairs_fit(pairs, &dx, &dy, NULL, &dtheta);
+
+                            PROGRESS_MESSAGE( " (rotate)[%.2f]", dtheta );
+
+                            dt = degrad(dtheta);
+                            rotate_frame(fr, -dt);
+
+                        } else { // rotate and shift actual fr
+                            pairs_fit(pairs, &dx, &dy, NULL, NULL);
+
+                            PROGRESS_MESSAGE( " (x,y)[%.1f, %.1f]", dx, dy );
+
+                            if (rotate) rotate_frame(imf->fr, -dt);
+
+                            shift_frame(imf->fr, -dx, -dy);
+
+                            struct wcs *wcs = & imf->fr->fim;
+                            if (wcs->wcsset == WCS_VALID) {
+                                adjust_wcs(wcs, 0, 0, 1, -dtheta);
+                                adjust_wcs(wcs, -dx, -dy, 1, 0);
+                                wcs_to_fits_header(imf->fr); // not quite correct
+                            }
+                        }
+
+                        g_slist_free(pairs);
+                    }
+
+                }  else {
+                    if (progress) (* progress)(" no match", data);
+
+                    printf("align_imf: n == 0\n"); fflush(NULL);
                 }
 
-                pass++;
+                GSList *sl = fsl;
+                while (sl) {
+                    struct gui_star *gs = GUI_STAR(sl->data);
+                    gui_star_release(gs, "align_imf");
+                    sl = g_slist_next(sl);
+                }
+                g_slist_free(fsl);
+
+            } else {
+                printf("align_imf: fsl == NULL\n"); fflush(NULL);
             }
 
-            if (rotate || smooth) release_frame(fr, "align_imf rotate/smooth");
+            pass++;
         }
+
+        if (rotate || smooth) release_frame(fr, "align_imf rotate/smooth");
     }
 
-#endif
 
 //    if (return_ok && (imf->fim->flags == WCS_VALID)) {
 //        wcs_clone(& imf->fr->fim, imf->fim);

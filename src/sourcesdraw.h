@@ -90,28 +90,17 @@ struct gui_star_list {
 #define STAR_SHAPE_DIAMOND 4
 #define STAR_SHAPE_CROSS 5
 
-/* return the type mask from a gui_star pointer */
-//#define TYPE_MASK_GSTAR(gs) (1 << (((gs)->flags) & STAR_TYPE_ALL))
-#define TYPE_MASK_GSTAR(gs) (((gs)->flags) & STAR_TYPE_ALL)
-
-//#define GSTAR_SET_TYPE(gs, type) ( (gs)->flags = ((gs)->flags & ~STAR_TYPE_ALL) | TYPE_MASK((type)) )
-//#define GSTAR_IS_TYPE(gs, type) ( ((gs)->flags & TYPE_MASK(type)) == TYPE_MASK(type) )
-//#define GSTAR_IN(gs, select) ( ((gs)->flags & (select)) != 0 )
-
-// these don't work
-//#define GSTAR_SET_TYPE(gs, type) ((gs)->type = (type))
-//#define GSTAR_IS_TYPE(gs, type) ((gs)->type == (type))
-#define GSTAR_IN(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
+#define GSTAR_OF_TYPE(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
 #define GSTAR_TYPE(gs) ((gs)->type)
 
-/* type mask for catalog and reference stars */
-#define SELECT_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
-/* type mask for stars that are specific to a particular frame */
-#define SELECT_FRSTAR (TYPE_MASK(STAR_TYPE_SIMPLE)|TYPE_MASK(STAR_TYPE_USEL))
-/* type mask for stars that paticipate in photometry */
-#define SELECT_PHOT (TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
+/* selection mask for catalog and reference stars */
+#define TYPE_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
+/* selection mask for stars that are specific to a particular frame */
+#define TYPE_FRSTAR (TYPE_MASK(STAR_TYPE_SIMPLE)|TYPE_MASK(STAR_TYPE_USEL))
+/* selection mask for stars that paticipate in photometry */
+#define TYPE_PHOT (TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
 /* align stars */
-#define SELECT_ALIGN (TYPE_MASK(STAR_TYPE_ALIGN))
+#define TYPE_ALIGN (TYPE_MASK(STAR_TYPE_ALIGN))
 
 /* macros for casting */
 #define GUI_STAR(x) ((struct gui_star *)(x))
@@ -143,8 +132,8 @@ extern gboolean sources_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer
 extern GSList *filter_selection(GSList *sl, guint type_mask, guint and_mask, guint or_mask);
 extern void search_remove_pair_from(struct gui_star *gs, struct gui_star_list *gsl);
 void remove_stars(GtkWidget *window, int type_mask, int flag_mask);
-void delete_stars(GtkWidget *window, int type_mask, int flag_mask);
 void remove_pairs(GtkWidget *window, int flag_mask);
+void selected_stars_set_type(GtkWidget *window, int type);
 void redraw_cat_stars(GtkWidget *window);
 int update_gs_from_cats(GtkWidget *window, struct cat_star *cats);
 int add_cat_stars_to_window(gpointer window, struct cat_star **catsl, int n);
@@ -186,6 +175,8 @@ int merge_cat_star_list_to_window(gpointer window, GList *addsl);
 struct gui_star *window_find_gs_by_cats_name(GtkWidget *window, char *name);
 struct gui_star *find_gs_by_cats_name(struct gui_star_list *gsl, char *name);
 void print_gui_stars(GSList *sl);
+void selected_stars_invert(GtkWidget *window);
+void delete_stars(GtkWidget *window, int type_mask, int flag_mask);
 
 
 #endif

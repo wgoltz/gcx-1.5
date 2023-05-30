@@ -5,24 +5,24 @@
 
 #define CAT_GET_SIZE 50000 	/* number of stars we search field star catalogs for before sorting */
 
-#define CAT_STAR_NAME_SZ 63
-
 /* a catalog with name == NULL is invalid (empty table cell)
  * a catalog with a valid name and a NULL cat_search is closed
  */
 
 #define CATS_TYPE_MASK 0x0f
 
-/* we have the same types as gui stars */
-#define CATS_TYPE_SREF 0x01
-#define CATS_TYPE_APSTD 0x02
-#define CATS_TYPE_APSTAR 0x03
-#define CATS_TYPE_CAT 0x04
-#define CATS_TYPE_ALIGN 0x06
-#define CATS_TYPE_MOVING 0x08
+// gui_star types same as cat star types
+typedef enum {
+    CATS_TYPE_SREF = 1,
+    CATS_TYPE_APSTD,
+    CATS_TYPE_APSTAR,
+    CATS_TYPE_CAT,
+    CATS_TYPE_ALIGN,
+    CATS_TYPE_MOVING,
+    CATS_TYPES
+} cats_type;
 
-#define CATS_TYPE(cats) (((cats)->flags) & CATS_TYPE_MASK)
-
+#define CATS_TYPE(cats) ( ((cats)->gs) ? (cats)->gs->type : 0 )
 
 /* flags for catalogs and stars */
 
@@ -103,6 +103,7 @@ struct cat_star {
 	int ref_count;
 //	void *catt;	/* the catalog */
 	int flags;
+    cats_type type;
 	double ra;
 	double dec;
 	double perr;		/* position error in arcsec */
@@ -134,7 +135,7 @@ struct cat_star {
 struct catalog {
 	int ref_count;
 	char *name; /* name of catalog */
-	int flags; /* flags for catalog */
+//	int flags; /* flags for catalog */
     int (* cat_search)(struct cat_star *cst[], struct catalog *cat, double ra, double dec, double radius, int n);
     int (* cat_get)(struct cat_star *cst[], struct catalog *cat, char *name, int n);
 	int (* cat_add)(struct cat_star *cst, struct catalog *cat);

@@ -275,7 +275,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
         GSList *sl;
         for (sl = gsl->sl; sl != NULL; sl = sl->next) {
             struct gui_star *gs = GUI_STAR(sl->data);
-            if (gs->s && (GSTAR_IN(gs, SELECT_CATREF)))
+            if (gs->s && (GSTAR_OF_TYPE(gs, TYPE_CATREF)))
                 ssl = g_list_prepend(ssl, gs->s);
         }
     }

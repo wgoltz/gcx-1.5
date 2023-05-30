@@ -118,6 +118,7 @@ extern void act_frame_new (GtkAction *action, gpointer window);
 extern void act_about_cx (GtkAction *action, gpointer window);
 
 extern void act_stars_auto_pairs(GtkAction *action, gpointer window);
+extern void act_stars_invert_selection(GtkAction *action, gpointer window);
 extern void act_stars_rm_selected(GtkAction *action, gpointer window);
 extern void act_stars_rm_detected(GtkAction *action, gpointer window);
 extern void act_stars_rm_user(GtkAction *action, gpointer window);
@@ -132,6 +133,9 @@ extern void act_stars_toggle_off_frame(GtkAction *action, gpointer window);
 extern void act_stars_rm_all(GtkAction *action, gpointer window);
 extern void act_stars_rm_pairs_all(GtkAction *action, gpointer window);
 extern void act_stars_rm_pairs_selected(GtkAction *action, gpointer window);
+extern void act_selected_to_target (GtkAction *action, gpointer window);
+extern void act_selected_to_std (GtkAction *action, gpointer window);
+extern void act_selected_to_field (GtkAction *action, gpointer window);
 
 /* from sourcesdraw.c */
 extern void act_stars_show_target (GtkAction *action, gpointer window);

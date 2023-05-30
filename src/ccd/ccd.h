@@ -157,7 +157,7 @@ struct im_stats {
 				   to a "mean" value, but is _not_ actually used in the
 				   transformation. the xinc/yinc are however, according to the
 				   fits convention. */
-#define WCS_DATA_IS_FLIPPED 0x10 // wcs (as read) is flipped (xinc * yinc < 0)
+#define WCS_DATA_IS_FLIPPED 0x10 // frame data has been flipped
 #define WCS_HAVE_POS 0x20  // have xref and yref
 #define WCS_HAVE_SCALE 0x40 // have xinc and yinc
 #define WCS_EDITED 0x80 // updated values in wcsedit

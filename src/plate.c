@@ -161,8 +161,6 @@ void XE_to_xy(struct wcs *wcs, double X, double E, double *x, double *y)
 {
     double xinc = wcs->xinc;
     double yinc = wcs->yinc;
-//    if (wcs->flags & WCS_DATA_IS_FLIPPED)
-//        yinc = - yinc;
 
 	if (wcs->flags & WCS_USE_LIN) {
         XE_to_xy_linear(wcs->xrefpix, wcs->yrefpix, xinc, yinc, wcs->pc, X, E, x, y);
@@ -177,8 +175,6 @@ void XE_to_xy(struct wcs *wcs, double X, double E, double *x, double *y)
 void xy_to_XE(struct wcs *wcs, double x, double y, double *X, double *E)
 {
     double xinc = wcs->xinc;
-//    if (wcs->flags & WCS_DATA_IS_FLIPPED)
-//        xinc = - xinc;
 
 	if (wcs->flags & WCS_USE_LIN) {
         xy_to_XE_linear(wcs->xrefpix, wcs->yrefpix, xinc, wcs->yinc, wcs->pc, x, y, X, E);

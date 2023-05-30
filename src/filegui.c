@@ -554,7 +554,7 @@ int load_gsc2_to_window(gpointer window, char *name)
 	}
 
 	if (ret >= 0) {
-//		remove_stars(window, SELECT_PHOT, 0);
+//		remove_stars(window, TYPE_PHOT, 0);
 		add_cat_stars_to_window(window, csl, ret);
 	}
 	return ret;

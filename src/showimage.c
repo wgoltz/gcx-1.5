@@ -1116,7 +1116,7 @@ d2_printf("frame to channel\n");
 	}
 
 	gtk_window_set_title (GTK_WINDOW (window), fr->name);
-    remove_stars(window, SELECT_FRSTAR, 0);
+    remove_stars(window, TYPE_FRSTAR, 0);
 
     redraw_cat_stars(window);
 

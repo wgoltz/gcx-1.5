@@ -159,7 +159,8 @@ static int gsc_search(struct cat_star *cst[], struct catalog *cat,
 		cats->equinox = 2000.0;
 		cats->mag = tc[i].mag;
         cats->name = tc[i].name; // already dupd
-        cats->flags = CATS_TYPE_SREF | CATS_FLAG_ASTROMET;
+        cats->type = CATS_TYPE_SREF;
+        cats->flags |= CATS_FLAG_ASTROMET;
 //        cats->comments = strdup("p=G");
 		cst[i] = cats;
 	}  
@@ -189,7 +190,7 @@ static struct catalog *cat_open_gsc(struct catalog *cat)
 	cat->cat_get = NULL;
 	cat->cat_add = NULL;
 	cat->cat_sync = NULL;
-    cat->flags = CATS_TYPE_SREF | CATS_FLAG_ASTROMET;
+//    cat->flags = CATS_TYPE_SREF | CATS_FLAG_ASTROMET;
 	return cat;
 }
 
@@ -265,8 +266,9 @@ static int tycho2_cat_search(struct cat_star *cst[], struct catalog *cat,
 		cats->perr = 0.001 * sqrt(sqr(raerr) + sqr(decerr));
 		cats->equinox = 2000.0;
         asprintf(&cats->name, "%04d-%04d", r, s);
-        cats->flags = CATS_FLAG_ASTROMET | CATS_TYPE_SREF;
-		if (vt < 30.0 && bt < 30.0) {
+        cats->type = CATS_TYPE_SREF;
+        cats->flags |= CATS_FLAG_ASTROMET;
+        if (vt < 30.0 && bt < 30.0) {
 			cats->mag = vt - 0.090 * (bt - vt);
             double verr = vterr;
             double berr = bterr;
@@ -278,8 +280,6 @@ static int tycho2_cat_search(struct cat_star *cst[], struct catalog *cat,
                    vt - 0.090 * (bt - vt), verr, 0.850 * (bt - vt) + vt - 0.090 * (bt - vt),
                                berr, vt, vterr, bt, bterr);
 
-//			asprintf(&cats->comments, "p=T ");
- //           cats->flags = CATS_FLAG_ASTROMET | CATS_TYPE_SREF;
 		} else if (vt < 30.0) {
 			cats->mag = vt;
             asprintf(&cats->smags, "vt=%.3f/%.3f", vt, vterr);
@@ -319,7 +319,7 @@ static struct catalog *cat_open_tycho2(struct catalog *cat)
 	cat->cat_get = NULL;
 	cat->cat_add = NULL;
 	cat->cat_sync = NULL;
-    cat->flags = CATS_TYPE_CAT | CATS_FLAG_ASTROMET;
+//    cat->flags = CATS_TYPE_CAT | CATS_FLAG_ASTROMET;
 	return cat;
 }
 
@@ -425,6 +425,7 @@ static void update_cat_star(struct cat_star *ocats, struct cat_star *cats)
 	ocats->dec = cats->dec;
 	ocats->perr = cats->perr;
 	ocats->equinox = cats->equinox;
+    ocats->type = cats->type;
 	ocats->flags = cats->flags;
     ocats->mag = cats->mag;
     ocats->name = strdup(cats->name);
@@ -483,7 +484,7 @@ static struct catalog *cat_open_local(struct catalog *cat)
 	cat->cat_get = local_get;
 	cat->cat_add = local_add;
 	cat->cat_sync = local_sync;
-	cat->flags = 0;
+//	cat->flags = 0;
 	return cat;
 }
 
@@ -518,7 +519,7 @@ int edb_get(struct cat_star *cst[], struct catalog *cat,
 	cats->mag = mag;
 	cats->equinox = 2000.0;
     cats->name = strdup(name);
-    cats->flags = CATS_TYPE_CAT;
+    cats->type = CATS_TYPE_CAT;
 	cst[0] = cats;
 	return 1;
 }
@@ -538,7 +539,7 @@ static struct catalog *cat_open_edb(struct catalog *cat)
 	cat->cat_get = edb_get;
 	cat->cat_add = NULL;
 	cat->cat_sync = NULL;
-	cat->flags = 0;
+//	cat->flags = 0;
 	return cat;
 }
 

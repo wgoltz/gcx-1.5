@@ -87,9 +87,9 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 				cats->dec = dec;
 				cats->equinox = 1.0 * wcs->equinox;
 				cats->mag = 0.0;
-				cats->flags = CATS_TYPE_SREF;
+                cats->type = CATS_TYPE_SREF;
 				cats->comments = NULL;
-                if (flags & MKRCP_DET_TO_TGT) cats->flags = CATS_TYPE_APSTAR;
+                if (flags & MKRCP_DET_TO_TGT) cats->type = CATS_TYPE_APSTAR;
 
 				tsl = g_list_prepend(tsl, cats);
 			}
@@ -107,9 +107,9 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 				cats->dec = dec;
 				cats->equinox = 1.0 * wcs->equinox;
 				cats->mag = 0.0;
-				cats->flags = CATS_TYPE_SREF;
+                cats->type = CATS_TYPE_SREF;
 				cats->comments = NULL;
-                if (flags & MKRCP_USER_TO_TGT) cats->flags = CATS_TYPE_APSTAR;
+                if (flags & MKRCP_USER_TO_TGT) cats->type = CATS_TYPE_APSTAR;
 
 				tsl = g_list_prepend(tsl, cats);
 			}
@@ -120,7 +120,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe field");
-                    if (flags & MKRCP_FIELD_TO_TGT) cats->flags = CATS_TYPE_APSTAR;
+                    if (flags & MKRCP_FIELD_TO_TGT) cats->type = CATS_TYPE_APSTAR;
 
                     tsl = g_list_prepend(tsl, cats);
                 }
@@ -130,7 +130,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe cat");
-                    if (flags & MKRCP_CAT_TO_STD) cats->flags = CATS_TYPE_APSTD;
+                    if (flags & MKRCP_CAT_TO_STD) cats->type = CATS_TYPE_APSTD;
 
                     tsl = g_list_prepend(tsl, cats);
                 }
@@ -224,7 +224,8 @@ static int crack_constar(char *line, struct cat_star *cats)
 		ret = asprintf(&smags, "p(gsc)=%.3f", mag);
 		if (ret < 0)
 			smags = NULL;
-		cats->flags = CATS_FLAG_ASTROMET | CATS_TYPE_SREF;
+        cats->type = CATS_TYPE_SREF;
+        cats->flags |= CATS_FLAG_ASTROMET;
 	} else {
 /* ref star (has vmag) */
 		ret = sscanf(line+i, "VMAG=%f", &vmag);
@@ -233,7 +234,8 @@ static int crack_constar(char *line, struct cat_star *cats)
 			if (ret < 0)
 				smags = NULL;
 		}
-		cats->flags = CATS_TYPE_APSTD | CATS_FLAG_ASTROMET;
+        cats->type = CATS_TYPE_APSTD;
+        cats->flags |= CATS_FLAG_ASTROMET;
 	}
 	i=0;
 	while (line[i] != 0) {
@@ -309,7 +311,8 @@ end:
 	cats->mag = mag;
     cats->name = strdup(name);
 	cats->comments = lstrndup(comment, k);
-	cats->flags = CATS_TYPE_APSTAR | CATS_FLAG_VARIABLE;
+    cats->type = CATS_TYPE_APSTAR;
+    cats->flags |= CATS_FLAG_VARIABLE;
 
 //	d3_printf("varstar name:%s ra:%.4f dec:%.4f mag:%.4f k=%d\ncomment:%s\n", 
 //		  cats->name, cats->ra, cats->dec, cats->mag, k, cats->comments);
@@ -510,7 +513,8 @@ int read_gsc2(struct cat_star *csl[], FILE *fp, int n, double *cra, double *cdec
 			update_band_by_name(&cats->smags, "n(gsc2)", nmag, nmagerr);
 		}
 */
-		cats->flags = CATS_TYPE_SREF | CATS_FLAG_ASTROMET;
+        cats->type = CATS_TYPE_SREF;
+        cats->flags |= CATS_FLAG_ASTROMET;
 		if (-1 == asprintf(&cats->comments, "p=g "))
 			cats->comments = NULL;
 		cst[sn]=cats;
@@ -590,7 +594,8 @@ int read_landolt_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		                   "u=%.3f/0.005 r=%.3f/0.005 i=%.3f/0.005",
 		                   vmag, bmag, umag, rmag, imag))
             cats->cmags = NULL;
-		cats->flags = CATS_TYPE_APSTD | CATS_FLAG_ASTROMET;
+        cats->type = CATS_TYPE_APSTD;
+        cats->flags |= CATS_FLAG_ASTROMET;
 		if (-1 == asprintf(&cats->comments, "%s", nam))
 			cats->comments = NULL;
 		cst[sn]=cats;
@@ -681,7 +686,7 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 		cats->dec = dec;
 		cats->mag = 0.0;
 		cats->equinox = 2000.0;
-		cats->flags = CATS_TYPE_CAT;
+        cats->type = CATS_TYPE_CAT;
 		if (field[4] != 0)
 			ret = asprintf(&cats->comments, "p=%s i=%s %s", 
 				 line+field[2], line+field[3], line+field[4]);
@@ -799,7 +804,8 @@ int read_henden_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 					      sqrt(sqr(verr)+sqr(vrerr)+sqr(rierr)));
 			}
 		}
-		cats->flags = CATS_TYPE_APSTD | CATS_FLAG_ASTROMET;
+        cats->type = CATS_TYPE_APSTD;
+        cats->flags |= CATS_FLAG_ASTROMET;
 		cst[sn]=cats;
 		sn ++;
 	}
@@ -883,7 +889,8 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 	cats->dec = dec;
 	cats->mag = vmag;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_APSTAR | CATS_FLAG_VARIABLE;
+    cats->type = CATS_TYPE_APSTAR;
+    cats->flags |= CATS_FLAG_VARIABLE;
 	cst[sn]=cats;
 	sn ++;
 
@@ -916,9 +923,9 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 		cats->mag = c11;
 		cats->equinox = 2000.0;
 		if (c11 >= 12.5)
-			cats->flags = CATS_TYPE_APSTD;
+            cats->type = CATS_TYPE_APSTD;
 		else
-			cats->flags = CATS_TYPE_CAT;
+            cats->type = CATS_TYPE_CAT;
 		cst[sn]=cats;
 		sn ++;
 	}
@@ -949,7 +956,7 @@ int read_sumner_table(struct cat_star *csl[], FILE *fp, int n, double *cra, doub
 			cats->dec = (c6 / 60 + c7 / 3600 + c5);
 		cats->mag = c11;
 		cats->equinox = 2000.0;
-		cats->flags = CATS_TYPE_CAT;
+        cats->type = CATS_TYPE_CAT;
 		cst[sn]=cats;
 		sn ++;
 	}
@@ -1086,7 +1093,8 @@ static int read_gcvs_table(struct cat_star *csl[], FILE *fp, int n, double *cra,
 		cats->dec = dec;
 		cats->mag = mmax;
 		cats->equinox = 2000.0;
-		cats->flags = CATS_TYPE_CAT | CATS_FLAG_VARIABLE;
+        cats->type = CATS_TYPE_CAT;
+        cats->flags = CATS_FLAG_VARIABLE;
 		if (spec[0] != 0 && !amp) {
 			ret = asprintf(&cats->comments, "p=V t=%s s=%s m(%s)=%.2f/%.2f",
 				 type, spec, phot, mmax, mmin);
@@ -1227,7 +1235,8 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 		cats->dec = dec;
 		cats->mag = 0.0;
 		cats->equinox = 2000.0;
-		cats->flags = CATS_TYPE_CAT | CATS_FLAG_VARIABLE;
+        cats->type = CATS_TYPE_CAT;
+        cats->flags = CATS_FLAG_VARIABLE;
 		cst[sn]=cats;
 		sn ++;
 		d4_printf("got %s\n", cats->name);
@@ -1381,24 +1390,24 @@ static GList * merge_star(GList *csl, struct cat_star *new_star)
 		cats = CAT_STAR(sl->data);
         if (cats_is_duplicate(cats, new_star)) {
 			/* these are the funny replacement/reject rules */
-			if (CATS_TYPE(cats) == CATS_TYPE_SREF) {
+            if (cats->type == CATS_TYPE_SREF) {
                 cat_star_release(cats, "merge_star 1&2");
                 cat_star_ref(new_star, "merge_star 1&2");
                 sl->data = new_star;
-			} else if (CATS_TYPE(cats) == CATS_TYPE_ALIGN) {
-                if (CATS_TYPE(new_star) != CATS_TYPE_SREF) {
+            } else if (cats->type == CATS_TYPE_ALIGN) {
+                if (new_star->type != CATS_TYPE_SREF) {
                     cat_star_release(cats, "merge_star 3&4");
                     cat_star_ref(new_star, "merge_star 3&4");
                     sl->data = new_star;
 				}
-			} else if (CATS_TYPE(cats) == CATS_TYPE_CAT) {
-                if (CATS_TYPE(new_star) != CATS_TYPE_SREF && CATS_TYPE(new_star) != CATS_TYPE_ALIGN) {
+            } else if (cats->type == CATS_TYPE_CAT) {
+                if (new_star->type != CATS_TYPE_SREF && new_star->type != CATS_TYPE_ALIGN) {
                     cat_star_release(cats, "merge_star 5&6");
                     cat_star_ref(new_star, "merge_star 5&6");
                     sl->data = new_star;
 				}
-            } else if (CATS_TYPE(cats) == CATS_TYPE_APSTD || CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
-                if (CATS_TYPE(new_star) == CATS_TYPE_APSTD || CATS_TYPE(new_star) == CATS_TYPE_APSTAR) {
+            } else if (cats->type == CATS_TYPE_APSTD || cats->type == CATS_TYPE_APSTAR) {
+                if (new_star->type == CATS_TYPE_APSTD || new_star->type == CATS_TYPE_APSTAR) {
                     cat_star_release(cats, "merge_star 7&8");
                     cat_star_ref(new_star, "merge_star 7&8");
                     sl->data = new_star;
@@ -1468,7 +1477,7 @@ int rcp_set_target(FILE *old, char *obj, FILE *outf, double mag_limit)
 	char *comments = NULL;
 
 	cats = get_object_by_name(obj);
-	cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
+    cats->type = CATS_TYPE_APSTAR;
 	if (cats == NULL)
 		return -1;
 
@@ -1550,7 +1559,7 @@ struct stf *make_tyc_stf(char *obj, double box, double mag_limit)
 		err_printf("make_tyc_rcp: cannot find object %s\n", obj);
 		return NULL;
 	}
-	cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
+    cats->type = CATS_TYPE_APSTAR;
 
 	cat = open_catalog("tycho2");
 
@@ -1565,7 +1574,7 @@ struct stf *make_tyc_stf(char *obj, double box, double mag_limit)
 
 	d3_printf ("got %d from cat_search\n", n); 
 	for (i = 0; i < n; i++) {
-		csl[i]->flags = (csl[i]->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTD;
+        csl[i]->type = CATS_TYPE_APSTD;
 		tsl = g_list_append(tsl, csl[i]);
 	}
 

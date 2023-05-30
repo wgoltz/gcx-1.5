@@ -802,7 +802,11 @@ static GtkActionEntry image_actions[] = {
 	{ "stars-add-catalog", NULL, "Add From _Catalog",      "A",          NULL, G_CALLBACK (act_stars_add_catalog) },
     { "stars-synthetic",   NULL, "Add _Synthetic Stars", "<control>A", NULL, G_CALLBACK (act_stars_add_synthetic)   },
 	{ "stars-edit",        NULL, "_Edit",                  "<control>E", NULL, G_CALLBACK (act_stars_edit)        },
+    { "stars-invert-selection", NULL, "Invert Selection",   NULL, NULL, G_CALLBACK (act_stars_invert_selection) },
     { "stars-rm-selected", NULL, "Remove Selecte_d",       "<control>D", NULL, G_CALLBACK (act_stars_rm_selected) },
+    { "stars-set-std",     NULL, "Change to Std",       NULL, NULL, G_CALLBACK (act_selected_to_std) },
+    { "stars-set-target",  NULL, "Change to Target",       NULL, NULL, G_CALLBACK (act_selected_to_target) },
+    { "stars-set-field",   NULL, "Change to Field",       NULL, NULL, G_CALLBACK (act_selected_to_field) },
     { "stars-toggle-detected", NULL, "Toggle Detected _Stars", "<shift>S",   NULL, G_CALLBACK (act_stars_toggle_detected) },
     { "stars-toggle-user",     NULL, "Toggle _User Stars",     "<shift>U",   NULL, G_CALLBACK (act_stars_toggle_user) },
     { "stars-toggle-field",    NULL, "Toggle _Field Stars",    "<shift>F",   NULL, G_CALLBACK (act_stars_toggle_field) },
@@ -930,7 +934,11 @@ static char *image_common_ui =
 	"  <separator name='separator2'/>"
 	"  <menuitem name='stars-edit' action='stars-edit'/>"
 	"  <separator name='separator3'/>"
-	"  <menuitem name='stars-rm-selected' action='stars-rm-selected'/>"
+    "  <menuitem name='stars-invert-selection' action='stars-invert-selection'/>"
+    "  <menuitem name='stars-rm-selected' action='stars-rm-selected'/>"
+    "  <menuitem name='stars-set-std' action='stars-set-std'/>"
+    "  <menuitem name='stars-set-target' action='stars-set-target'/>"
+    "  <menuitem name='stars-set-field' action='stars-set-field'/>"
     "  <menuitem name='stars-toggle-detected' action='stars-toggle-detected'/>"
     "  <menuitem name='stars-toggle-user' action='stars-toggle-user'/>"
     "  <menuitem name='stars-toggle-field' action='stars-toggle-field'/>"
@@ -1363,10 +1371,30 @@ void act_stars_rm_all (GtkAction *action, gpointer window)
     remove_stars (window, STAR_TYPE_ALL, 0);
 }
 
+void act_stars_invert_selection (GtkAction *action, gpointer window)
+{
+    selected_stars_invert(window);
+}
+
 void act_stars_rm_selected (GtkAction *action, gpointer window)
 {
 //    remove_stars(window, STAR_TYPE_ALL, STAR_SELECTED);
     delete_stars(window, STAR_TYPE_ALL, STAR_SELECTED);
+}
+
+void act_selected_to_target (GtkAction *action, gpointer window)
+{
+    selected_stars_set_type(window, STAR_TYPE_APSTAR);
+}
+
+void act_selected_to_std (GtkAction *action, gpointer window)
+{
+    selected_stars_set_type(window, STAR_TYPE_APSTD);
+}
+
+void act_selected_to_field (GtkAction *action, gpointer window)
+{
+    selected_stars_set_type(window, STAR_TYPE_SREF);
 }
 
 void act_stars_toggle_detected (GtkAction *action, gpointer window)
@@ -1386,7 +1414,7 @@ void act_stars_toggle_field (GtkAction *action, gpointer window)
 
 void act_stars_toggle_catalog (GtkAction *action, gpointer window)
 {
-    draw_stars_of_type_window(window, SELECT_CATREF, toggle_draw);
+    draw_stars_of_type_window(window, TYPE_CATREF, toggle_draw);
 }
 
 void act_stars_rm_detected (GtkAction *action, gpointer window)

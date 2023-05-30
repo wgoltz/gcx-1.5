@@ -205,6 +205,12 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
         if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
     }
 
+    int frame_flipped = (wcs->xinc * wcs->yinc < 0);
+
+    g_object_set_data(G_OBJECT(dialog), "ignore_flip", (gpointer) 1);
+    set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
+    g_object_set_data(G_OBJECT(dialog), "ignore_flip", NULL);
+
     gtk_widget_queue_draw(dialog);
 
     return 0;
@@ -219,15 +225,8 @@ void wcsedit_refresh(gpointer window)
     GtkWidget *dialog = window_get_wcsedit(window);
     if (dialog == NULL) return;
 
-//d2_printf("wcsedit.wcsedit_refresh\n");
     struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
-
-    int frame_flipped = (wcs->wcsset != WCS_INVALID) && (wcs->xinc * wcs->yinc < 0);
-
-    g_object_set_data(G_OBJECT(dialog), "no_toggle", (gpointer) 1); // NOT called by toggling flip_field button
-    set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
-    g_object_set_data(G_OBJECT(dialog), "no_toggle", NULL);
 
     wcsedit_from_wcs(dialog, wcs);
 
@@ -241,52 +240,25 @@ void wcsedit_refresh(gpointer window)
 static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
 {
     GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    int toggle = (g_object_get_data(G_OBJECT(dialog), "no_toggle") == NULL);
-    if (toggle) { // flip_field button clicked
-        struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-        struct ccd_frame *fr = i_chan->fr;
-        struct wcs *frame_wcs = &(fr->fim);
+    if (g_object_get_data(G_OBJECT(dialog), "ignore_flip")) return;
 
-        struct wcs *window_wcs = window_get_wcs(window);
+    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+    struct ccd_frame *fr = i_chan->fr;
+    struct wcs *frame_wcs = &(fr->fim);
 
-//        int flip_field = get_named_checkb_val(dialog, "wcs_flip_field_checkb");
+    flip_frame(fr);
 
-//        int frame_flipped = (frame_wcs->wcsset != WCS_INVALID) && (frame_wcs->xinc * frame_wcs->yinc < 0);
-//        int frame_data_is_flipped = ((frame_wcs->flags & WCS_DATA_IS_FLIPPED) != 0);
+    i_chan->channel_changed = 1;
 
-//        int current_flip = (frame_data_is_flipped ^ frame_flipped);
-//        int new_flip = (flip_field ^ frame_flipped);
+    struct wcs *window_wcs = window_get_wcs(window);
 
-//        printf("wcs_flip_field_cb ****  flip_field %s frame_flipped %s frame_data_is_flipped %s current_flip %s new_flip %s\n",
-//               flip_field ? "Yes" : "No",
-//               frame_flipped ? "Yes" : "No",
-//               frame_data_is_flipped ? "Yes" : "No",
-//               current_flip ? "Yes" : "No",
-//               new_flip ? "Yes" : "No");
+    wcs_from_frame(fr, window_wcs);
 
-        printf("\nflip\n");
-        flip_frame(fr);
+    // refresh gui stars
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl != NULL) cat_change_wcs(gsl->sl, window_wcs);
 
-        i_chan->channel_changed = 1;
-        frame_wcs->flags ^= WCS_DATA_IS_FLIPPED;
-        if (frame_wcs->wcsset) {
-            frame_wcs->yinc = -frame_wcs->yinc;
-        }
-
-        window_wcs->flags ^= WCS_DATA_IS_FLIPPED;
-        if (window_wcs->wcsset) {
-            window_wcs->yinc = -window_wcs->yinc;
-        }
-
-        // refresh gui stars
-        struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-        if (gsl != NULL) cat_change_wcs(gsl->sl, window_wcs);
-//        printf("refresh gui stars\n"); fflush(NULL);
-
-        gtk_widget_queue_draw(window);
-    }
-
-//fflush(NULL);
+    gtk_widget_queue_draw(window);
 }
 
 /* called by wcsedit_refresh_parent

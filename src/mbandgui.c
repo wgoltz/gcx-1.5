@@ -651,6 +651,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
     case CATS_TYPE_APSTAR :	v = "Tgt"; break;
     case CATS_TYPE_CAT    : v = "Obj"; break;
     case CATS_TYPE_SREF   : v = "Field"; break;
+    default: break;
     }
 
     add_sob_store_entry( SOB_TYPE_COL, "%s", v );

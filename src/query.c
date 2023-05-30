@@ -141,7 +141,7 @@ static struct cat_star * parse_cat_line_ucac2_main(char *line)
 	cats->ra = u;
 	cats->dec = v;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     uc = strtod(line + cols[5], &endp);
 	cats->mag = uc;
@@ -223,7 +223,7 @@ static struct cat_star * parse_cat_line_ucac2_bss(char *line)
 	cats->ra = u;
 	cats->dec = v;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     u = strtod(line + cols[4], &endp);
     v = strtod(line + cols[5], &endp);
@@ -326,7 +326,7 @@ static struct cat_star * parse_cat_line_ucac3(char *line)
 	cats->ra = u;
 	cats->dec = v;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
 	u = strtod(line+cols[3], &endp);
 	if (u > 0) {
@@ -406,7 +406,7 @@ static struct cat_star * parse_cat_line_gsc2(char *line)
 	cats->ra = u;
 	cats->dec = v;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
 	fr = strtod(line+cols[4], &endp);
 	fre = strtod(line+cols[5], &endp);
@@ -493,7 +493,7 @@ static struct cat_star * parse_cat_line_gsc23(char *line)
     cats->ra = ra;
     cats->dec = dc;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     fm = strtod(line + cols[4], &endp);
     jm = strtod(line + cols[5], &endp);
@@ -573,7 +573,7 @@ static struct cat_star * parse_cat_line_gsc_act(char *line)
     cats->dec = dc;
 
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
     cats->perr = strtod(line + cols[3], &endp);
     if (cats->perr == 0.0) cats->perr = BIG_ERR;
 
@@ -664,7 +664,7 @@ static struct cat_star * parse_cat_line_usnob(char *line)
     cats->ra = ra;
     cats->dec = dc;
 	cats->equinox = 2000.0;
-	cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     double b1 = strtod(line + cols[9], &endp);
     double r1 = strtod(line + cols[10], &endp);
@@ -804,7 +804,7 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
     cats->ra = ra;
     cats->dec = dc;
     cats->equinox = 2000.0;
-    cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     double jm = strtod(line + cols[9], &endp);
     double km = strtod(line + cols[10], &endp);
@@ -929,7 +929,7 @@ static struct cat_star * parse_cat_line_tycho(char *line)
     cats->ra = ra;
     cats->dec = dc;
     cats->equinox = 2000.0;
-    cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     double bm = strtod(line + cols[5], &endp);
     double vm = strtod(line + cols[6], &endp);
@@ -1033,7 +1033,7 @@ static struct cat_star * parse_cat_line_hip(char *line)
     cats->ra = ra;
     cats->dec = dc;
     cats->equinox = 2000.0;
-    cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     double bm = strtod(line + cols[10], &endp);
     double vm = strtod(line + cols[3], &endp);
@@ -1146,7 +1146,7 @@ static struct cat_star * parse_cat_line_apass(char *line)
     cats->ra = ra;
     cats->dec = dc;
     cats->equinox = 2000.0;
-    cats->flags = CATS_TYPE_SREF;
+    cats->type = CATS_TYPE_SREF;
 
     double bmv = strtod(line + cols[8], &endp);
     double bmv_e = strtod(line + cols[9], &endp);
@@ -1438,7 +1438,7 @@ int make_cat_rcp(char *obj, unsigned int catalog, FILE *outf)
 		err_printf("make_cat_rcp: cannot find object %s\n", obj);
 		return -1;
 	}
-    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
+    cats->type = CATS_TYPE_APSTAR;
 
     tsl = query_catalog(catalog, cats->ra, cats->dec, progress_pr, NULL);
 

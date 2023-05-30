@@ -300,19 +300,13 @@ static void flags_changed_cb( GtkWidget *widget, gpointer dialog)
         int state = gtk_combo_box_get_active(GTK_COMBO_BOX(widget));
 
         switch (state) {
-        case 0 : cats->flags &= ~CATS_TYPE_MASK;
-                 cats->flags |= CATS_TYPE_SREF;
-                 break;
-        case 1 : cats->flags &= ~(CATS_TYPE_MASK | CATS_FLAG_VARIABLE);
-                 cats->flags |= CATS_TYPE_APSTD;
+        case 0 : cats->type = CATS_TYPE_SREF; break;
+        case 1 : cats->flags &= ~CATS_FLAG_VARIABLE;
+                 cats->type = CATS_TYPE_APSTD;
                  star_edit_update_flags(dialog, cats);
                  break;
-        case 2 : cats->flags &= ~(CATS_TYPE_MASK);
-                 cats->flags |= CATS_TYPE_APSTAR;
-                 break;
-        case 3 : cats->flags &= ~(CATS_TYPE_MASK);
-                 cats->flags |= CATS_TYPE_CAT;
-                 break;
+        case 2 : cats->type = CATS_TYPE_APSTAR; break;
+        case 3 : cats->type = CATS_TYPE_CAT; break;
         }
     }
     gui_update_star(dialog, cats);
@@ -511,8 +505,8 @@ static void star_make_std(struct cat_star *cats)
 	else
         str_join_str(&cats->comments, ", %s", cats->name);
 //	d3_printf("new_comments: %s\n", cats->comments);
-	cats->flags &= ~(CATS_FLAG_VARIABLE | CATS_TYPE_MASK);
-	cats->flags |= CATS_TYPE_APSTD;
+    cats->flags &= ~CATS_FLAG_VARIABLE;
+    cats->type = CATS_TYPE_APSTD;
 }
 
 static void mkref_cb( GtkWidget *widget, gpointer data )
@@ -695,14 +689,14 @@ d3_printf("making cats\n");
 			cats->dec = dec;
 			cats->equinox = 1.0 * wcs->equinox;
 			cats->mag = 0.0;
-			cats->flags = CATS_TYPE_SREF;
+            cats->type = CATS_TYPE_SREF;
 			gs->s = cats;
 
             cat_star_ref(cats, "do_star_edit"); // try this
 
 			if (make_std) {
                 gs->type = STAR_TYPE_APSTD;
-				cats->flags = CATS_TYPE_APSTD;
+                cats->type = CATS_TYPE_APSTD;
 			} else {
                 gs->type = STAR_TYPE_SREF;
 			}
@@ -731,7 +725,7 @@ d3_printf("making cats\n");
 void star_edit_dialog(GtkWidget *window, GSList *found)
 {
 	GSList *sel;
-    sel = filter_selection(found, SELECT_CATREF, 0, 0);
+    sel = filter_selection(found, TYPE_CATREF, 0, 0);
 	if (sel == NULL) {
         if (modal_yes_no("This star type cannot be edited.\nConvert to field star?", NULL))
             do_edit_star(window, found, 0);

@@ -689,18 +689,18 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 			case G_TOKEN_SYMBOL:
 				switch(intval(scan)) {
 				case SYM_STD:
-                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTD;
+                    cats->type = CATS_TYPE_APSTD;
 					cats->flags &= ~CATS_FLAG_VARIABLE;
 					break;
 				case SYM_TGT:
 				case SYM_TARGET:
-                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_APSTAR;
+                    cats->type = CATS_TYPE_APSTAR;
 					break;
 				case SYM_FIELD:
-                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_SREF;
+                    cats->type = CATS_TYPE_SREF;
 					break;
 				case SYM_CATALOG:
-                    cats->flags = (cats->flags & ~CATS_TYPE_MASK) | CATS_TYPE_CAT;
+                    cats->type = CATS_TYPE_CAT;
 					break;
 				default:
 					break;

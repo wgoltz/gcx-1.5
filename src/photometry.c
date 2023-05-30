@@ -519,7 +519,7 @@ static void stf_keep_good_phot(struct stf *stf)
 struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gsl, struct ccd_frame *fr)
 {
     // make cat star list from gui star list
-    GSList *apsl = gui_stars_of_type(gsl, SELECT_PHOT);
+    GSList *apsl = gui_stars_of_type(gsl, TYPE_PHOT);
     if (g_slist_length (apsl) == 0) {
 		err_printf_sb2(window, "in photometry.run_phot: No phot stars\n");
 		return  NULL;

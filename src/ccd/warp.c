@@ -842,6 +842,10 @@ void flip_frame(struct ccd_frame *fr)
         float *in = get_color_plane(fr, plane_iter);
         flip_data(in, NULL, fr->w, fr->h);
     }
+    fr->fim.yinc = -fr->fim.yinc;
+    fr->fim.flags ^= WCS_DATA_IS_FLIPPED;
+
+    printf("%s\n", fr->fim.flags & WCS_DATA_IS_FLIPPED ? "flipped" : "unflipped"); fflush(NULL);
 }
 
 

@@ -179,7 +179,11 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 				sob = STAR_OBS(sl->data);
 				sl = g_list_next(sl);
 
-                if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+                struct cat_star *cats = sob->cats;
+
+                if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
+                if (GUI_STAR(cats->gs)->flags & STAR_DELETED) continue;
+
                 if (sob->weight <= 0.0001) continue;
                 if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
                 if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
@@ -532,7 +536,11 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 			sob = STAR_OBS(sl->data);
 			sl = g_list_next(sl);
 
-            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            struct cat_star *cats = sob->cats;
+
+            if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
+            if (GUI_STAR(cats->gs)->flags & STAR_DELETED) continue;
+
             if (sob->weight <= 0.00001) continue;
             if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
             if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
@@ -651,16 +659,20 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 
         if ((data->band == -1) || (sob->ofr->band == data->band)) {
 
+            struct cat_star *cats = sob->cats;
+
+            if (GUI_STAR(cats->gs)->flags & STAR_DELETED) continue;
+
             double m = MAG_UNSET;
             double me = BIG_ERR;
 
-            if ((CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR)) {
+            if ((CATS_TYPE(cats) == CATS_TYPE_APSTAR)) {
                 if (sob->mag != MAG_UNSET)
                     m = sob->mag;
                 if (sob->err < BIG_ERR)
                     me = sob->err;
 
-            } else if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTD) {
+            } else if (CATS_TYPE(cats) == CATS_TYPE_APSTD) {
                 if ((sob->imag != MAG_UNSET) && (sob->ofr->zpoint != MAG_UNSET))
                     m = sob->imag + sob->ofr->zpoint;
                 if ((sob->imagerr < BIG_ERR) && (sob->ofr->zpointerr < BIG_ERR))
