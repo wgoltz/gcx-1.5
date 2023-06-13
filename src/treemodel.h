@@ -14,6 +14,7 @@
 gboolean model_has_next_path (GtkTreeModel *model, GtkTreePath *path);
 
 GList *tree_view_get_selected_rows (GtkTreeView *tree_view);
+void tree_view_invert_selection(GtkTreeView *tree_view);
 gboolean tree_view_select_path (GtkTreeView *tree_view, GtkTreePath *path);
 gboolean tree_view_select_path_rel (GtkTreeView *tree_view, GtkTreePath *path, int rel);
 void tree_view_mark_path (GtkTreeView *tree_view);

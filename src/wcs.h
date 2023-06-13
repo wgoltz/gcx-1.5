@@ -36,6 +36,7 @@ void adjust_wcs(struct wcs *wcs, double dx, double dy, double ds, double dtheta)
 double pairs_fit(GSList *pairs, double *dxo, double *dyo, double *dso, double *dto);
 void refresh_wcs(gpointer window);
 struct wcs *window_get_wcs(gpointer window);
+void fits_frame_params_to_fim(struct ccd_frame *fr);
 
 /* from plate.c */
 

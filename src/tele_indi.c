@@ -44,13 +44,37 @@ static void tele_check_state(struct tele_t *tele)
 	}
 }
 
+/* read coords, save to ra and dec, return 0
+ * return -1 if don't have tele->coord_prop or
+ * ra and/or dec args provided but have bad values when read
+ * */
+int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
+{
+    if (! tele->coord_prop) return -1;
+
+    gboolean ok = TRUE;
+
+    if (ra) {
+        *ra = indi_prop_get_number(tele->coord_prop, "RA");
+        ok = (*ra != NAN);
+    }
+    if (dec) {
+        *dec = indi_prop_get_number(tele->coord_prop, "DEC");
+        ok = ok && (*dec != NAN);
+    }
+
+    return ok ? 0 : -1;
+}
+
+/* return last read coords from tele structure
+ */
 int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
 {
     struct indi_elem_t *elem = NULL;
 
     if (! tele->ready) {
         err_printf("tele_get_tracking: Tele isn't ready.  Can't get tracking\n");
-        return;
+        return -1;
     }
 
     *ra = tele->right_ascension;
@@ -58,14 +82,17 @@ int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
     return tele->coord_prop->state;
 }
 
+/* read coords into tele stucture
+ */
 static void tele_get_coords_cb(struct indi_prop_t *iprop, void *data)
 {
 	struct tele_t *tele = data;
 
     if (!tele->ready) return;
 
-	tele->right_ascension = indi_prop_get_number(iprop, "RA");
-	tele->declination = indi_prop_get_number(iprop, "DEC");
+    int result = tele_read_coords(tele, &tele->right_ascension, &tele->declination);
+    if (result == -1) return;
+
     tele->change_state = (tele->state != iprop->state);
     tele->state = iprop->state;
 
@@ -143,7 +170,7 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
     if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
 		tele->coord_prop = iprop;
         tele->coord_set_prop = iprop; // try this
-printf("Found EQUATORIAL_EOD_COORD for tele %s\n", iprop->idev->name); fflush(NULL);
+printf("Found %s for tele %s\n", iprop->name, iprop->idev->name); fflush(NULL);
         indi_prop_add_cb(iprop, (IndiPropCB)tele_get_coords_cb, tele);
 	}
 	else if (strcmp(iprop->name, "ON_COORD_SET") == 0) {
@@ -263,28 +290,31 @@ void tele_guide_move(struct tele_t *tele, int dx_msec, int dy_msec)
 	tele_timed_move(tele, dx_msec, dy_msec, TELE_MOVE_GUIDE);
 }
 
+
 void tele_center_move(struct tele_t *tele, float dra, float ddec)
 {
-	float ra, dec;
-	ra = tele_get_ra(tele) + dra;
-	dec = tele_get_dec(tele) + ddec;
-	tele_set_speed(tele, TELE_MOVE_CENTERING);
-    tele_set_coords(tele, TELE_COORDS_SLEW, ra / 15.0, dec, 0.0);
+    double ra = tele_get_ra(tele);
+    double dec = tele_get_dec(tele);
+    if (ra != NAN && dec != NAN) {
+        ra += dra;
+        dec += ddec;
+        tele_set_speed(tele, TELE_MOVE_CENTERING);
+        tele_set_coords(tele, TELE_COORDS_SLEW, ra / 15.0, dec, 0.0);
+    }
 }
 
 double tele_get_ra(struct tele_t *tele)
 {
-	if (! tele->coord_prop)
-		return 0.0;
+    if (! tele->coord_prop) return NAN; // 0.0;
 	return indi_prop_get_number(tele->coord_prop, "RA");
 }
 
 double tele_get_dec(struct tele_t *tele)
 {
-	if (! tele->coord_prop)
-		return 0.0;
+    if (! tele->coord_prop) return NAN; // 0.0;
 	return indi_prop_get_number(tele->coord_prop, "DEC");
 }
+
 
 void tele_abort(struct tele_t *tele)
 {

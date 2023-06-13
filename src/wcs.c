@@ -56,18 +56,18 @@ struct wcs *window_get_wcs(gpointer window)
 }
 
 /* try to get an inital (frame) wcs from frame data and local params */
-static void fits_frame_params_to_fim(struct ccd_frame *fr)
+void fits_frame_params_to_fim(struct ccd_frame *fr)
 {
     double ra;
     gboolean have_ra = (fits_get_double(fr, P_STR(FN_RA), &ra) > 0);
-    if (have_ra) {
+    if (! have_ra) {
         int d_type = fits_get_dms(fr, P_STR(FN_RA), &ra);
         have_ra = (d_type >= 0);
         if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0; // sexa hh:mm:ss else decimal
     }
     if (! have_ra) {
         have_ra = (fits_get_double(fr, P_STR(FN_OBJCTRA), &ra) > 0);
-        if (have_ra) {
+        if (! have_ra) {
             int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
             have_ra = (d_type >= 0);
             if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0;
@@ -75,8 +75,16 @@ static void fits_frame_params_to_fim(struct ccd_frame *fr)
     }
 
     double dec;
-    gboolean have_dec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) >= 0);
-    if (! have_dec) have_dec = (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) >= 0);
+    gboolean have_dec = (fits_get_double(fr, P_STR(FN_DEC), &dec) > 0);
+    if (! have_dec) {
+        have_dec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) >= 0);
+    }
+    if (! have_dec) {
+        have_dec = (fits_get_double(fr, P_STR(FN_OBJCTDEC), &dec) > 0);
+        if (! have_dec) {
+            have_dec = (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) >= 0);
+        }
+    }
 
     gboolean have_pos = (have_ra && have_dec);
     if (! have_pos) {
@@ -180,21 +188,23 @@ void refresh_wcs(gpointer window) {
     if (wcs == NULL) return;
 
     struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr && fr->imf) {
-        struct wcs *imf_wcs = fr->imf->fim;
-        if (imf_wcs->wcsset > fr->fim.wcsset) {
-            if (imf_wcs->wcsset >= wcs->wcsset) {
-                wcs_clone(&fr->fim, imf_wcs);
-//                wcs_clone(wcs, imf_wcs);
+    if (fr) {
+        if (fr->imf) {
+            struct wcs *imf_wcs = fr->imf->fim;
+            if (imf_wcs->wcsset > fr->fim.wcsset) {
+                if (imf_wcs->wcsset >= wcs->wcsset) {
+                    wcs_clone(&fr->fim, imf_wcs);
+                }
+            } else {
+                wcs->wcsset = WCS_INITIAL;
             }
-        } else {
-            wcs->wcsset = WCS_INITIAL;
 //            wcs_from_frame(fr, wcs);
-        }
-        wcs_from_frame(fr, wcs);
 
-    } else {
-        printf("refresh_wcs no imf\n");
+        } else {
+            printf("refresh_wcs no imf\n");
+        }
+
+        wcs_from_frame(fr, wcs);
     }
 
     wcsedit_refresh(window);
@@ -1006,16 +1016,22 @@ int auto_pairs(struct gui_star_list *gsl)
         }
     }
 
-printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
     cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare_size);
+
+printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
+for (sl = cat; sl != NULL; sl = sl->next) {
+    struct gui_star *gs = GUI_STAR(sl->data);
+    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
+}
 
     field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
     field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
-//    for (sl = cat; sl != NULL; sl = sl->next) {
-//        struct gui_star *gs = GUI_STAR(sl->data);
-//        d3_printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
-//    }
+printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
+for (sl = field; sl != NULL; sl = sl->next) {
+    struct gui_star *gs = GUI_STAR(sl->data);
+    printf("FIELD: x: %.1f y: %.1f size: %.1f\n", gs->x, gs->y, gs->size);
+}
 
     if (cat == NULL || field == NULL) {
         if (cat) g_slist_free(cat);

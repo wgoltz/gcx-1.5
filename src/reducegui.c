@@ -71,7 +71,7 @@ static void imf_next_cb(GtkAction *action, gpointer dialog);
 static void imf_rm_cb(GtkAction *action, gpointer dialog);
 static void imf_reload_cb(GtkAction *action, gpointer dialog);
 static void imf_skip_cb(GtkAction *action, gpointer dialog);
-static void imf_unskip_cb(GtkAction *action, gpointer dialog);
+static void imf_toggle_skip_cb(GtkAction *action, gpointer dialog);
 static void imf_invert_selection_cb(GtkAction *action, gpointer dialog);
 static void imf_select_skipped_cb(GtkAction *action, gpointer dialog);
 static void imf_selall_cb(GtkAction *action, gpointer dialog);
@@ -149,14 +149,13 @@ static GtkActionEntry reduce_menu_actions[] = {
 	{ "frame-display",         NULL, "_Display Frame",          "D",          NULL, G_CALLBACK (imf_display_cb) },
 	{ "frame-next",            NULL, "_Next Frame",             "N",          NULL, G_CALLBACK (imf_next_cb) },
 	{ "frame-prev",            NULL, "_Previous Frame",         "J",          NULL, G_CALLBACK (imf_prev_cb) },
-	{ "frame-skip-selected",   NULL, "S_kip Selected Frames",   "K",          NULL, G_CALLBACK (imf_skip_cb) },
-	{ "frame-unskip-selected", NULL, "_Unskip Selected Frames", "U",          NULL, G_CALLBACK (imf_unskip_cb) },
 
 	/* Edit */
-    { "edit-menu",        NULL, "_Edit" },
-    { "select-all",       NULL, "Select _All", "<control>A",             NULL, G_CALLBACK (imf_selall_cb) },
-    { "select-skipped",   NULL, "Select _Skipped Frames", "<control>S",  NULL, G_CALLBACK (imf_select_skipped_cb) },
-    { "invert-selection", NULL, "_Invert Selection", "<control>I",       NULL, G_CALLBACK (imf_invert_selection_cb) },
+    { "edit-menu",             NULL, "_Edit" },
+    { "select-all",            NULL, "Select _All", "<control>A",             NULL, G_CALLBACK (imf_selall_cb) },
+    { "frame-skip-selected",   NULL, "Toggle S_kip Selected Frames",   "K",   NULL, G_CALLBACK (imf_toggle_skip_cb) },
+    { "invert-selection",      NULL, "_Invert Selection", "<control>I",       NULL, G_CALLBACK (imf_invert_selection_cb) },
+    { "select-skipped",        NULL, "Select all Skipped Frames", "<control>K",  NULL, G_CALLBACK (imf_select_skipped_cb) },
 
 	/* Reduce */
 	{ "reduce-menu",          NULL, "_Reduce" },
@@ -188,14 +187,13 @@ static GtkWidget *get_main_menu_bar(GtkWidget *window, GtkWidget *notebook_page)
 		"    <menuitem name='Next Frame' action='frame-next'/>"
 		"    <menuitem name='Previous Frame' action='frame-prev'/>"
 		"    <separator name='separator2'/>"
-		"    <menuitem name='Skip Selected Frames' action='frame-skip-selected'/>"
-		"    <menuitem name='Unskip Selected Frames' action='frame-unskip-selected'/>"
 		"  </menu>"
 		"  <menu name='edit' action='edit-menu'>"
 		"    <menuitem name='Select All' action='select-all'/>"
-        "    <menuitem name='Select Skipped Frames' action='select-skipped'/>"
         "    <menuitem name='Invert Selection' action='invert-selection'/>"
-		"  </menu>"
+        "    <menuitem name='Toggle Skip for Selected Frames' action='frame-skip-selected'/>"
+        "    <menuitem name='Select all Skipped Frames' action='select-skipped'/>"
+        "  </menu>"
 		"  <menu name='Reduce' action='reduce-menu'>"
 		"    <menuitem name='Reduce All' action='reduce-all'/>"
 		"    <menuitem name='Reduce One Frame' action='reduce-one'/>"
@@ -566,8 +564,6 @@ void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_l
     if (ccdr) ccdr->window = window;
 }
 
-
-/* mark selected files to be skipped */
 static void imf_skip_cb(GtkAction *action, gpointer dialog)
 {
     GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
@@ -582,77 +578,68 @@ static void imf_skip_cb(GtkAction *action, gpointer dialog)
     GList *tmp;
     struct image_file *imf;
 
-	for (tmp = sel; tmp; tmp = tmp->next) {
-        gtk_tree_model_get_iter (image_file_store, &iter, tmp->data);
-        gtk_tree_model_get (image_file_store, &iter, IMFL_COL_IMF, (GValue *) &imf, -1);
-
-		imf->flags |= IMG_SKIP;
-	}
-
-	g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
-	g_list_free (sel);
-
-    update_selected_mband_status_label (dialog); // skip
-}
-
-
-/* remove skip marks from selected files */
-static void imf_unskip_cb(GtkAction *action, gpointer dialog)
-{
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
-    g_return_if_fail (image_file_view != NULL);
-
-    GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
-    g_return_if_fail (image_file_store != NULL);
-
-    GList *sel = tree_view_get_selected_rows (image_file_view);
-
-    GList *tmp;
-    GtkTreeIter iter;
-    struct image_file *imf;
-
-	for (tmp = sel; tmp; tmp = tmp->next) {
-        gtk_tree_model_get_iter (image_file_store, &iter, tmp->data);
-        gtk_tree_model_get (image_file_store, &iter, IMFL_COL_IMF, (GValue *) &imf, -1);
-
-		imf->flags &= ~IMG_SKIP;
-	}
-
-	g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
-	g_list_free (sel);
-
-    update_selected_mband_status_label (dialog); // unskip
-}
-
-/* invert selection */
-static void imf_invert_selection_cb(GtkAction *action, gpointer dialog)
-{
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
-    g_return_if_fail (image_file_view != NULL);
-
-    GtkTreeSelection *selection = gtk_tree_view_get_selection (image_file_view);
-    gtk_tree_selection_select_all (selection);
-
-    GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
-    g_return_if_fail (image_file_store != NULL);
-
-    GList *sel = tree_view_get_selected_rows (image_file_view);
-
-    GList *tmp;
-    GtkTreeIter iter;
-    struct image_file *imf;
-
     for (tmp = sel; tmp; tmp = tmp->next) {
         gtk_tree_model_get_iter (image_file_store, &iter, tmp->data);
         gtk_tree_model_get (image_file_store, &iter, IMFL_COL_IMF, (GValue *) &imf, -1);
 
-        imf->flags ^= IMG_SKIP;
+        imf->flags |= IMG_SKIP;
     }
 
     g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
     g_list_free (sel);
 
-    update_selected_mband_status_label (dialog); // unskip
+    update_selected_mband_status_label (dialog);
+}
+
+/* toggle skip for selected files */
+static void imf_toggle_skip_cb(GtkAction *action, gpointer dialog)
+{
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    g_return_if_fail (image_file_view != NULL);
+
+    GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
+    g_return_if_fail (image_file_store != NULL);
+
+    GList *sel = tree_view_get_selected_rows (image_file_view);
+
+    GtkTreeIter iter;
+    GList *tmp;
+    struct image_file *imf;
+
+	for (tmp = sel; tmp; tmp = tmp->next) {
+        gtk_tree_model_get_iter (image_file_store, &iter, tmp->data);
+        gtk_tree_model_get (image_file_store, &iter, IMFL_COL_IMF, (GValue *) &imf, -1);
+
+        imf->flags ^= IMG_SKIP;
+	}
+
+	g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
+	g_list_free (sel);
+
+    update_selected_mband_status_label (dialog);
+}
+
+
+static void imf_invert_selection_cb(GtkAction *action, gpointer dialog)
+{
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    g_return_if_fail (image_file_view != NULL);
+
+    tree_view_invert_selection(image_file_view);
+}
+
+static gboolean select_skipped(GtkTreeModel *image_file_store, GtkTreePath *path, GtkTreeIter *iter, gpointer data)
+{
+    struct image_file *imf;
+    GtkTreeSelection *selection = data;
+
+    gtk_tree_model_get (image_file_store, iter, IMFL_COL_IMF, (GValue *) &imf, -1);
+
+    if (imf->flags & IMG_SKIP)
+        gtk_tree_selection_select_iter(selection, iter);
+//    else
+//        gtk_tree_selection_unselect_iter(selection, iter);
+    return FALSE;
 }
 
 /* select skipped frames */
@@ -662,28 +649,14 @@ static void imf_select_skipped_cb(GtkAction *action, gpointer dialog)
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeSelection *selection = gtk_tree_view_get_selection (image_file_view);
-    gtk_tree_selection_select_all (selection);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
     g_return_if_fail (image_file_store != NULL);
 
-    GList *sel = tree_view_get_selected_rows (image_file_view);
+    gtk_tree_selection_unselect_all(selection);
+    gtk_tree_model_foreach(image_file_store, select_skipped, selection);
 
-    GList *tmp;
-    GtkTreeIter iter;
-    struct image_file *imf;
-
-    for (tmp = sel; tmp; tmp = tmp->next) {
-        gtk_tree_model_get_iter (image_file_store, &iter, tmp->data);
-        gtk_tree_model_get (image_file_store, &iter, IMFL_COL_IMF, (GValue *) &imf, -1);
-
-        imf->flags ^= IMG_SKIP;
-    }
-
-    g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
-    g_list_free (sel);
-
-    update_selected_mband_status_label (dialog); // unskip
+    update_selected_mband_status_label (dialog);
 }
 
 /* remove selected files */
@@ -1677,6 +1650,8 @@ static void show_align_cb(GtkAction *action, gpointer dialog)
 
     remove_stars_of_type_window (im_window, TYPE_MASK(STAR_TYPE_ALIGN), 0);
     add_gui_stars_to_window (im_window, ccdr->align_stars);
+    redraw_cat_stars(im_window);
+
     gtk_widget_queue_draw (im_window);
 }
 

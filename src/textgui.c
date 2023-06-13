@@ -209,28 +209,21 @@ static void update_help_text(GtkWidget *dialog, char *page)
 
 static void update_fits_header_dialog(GtkWidget *dialog, struct ccd_frame *fr)
 {
-	GtkWidget *text;
-	GtkTextBuffer *buffer;
-	char line[82];
-	int i;
+    char *title = NULL;
+    asprintf(&title, "%s header", fr->name);
+    if (title) gtk_window_set_title(GTK_WINDOW(dialog), title), free(title);
 
-    char title[256];
-    snprintf(title, 255, "%s header", fr->name);
-    gtk_window_set_title(GTK_WINDOW(dialog), title);
-
-	text = g_object_get_data(G_OBJECT(dialog), "text1");
+    GtkWidget *text = g_object_get_data(G_OBJECT(dialog), "text1");
 	g_return_if_fail(text != NULL);
 
-        /* kill old text */
-	/* FIXME: this is rather crude */
-	buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text));
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text));
 	gtk_text_buffer_set_text(buffer, "", -1);
 
-	line[80] = '\n';
-	line[81] = 0;
+    int i;
 	for (i=0; i< fr->nvar; i++) {
-		memcpy(line, fr->var[i], 80);
-		gtk_text_buffer_insert_at_cursor(buffer, line, -1);
+        char *line = NULL;
+        asprintf(&line, "%.80s\n", fr->var[i]);
+        if (line) gtk_text_buffer_insert_at_cursor(buffer, line, -1), free(line);
 	}
 }
 

@@ -621,7 +621,7 @@ GtkWidget* create_camera_control (void)
   TABLE_ATTACH(table, label, 4, 0, 1, 1);
   TABLE_ATTACH(table, item, 4, 1, 1, 1);
 
-  item = gtk_button_new_with_label (" I ");
+  item = gtk_button_new_with_label ("Info");
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "obs_info_button", item, (GDestroyNotify) g_object_unref);
   gtk_widget_set_sensitive (item, FALSE);

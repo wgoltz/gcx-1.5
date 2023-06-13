@@ -65,6 +65,7 @@ extern void tele_center_move(struct tele_t *tele, float dra, float ddec);
 extern void tele_abort(struct tele_t *tele);
 extern int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox);
 
+extern int tele_read_coords(struct tele_t *tele, double *ra, double *dec);
 extern double tele_get_ra(struct tele_t *tele);
 extern double tele_get_dec(struct tele_t *tele);
 extern void tele_set_ready_callback(void *window, void *func, void *data, char *msg);

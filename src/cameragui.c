@@ -49,6 +49,8 @@
 #include "misc.h"
 #include "libindiclient/indigui.h"
 #include "filegui.h"
+#include "tele_indi.h"
+#include "wcs.h"
 
 #define AUTO_FILE_FORMAT "%s%03d"
 #define AUTO_FILE_GZ_FORMAT "%s%03d.gz"
@@ -619,8 +621,31 @@ static int expose_indi_cb(GtkWidget *dialog)
         noise_to_fits_header(fr);
 
         frame_stats(fr);
+
+        // read scope position
+        struct tele_t *tele = tele_find(main_window);
+        double ra, dec;
+        if (tele_read_coords(tele, &ra, &dec) == 0) {
+
+            // write coords to fits header
+            char *ras = degrees_to_hms_pr(ra, 2);
+            char *line = NULL;
+            if (ras) asprintf(&line, " '%s'", ras), free(ras);
+            if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
+
+            char *decs = degrees_to_dms_pr(dec, 1);
+            line = NULL;
+            if (decs) asprintf(&line, " '%s'", decs), free(decs);
+            if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
+        }
+
+        update_fits_header_display(main_window);
+
         frame_to_channel(fr, main_window, "i_channel");
-//        update_fits_header_display(main_window);
+
+        // update wcs
+//        fits_frame_params_to_fim(fr);
+//        refresh_wcs(main_window);
 
         if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) == GET_OPTION_SAVE) {
 // field matching: time waster

@@ -423,7 +423,7 @@ static void indi_exec_cb(void *cb_list, void *idata, char *msg)
     else
         first = 0;
 
-printf("indi_exec_cb: %s %s\n", msg, (cb_list == NULL) ? "(no callback functions)" : ""); fflush(NULL);
+// printf("indi_exec_cb: %s %s\n", msg, (cb_list == NULL) ? "(no callback functions)" : ""); fflush(NULL);
 
 
     if (! cb_list) {

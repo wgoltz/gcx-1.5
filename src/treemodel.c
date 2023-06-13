@@ -23,11 +23,22 @@ GList *tree_view_get_selected_rows(GtkTreeView *tree_view)
     return sel;
 }
 
-void tree_view_invert_selection(GtkTreeView *tree_view)
+static gboolean invert_selection(GtkTreeModel *list_store, GtkTreePath *path, GtkTreeIter *iter, gpointer data)
 {
+    GtkTreeSelection *selection = data;
+    if (gtk_tree_selection_iter_is_selected(selection, iter))
+        gtk_tree_selection_unselect_iter(selection, iter);
+    else
+        gtk_tree_selection_select_iter(selection, iter);
+    return FALSE;
+}
+
+void tree_view_invert_selection(GtkTreeView *tree_view)
+{    
     GtkTreeSelection *selection = gtk_tree_view_get_selection (tree_view);
-    GList *sel = gtk_tree_selection_get_selected_rows (selection, NULL);
-    return sel;
+    GtkTreeModel *list_store = gtk_tree_view_get_model(tree_view);
+
+    gtk_tree_model_foreach(list_store, invert_selection, selection);
 }
 
 gboolean tree_view_select_path(GtkTreeView *tree_view, GtkTreePath *path)
