@@ -177,6 +177,7 @@ struct gui_star *find_gs_by_cats_name(struct gui_star_list *gsl, char *name);
 void print_gui_stars(GSList *sl);
 void selected_stars_invert(GtkWidget *window);
 void delete_stars(GtkWidget *window, int type_mask, int flag_mask);
+void delete_star(struct gui_star *gs);
 
 
 #endif

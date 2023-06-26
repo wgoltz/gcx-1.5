@@ -794,14 +794,14 @@ void ref_sources(struct sources *src)
 		src->ref_count ++;
 }
 
-void release_star(struct star *s)
+void release_star(struct star *s, char *msg)
 {
 	if (s == NULL)
 		return;
 	if (s->ref_count < 1)
-        err_printf("release_star: cat_star has ref_count of %d\n", s->ref_count);
+        err_printf("release_star: star has ref_count of %d\n", s->ref_count);
 	if (s->ref_count == 1) {
-        printf("release_star\n"); fflush(NULL);
+        printf("release_star: %s\n", (msg) ? msg : ""); fflush(NULL);
 		free(s);
 	} else {
 		s->ref_count --;

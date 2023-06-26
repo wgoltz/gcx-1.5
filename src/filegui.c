@@ -392,7 +392,6 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 
 		} else {
 			rfn = fopen(name, "r");
-            // if it fails try to read .zippish file(s)?
 		}
 
         if (rfn == NULL) {

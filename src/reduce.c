@@ -260,16 +260,24 @@ static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq,
 
     if (imf->flags & IMG_SKIP) return 0;
 
-    gboolean zipped = (is_zip_name(outf) > 0);
+    gboolean out_zipped = (is_zip_name(outf) > 0);
+    gboolean in_zipped = (is_zip_name(imf->filename) > 0);
 
-    char *fn = save_name(imf->filename, outf, seq);
+    int out_extens = (out_zipped) ? drop_dot_extension(outf) : 0;
+    int in_extens = (in_zipped) ? drop_dot_extension(imf->filename) : 0;
+
+    double jd = frame_jdate(imf->fr);
+    char *fn = save_name(imf->filename, outf, seq, &jd);
+
+    if (out_extens) outf[out_extens] = '.'; // restore zip extension
+    if (in_extens) imf->filename[in_extens] = '.';
 
     int res = -1;
     if (fn) {
 
-        PROGRESS_MESSAGE( "saving %s%s\n", fn, (zipped) ? "(zipped)" : "");
+        PROGRESS_MESSAGE( "saving %s%s\n", fn, (out_zipped) ? " (zipped)" : "");
 
-        if (zipped)
+        if (out_zipped)
             res = write_gz_fits_frame(imf->fr, fn);
         else
             res = write_fits_frame(imf->fr, fn);
@@ -376,15 +384,15 @@ int imf_check_reload(struct image_file *imf)
 {
     if (imf->flags & IMG_IN_MEMORY_ONLY) return 0;
 
-    struct stat new_stats = { 0 };
-    if (stat(imf->filename, &new_stats)) return 1;
+    struct stat imf_stat = { 0 };
+    if (stat(imf->filename, &imf_stat)) return 1;
 
     gboolean not_loaded = (imf->flags & IMG_LOADED) == 0;
-    gboolean reload_sec = (imf->mtime.tv_sec != new_stats.st_mtim.tv_sec);
-    gboolean reload_nsec = (imf->mtime.tv_nsec != new_stats.st_mtim.tv_nsec);
+    gboolean reload_sec = (imf->mtime.tv_sec != imf_stat.st_mtim.tv_sec);
+    gboolean reload_nsec = (imf->mtime.tv_nsec != imf_stat.st_mtim.tv_nsec);
 
-    imf->mtime.tv_sec = new_stats.st_mtim.tv_sec;
-    imf->mtime.tv_nsec = new_stats.st_mtim.tv_nsec;
+    imf->mtime.tv_sec = imf_stat.st_mtim.tv_sec;
+    imf->mtime.tv_nsec = imf_stat.st_mtim.tv_nsec;
 
     return (not_loaded || reload_sec || reload_nsec) ? 1 : 0;
 }
@@ -1819,7 +1827,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 
     if (active == 2) { // match WCS
         if (imf_load_frame(ccdr->alignref) < 0) {
-            imf_release_frame(imf, "");
+            imf_release_frame(imf, "align_imf");
             printf("align_imf: can't load alignment frame\n"); fflush(NULL);
             return -1;
         }
@@ -2184,15 +2192,18 @@ struct image_file* add_image_frame_to_list(struct image_file_list *imfl, struct 
     struct image_file *imf;
     g_return_val_if_fail(imfl != NULL, NULL);
 
-//printf("reduce.add_image_file_to_list %s\n", filename);
+//printf("reduce.add_image_frame_to_list %s\n", filename);
     imf = image_file_new();
 
     imf->filename = strdup(fr->name);
-    imf->fr = fr;
-    fr->imf = imf;
 
     wcs_clone(imf->fim, &fr->fim);
     imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED;
+
+    imf_load_frame(imf);
+
+//    imf->fr = fr;
+//    fr->imf = imf;
 
     imfl->imlist = g_list_append(imfl->imlist, imf);
 

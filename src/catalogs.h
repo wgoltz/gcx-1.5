@@ -22,7 +22,7 @@ typedef enum {
     CATS_TYPES
 } cats_type;
 
-#define CATS_TYPE(cats) ( ((cats)->gs) ? (cats)->gs->type : 0 )
+#define CATS_TYPE(cats) ( cats->type )
 
 /* flags for catalogs and stars */
 

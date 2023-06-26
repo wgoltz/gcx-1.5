@@ -371,7 +371,7 @@ int mband_dataset_set_mag_source(struct mband_dataset *mbds, int ms)
 
             char *mag_source[] = { cats->smags, cats->cmags };
 
-            struct o_star *ost = g_hash_table_lookup(mbds->objhash, cats->name);
+            struct o_star *ost = g_hash_table_lookup(mbds->objhash, cats->name); // bad cats after stf_free_cats
 
             if (ost) {
                 int i;

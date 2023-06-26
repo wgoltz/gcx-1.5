@@ -365,7 +365,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
         else {
             cat_star_release(CAT_STAR(gs->s), "merge_cat_star_list");
             cat_star_ref(acats, "");
-            gs->s = acats;
+            gs->s = acats; // load recipe replacing old
 
 //            if (CATS_TYPE(acats) == CATS_TYPE_APSTAR) {
 //                gs->type = STAR_TYPE_APSTAR;
@@ -399,7 +399,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
         gs->type = (star_type)cats->type;
 
         cat_star_ref(cats, "");
-		gs->s = cats;
+        gs->s = cats; // set during load recipe
 
         gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
@@ -910,43 +910,39 @@ void gui_star_release(struct gui_star *gs, char *msg)
 
 	if (gs->ref_count < 1)
 		g_warning("gui_star has ref_count of %d\n", gs->ref_count);
-	if (gs->ref_count == 1) {
-//        printf("gui_star_release %p freed (%s)\n", gs, msg);
-        char *new_msg = NULL;
-        if (msg && *msg)
-            str_join_varg(&new_msg, "%s (gui_star %p %d free)", msg, gs, gs->sort);
 
-        if(gs->label.label)
-			free(gs->label.label);
-		if (gs->pair)
-			remove_pair_from(gs);
-        if (gs->s) {
-            int type = GSTAR_TYPE(gs);
-            if (type < 0) {
-                printf("gui_star_release: NULL star type!\n");
-                fflush(NULL);
-                release_star(STAR(gs->s));
-            } else {
-                switch(type) {
-                case STAR_TYPE_APSTD:
-                case STAR_TYPE_APSTAR:
-                case STAR_TYPE_CAT:
-                case STAR_TYPE_SREF:
-                    cat_star_release(CAT_STAR(gs->s), (new_msg) ? new_msg : msg);
-                    if (new_msg) free(new_msg);
-                    break;
-                default:
-                    release_star(STAR(gs->s));
-                    break;
-                }
-            }
-		}
-//		d3_printf("gs free\n");
-		free(gs);
+    if (gs->ref_count > 1) {
+        gs->ref_count --;
+        return;
+    }
 
-	} else {
-		gs->ref_count --;
-	}
+    //        printf("gui_star_release %p freed (%s)\n", gs, msg);
+    char *new_msg = NULL;
+    if (msg && *msg) str_join_varg(&new_msg, "%s (gui_star %p %d free)", msg, gs, gs->sort);
+
+    if (gs->label.label) free(gs->label.label);
+    if (gs->pair) remove_pair_from(gs);
+
+    if (gs->s) {
+        int type = GSTAR_TYPE(gs);
+
+        switch(type) {
+        case STAR_TYPE_APSTD:
+        case STAR_TYPE_APSTAR:
+        case STAR_TYPE_CAT:
+        case STAR_TYPE_SREF:
+            cat_star_release(CAT_STAR(gs->s), (new_msg) ? new_msg : msg);
+            if (new_msg) free(new_msg);
+            break;
+        default:
+            printf("gui_star_release: release star\n"); fflush(NULL);
+            release_star(STAR(gs->s), msg);
+            break;
+        }
+    }
+
+    free(gs);
+
     fflush(NULL);
 }
 

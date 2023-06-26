@@ -82,7 +82,7 @@ void replace_strval(char **str, char *val)
 {
 	if (*str)
 		free(*str);
-	*str = val;
+    *str = strdup(val);
 }
 
 /* get a catalog object cats. the object is specified by 
@@ -149,7 +149,7 @@ int obs_set_from_object(struct obs_data *obs, char *name)
 	obs->ra = cats->ra;
 	obs->dec = cats->dec;
 	obs->equinox = cats->equinox;
-	replace_strval(&(obs->objname), strdup(name));
+    replace_strval(&(obs->objname), name);
     cat_star_release(cats, "obs_set_from_object");
 	return 0;
 }

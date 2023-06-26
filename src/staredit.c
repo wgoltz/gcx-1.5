@@ -690,7 +690,7 @@ d3_printf("making cats\n");
 			cats->equinox = 1.0 * wcs->equinox;
 			cats->mag = 0.0;
             cats->type = CATS_TYPE_SREF;
-			gs->s = cats;
+            gs->s = cats; // edit new star
 
             cat_star_ref(cats, "do_star_edit"); // try this
 
@@ -739,7 +739,7 @@ void add_star_from_catalog(gpointer window)
 {
 	char *name = NULL;
 
-    if (modal_entry_prompt("Enter object name or\n <catalog>:<name>", "Enter Object", NULL, &name))	return;
+    if (! modal_entry_prompt("Enter object name or\n <catalog>:<name>", "Enter Object", NULL, &name)) return;
 
 	d3_printf("looking for object %s\n", name);
     struct cat_star *cats = get_object_by_name(name);

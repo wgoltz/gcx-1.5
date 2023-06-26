@@ -47,24 +47,6 @@
 #include "recipe.h"
 #include "filegui.h"
 
-static char *constellations =
-    "AND ANT APS AQL AQR ARA ARI AUR BOO CAE "
-    "CAM CAP CAR CAS CEN CEP CET CHA CIR CMA "
-    "CMI CNC COL COM CRA CRB CRT CRU CRV CVN "
-    "CYG DEL DOR DRA EQU ERI FOR GEM GRU HER "
-    "HOR HYA HYI IND LAC LEO LEP LIB LMI LUP "
-    "LYN LYR MEN MIC MON MUS NOR OCT OPH ORI "
-    "PAV PEG PER PHE PIC PSA PSC PUP PYX RET "
-    "SCL SCO SCT SER SEX SGE SGR TAU TEL TRA "
-    "TRI TUC UMA UMI VEL VIR VOL VUL";
-
-
-static int is_constell(char *cc)
-{
-    char *found = strstr(constellations, cc);
-
-    return (found) ? found - constellations : -1;
-}
 
 /* search the validation file for an entry matching 
    name; update the designation (up to len characters). return 0 if the star

@@ -1006,7 +1006,7 @@ static void try_unmark_star(GtkWidget *window, GSList *found)
         sl = g_slist_next(sl);
 
 //		if (TYPE_MASK_GSTAR(gs) & TYPE_FRSTAR) {
-            remove_star(gsl, gs);
+            delete_star(gs); // remove_star(gsl, gs);
 //			break;
 //		}
 	}
@@ -1595,7 +1595,7 @@ static char *sprint_star(struct gui_star *gs, struct wcs *wcs)
 {
     char *buf = NULL;
 
-    if (gs->s) {
+    if (gs->s) { // gs->s has been freed
         struct cat_star *cats = CAT_STAR(gs->s);
 
         if (GSTAR_OF_TYPE(gs, TYPE_CATREF)) {

@@ -25,7 +25,7 @@ int drop_dot_extension(char *fn);
 int is_zip_name(char *fn);
 int has_extension(char *fn);
 int get_seq(char *fn);
-char *save_name(char *in_file_name, char *file_name_stub, int *seq);
+char *save_name(char *in_file_name, char *file_name_stub, int *seq, double *jd);
 
 double angular_dist(double a, double b);
 void update_timer(struct timeval *tv_old);
@@ -36,5 +36,6 @@ void trim_lcase_first_word(char *buf);
 void trim_first_word(char *buf);
 void trim_blanks(char *buf);
 
+int is_constell(char *cc);
 
 #endif

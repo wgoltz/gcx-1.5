@@ -820,6 +820,13 @@ GtkWidget* create_camera_control (void)
   gtk_spin_button_set_snap_to_ticks (GTK_SPIN_BUTTON (item), TRUE);
   TABLE_ATTACH(table, item, 0, 0, 1, 1);
 
+  item = gtk_spin_button_new_with_range (0, 10000, 1);
+  g_object_ref (item);
+  g_object_set_data_full (G_OBJECT (camera_control), "file_seqn_spin", item, (GDestroyNotify) g_object_unref);
+//  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE);
+//  gtk_spin_button_set_snap_to_ticks (GTK_SPIN_BUTTON (item), TRUE);
+//  TABLE_ATTACH(table, item, 0, 0, 1, 1);
+
   label = gtk_label_new ("Total frames");
   gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5);
   gtk_misc_set_padding (GTK_MISC (label), 2, 0);

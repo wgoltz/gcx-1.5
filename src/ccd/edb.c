@@ -37,6 +37,7 @@
 #include <errno.h>
 
 #include "ccd.h"
+#include "misc.h"
 
 #define degrad(x) ((x) * PI / 180)
 #define raddeg(x) ((x) * 180 / PI)
@@ -52,28 +53,6 @@ typedef struct catalog_entry {
 	int epoch;
 } CATALOG_ENTRY;
 
-static char constell[100][4] = {
-	"AND", "ANT", "APS", "AQL", "AQR", "ARA", "ARI", "AUR", "BOO", "CAE",
-	"CAM", "CAP", "CAR", "CAS", "CEN", "CEP", "CET", "CHA", "CIR", "CMA",
-	"CMI", "CNC", "COL", "COM", "CRA", "CRB", "CRT", "CRU", "CRV", "CVN",
-	"CVS", "CYG", "DEL", "DOR", "DRA", "EQU", "ERI", "FOR", "GEM", "GRU",
-	"HER", "HOR", "HYA", "HYI", "IND", "LAC", "LEO", "LEP", "LIB", "LMI",
-	"LUP", "LYN", "LYR", "MEN", "MIC", "MON", "MUS", "NOR", "OCT", "OPH",
-	"ORI", "PAV", "PEG", "PER", "PHE", "PIC", "PSA", "PSC", "PUP", "PYX",
-	"RET", "SCL", "SCO", "SCT", "SER", "SEX", "SGE", "SGR", "TAU", "TEL",
-	"TRA", "TRI", "TUC", "UMA", "UMI", "VEL", "VIR", "VOL", "VUL", "WDC"
-};
-
-static int is_constell(char *cc)
-{
-	int i;
-
-	for (i = 0; i < 90; i++) {
-		if (!strcmp(cc, constell[i]))
-			return 1;
-	}
-	return 0;
-}
 
 #define JD2000 2451545.0
 //#define	degrad(x)	((x)*PI/180.)
@@ -272,7 +251,7 @@ short locate_by_name(char *inname, CATALOG_ENTRY * objout, char *edbdir)
 	// two letters followed by the name of the constelation or Vnnn[n] followed
 	// by the name of the constellation
 
-	if (is_constell(name + strlen(name) - 3)) {
+    if (is_constell(name + strlen(name) - 3) >= 0) {
 		if ((strlen(name) == 4) && name[0] >= 'R' && name[0] <= 'Z') {
 			// name variable star of type 'R CCC'
 			rename[0] = name[0];
@@ -314,7 +293,7 @@ short locate_by_name(char *inname, CATALOG_ENTRY * objout, char *edbdir)
 		rename[4 + i] = 0;
 
 	} else {		// it is a proper name of a star
-		nnm = name;
+        nnm = inname;
 		nm = rename;
 		*nm++ = toupper(*nnm++);
 		while (*nnm)

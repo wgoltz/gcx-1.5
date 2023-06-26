@@ -289,6 +289,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
         if (have_ra) {
             if (d_type == DMS_SEXA) d *= 15;
             ra = fabs(modf(d / 360, &i) * 360);
+            if (ra >= 360) ra = 0;
         }
         free(text);
     }
@@ -339,6 +340,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
         if (text != end) {
             double i;
             rot = modf(d / 360, &i) * 360;
+            if (rot >= 360) rot = 0;
         }
         free(text);
     }
@@ -679,6 +681,7 @@ static void move(int move_x, int move_y, gpointer dialog)
     if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
 
     double i; wcs->rot = modf(wcs->rot / 360, &i) * 360;
+    if (wcs->rot >= 360) wcs->rot = 0;
 
     char *buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
     if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
@@ -703,6 +706,7 @@ static void rot(int dir, gpointer dialog)
         rot += dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
 
         double i; rot = modf(rot / 360, &i) * 360;
+        if (rot >= 360) rot = 0;
 
         char *buf = NULL; asprintf(&buf, "%.4f", rot);
         if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);

@@ -52,8 +52,8 @@
 #include "tele_indi.h"
 #include "wcs.h"
 
-#define AUTO_FILE_FORMAT "%s%03d"
-#define AUTO_FILE_GZ_FORMAT "%s%03d.gz"
+#define AUTO_FILE_FORMAT "%s%03d.fits"
+#define AUTO_FILE_GZ_FORMAT "%s%03d.fits.gz"
 #define DEFAULT_FRAME_NAME "frame"
 #define DEFAULT_DARK_NAME "dark"
 
@@ -364,41 +364,45 @@ static void img_changed_cb( GtkWidget *widget, gpointer dialog )
 }
 
 /* save a frame with the name specified by the dialog; increment seq number, etc */
-void save_frame_auto_name(struct ccd_frame *fr, GtkWidget *dialog)
+void save_frame_auto_name(struct ccd_frame *fr, GtkWidget *cam_control_dialog)
 {
-	auto_filename(dialog);
+//    auto_filename(cam_control_dialog);
 
-    char *text = named_entry_text(dialog, "exp_file_entry");
+    char *text = named_entry_text(cam_control_dialog, "exp_file_entry");
     if (text == NULL) {
         text = strdup(DEFAULT_FRAME_NAME);
-        named_entry_set(dialog, "exp_file_entry", text);
+        named_entry_set(cam_control_dialog, "exp_file_entry", text);
 	}
 
     wcs_to_fits_header(fr); // ?
 
-    int seq = named_spin_get_value(dialog, "file_seqn_spin");
-	check_seq_number(text, &seq);
+    int seq = named_spin_get_value(cam_control_dialog, "file_seqn_spin");
+    if (seq >= 0) {
+        int append = check_seq_number(text, &seq);
+        if (append >= 0) {
 
-    gboolean zipped = (get_named_checkb_val(GTK_WIDGET(dialog), "exp_compress_checkb") > 0);
+            gboolean zipped = (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "exp_compress_checkb") > 0);
 
-    char *fn = NULL; asprintf(&fn, (zipped) ? AUTO_FILE_GZ_FORMAT : AUTO_FILE_FORMAT, text, seq);
-    free(text);
+            text[append] = 0;
+            char *fn = NULL; asprintf(&fn, (zipped) ? AUTO_FILE_GZ_FORMAT : AUTO_FILE_FORMAT, text, seq);
+            free(text);
 
-    if (fn) {
+            if (fn) {
+                int ret = write_fits_frame(fr, fn);
 
-        int ret = write_fits_frame(fr, fn);
+                char *mb = NULL;
+                if (ret) {
+                    asprintf(&mb, "WRITE FAILED: %s", fn);
+                } else {
+                    asprintf(&mb, "Wrote file: %s", fn);
+                    seq ++;
+                    named_spin_set(cam_control_dialog, "file_seqn_spin", seq);
+                }
+                free(fn);
 
-        char *mb = NULL;
-        if (ret) {
-            asprintf(&mb, "WRITE FAILED: %s", fn);
-        } else {
-            asprintf(&mb, "Wrote file: %s", fn);
-            seq ++;
-            //        named_spin_set(dialog, "file_seqn_spin", seq);
+                if (mb) status_message(cam_control_dialog, mb), free(mb);
+            }
         }
-        free(fn);
-
-        if (mb) status_message(dialog, mb), free(mb);
     }
 }
 
@@ -628,7 +632,7 @@ static int expose_indi_cb(GtkWidget *dialog)
         if (tele_read_coords(tele, &ra, &dec) == 0) {
 
             // write coords to fits header
-            char *ras = degrees_to_hms_pr(ra, 2);
+            char *ras = degrees_to_hms_pr(ra * 15, 2);
             char *line = NULL;
             if (ras) asprintf(&line, " '%s'", ras), free(ras);
             if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
@@ -711,10 +715,10 @@ static char *postfix_XXX(char *filename) {
     return name;
 }
 
-static void setup_streaming(struct camera_t *camera, GtkWidget *dialog)
+static void setup_streaming(struct camera_t *camera, GtkWidget *cam_control_dialog)
 {
     // set local file name
-    char *full_name = named_entry_text(dialog, "exp_file_entry");
+    char *full_name = named_entry_text(cam_control_dialog, "exp_file_entry");
     char *filename = NULL;
     char *dirpath = NULL;
     if (full_name) {
@@ -729,16 +733,16 @@ static void setup_streaming(struct camera_t *camera, GtkWidget *dialog)
     if (filename) free(filename);
     if (full_name) free(full_name);
 
-    double exptime = named_spin_get_value(dialog, "exp_spin");
+    double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
     if (exptime > 4) { // INDI clips exptime < 4 s
         exptime = 4;
-        named_spin_set(dialog, "exp_spin", exptime);
+        named_spin_set(cam_control_dialog, "exp_spin", exptime);
     }
 
-    int count = named_spin_get_value(dialog, "exp_number_spin");
+    int count = named_spin_get_value(cam_control_dialog, "exp_number_spin");
     char *buf;
     buf = NULL; asprintf(&buf, "%d", count);
-    if (buf) named_entry_set(dialog, "exp_frame_entry", buf), free(buf);
+    if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
 
     indi_dev_enable_blob(camera->streaming_prop->idev, FALSE);
     indi_prop_set_number(camera->streaming_prop, "COUNT", count);
@@ -872,112 +876,136 @@ static void update_obs_entries( GtkWidget *dialog, struct obs_data *obs)
 
 /* if we are in auto filename mode, generate a new name based on the
  * current obs. Reset the sequence number if the name has changed */
-static void auto_filename(GtkWidget *dialog)
+static void auto_filename(GtkWidget *cam_control_dialog)
 {
-	int seq = 1;
 
-    struct obs_data *obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
-    if (obs == NULL) {
-        d3_printf("no obs to set the filename from\n");
-        return;
-    }
+// move this to obs_data_cb
+//    named_spin_set(cam_control_dialog, "file_seqn_spin", 1);
 
-    char *text = named_entry_text(dialog, "exp_file_entry");
-//    if (get_named_checkb_val(dialog, "img_dark_checkb")) { // get dark frame sequence number
-//		if (text == NULL || strcmp(text, DEFAULT_DARK_NAME)) {
-//			named_entry_set(dialog, "exp_file_entry", DEFAULT_DARK_NAME);
-//			check_seq_number(DEFAULT_DARK_NAME, &seq);
-////			named_spin_set(dialog, "file_seqn_spin", seq);
-//		}
-//		g_free(text);
-//		return;
-//	}
+//    char *text = named_entry_text(cam_control_dialog, "exp_file_entry");
 
-    char *name = NULL;
-	if (obs->filter != NULL)
-        asprintf(&name, "%s-%s-", obs->objname, obs->filter);
-	else
-        asprintf(&name, "%s-", obs->objname);
+//    char *name = NULL;
+//    if (text == NULL) {
+//        struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
 
-    if (name) {
-        if (text == NULL || strcmp(text, name)) {
-            named_entry_set(dialog, "exp_file_entry", name);
-            check_seq_number(name, &seq);
-            //		named_spin_set(dialog, "file_seqn_spin", seq);
+//        if (obs->filter != NULL)
+//            asprintf(&name, "%s-%s-", obs->objname, obs->filter);
+//        else
+//            asprintf(&name, "%s-", obs->objname);
+//    } else {
+//        name = strdup(text);
+//    }
+
+    char *text = named_entry_text(cam_control_dialog, "exp_file_entry");
+    if (text) {
+        char *name = strdup(text);
+
+        if (name) {
+            int seq = 0;
+            int append = check_seq_number(name, &seq);
+            // overwrite sequence string
+            if (append >= 0) {
+                name[append] = 0;
+
+                str_join_varg(&name, "%03d", seq);
+                named_entry_set(cam_control_dialog, "exp_file_entry", name);
+                named_spin_set(cam_control_dialog, "file_seqn_spin", seq);
+
+                free(name);
+            }
         }
-        free(name);
+        free(text);
     }
-    free(text);
 }
 
 /* called when the object on the obs page is changed */
-static void obsdata_cb( GtkWidget *widget, gpointer data )
+static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    struct obs_data *obs = g_object_get_data(G_OBJECT(data), "obs_data");
+    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
 	if (obs == NULL) {
 		obs = obs_data_new();
 		if (obs == NULL) {
 			err_printf("cannot create new obs\n");
 			return;
 		}
-        g_object_set_data_full(G_OBJECT(data), "obs_data", obs, (GDestroyNotify) obs_data_release);
+        g_object_set_data_full(G_OBJECT(cam_control_dialog), "obs_data", obs, (GDestroyNotify) obs_data_release);
 
-        GtkComboBox *combo = (GtkComboBox *)g_object_get_data(G_OBJECT(data), "obs_filter_combo");
+        GtkComboBox *combo = (GtkComboBox *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_filter_combo");
 
         char *text = gtk_combo_box_get_active_text(combo);
-		replace_strval(&obs->filter, text);
-        g_free(text);
+        if (text) {
+            replace_strval(&obs->filter, text);
+            g_free(text);
+        }
 	}
 
-    GtkWidget *wid = g_object_get_data(G_OBJECT(data), "obs_object_entry");
+    GtkWidget *wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_object_entry");
 	if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
 
         char *buf = NULL; asprintf(&buf, "looking up %s", text);
-        if (buf) status_message(data, buf), free(buf);
+        if (buf) status_message(cam_control_dialog, buf), free(buf);
 
         int ret = obs_set_from_object(obs, text);
 		if (ret < 0) {
             buf = NULL; asprintf(&buf, "Cannot find object %s", text);
-            if (buf) status_message(data, buf), free(buf);
+            if (buf) status_message(cam_control_dialog, buf), free(buf);
 
 			replace_strval(&obs->objname, text);
             g_free(text);
 
-			auto_filename(data);
+            auto_filename(cam_control_dialog);
 			return;
 		}
         buf = NULL; asprintf(&buf, "Found object %s", text);
-        if (buf) status_message(data, buf), free(buf);
+        if (buf) status_message(cam_control_dialog, buf), free(buf);
 		g_free(text);
 
-		update_obs_entries(data, obs);
-		auto_filename(data);
+        update_obs_entries(cam_control_dialog, obs);
+
+// from auto_filename: set exp_file_entry when obs changes
+        named_spin_set(cam_control_dialog, "file_seqn_spin", 1);
+
+        char *exp_text = named_entry_text(cam_control_dialog, "exp_file_entry");
+
+        char *name = NULL;
+        if (exp_text == NULL) {
+            if (obs->filter != NULL)
+                asprintf(&name, "%s-%s-", obs->objname, obs->filter);
+            else
+                asprintf(&name, "%s-", obs->objname);
+        } else {
+            name = strdup(exp_text);
+        }
+        if (exp_text) g_free(exp_text);
+        if (name) free(name);
+
+        auto_filename(cam_control_dialog);
 	}
 }
 
 /* called when the object or filter on the obs page is changed */
-static void old_obsdata_cb( GtkWidget *widget, gpointer data )
+static void old_obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
     GtkWidget *wid;
     GtkComboBox *combo;
     double d;
 
-    struct obs_data *obs = g_object_get_data(G_OBJECT(data), "obs_data");
+    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
     if (obs == NULL) {
         obs = obs_data_new();
         if (obs == NULL) {
             err_printf("cannot create new obs\n");
             return;
         }
-        g_object_set_data_full(G_OBJECT(data), "obs_data", obs, (GDestroyNotify) obs_data_release);
-        combo = (GtkComboBox *)g_object_get_data(G_OBJECT(data), "obs_filter_combo"
+        g_object_set_data_full(G_OBJECT(cam_control_dialog), "obs_data", obs, (GDestroyNotify) obs_data_release);
+        combo = (GtkComboBox *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_filter_combo"
                                                  );
         char *text = gtk_combo_box_get_active_text(combo);
         replace_strval(&obs->filter, text);
         g_free(text);
     }
-    wid = g_object_get_data(G_OBJECT(data), "obs_object_entry");
+    wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_object_entry");
     if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
         d3_printf("looking up %s\n", text);
@@ -986,59 +1014,59 @@ static void old_obsdata_cb( GtkWidget *widget, gpointer data )
         if (ret < 0) {
             char *buf = NULL;
             asprintf(&buf, "Cannot find object %s", text);
-            if (buf) status_message(data, buf), free(buf);
+            if (buf) status_message(cam_control_dialog, buf), free(buf);
 
             replace_strval(&obs->objname, text);
             g_free(text);
 
-            auto_filename(data);
+            auto_filename(cam_control_dialog);
             return;
         }
         g_free(text);
 
-        update_obs_entries(data, obs);
-        auto_filename(data);
+        update_obs_entries(cam_control_dialog, obs);
+        auto_filename(cam_control_dialog);
         return;
     }
-    wid = g_object_get_data(G_OBJECT (data), "obs_filter_combo");
+    wid = g_object_get_data(G_OBJECT (cam_control_dialog), "obs_filter_combo");
     if (widget == wid) {
         char *text = gtk_combo_box_get_active_text(GTK_COMBO_BOX (widget));
         d3_printf("obs_cb: setting filter to %s\n", text);
         replace_strval(&obs->filter, text);
         g_free(text);
 
-        update_obs_entries(data, obs);
-        auto_filename(data);
+        update_obs_entries(cam_control_dialog, obs);
+        auto_filename(cam_control_dialog);
         return;
     }
-    wid = g_object_get_data(G_OBJECT(data), "obs_ra_entry");
+    wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_ra_entry");
     if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
         int d_type = dms_to_degrees(text, &d);
         if (d_type >= 0) {
             if (d_type == DMS_SEXA) obs->ra = d * 15.0;
-            update_obs_entries(data, obs);
+            update_obs_entries(cam_control_dialog, obs);
         } else {
             error_beep();
-            status_message(data, "Bad R.A. Value");
+            status_message(cam_control_dialog, "Bad R.A. Value");
         }
         g_free(text);
         return;
     }
-    wid = g_object_get_data(G_OBJECT(data), "obs_dec_entry");
+    wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_dec_entry");
     if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
         if (dms_to_degrees(text, &d) >= 0) {
             obs->dec = d;
-            update_obs_entries(data, obs);
+            update_obs_entries(cam_control_dialog, obs);
         } else {
             error_beep();
-            status_message(data, "Bad Declination Value");
+            status_message(cam_control_dialog, "Bad Declination Value");
         }
         g_free(text);
         return;
     }
-    wid = g_object_get_data(G_OBJECT(data), "obs_epoch_entry");
+    wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_epoch_entry");
     if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
         char *end;
@@ -1046,10 +1074,10 @@ static void old_obsdata_cb( GtkWidget *widget, gpointer data )
         d = strtod(text, &end);
         if (text != end) {
             obs->equinox = d;
-            update_obs_entries(data, obs);
+            update_obs_entries(cam_control_dialog, obs);
         } else {
             error_beep();
-            status_message(data, "Bad Equinox Value");
+            status_message(cam_control_dialog, "Bad Equinox Value");
         }
         g_free(text);
         return;
@@ -1104,13 +1132,13 @@ static void img_run_cb( GtkWidget *widget, gpointer dialog )
     }
 }
 
-static void img_file_browse_cb( GtkWidget *widget, gpointer dialog )
+static void img_file_browse_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *entry = g_object_get_data(G_OBJECT(dialog), "exp_file_entry");
+    GtkWidget *entry = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_file_entry");
     g_return_if_fail(entry != NULL);
 
     char *default_name = "image_XXX.gz";
-    file_select_to_entry (dialog, entry, "Save frame as ...", default_name, "*", 1, F_SAVE);
+    file_select_to_entry (cam_control_dialog, entry, "Save frame as ...", default_name, "*", 1, F_SAVE);
 }
 
 /* send an abort slew message */
@@ -1312,57 +1340,57 @@ static gboolean fwheel_ready_indi_cb(gpointer data)
 	return FALSE;
 }
 
-void cam_set_callbacks(GtkWidget *dialog)
+void cam_set_callbacks(GtkWidget *cam_control_dialog)
 {
-    g_signal_connect (G_OBJECT (dialog), "delete_event", G_CALLBACK (delete_event), dialog);
+    g_signal_connect (G_OBJECT (cam_control_dialog), "delete_event", G_CALLBACK (delete_event), cam_control_dialog);
 
-    set_named_callback(dialog, "scope_goto_button", "clicked", scope_goto_cb);
-	set_named_callback(dialog, "scope_auto_button", "clicked", scope_auto_cb);
-	set_named_callback(dialog, "scope_sync_button", "clicked", scope_sync_cb);
-//	set_named_callback(dialog, "scope_align_button", "clicked", scope_align_cb);
-	set_named_callback(dialog, "scope_abort_button", "clicked", scope_abort_cb);
-	set_named_callback(dialog, "scope_dither_button", "clicked", scope_dither_cb);
+    set_named_callback(cam_control_dialog, "scope_goto_button", "clicked", scope_goto_cb);
+    set_named_callback(cam_control_dialog, "scope_auto_button", "clicked", scope_auto_cb);
+    set_named_callback(cam_control_dialog, "scope_sync_button", "clicked", scope_sync_cb);
+//	set_named_callback(cam_control_dialog, "scope_align_button", "clicked", scope_align_cb);
+    set_named_callback(cam_control_dialog, "scope_abort_button", "clicked", scope_abort_cb);
+    set_named_callback(cam_control_dialog, "scope_dither_button", "clicked", scope_dither_cb);
 
-	set_named_callback(dialog, "obs_list_abort_button", "clicked", scope_abort_cb);
-	set_named_callback(dialog, "obs_list_file_button", "clicked", obs_list_select_file_cb);
+    set_named_callback(cam_control_dialog, "obs_list_abort_button", "clicked", scope_abort_cb);
+    set_named_callback(cam_control_dialog, "obs_list_file_button", "clicked", obs_list_select_file_cb);
 
-    set_named_callback(dialog, "cooler_tempset_spin", "value-changed", cooler_temp_cb);
+    set_named_callback(cam_control_dialog, "cooler_tempset_spin", "value-changed", cooler_temp_cb);
 
-//	set_named_callback(dialog, "img_get_img_button", "clicked", img_get_image_cb);
+//	set_named_callback(cam_control_dialog, "img_get_img_button", "clicked", img_get_image_cb);
 
-    set_named_callback(dialog, "exp_mode_combo", "changed", img_mode_changed_cb);
-    set_named_callback(dialog, "exp_run_button", "toggled", img_run_cb);
-    set_named_callback(dialog, "exp_file_browse", "clicked", img_file_browse_cb);
+    set_named_callback(cam_control_dialog, "exp_mode_combo", "changed", img_mode_changed_cb);
+    set_named_callback(cam_control_dialog, "exp_run_button", "toggled", img_run_cb);
+    set_named_callback(cam_control_dialog, "exp_file_browse", "clicked", img_file_browse_cb);
 
-    //set_named_callback(dialog, "exp_spin", "changed", img_changed_cb);
+    //set_named_callback(cam_control_dialog, "exp_spin", "changed", img_changed_cb);
 
-    set_named_callback(dialog, "img_width_spin", "value-changed", img_changed_cb);
-    set_named_callback(dialog, "img_height_spin", "value-changed", img_changed_cb);
-    set_named_callback(dialog, "img_x_skip_spin", "value-changed", img_changed_cb);
-    set_named_callback(dialog, "img_y_skip_spin", "value-changed", img_changed_cb);
-    set_named_callback(dialog, "img_display_set", "clicked", img_display_set_cb);
+    set_named_callback(cam_control_dialog, "img_width_spin", "value-changed", img_changed_cb);
+    set_named_callback(cam_control_dialog, "img_height_spin", "value-changed", img_changed_cb);
+    set_named_callback(cam_control_dialog, "img_x_skip_spin", "value-changed", img_changed_cb);
+    set_named_callback(cam_control_dialog, "img_y_skip_spin", "value-changed", img_changed_cb);
+    set_named_callback(cam_control_dialog, "img_display_set", "clicked", img_display_set_cb);
 
-    set_named_callback(dialog, "img_bin_combo", "changed", binning_changed_cb);
-    set_named_callback(dialog, "img_size_combo_box", "changed", img_changed_cb);
+    set_named_callback(cam_control_dialog, "img_bin_combo", "changed", binning_changed_cb);
+    set_named_callback(cam_control_dialog, "img_size_combo_box", "changed", img_changed_cb);
 
-    set_named_callback(dialog, "obs_filter_combo", "changed", filter_list_select_cb);
+    set_named_callback(cam_control_dialog, "obs_filter_combo", "changed", filter_list_select_cb);
 
-    set_named_callback(dialog, "obs_object_entry", "activate", obsdata_cb);
-//    set_named_callback(dialog, "obs_object_entry", "focus-out-event", obsdata_focus_out_cb);
+    set_named_callback(cam_control_dialog, "obs_object_entry", "activate", obsdata_cb);
+//    set_named_callback(cam_control_dialog, "obs_object_entry", "focus-out-event", obsdata_focus_out_cb);
 
-//	set_named_callback(dialog, "obs_ra_entry", "activate", obsdata_cb);
-//    set_named_callback(dialog, "obs_ra_entry", "focus-out-event", obsdata_focus_out_cb);
+//	set_named_callback(cam_control_dialog, "obs_ra_entry", "activate", obsdata_cb);
+//    set_named_callback(cam_control_dialog, "obs_ra_entry", "focus-out-event", obsdata_focus_out_cb);
 
-//	set_named_callback(dialog, "obs_dec_entry", "activate", obsdata_cb);
-//    set_named_callback(dialog, "obs_dec_entry", "focus-out-event", obsdata_focus_out_cb);
+//	set_named_callback(cam_control_dialog, "obs_dec_entry", "activate", obsdata_cb);
+//    set_named_callback(cam_control_dialog, "obs_dec_entry", "focus-out-event", obsdata_focus_out_cb);
 
-//	set_named_callback(dialog, "obs_epoch_entry", "activate", obsdata_cb);
-//    set_named_callback(dialog, "obs_epoch_entry", "focus-out-event", obsdata_focus_out_cb);
+//	set_named_callback(cam_control_dialog, "obs_epoch_entry", "activate", obsdata_cb);
+//    set_named_callback(cam_control_dialog, "obs_epoch_entry", "focus-out-event", obsdata_focus_out_cb);
 
 // lookup object when exp_file_entry changes
-    set_named_callback(dialog, "obs_list_fname", "activate", obs_list_fname_cb);
+    set_named_callback(cam_control_dialog, "obs_list_fname", "activate", obs_list_fname_cb);
 
-	obs_list_callbacks(dialog);
+    obs_list_callbacks(cam_control_dialog);
 }
 
 /* initialise the telescope page params from pars */
@@ -1385,52 +1413,51 @@ static void set_scope_params_from_par(gpointer dialog)
 // otherwise works directly
 void act_control_camera (GtkAction *action, gpointer window)
 {
-	GtkWidget *dialog;
 	GtkWidget* create_camera_control (void);
 
-    dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    GtkWidget *cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
 // try this:
-//    dialog = NULL;
+//    cam_control_dialog = NULL;
 //    g_object_set_data(G_OBJECT(window), "cam_dialog", dialog); // clear dialog and rebuild
 
-    if (dialog == NULL) {
-		dialog = create_camera_control();
-		g_object_ref(dialog);
-        g_object_set_data_full(G_OBJECT(window), "cam_dialog", dialog, (GDestroyNotify)gtk_widget_destroy);
+    if (cam_control_dialog == NULL) {
+        cam_control_dialog = create_camera_control();
+        g_object_ref(cam_control_dialog);
+        g_object_set_data_full(G_OBJECT(window), "cam_dialog", cam_control_dialog, (GDestroyNotify)gtk_widget_destroy);
 
-		g_object_set_data(G_OBJECT(dialog), "image_window", window);
-//		g_signal_connect (G_OBJECT(dialog), "destroy", G_CALLBACK(close_cam_dialog), window);
-        g_signal_connect (G_OBJECT(dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
-        g_object_set(G_OBJECT (dialog), "destroy-with-parent", TRUE, NULL);
-//		set_filter_list(dialog);
+        g_object_set_data(G_OBJECT(cam_control_dialog), "image_window", window);
+//		g_signal_connect (G_OBJECT(cam_control_dialog), "destroy", G_CALLBACK(close_cam_dialog), window);
+        g_signal_connect (G_OBJECT(cam_control_dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
+        g_object_set(G_OBJECT (cam_control_dialog), "destroy-with-parent", TRUE, NULL);
+//		set_filter_list(cam_control_dialog);
 
-		cam_set_callbacks(dialog);
-		set_scope_params_from_par(dialog);
+        cam_set_callbacks(cam_control_dialog);
+        set_scope_params_from_par(cam_control_dialog);
 
         struct camera_t *camera = camera_find(window, CAMERA_MAIN);
         if (camera) {
             camera_set_ready_callback(window, CAMERA_MAIN, cam_ready_indi_cb, window, "cam_ready_indi_cb");
-            enable_camera_widgets(dialog, camera->ready);
+            enable_camera_widgets(cam_control_dialog, camera->ready);
         }
         struct tele_t *tele = tele_find(window);
         if (tele) {
             tele_set_ready_callback(window, tele_ready_indi_cb, window, "tele_ready_indi_cb");
-            enable_telescope_widgets(dialog, tele->ready);
+            enable_telescope_widgets(cam_control_dialog, tele->ready);
 		}
         if (fwheel_find(window) != NULL) {
-            gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "obs_filter_combo")), FALSE);
+            gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "obs_filter_combo")), FALSE);
             fwheel_set_ready_callback(window, fwheel_ready_indi_cb, window, "fwheel_ready_indi_cb");
 		}
 
-        cam_to_img(dialog);
-//		gtk_widget_show_all(dialog);
+        cam_to_img(cam_control_dialog);
+//        gtk_widget_show_all(cam_control_dialog);
 //	} else {
-//		gtk_widget_show(dialog);
-//		gdk_window_raise(dialog->window);
+//		gtk_widget_show(cam_control_dialog);
     }
-    gtk_widget_show_all(dialog);
+    gtk_widget_show_all(cam_control_dialog);
+    gdk_window_raise(cam_control_dialog->window);
 
-//    cam_dialog_update(dialog);
-//    cam_dialog_edit(dialog);
+//    cam_dialog_update(cam_control_dialog);
+//    cam_dialog_edit(cam_control_dialog);
 }
 

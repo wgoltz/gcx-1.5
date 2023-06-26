@@ -672,10 +672,13 @@ static char *degrees_to_hms_or_dms_pr(double deg, int prec, int hours)
 
     deg += precs[prec] / 7200;
 
-    if (hours)
+    if (hours) {
         deg = modf(deg / 24, &i) * 24;
-    else
+        if (deg >= 24) deg = 0;
+    } else {
         deg = modf(deg / 360, &i) * 360;
+        if (deg >= 360) deg = 0;
+    }
 
     int d1 = floor (deg);
     deg = (deg - d1) * 60.0;

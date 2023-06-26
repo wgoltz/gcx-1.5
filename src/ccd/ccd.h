@@ -690,7 +690,7 @@ extern void release_sources(struct sources *src);
 extern void ref_sources(struct sources *src);
 extern struct sources *new_sources(int n);
 #define free_sources(x) release_sources(x)
-extern void release_star(struct star *s);
+extern void release_star(struct star *s, char *msg);
 
 // from ccd/worldpos.c
 

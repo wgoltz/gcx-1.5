@@ -141,15 +141,29 @@ int dot_extension(char *fn)
     return p - fn;
 }
 
+typedef enum {
+    ZIP_unzipped,
+    ZIP_Z,
+    ZIP_GZ,
+    ZIP_ZIP,
+    ZIP_BZ2,
+    ZIP_size
+} zip_type;
+
+char *zip_extens[ZIP_size] = { "", ".z", ".gz", ".zip", ".bz2" };
+
 int is_zip_name(char *fn)
 {
     int len = strlen(fn);
-    if (len < 3) return 0;
 
-    if (strcasecmp(fn + len - 2, ".z") == 0) return 1;
-    if (strcasecmp(fn + len - 3, ".gz") == 0) return 2;
-    if (strcasecmp(fn + len - 4, ".zip") == 0) return 3;
-    if (strcasecmp(fn + len - 4, ".bz2") == 0) return 3;
+    int i;
+    for (i = ZIP_Z; i < ZIP_size; i++) {
+        int ext_len = strlen(zip_extens[i]);
+        if (len < ext_len) return 0;
+
+        char *p = fn + len - ext_len;
+        if (strcasecmp(p, zip_extens[i]) == 0) return i;
+    }
 
     return 0;
 }
@@ -180,7 +194,7 @@ int has_extension(char *fn)
 
         if (*p == '.') break;
     }
-    return (int) (p - fn); // if > 0 : the position of '.' in extension
+    return p - fn; // if > 0 : the position of '.' in extension
 }
 
 // return numeric sequence number at end of filename
@@ -202,84 +216,155 @@ int get_seq(char *fn)
     return -1;
 }
 
-// get start of seq slot defined by the X positions at end of name: name(X..X)
-// return seq slot size (number of Xs) or zero (append to end)
-int get_seq_slot(char **seq_slot)
+// get start of seq slot defined by the X positions at end of name: name(XXX)
+// return seq slot size (number of Xs)
+int get_slot(char **slot, char pattern)
 {
-    if (seq_slot == NULL || *seq_slot == 0) return -1;
+    if (slot == NULL || *slot == 0) return -1;
 
-    char *pend = *seq_slot + strlen(*seq_slot);
+    char *pend = *slot + strlen(*slot);
     char *p = pend;
-    while (*(--p) == 'X') { }
+    while (TRUE) {
+        p--;
+        if (*p != pattern) break;
+    }
     p++;
-    *seq_slot = p;
+    *slot = p;
     return pend - p;
 }
 
-// auto generate ouput file name
-// in_file: in_name(.extens)(.zippish) (drop extensions to get name)
-// file_name_stub: (path/)(out_name or _)(X..X)(.extens)(.zippish)
-// if out_name = '_', out_name = in_name
-// seq = NULL ignore sequence
-// otherwise replace X..X (no 'X' - just append) with seq and increment seq
-// tackon .extens, drop .zippish
+typedef struct {
+    char *in_name;
+    char *out_stub;
+    gboolean use_seq;
+    gboolean use_jd;
+} test_type;
 
-char *save_name(char *in_full_name, char *file_name_stub, int *seq)
+
+
+void test_save_name()
+{
+    test_type test[] = {
+        { "path/name.blah", "new_path/new_name_X.extension", TRUE, TRUE },
+        { "path/name.blah", "new_path/new_name_T.extension", FALSE, FALSE },
+        { "path/name.blah", "new_path/new_name_XXX_TTT.extension", FALSE, TRUE },
+        { "path/name.blah", "new_path/new_name_TTT_XXX.extension", FALSE, TRUE },
+        { "path/name.blah", "new_path/new_name_XXX_TTT.extension", TRUE, FALSE },
+        { "path/name.blah", "new_path/new_name_TTT_XXX.extension", TRUE, FALSE },
+        { "path/something.blah", "new_path/_.extension", TRUE, FALSE },
+        { "path/something_else.blah", "_.extension", FALSE, TRUE },
+        { NULL, NULL, FALSE, FALSE }
+    };
+
+    double jd = 1000.00000001;
+    int seq = 10;
+
+    test_type *p = test;
+
+    while (TRUE) {
+        if (p->in_name == NULL) break;
+
+        char *fn = save_name(p->in_name, p->out_stub, p->use_seq ? &seq : NULL, p->use_jd ? &jd : NULL);
+        if (fn) {
+            printf("%s %s %s %s: %s\n",
+                   p->in_name,
+                   p->out_stub,
+                   p->use_seq ? "use_seq" : "",
+                   p->use_jd ? "use_jd" : "",
+                   fn);
+            free(fn);
+        }
+
+        p++;
+    }
+    fflush(NULL);
+}
+
+/* auto generate ouput file name adding sequence number or jd
+ *  note: check and remove zippish extens before calling this
+ *
+ * in_file: (in_name)_[jd or seq][.extens]
+ * drop extensions and jd/seq to get (in_name)_
+ *
+ * file_name_stub: [path/](out_name)[XXX][.extens]
+ * if out_name = '_', out_name = in_name
+ *
+ * seq = NULL ignore sequence
+ * jd = NULL ignore jd
+ *
+ * get format from stub:
+ * if have XXX and have seq, n Xs represent decimal width, add seq with precision %.nd, inc seq
+ * if have TTT and have jd, n Ts represent decimal precision, add jd with precision %(n+4).nf
+ * no format? append seq or jd with default format (seq: %.3d, jd: %9.5f)
+ *
+ * tackon .extens */
+
+char *save_name(char *in_full_name, char *file_name_stub, int *seq, double *jd)
 {
     char *in_copy = strdup(in_full_name);
 
     char *in_file_name = basename(in_copy);
     int extens = has_extension(in_file_name);
-
-    gboolean in_zipped = (is_zip_name(in_file_name) > 0);
-
-    if (in_zipped) { // drop zip extens
-        in_file_name[extens] = 0;
-        extens = has_extension(in_file_name);
-    }
-    if (extens > 0) in_file_name[extens] = 0; // drop other extens
+    if (extens > 0) in_file_name[extens] = 0; // drop extens
 
     char *out_copy = strdup(file_name_stub);
     extens = has_extension(out_copy);
+    if (extens > 0) out_copy[extens] = 0; // drop extens
 
-    gboolean out_zipped = (is_zip_name(out_copy) > 0);
+    char *X_slot = out_copy;
+    int X_size = get_slot(&X_slot, 'X');
+    if (X_size >= 0) *X_slot = 0; // drop X's
 
-    if (out_zipped) { // drop zip extens
-        out_copy[extens] = 0;
-        extens = has_extension(out_copy);
-    }
-    if (extens > 0) out_copy[extens] = 0; // drop other extens
+    char *T_slot = out_copy;
+    int T_size = get_slot(&T_slot, 'T');
+    if (T_size >= 0) *T_slot = 0; // drop T's
 
-    char *seq_slot = out_copy;
-    int seq_size = get_seq_slot(&seq_slot);
-    if (seq_size >= 0) *seq_slot = 0;
+    char *out_file_name = NULL;
+    char *out_base_name = basename(out_copy);
 
-    char *out_file_name = basename(out_copy);
+    if ((X_size && T_size) && (seq == NULL) ^ (jd == NULL)) out_file_name = out_base_name;
+    if ((X_size == 0) ^ (T_size == 0) && (seq && jd)) out_file_name = out_base_name;
 
-    if (strcmp(out_file_name, "_") == 0) out_file_name = in_file_name;
+    if (strcmp(out_base_name, "_") == 0) out_file_name = in_file_name;
+
+    if (out_file_name == NULL) out_file_name = out_base_name;
 
     char *fn = NULL;
 
     char *dir_copy = strdup(file_name_stub);
+
     char *dir_name = dirname(dir_copy);
     if (dir_name)
         str_join_varg(&fn, "%s/%s", dir_name, out_file_name);
     else
         str_join_str(&fn, "%s", out_file_name);
 
-    if (out_file_name != in_file_name && seq) {
-        if (seq_size > 0)
-            str_join_varg(&fn, "%0*d", seq_size, *seq);
-        else
-            str_join_varg(&fn, "%.d", *seq);
+    if (out_file_name != in_file_name) {
+        if (seq) {
+            if (X_size)
+                str_join_varg(&fn, "%0.*d", X_size, *seq);
+            else
+                str_join_varg(&fn, "%0.3d", *seq);
 
-        (*seq)++;
+            (*seq)++;
+        }
+
+        if (jd) {
+            double i;
+            double short_jd = modf(*jd / 1000, &i) * 1000;
+            if (short_jd >= 1000) short_jd = 0;
+
+            if (T_size)
+                str_join_varg(&fn, "%0*.*f", 4 + T_size, T_size, short_jd);
+            else
+                str_join_varg(&fn, "%09.5f", short_jd);
+        }
     }
 
     free(dir_copy);
     free(in_copy);
 
-    if (extens > 0) str_join_str(&fn, ".%s", & out_copy[extens + 1]);
+    if (extens > 0) str_join_str(&fn, ".%s", & out_copy[extens + 1]); // add extens
 
     free(out_copy);
 
@@ -288,7 +373,7 @@ char *save_name(char *in_full_name, char *file_name_stub, int *seq)
 
 
 /* check if the supplied name+seq number is already used; return a free
- * sequence number (and return 1) if that is the case */
+ * sequence number. return pointer to position to append seq */
 int check_seq_number(char *file, int *sqn)
 {
     char *fcopy = strdup(file);
@@ -301,43 +386,48 @@ int check_seq_number(char *file, int *sqn)
 
 
     free(fcopy);
-    if (dir == NULL) return 0;
+    if (dir == NULL) return -1;
 
     fcopy = strdup(file);
 
     // drop extensions
-    int extens;
-    while ((extens = has_extension(file)) > 0) fcopy[extens] = 0;
-
-    char *fn = basename(fcopy);
-    int sz = strlen(fn);
+    while (1) {
+        int extens = has_extension(fcopy);
+        if (extens <= 0) break;
+        fcopy[extens] = 0;
+    }
 
     // strip numeric suffix
-    char *p = fn + sz - 1;
-    while (p > fn) {
+    char *p = fcopy + strlen(fcopy) - 1;
+    while (p > fcopy) {
         if (*p >= '0' && *p <= '9')
            p--;
         else
            break;
     }
-    if (p >= fn) sz = p - fn + 1;
+    int pos = (p >= fcopy) ? p - fcopy + 1 : 0; // end of name part in file name
 
     int lseq = 0;
+    char *fn = basename(fcopy);
+    int sz = p - fn + 1; // size of name part
 
-    struct dirent * entry;
+    struct dirent *entry;
+    int n = 0;
     while ((entry = readdir(dir))) {
-        if (strncmp(entry->d_name, fn, sz)) continue;
-        int n = strtol(entry->d_name + sz, NULL, 10);
-        if (n > lseq) lseq = n;
+        if (strncmp(entry->d_name, fn, sz)) continue; // check name part of entry
+
+        n = strtol(entry->d_name + sz, NULL, 10); // get sequence number from entry
+        if (n > lseq) lseq = n; // set lseq to largest
     }
+
     free(fcopy);
     closedir(dir);
     if (*sqn <= lseq) {
         d3_printf("check_seq_number: adjusting sqn to %d\n", lseq + 1);
         *sqn = lseq + 1;
-        return -1;
     }
-    return 0;
+
+    return pos; // string position in file name to append sequence
 }
 
 
@@ -412,7 +502,7 @@ void named_spin_set(GtkWidget *dialog, char *name, double val)
 {
 	GtkWidget *spin;
 	g_return_if_fail(dialog != NULL);
-	spin = g_object_get_data(G_OBJECT(dialog), name);
+    spin = g_object_get_data(G_OBJECT(dialog), name); // file_seqn_spin not found
 	g_return_if_fail(spin != NULL);
     if (val != gtk_spin_button_get_value(GTK_SPIN_BUTTON(spin))) {
         gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin), val);
@@ -422,9 +512,8 @@ void named_spin_set(GtkWidget *dialog, char *name, double val)
 
 double named_spin_get_value(GtkWidget *dialog, char *name)
 {
-	GtkWidget *spin;
-	spin = g_object_get_data(G_OBJECT(dialog), name);
-	g_return_val_if_fail(spin != NULL, 0.0);
+    GtkWidget *spin = g_object_get_data(G_OBJECT(dialog), name);
+    if (spin == NULL) return -1;
 	return gtk_spin_button_get_value(GTK_SPIN_BUTTON(spin));
 }
 
@@ -773,6 +862,26 @@ void trim_blanks(char *buf)
 		buf[i] = buf[s];
 	buf[i] = 0;
 	d4_printf("buf=|%s| s:%d e:%d\n", buf, s, e);
+}
+
+
+static char *constellations =
+    "AND ANT APS AQL AQR ARA ARI AUR BOO CAE "
+    "CAM CAP CAR CAS CEN CEP CET CHA CIR CMA "
+    "CMI CNC COL COM CRA CRB CRT CRU CRV CVN "
+    "CYG DEL DOR DRA EQU ERI FOR GEM GRU HER "
+    "HOR HYA HYI IND LAC LEO LEP LIB LMI LUP "
+    "LYN LYR MEN MIC MON MUS NOR OCT OPH ORI "
+    "PAV PEG PER PHE PIC PSA PSC PUP PYX RET "
+    "SCL SCO SCT SER SEX SGE SGR TAU TEL TRA "
+    "TRI TUC UMA UMI VEL VIR VOL VUL";
+
+
+int is_constell(char *cc)
+{
+    char *found = strstr(constellations, cc);
+
+    return (found) ? found - constellations : -1;
 }
 
 #ifndef HAVE_BASENAME

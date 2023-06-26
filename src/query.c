@@ -1627,6 +1627,9 @@ static void cds_query(gpointer window, guint action)
 
 /* something strange happening here */
     GList *tsl = query_catalog(action, wcs->xref, wcs->yref, logw_print, logw);
+    if (tsl == NULL) {
+        printf("cds_query failed"); fflush(NULL);
+    }
 /*
     double xc = wcs->xrefpix + fr->w / 2;
     double yc = wcs->yrefpix + fr->h / 2;

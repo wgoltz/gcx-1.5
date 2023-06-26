@@ -671,7 +671,6 @@ int fake_main(int ac, char **av)
 
     gboolean batch = FALSE; /* batch operations have been selected */
 
-
     char *shortopts = "h?3:d:b:f:B:a:A:M:G:S:r:uNio:X:e:sFp:P:V:O:T:nj:cC:wv";
 	struct option longopts[] = {
         {"help", no_argument, NULL, 'h'},

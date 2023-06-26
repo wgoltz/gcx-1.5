@@ -545,7 +545,7 @@ void cat_change_wcs(GSList *sl, struct wcs *wcs)
 //printf("cat_change_wcs wcs->xinc * wcs->yinc < 0 %s\n", wcs->xinc * wcs->yinc < 0 ? "Yes" : "No"); fflush(NULL);
     if ((wcs->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS)) == 0) return;
 
-	while (sl != NULL) {
+    while (sl != NULL) { // bad cats in gs->s
         struct gui_star *gs = GUI_STAR(sl->data);
         sl = g_slist_next(sl);
 
@@ -554,8 +554,12 @@ void cat_change_wcs(GSList *sl, struct wcs *wcs)
 
         if (GSTAR_OF_TYPE(gs, TYPE_CATREF)) {
             struct cat_star *cats = CAT_STAR(gs->s);
+//            if (cats->gs != gs) {
+//                printf("bad cats for gs->sort %d\n", gs->sort);
+//                fflush(NULL);
+//                continue;
+//            }
 
-//printf("%d %s\n", gs->sort, cats->name); fflush(NULL);
             cats_xypix(wcs, cats, &(gs->x), &(gs->y));
 		}
 	}
