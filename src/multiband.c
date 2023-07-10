@@ -329,7 +329,7 @@ int mband_dataset_search_add_band(struct mband_dataset *mbds, char *band)
 	return mbds->nbands - 1;
 }
 
-/* add sobs from ofr->stf to ofr */
+/* add all sobs from ofr->stf to ofr */
 //int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr, int mag_source)
 int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr)
 {
@@ -338,8 +338,8 @@ int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *of
     for (; ssl != NULL; ssl = ssl->next) {
         struct cat_star *cats = CAT_STAR(ssl->data);
 
-        if (CATS_TYPE(cats) != CATS_TYPE_APSTD && CATS_TYPE(cats) != CATS_TYPE_APSTAR) continue;
-        if (cats->gs->flags & STAR_DELETED) continue;
+//        if (CATS_TYPE(cats) != CATS_TYPE_APSTD && CATS_TYPE(cats) != CATS_TYPE_APSTAR) continue;
+//        if (cats->gs->flags & STAR_DELETED) continue;
 
         mband_dataset_add_sob(mbds, cats, ofr); // adds sob to ofr->sobs
         ns ++;

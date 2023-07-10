@@ -772,7 +772,7 @@ void selected_stars_set_type(GtkWidget *window, int type)
         if (gs->flags & STAR_SELECTED)
             gs->type = type;
     }
-
+// update mband dialog
     gtk_widget_queue_draw(window);
 }
 

@@ -839,27 +839,13 @@ static void dialog_add_files(GSList *files, gpointer dialog)
     g_return_if_fail (imfl != NULL);
 
     while (files != NULL) {
-        add_image_file_to_list (imfl, files->data, 0);
+        add_image_file_to_list (imfl, NULL, files->data, 0);
         files = g_slist_next (files);
     }
 
     dialog_update_from_imfl(dialog, imfl);
 }
 
-static void dialog_add_frames(GSList *frames, gpointer dialog)
-{
-    struct image_file_list *imfl;
-
-    imfl = dialog_set_imfl (G_OBJECT(dialog), NULL);
-    g_return_if_fail (imfl != NULL);
-
-    while (frames != NULL) {
-        add_image_frame_to_list (imfl, frames->data, 0);
-        frames = g_slist_next (frames);
-    }
-
-    dialog_update_from_imfl(dialog, imfl);
-}
 
 void window_add_files(GSList *files, gpointer window)
 {
@@ -870,13 +856,23 @@ void window_add_files(GSList *files, gpointer window)
     dialog_add_files (files, dialog);
 }
 
-void window_add_frames(GSList *frames, gpointer window)
+static void dialog_add_frame(struct ccd_frame *fr, char *filename, int flags, gpointer processing_dialog)
 {
-    GtkWidget *dialog = g_object_get_data( G_OBJECT(window), "processing");
-    if (dialog == NULL) dialog = make_image_processing (window);
-    g_return_if_fail(dialog != NULL);
+    struct image_file_list *imfl = dialog_set_imfl (G_OBJECT(processing_dialog), NULL);
+    g_return_if_fail (imfl != NULL);
 
-    dialog_add_frames (frames, dialog);
+    add_image_file_to_list (imfl, fr, filename, flags);
+
+    dialog_update_from_imfl(processing_dialog, imfl);
+}
+
+void window_add_frame(struct ccd_frame *fr, char *filename, int flags, gpointer window)
+{
+    GtkWidget *processing_dialog = g_object_get_data( G_OBJECT(window), "processing");
+    if (processing_dialog == NULL) processing_dialog = make_image_processing (window);
+    g_return_if_fail(processing_dialog != NULL);
+
+    dialog_add_frame (fr, filename, flags, processing_dialog);
 }
 
 static void imf_add_cb(GtkAction *action, gpointer dialog)
@@ -908,6 +904,11 @@ d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
 
         if (!(imf->flags & IMG_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
             imf_release_frame(imf, "imf_reload_cb");
+
+            struct ccd_frame *fr = imf->fr;
+            if (fr)
+                fr->imf = NULL;
+            imf->fr = NULL;
 
             imf->flags &= IMG_SKIP; // we keep the skip flag
         }
@@ -1082,11 +1083,9 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         if (text) {
             if ((ccdr->ops & IMG_OP_BIAS) && ccdr->bias && strcmp(text, ccdr->bias->filename)) {
                 image_file_release(ccdr->bias);
-                ccdr->bias = image_file_new();
-                ccdr->bias->filename = strdup(text);
+                ccdr->bias = image_file_new(NULL, text);
             } else if (!(ccdr->ops & IMG_OP_BIAS)) {
-                ccdr->bias = image_file_new();
-                ccdr->bias->filename = strdup(text);
+                ccdr->bias = image_file_new(NULL, text);
             }
             free(text);
         }
@@ -1104,11 +1103,9 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         if (text) {
             if ((ccdr->ops & IMG_OP_DARK) && ccdr->dark && strcmp(text, ccdr->dark->filename)) {
                 image_file_release(ccdr->dark);
-                ccdr->dark = image_file_new();
-                ccdr->dark->filename = strdup(text);
+                ccdr->dark = image_file_new(NULL, text);
             } else if (!(ccdr->ops & IMG_OP_DARK)) {
-                ccdr->dark = image_file_new();
-                ccdr->dark->filename = strdup(text);
+                ccdr->dark = image_file_new(NULL, text);
             }
             free(text);
         }
@@ -1126,11 +1123,9 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         if (text) {
             if ((ccdr->ops & IMG_OP_FLAT) && ccdr->flat && strcmp(text, ccdr->flat->filename)) {
                 image_file_release(ccdr->flat);
-                ccdr->flat = image_file_new();
-                ccdr->flat->filename = strdup(text);
+                ccdr->flat = image_file_new(NULL, text);
             } else if (!(ccdr->ops & IMG_OP_FLAT)) {
-                ccdr->flat = image_file_new();
-                ccdr->flat->filename = strdup(text);
+                ccdr->flat = image_file_new(NULL, text);
             }
             free(text);
         }
@@ -1150,8 +1145,7 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
                 if (ccdr->bad_pix_map)
                     bad_pix_map_release(ccdr->bad_pix_map);
 
-            ccdr->bad_pix_map =  bad_pix_map_new();
-            ccdr->bad_pix_map->filename = strdup(text);
+            ccdr->bad_pix_map =  bad_pix_map_new(text);
 
             free(text);
         }
@@ -1174,13 +1168,11 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         if (text) {
             if ((ccdr->ops & IMG_OP_ALIGN) && ccdr->alignref && strcmp(text, ccdr->alignref->filename)) {
                 image_file_release(ccdr->alignref);
-                ccdr->alignref = image_file_new();
-                ccdr->alignref->filename = strdup(text);
+                ccdr->alignref = image_file_new(NULL, text);
                 free_alignment_stars(ccdr);
 
             } else if (!(ccdr->ops & IMG_OP_ALIGN)) {
-                ccdr->alignref = image_file_new();
-                ccdr->alignref->filename = strdup(text);
+                ccdr->alignref = image_file_new(NULL, text);
             }
             free(text);
         }
@@ -1506,11 +1498,9 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
     if ( (ccdr->ops & IMG_OP_STACK) && ret >= 0 ) { // stack
 
         struct ccd_frame *fr = stack_frames (imfl, ccdr, progress_pr, dialog);
-        if (fr) {
-            imf = add_image_file_to_list (imfl, fr->name, IMG_LOADED | IMG_IN_MEMORY_ONLY | IMG_DIRTY);
+        if (fr && fr->imf) {
+            struct image_file *imf = fr->imf;
 
-            imf->fr = fr;
-            fr->imf = imf;
             wcs_clone(imf->fim, &fr->fim);
 //            get_frame(imf->fr, "ccdred_run_cb");
 
@@ -1525,8 +1515,7 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 //                if (fr->name) free(fr->name);
 //                fr->name = strdup(imf->filename);
 
-            } else
-                imf->flags |= IMG_DIRTY;
+            }
 
             dialog_update_from_imfl (dialog, imfl);
             imf_display_cb (NULL, dialog);

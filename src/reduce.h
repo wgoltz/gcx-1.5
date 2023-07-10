@@ -47,7 +47,10 @@ struct image_file {
 #define IMG_BAYER_MASK 0xf000000
 #define IMG_BAYER_SHIFT 24
 
-struct image_file * image_file_new(void);
+#define STACK_RESULT "Stack Result"
+#define NEW_FRAME "New Frame"
+
+struct image_file * image_file_new(struct ccd_frame *fr, char *filename);
 void image_file_ref(struct image_file *imf);
 void image_file_release(struct image_file *imf);
 
@@ -83,10 +86,9 @@ struct image_file_list {
 	GList *imlist;
 };
 
-struct bad_pix_map *bad_pix_map_new(void);
+struct bad_pix_map *bad_pix_map_new(char *filename);
 struct bad_pix_map *bad_pix_map_release(struct bad_pix_map *map);
-struct image_file *add_image_file_to_list(struct image_file_list *imfl, char *filename, int flags);
-struct image_file *add_image_frame_to_list(struct image_file_list *imfl, struct ccd_frame *fr, int flags);
+struct image_file *add_image_file_to_list(struct image_file_list *imfl, struct ccd_frame *fr, char *filename, int flags);
 struct image_file_list * image_file_list_new(void);
 void image_file_list_ref(struct image_file_list *imfl);
 void image_file_list_release(struct image_file_list *imfl);
@@ -118,7 +120,7 @@ int imf_check_reload(struct image_file *imf);
 
 void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_list *imfl);
 void window_add_files(GSList *files, gpointer window); /* add list of file names */
-void window_add_frames(GSList *frames, gpointer window); /* add list of frame pointers */
+void window_add_frame(struct ccd_frame *fr, char *filename, int flags, gpointer window); /* add new imf with frame and filename */
 int log_msg(char *msg, void *dialog);
 
 #endif

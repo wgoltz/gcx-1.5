@@ -531,12 +531,22 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
         struct gui_star *gs = GUI_STAR (sl->data);
         sl = g_slist_next (sl);
 
-        if (gs->s == NULL) continue;
+        if (gs->s == NULL) {
+            printf("gs %p (%d) has not attached star\n", gs, gs->sort);
+            fflush(NULL);
+            continue;
+        }
 
         struct cat_star *cats = CAT_STAR(gs->s);
+
         // ref cats or gs ?
 
-        cats->gs = gs;
+        if (cats->gs == NULL)
+            cats->gs = gs;
+        else if (gs != cats->gs) {
+            printf("gui_stars dont match!\n");
+            fflush(NULL);
+        }
 
         // asl has same sort order (by gui_star) as gui_star_list->sl
         asl = g_list_insert_sorted (asl, cats, (GCompareFunc)cats_gs_compare); // make sorted GList of cat_stars

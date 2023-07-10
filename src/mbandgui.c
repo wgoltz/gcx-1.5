@@ -235,11 +235,11 @@ struct {
     { "Status", NULL },
     { "Zpoint", sort_func },
     { "Err", sort_func },
-    { "Fitted", NULL },
-    { "Outliers", NULL },
+    { "Fitted", sort_func },
+    { "Outliers", sort_func },
     { "MEU", sort_func },
     { "Airmass", NULL },
-    { "JD", NULL },
+    { "JD", sort_func },
     { "File Name", NULL },
 };
 

@@ -52,6 +52,7 @@
 #include "wcs.h"
 #include "params.h"
 #include "misc.h"
+#include "reduce.h"
 
 #define MAX_FLAT_GAIN 1.5	// max gain accepted when flatfielding
 #define FITS_HROWS 36	// number of fits header lines in a block
@@ -90,6 +91,8 @@ struct ccd_frame *clone_frame(struct ccd_frame *fr)
 	}
 
     new_fr->ref_count = 1;
+    new_fr->imf = NULL;
+    new_fr->name = NULL;
     return new_fr;
 }
 
@@ -308,12 +311,15 @@ d2_printf("release %p '%s'\n", fr, fr->name);
 printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
 
         if (fr->ref_count < 1) {
+            struct image_file *imf = fr->imf;
+            if (imf)
+                imf->fr = NULL;
+
             free_frame(fr);
             fr = NULL;
         }
-    } else {
-//        printf("release_frame NULL %s\n", msg); fflush(NULL);
     }
+
     return fr;
 }
 

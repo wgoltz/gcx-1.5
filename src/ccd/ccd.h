@@ -759,6 +759,7 @@ extern int rotate_frame(struct ccd_frame *fr, double theta);
 extern void flip_frame(struct ccd_frame *fr);
 extern void rotate_frame_pi(struct ccd_frame *fr);
 extern void rotate_trame_pi_2(struct ccd_frame *fr, int direction);
+extern int gauss_blur_frame(struct ccd_frame *fr, double r);
 
 /* from ccd/edb.c */
 int locate_edb(char name[], double *ra, double *dec, double *mag, char *edbdir);

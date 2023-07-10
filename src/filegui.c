@@ -253,8 +253,8 @@ static void save_fits(GtkWidget *chooser, gpointer user_data)
 
     struct image_file *imf = ich->fr->imf;
     if (imf) {
-        if (imf->filename && (strcmp(imf->filename, "stack result") == 0)) {
-            free(imf->filename);
+        if (imf->flags & IMG_IN_MEMORY_ONLY) {
+            if (imf->filename) free(imf->filename);
             imf->filename = strdup(fn);
 
             if (ich->fr->name) free(ich->fr->name);

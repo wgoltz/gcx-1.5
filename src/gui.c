@@ -325,23 +325,11 @@ void act_user_quit(GtkAction *action, gpointer window)
 void act_frame_new (GtkAction *action, gpointer window)
 {
     struct ccd_frame *fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
-    char *fn = "New Frame";
-    fr->name = strdup(fn);
+
     get_frame(fr, "act_frame_new");
 // set wcs from window
 
-    GSList *fl = NULL;
-    fl = g_slist_append(fl, fr);
-    window_add_frames(fl, window);
-    g_slist_free(fl);
-
-//    GtkWidget *dialog = g_object_get_data (G_OBJECT(window), "processing");
-//    struct image_file_list *imfl = g_object_get_data (G_OBJECT(dialog), "imfl");
-//    struct image_file *imf = add_image_file_to_list(imfl, fr->name, IMG_LOADED);
-//    imf->fr = fr;
-
-//    dialog_update_from_imfl (dialog, imfl);
-//    imf_display_cb (NULL, dialog);
+    window_add_frame(fr, NEW_FRAME, IMG_IN_MEMORY_ONLY | IMG_DIRTY | IMG_LOADED, window);
 
 	frame_to_channel(fr, window, "i_channel");
     release_frame(fr, "act_frame_new");

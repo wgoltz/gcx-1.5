@@ -316,6 +316,8 @@ int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
 	}
     if (progress) (* progress)("mock save\n", data);
 
+    imf->flags &= ~IMG_DIRTY;
+
 	return 0;
 }
 
@@ -771,21 +773,14 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         remove_bayer_info(imf->fr);
         if ( ! (imf->flags & IMG_OP_BLUR) ) {
-            ccdr->blur = new_blur_kern(ccdr->blur, 7, ccdr->blurv);
-// create 8 bit copy
-//unsigned char* copy = malloc(imf->fr->w * imf->fr->h * sizeof(unsigned char));
-//int i, j;
-//unsigned char *p = copy;
-//for (i = 0; i < imf->fr->w; i++)
-//    for (j = 0; j < imf->fr->h; j++)
-//        p++ = (unsigned char) ((get_pixel_luminence(imf->fr, i, j) * a + b);
-//
-// ctmf
-// copy back to frame
+            int res = 0;
+            if (ccdr->blurv < 2) {
+                ccdr->blur = new_blur_kern(ccdr->blur, 7, ccdr->blurv);
+                res = filter_frame_inplace(imf->fr, ccdr->blur->kern, ccdr->blur->size);
+            } else
+                res = gauss_blur_frame(imf->fr, ccdr->blurv);
 
-            if (filter_frame_inplace(imf->fr, ccdr->blur->kern, ccdr->blur->size))
-//            float lpv3[9] = {1/16.0, 1/8.0, 1/16.0, 1/8.0, 1/4.0, 1/8.0, 1/16.0, 1/8.0, 1/16.0};
-//            if (filter_frame_inplace(imf->fr, lpv3, 3))
+            if (res)
                 REPORT( " (FAILED)" )
             else {
                 lb = NULL; asprintf(&lb, "'GAUSSIAN BLUR (FWHM=%.1f)'", ccdr->blurv);
@@ -1525,9 +1520,6 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 
             if (fr->exp.bias != 0.0) scale_shift_frame(fr, 1.0, -fr->exp.bias);
             noise_to_fits_header(fr);
-
-            if (fr->name) free(fr->name);
-            fr->name = strdup("stack result");
         }
     }
 
@@ -1539,15 +1531,8 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             imf_release_frame(imf, "stack_frames");
     }
 
-//    if (fr) {
-//        struct image_file *imf = image_file_new();
-//        imf->filename = strdup(fr->name);
-//        wcs_clone(imf->fim, &fr->fim); // setup imf->fim from somewhere
-//        imf->flags |= (IMG_LOADED | IMG_DIRTY | IMG_IN_MEMORY_ONLY);
-
-//        fr->imf = imf;
-//        imf->fr = fr;
-//    }
+    if (fr)
+        add_image_file_to_list(imfl, fr, STACK_RESULT, IMG_LOADED | IMG_IN_MEMORY_ONLY | IMG_DIRTY);
 
 d3_printf("ccd_frame.stack_frames return ok\n");
     return fr;
@@ -2126,7 +2111,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 }
 
 /* alloc/free functions for reduce-related objects */
-struct image_file * image_file_new(void)
+struct image_file * image_file_new(struct ccd_frame *fr, char *filename)
 {
 	struct image_file *imf;
     imf = calloc(1, sizeof(struct image_file));
@@ -2137,7 +2122,19 @@ struct image_file * image_file_new(void)
 	imf->ref_count = 1;
 
     imf->fim = wcs_new();
-	return imf;
+    imf->fr = fr;
+
+    if (fr) fr->imf = imf;
+    if (filename) imf->filename = strdup(filename);
+    if (fr && filename) {
+        if (fr->name) {
+            printf("image_file_new: fr already has a name!\n");
+            fflush(NULL);
+        }
+        fr->name = strdup(filename);
+    }
+
+    return imf;
 }
 
 void image_file_ref(struct image_file *imf)
@@ -2166,47 +2163,31 @@ d3_printf("imf freed '%s'\n", imf->filename);
     if (imf->filename) free(imf->filename);
     if (imf->fim) wcs_release(imf->fim);
 
+    struct ccd_frame *fr = imf->fr;
+    if (fr)
+        fr->imf = NULL;
+
     free(imf);
 }
 
-struct image_file* add_image_file_to_list(struct image_file_list *imfl, char *filename, int flags)
+struct image_file* add_image_file_to_list(struct image_file_list *imfl, struct ccd_frame *fr, char *filename, int flags)
 {
     struct image_file *imf;
     g_return_val_if_fail(imfl != NULL, NULL);
 
 //printf("reduce.add_image_file_to_list %s\n", filename);
-    imf = image_file_new();
+    imf = image_file_new(fr, filename);
 
-    imf->filename = strdup(filename);
-
-    imf->flags = flags;
-
-    imfl->imlist = g_list_append(imfl->imlist, imf);
- //   image_file_ref(imf);
-//printf("reduce.add_image_file_to_list return\n");
-    return imf;
-}
-
-struct image_file* add_image_frame_to_list(struct image_file_list *imfl, struct ccd_frame *fr, int flags)
-{
-    struct image_file *imf;
-    g_return_val_if_fail(imfl != NULL, NULL);
-
-//printf("reduce.add_image_frame_to_list %s\n", filename);
-    imf = image_file_new();
-
-    imf->filename = strdup(fr->name);
-
-    wcs_clone(imf->fim, &fr->fim);
-    imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED;
-
-    imf_load_frame(imf);
-
-//    imf->fr = fr;
-//    fr->imf = imf;
+    imf->flags |= flags;
 
     imfl->imlist = g_list_append(imfl->imlist, imf);
 
+    if (fr) {
+        wcs_clone(imf->fim, &fr->fim);
+//        imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED | IMG_DIRTY;
+
+        imf_load_frame(imf);
+    }
  //   image_file_ref(imf);
 //printf("reduce.add_image_file_to_list return\n");
     return imf;
@@ -2303,7 +2284,7 @@ d2_printf("imfl freed\n");
 }
 
 
-struct bad_pix_map *bad_pix_map_new(void)
+struct bad_pix_map *bad_pix_map_new(char *filename)
 {
     struct bad_pix_map *map;
     map = calloc(1, sizeof(struct bad_pix_map));
@@ -2312,6 +2293,7 @@ struct bad_pix_map *bad_pix_map_new(void)
         exit(1);
     }
     map->ref_count = 1;
+    map->filename = strdup(filename);
     return map;
 }
 

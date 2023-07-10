@@ -198,57 +198,50 @@ void free_blur_kern(struct blur_kern *blur)
 
 // filter a frame using the supplied kernel
 // size must be an odd number >=3
+// results within size/2 pixels of edges are set to cavg
 // returns 0 for ok, -1 for error
 int filter_frame(struct ccd_frame *fr, struct ccd_frame *fro, float *kern, int size)
 {
-	if (size % 2 != 1 || size < 3 || size > 7) {
+    if (size % 2 != 1 || size < 3 || size > 7) {
 		err_printf("filter_frame: bad size %d\n");
 		return -1;
 	}
 
     int w = fr->w;
 
-    int all = w * (fr->h - (size - 1)) - (size) ;
+//    int all = w * (fr->h - (size - 1)) - (size) ;
+    int all = fr->w * (fr->h - size + 1);
 
     int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(fr, plane_iter))) {
         float *dpi = get_color_plane(fr, plane_iter);
         float *dpo = get_color_plane(fro, plane_iter);
 
-
-//		for(i=0; i<all; i++)
-//			*dpo++ = *dpi++;
-//		return;
-
-//		d3_printf("dpi %x dpo %x\n", dpi, dpo);
+        float *dpo0 = dpo;
 
         int i;
-		for (i = 0; i < (size / 2) * w + (size / 2); i++) {
+        for (i = 0; i < (size / 2) * w; i++) { // cavg start size/2 rows
             *dpo++ = fr->stats.cavg;
 		}
-
-//		d3_printf("all: %d (%d) w: %d allo: %d\n", all, w * fr->h, w,
-//			  fro->w*fro->h);
-
-//		d3_printf("dpi %x dpo %x\n", dpi, dpo);
+        dpo += size / 2; // center dpo at first (output) pixel
 
 		switch(size) {
 		case 3:
-			for (i=0; i<all; i++) {
+            for (i = 0; i < all; i++) {
 				*dpo = conv3(dpi, kern, w);
 				dpi ++;
 				dpo ++;
 			}
 			break;
 		case 5:
-			for (i=0; i<all; i++) {
+            for (i = 0; i < all; i++) {
 				*dpo = conv5(dpi, kern, w);
 				dpi ++;
   				dpo ++;
 			}
 			break;
 		case 7:
-			for (i=0; i<all; i++) {
+            for (i = 0; i < all; i++) {
                 *dpo = conv7(dpi, kern, w);
 				dpi ++;
 				dpo ++;
@@ -256,17 +249,64 @@ int filter_frame(struct ccd_frame *fr, struct ccd_frame *fro, float *kern, int s
 			break;
 		}
 
-//		d3_printf("dpi %x dpo %x\n", dpi, dpo);
-
-		for (i = 0; i < (size / 2) * w + (size / 2); i++) {
+        for (i = 0; i < (size / 2) * (w - 1); i++) { // cavg end size/2 rows
             *dpo++ = fr->stats.cavg;
 		}
+
+        // cavg start and end columns
+        dpo = dpo0;
+
+        int x, y;
+        for (y = 0; y < fr->h; y++) {
+            for (x = 0; x < size / 2; x++) // cavg start columns
+                *dpo++ = fr->stats.cavg;
+
+            dpo0 += w;
+            dpo = dpo0 - size / 2;
+
+            for (x = 0; x < size / 2; x++) // cavg end columns
+                *dpo++ = fr->stats.cavg;
+        }
 	}
 
     fr->stats.statsok = 0;
 
 	return 0;
 
+}
+
+// from https://blog.ivank.net/fastest-gaussian-blur.html
+static void gaussBlur (float *scl, float *tcl, int w, int h, double r);
+
+int gauss_blur_frame(struct ccd_frame *fr, double r)
+{
+    struct ccd_frame *nf = clone_frame(fr);
+
+    if (nf == NULL) return -1;
+
+    int plane_iter = 0;
+    while ((plane_iter = color_plane_iter(fr, plane_iter))) {
+        float *dpi = get_color_plane(fr, plane_iter);
+        float *dpo = get_color_plane(nf, plane_iter);
+
+        gaussBlur(dpo, dpi, fr->w, fr->h, r);
+    }
+
+// swap frame and filtered frame data
+//    plane_iter = 0;
+//    while ((plane_iter = color_plane_iter(fr, plane_iter))) {
+//        float *pnf = get_color_plane(nf, plane_iter);
+//        float *pfr = get_color_plane(fr, plane_iter);
+
+//        set_color_plane(fr, plane_iter, pnf);
+//        set_color_plane(nf, plane_iter, pfr);
+//    }
+
+    fr->stats.statsok = 0;
+
+    release_frame(nf, "filter_frame_inplace 2");
+
+    return 0;
 }
 
 static void set_row_to_cavg(struct ccd_frame *fr, int row)
@@ -291,14 +331,6 @@ int filter_frame_inplace(struct ccd_frame *fr, float *kern, int size)
     struct ccd_frame *nf = clone_frame(fr);
 
     if (nf == NULL) return -1;
-
-// skip first and last row by setting them to cavg
-// need options to specify skip row
-    if (1) {
-
-        set_row_to_cavg(fr, 0);
-        set_row_to_cavg(fr, fr->h - 1);
-    }
 
     int ret = filter_frame(fr, nf, kern, size);
 	if (ret < 0) {
@@ -889,50 +921,141 @@ static void rotate_fsl(GSList *fsl, double xc, double yc, double dt)
 }
 */
 
-// create a gaussian filter kernel of given sigma
+// create a 2d gaussian filter kernel of given sigma
 // requires a prealloced table of floats of suitable size (size*size)
 // only odd-sized kernels are produced
 // returns 0 for success, -1 for error
 
 int make_gaussian(float sigma, int size, float *kern)
 {
-	int mid, all;
-	float *mp;
-	float sum, v;
-	int x, y;
-
 	if (sigma < 0.01) {
 		err_printf("make_gaussian: clipping sigma to 0.01\n");
 		sigma = 0.01;
 	}
 
-	if (size % 2 != 1 || size < 3 || size > 127) {
+    if (size % 2 != 1 || size < 3 || size > 7) {
 		err_printf("make_gaussian: bad size %d\n");
 		return -1;
 	}
-	mid = size / 2;
-	mp = kern + mid * size + mid;
-	sum = 0;
+    int mid = size / 2;
+    float *mp = kern + mid * size + mid;
+
+    float sum = 0;
+    int x, y;
 	for (y = 0; y < mid + 1; y++)
 		for(x = 0; x < mid + 1; x++) {
-            v = exp(- sqrt(sqr(x) + sqr(y)) / sigma);
+            float v = exp(- sqrt(sqr(x) + sqr(y)) / sigma);
 
-            //			d3_printf("x%d y%d v%.2f\n", x, y, v);
-			if (x == 0 && y == 0)
-				sum += v;
-			else if (x == 0 || y == 0)
-				sum += 2 * v;
-			else
-				sum += 4 * v;
+            sum += 4 * v;
 
 			*(mp + x + size * y) = v;
 			*(mp + x - size * y) = v;
 			*(mp - x - size * y) = v;
 			*(mp - x + size * y) = v;
 		}
-	all = size * size;
+
+    int all = size * size;
 	for (y = 0; y < all; y++)
 		kern[y] /= sum;
-	return 0;
+
+    return 0;
 }
 
+static float *boxesForGauss(double sigma, int n)  // standard deviation, number of boxes
+{
+    double wIdeal = sqrt((12 * sigma * sigma / n) + 1);  // Ideal averaging filter width
+    int wl = floor(wIdeal);  if (wl % 2 == 0) wl--;
+    int wu = wl + 2;
+
+    double mIdeal = (n * wl * wl + 4 * n * wl + 3 * n - 12 * sigma * sigma) / (wl + 1) / 4;
+//    double mIdeal = (12*sigma*sigma - n*wl*wl - 4*n*wl - 3*n)/(-4*wl - 4);
+    int m = round(mIdeal);
+
+    double sigmaActual = sqrt((m * wl * wl + (n - m) * wu * wu - n) / 12);
+    printf("sigms %f sigmaActual %f\n", sigma, sigmaActual); fflush(NULL);
+
+    float *sizes = calloc(n, sizeof(float));
+
+    int i;
+    for (i = 0; i < n; i++) sizes[i] = (i < m) ? wl : wu;
+
+    return sizes;
+}
+
+
+static void boxBlurH (float *scl, float *tcl, int w, int h, double r) {
+    double iarr = 1 / (r + r + 1);
+    int i;
+    for (i = 0; i < h; i++) {
+        int ti = i * w, li = ti, ri = ti + r;
+        float fv = scl[ti], lv = scl[ti + w - 1], val = (r + 1) * fv;
+
+        int j;
+        for (j = 0; j < r; j++) val += scl[ti + j];
+
+        for (j = 0; j <= r ; j++) {
+            val += scl[ri++] - fv;
+            tcl[ti++] = round(val * iarr);
+        }
+        for (j = r + 1; j < w - r; j++) {
+            val += scl[ri++] - scl[li++];
+            tcl[ti++] = round(val * iarr);
+        }
+        for (j = w - r; j < w; j++) {
+            val += lv - scl[li++];
+            tcl[ti++] = round(val * iarr);
+        }
+    }
+}
+
+static void boxBlurT (float *scl, float *tcl, int w, int h, double r) {
+    double iarr = 1 / (r + r + 1);
+
+    int i;
+    for(i = 0; i < w; i++) {
+        int ti = i, li = ti, ri = ti + r * w;
+        float fv = scl[ti], lv = scl[ti + w * (h - 1)], val = (r + 1) * fv;
+
+        int j;
+        for (j = 0; j < r; j++) val += scl[ti + j * w];
+
+        for (j = 0; j <= r; j++) {
+            val += scl[ri] - fv;
+            tcl[ti] = round(val * iarr);
+            ri += w;
+            ti += w;
+        }
+        for (j = r + 1; j < h - r; j++) {
+            val += scl[ri] - scl[li];
+            tcl[ti] = round(val * iarr);
+            li += w;
+            ri += w;
+            ti += w;
+        }
+        for (j = h - r; j < h; j++) {
+            val += lv - scl[li];
+            tcl[ti] = round(val * iarr);
+            li += w;
+            ti += w;
+        }
+    }
+}
+
+
+
+static void boxBlur (float *scl, float *tcl, int w, int h, double r) {
+    int i;
+    for (i = 0; i < w * h; i++) tcl[i] = scl[i];
+    boxBlurT(tcl, scl, w, h, r);
+    boxBlurH(scl, tcl, w, h, r);
+}
+
+static void gaussBlur (float *scl, float *tcl, int w, int h, double r) {
+    float *bxs = boxesForGauss(r, 3);
+
+    boxBlur (scl, tcl, w, h, (bxs[0] - 1) / 2);
+    boxBlur (tcl, scl, w, h, (bxs[1] - 1) / 2);
+    boxBlur (scl, tcl, w, h, (bxs[2] - 1) / 2);
+
+    free(bxs);
+}

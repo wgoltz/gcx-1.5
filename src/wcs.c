@@ -530,8 +530,8 @@ static void pairs_change_wcs(GSList *pairs, struct wcs *wcs)
 		}
         if (gs->s) {
 			cats = CAT_STAR(gs->s);
-		} else {
-			err_printf("No cat star found!\n");
+        } else { // not a cat star - do we care?
+//			err_printf("No cat star found!\n");
 			return;
 		}
 		pairs = g_slist_next(pairs);

@@ -518,16 +518,13 @@ int extract_bad_pixels(char *badpix, char *outf)
 
 	struct bad_pix_map *map;
 
-    struct image_file *imf = image_file_new();
-	imf->filename = strdup(badpix);
+    struct image_file *imf = image_file_new(NULL, badpix);
 
 d3_printf("gcx.extract_bad_pixels %s\n", badpix);
     if (imf_load_frame(imf) == 0) {
 //        map = calloc(1, sizeof(struct bad_pix_map));
-        map = bad_pix_map_new();
+        map = bad_pix_map_new(outf);
         if (map) {
-            map->filename = strdup(outf);
-
             if (find_bad_pixels(map, imf->fr, P_DBL(CCDRED_BADPIX_SIGMAS)) == 0)
                 save_bad_pix(map);
         }
@@ -547,8 +544,8 @@ int extract_sources(char *starf, char *outf)
 	struct sources *src;
 	int i;
 
-	imf = image_file_new();
-	imf->filename = strdup(starf);
+    imf = image_file_new(NULL, starf);
+
 d3_printf("gcx.extract_sources %s\n", starf);
     if (imf_load_frame(imf) < 0) {
         image_file_release(imf);
@@ -592,13 +589,13 @@ static struct ccd_frame *make_blank_obj_fr(char *obj, gpointer window)
 	fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
     set_wcs_from_object(fr, obj, P_DBL(FILE_NEW_SECPIX));
 
-    char *fn = (obj[0] == 0) ? "New Frame" : obj;
-    fr->name = strdup(fn);
+    char *fn = (obj[0] == 0) ? NEW_FRAME : obj;
+//    fr->name = strdup(fn);
 
-    GSList *fl = NULL;
-    fl = g_slist_append(fl, fr);
-    window_add_frames(fl, window);
-    g_slist_free(fl);
+//    GSList *fl = NULL;
+//    fl = g_slist_append(fl, fr);
+    window_add_frame(fr, fn, IMG_IN_MEMORY_ONLY | IMG_DIRTY | IMG_LOADED, window);
+//    g_slist_free(fl);
 
 	return fr;
 }
@@ -848,30 +845,25 @@ int fake_main(int ac, char **av)
             case 'p': ccdr->recipe = strdup(optarg); continue;// batch = TRUE; // set recipe file, interactive
 
             case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
-                ccdr->alignref = image_file_new();
-                ccdr->alignref->filename = strdup(optarg);
+                ccdr->alignref = image_file_new(NULL, optarg);
                 continue;
 
             case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
-                ccdr->bias = image_file_new();
-                ccdr->bias->filename = strdup(optarg);
+                ccdr->bias = image_file_new(NULL, optarg);
                 continue;
 
             case 'f':
-                ccdr->flat = image_file_new();
-                ccdr->flat->filename = strdup(optarg);
+                ccdr->flat = image_file_new(NULL, optarg);
                 ccdr->ops |= IMG_OP_FLAT;
                 batch = TRUE;
                 continue;
 
             case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
-                ccdr->dark = image_file_new();
-                ccdr->dark->filename = strdup(optarg);
+                ccdr->dark = image_file_new(NULL, optarg);
                 continue;
 
             case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
-                ccdr->bad_pix_map = bad_pix_map_new();
-                ccdr->bad_pix_map->filename = strdup(optarg);
+                ccdr->bad_pix_map = bad_pix_map_new(optarg);
                 continue;
 
             case 'P': run_phot = REP_STAR_ALL|REP_FMT_DATASET; batch = TRUE; // set recipe file, batch run
@@ -967,7 +959,7 @@ int fake_main(int ac, char **av)
     if (ac > optind) { /* build the image list */
 		imfl = image_file_list_new();
         int i;
-        for (i = optind; i < ac; i++) add_image_file_to_list(imfl, av[i], 0);
+        for (i = optind; i < ac; i++) add_image_file_to_list(imfl, NULL, av[i], 0);
 	}
 
 //while(! getchar()) { }
