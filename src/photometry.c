@@ -733,7 +733,8 @@ static void photometry_cb(gpointer window, guint action)
             if ((n = stf_centering_stats(stf, wcs, &r, &me)) != 0)
                 info_printf_sb2(window, "Centered %d stars. Errors (pixels) rms: %.2f max: %.2f", n, r, me);
 		}
-        stf_free_all(stf, "photometry_cb center stars");
+// get bad cats if this runs
+//        stf_free_all(stf, "photometry_cb center stars");
 		break;
 
 	case PHOT_CENTER_PLOT:
@@ -753,7 +754,7 @@ static void photometry_cb(gpointer window, guint action)
                 pclose(plfp);
             }
         }
-        stf_free_all(stf, "photometry_cb center plot");
+//        stf_free_all(stf, "photometry_cb center plot");
 		break;
 
 	case PHOT_RUN:

@@ -1013,19 +1013,25 @@ printf("home_path: %s\n", cwd); fflush(NULL);
             struct ccd_frame *fr = NULL;
             if (imfl) {
                 if (!op_no_reduce && ccdr) fr = reduce_frames_load(imfl, ccdr);
+
+                if (fr && interactive) {
+//                    GtkWidget *processing_dialog = g_object_get_data(G_OBJECT(window), "processing");
+//                    dialog_update_from_imfl (processing_dialog, imfl);
+//                    imf_display_cb (NULL, processing_dialog);
+                }
             } else {
 //                fr = make_blank_obj_fr(obj, window);
 //                get_frame(fr);
             }
 
             if (fr) {
-//                get_frame(fr);
+                get_frame(fr, "main");
                 if (obj && obj[0]) set_wcs_from_object(fr, obj, 0);
 
                 //printf("gcx.main 2\n");
 
                 frame_to_channel(fr, window, "i_channel");
-//                release_frame(fr);
+//                release_frame(fr, "main"); // don't release first frame
 
                 interactive = FALSE;
 

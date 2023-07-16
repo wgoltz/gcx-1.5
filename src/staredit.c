@@ -113,7 +113,7 @@ void star_edit_set_star(GtkWidget *dialog, struct cat_star *cats)
 void update_star_edit(GtkWidget *dialog)
 {
     char *buf;
-
+// bad cats
     struct cat_star *cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
     if (cats == NULL) return;
 
@@ -314,6 +314,7 @@ static void flags_changed_cb( GtkWidget *widget, gpointer dialog)
 
 static void entry_changed_cb( GtkWidget *widget, gpointer dialog)
 {
+    // get bad cats when editing star
     struct cat_star *cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
 	g_return_if_fail(cats != NULL);
 
@@ -375,7 +376,7 @@ static void move(int move_x, int move_y, gpointer dialog)
 
     struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
-
+// bad cats
     struct cat_star *cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
 
     if (move_x == 0 && move_y == 0) {

@@ -2187,7 +2187,7 @@ GtkWidget* create_image_processing (void)
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
- GtkAdjustment *adjustment = gtk_adjustment_new (1, 0, 10000, 0.1, 10, 0);
+ GtkAdjustment *adjustment = gtk_adjustment_new (1, -10000, 10000, 0.1, 10, 0);
  item = gtk_spin_button_new (adjustment, 1, 6);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "mul_spin", item, (GDestroyNotify) g_object_unref);

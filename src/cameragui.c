@@ -879,7 +879,7 @@ static void update_obs_entries( GtkWidget *dialog, struct obs_data *obs)
 static void auto_filename(GtkWidget *cam_control_dialog)
 {
 
-// move this to obs_data_cb
+// move this to obsdata_cb
 //    named_spin_set(cam_control_dialog, "file_seqn_spin", 1);
 
 //    char *text = named_entry_text(cam_control_dialog, "exp_file_entry");
@@ -938,7 +938,7 @@ static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
             g_free(text);
         }
 	}
-
+// use recipe if we have it as alternative for object_entry
     GtkWidget *wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_object_entry");
 	if (widget == wid) {
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
@@ -948,6 +948,7 @@ static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
 
         int ret = obs_set_from_object(obs, text);
 		if (ret < 0) {
+// set obs ra/dec from ra and dec entries
             buf = NULL; asprintf(&buf, "Cannot find object %s", text);
             if (buf) status_message(cam_control_dialog, buf), free(buf);
 
