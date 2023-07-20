@@ -394,9 +394,6 @@ int imf_check_reload(struct image_file *imf)
     gboolean reload_sec = (imf->mtime.tv_sec != imf_stat.st_mtim.tv_sec);
     gboolean reload_nsec = (imf->mtime.tv_nsec != imf_stat.st_mtim.tv_nsec);
 
-    imf->mtime.tv_sec = imf_stat.st_mtim.tv_sec;
-    imf->mtime.tv_nsec = imf_stat.st_mtim.tv_nsec;
-
     return (not_loaded || reload_sec || reload_nsec) ? 1 : 0;
 }
 
@@ -432,6 +429,12 @@ int imf_load_frame(struct image_file *imf)
         fr->imf = imf;
 
         imf->flags |= IMG_LOADED;
+
+        struct stat imf_stat = { 0 };
+        if (stat(imf->filename, &imf_stat) == 0) {
+            imf->mtime.tv_sec = imf_stat.st_mtim.tv_sec;
+            imf->mtime.tv_nsec = imf_stat.st_mtim.tv_nsec;
+        }
     }
 
     get_frame(fr, "imf_load_frame");
@@ -1629,12 +1632,8 @@ d3_printf("load alignment stars");
 
 // if imf->filename has been updated free align_stars and reload
     int reloaded = imf_check_reload(ccdr->alignref);
-    if (reloaded > 0) {
-        g_slist_free(ccdr->align_stars);
-        ccdr->align_stars = NULL;
-    }
 
-    if (! ccdr->align_stars) { // no valid align_stars yet
+    if (! ccdr->align_stars || reloaded > 0) { // no valid align_stars yet
         int res = imf_load_frame(ccdr->alignref);
         if (res < 0) return -1;
 
