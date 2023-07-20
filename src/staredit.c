@@ -73,7 +73,7 @@ static void star_edit_update_flags(GtkWidget *dialog, struct cat_star *cats)
     case CATS_TYPE_CAT:	gtk_combo_box_set_active(GTK_COMBO_BOX(widget), 3);
         break;
     default:
-        err_printf("Unsupported star type %x\n", cats->flags);
+        err_printf("Unsupported star type %x\n", cats->type);
     }
 }
 
@@ -113,7 +113,7 @@ void star_edit_set_star(GtkWidget *dialog, struct cat_star *cats)
 void update_star_edit(GtkWidget *dialog)
 {
     char *buf;
-// bad cats
+
     struct cat_star *cats = g_object_get_data(G_OBJECT(dialog), "cat_star");
     if (cats == NULL) return;
 
@@ -551,6 +551,10 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
     GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
 	if (dialog == NULL) {
 		dialog = create_pstar();
+        if (dialog == NULL) {
+            err_printf("cannot create star_edit_dialog\n");
+            return;
+        }
 
         g_object_set_data(G_OBJECT(dialog), "im_window", window);
         g_object_set_data_full(G_OBJECT(window), "star_edit_dialog", dialog, (GDestroyNotify)(gtk_widget_destroy));
@@ -558,7 +562,8 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 
         set_named_callback(dialog, "pstar_ok_button", "clicked", update_star_cb);
         set_named_callback(dialog, "pstar_cancel_button", "clicked", cancel_edit_cb);
-        set_named_callback(dialog, "pstar_make_std_button", "clicked", mkref_cb);
+// mkref_cb gets called while editing comments
+//        set_named_callback(dialog, "pstar_make_std_button", "clicked", mkref_cb);
 
         /*
                 set_named_callback(dialog, "magnitude_entry", "activate", val_changed_cb);

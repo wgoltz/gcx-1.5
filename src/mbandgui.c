@@ -648,7 +648,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
     char *v = "";
     switch (CATS_TYPE(sob->cats)) {
     case CATS_TYPE_APSTD  : v = "Std"; break;
-    case CATS_TYPE_APSTAR :	v = "Tgt"; break;
+    case CATS_TYPE_APSTAR : v = "Tgt"; break;
     case CATS_TYPE_CAT    : v = "Obj"; break;
     case CATS_TYPE_SREF   : v = "Field"; break;
     default: break;
@@ -659,6 +659,10 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
     struct mband_dataset *mbds = sob->ofr->mbds;
 
     int band = sob->ofr->band;
+    if (band < 0) {
+        printf("bad band in sob_store_set_row_vals\n");
+        return;
+    }
 
     struct transform trans = mbds->trans[band];
 

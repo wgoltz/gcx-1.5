@@ -444,7 +444,8 @@ static void ofr_sob_initial_weights(struct o_frame *ofr, struct transform *trans
 		sob->nweight = 0.0;
 
         if (ofr->band < 0) continue;
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;        
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
         if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
         if (sob->cats->gs->flags & STAR_DELETED) continue;
 
@@ -491,7 +492,9 @@ static double ofr_sob_residuals(struct o_frame *ofr, struct transform *trans)
 		sl = g_list_next(sl);
 
         if (ofr->band < 0) continue;
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
         if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
@@ -562,7 +565,9 @@ static void ofr_sob_reweight(struct o_frame *ofr, struct transform *trans, doubl
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+
         if (sob->nweight == 0.0) continue;
 
 		ns ++;
@@ -591,7 +596,9 @@ static double ofr_sob_stats(struct o_frame *ofr,
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+
         if (sob->nweight == 0.0) continue;
 
 		ns ++;
@@ -620,7 +627,9 @@ static double ofr_sob_stats(struct o_frame *ofr,
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+
         if (sob->nweight == 0.0) continue;
 
 		r2 += sqr(sob->residual - rm) * sob->weight;
@@ -664,7 +673,9 @@ static double ofr_median_residual(struct o_frame *ofr)
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+
         if (sob->nweight == 0.0) continue;
 
 		n++;
@@ -679,7 +690,9 @@ static double ofr_median_residual(struct o_frame *ofr)
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+
+//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
         if (sob->nweight == 0.0) continue;
 
 		a[n] = sob->residual;
@@ -741,7 +754,8 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res,
             continue;
         }
 
-        if (CATS_TYPE(cats) == CATS_TYPE_APSTD) { // reset smags
+        if (cats->gs->type == STAR_TYPE_APSTD) { // reset smags
+//        if (CATS_TYPE(cats) == CATS_TYPE_APSTD) { // reset smags
             char *mag_source[] = { cats->smags, cats->cmags };
             int i;
 
@@ -1046,7 +1060,9 @@ void mbds_smags_from_cmag_avgs(GList *ofrs)
             struct star_obs *sob = STAR_OBS(sl->data);
             struct cat_star *cats = CAT_STAR(sob->cats);
 
-            if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
+//            if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
+            if (cats->gs->type != STAR_TYPE_APSTD) continue;
+
             if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
             if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
             if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
@@ -1947,7 +1963,8 @@ void ofr_to_stf_cats(struct o_frame *ofr)
         double m = sob->mag;
         double me = sob->err;
 
-        if (CATS_TYPE(cats) == CATS_TYPE_APSTD) {
+//        if (CATS_TYPE(cats) == CATS_TYPE_APSTD) {
+        if (cats->gs->type == STAR_TYPE_APSTD) {
             if (sob->nweight == 0) {
                 m = sob->imag + ofr->zpoint;
                 me = sqrt(sqr(sob->imagerr) + sqr(ofr->zpointerr));

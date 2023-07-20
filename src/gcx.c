@@ -175,9 +175,11 @@ int save_params_rc(void *window)
     }
 
     int res = 1;
-    char *fn = NULL; asprintf(&fn, "%s/%s", passwd->pw_dir, rcname);
+//    char *fn = NULL; asprintf(&fn, "%s/%s", passwd->pw_dir, rcname);
 
-    if (fn) res = (save_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
+//    if (fn) res = (save_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
+
+    res = (save_par_file(rcname, PAR_NULL) < 0) ? 1 : 0;
 
     return res;
 }

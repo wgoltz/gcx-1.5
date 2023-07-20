@@ -366,6 +366,7 @@ GtkWidget* create_pstar (void)
   gtk_widget_add_accelerator (pstar_ok_button, "clicked", pstar_accel_group, GDK_Return, 0, GTK_ACCEL_VISIBLE);
   gtk_widget_set_can_default (pstar_ok_button, TRUE);
 
+/*
   GtkWidget *pstar_make_std_button = gtk_button_new_with_label ("Make Std");
   g_object_ref (pstar_make_std_button);
   g_object_set_data_full (G_OBJECT (pstar), "pstar_make_std_button", pstar_make_std_button, (GDestroyNotify) g_object_unref);
@@ -376,6 +377,7 @@ GtkWidget* create_pstar (void)
 
   gtk_widget_add_accelerator (pstar_make_std_button, "clicked", pstar_accel_group, GDK_r, 0, GTK_ACCEL_VISIBLE);
 //  gtk_widget_set_sensitive (pstar_make_std_button, FALSE);
+*/
 
   GtkWidget *pstar_cancel_button = gtk_button_new_with_label ("Undo Edits");
   g_object_ref (pstar_cancel_button);

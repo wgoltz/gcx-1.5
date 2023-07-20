@@ -255,8 +255,9 @@ static int save_image_file_to_dir(struct image_file *imf, char *dir, int (* prog
 static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq, int (* progress)(char *msg, void *data), void *data)
 {
 	g_return_val_if_fail(imf != NULL, -1);
-	g_return_val_if_fail(imf->fr != NULL, -1);
-	g_return_val_if_fail(outf != NULL, -1);
+    g_return_val_if_fail(imf->fr != NULL, -1);
+    g_return_val_if_fail(imf->filename != NULL, -1);
+    g_return_val_if_fail(outf != NULL, -1);
 
     if (imf->flags & IMG_SKIP) return 0;
 

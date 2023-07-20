@@ -600,8 +600,11 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 
         if ((ofr->band == -1) || (ofr->band == band)) {
 
-            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR && CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+//            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR && CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 //            if (sob->ost->smag[band] == MAG_UNSET) continue;
+
+            if (sob->cats->gs->type != STAR_TYPE_APSTAR) continue;
+            if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
 
             double m = sob->imag + sob->ofr->zpoint;
             double me = sob->imagerr; // sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
@@ -666,7 +669,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
             double m = MAG_UNSET;
             double me = BIG_ERR;
 
-            if ((CATS_TYPE(cats) == CATS_TYPE_APSTAR)) {
+            if (CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
                 if (sob->mag != MAG_UNSET)
                     m = sob->mag;
                 if (sob->err < BIG_ERR)

@@ -532,7 +532,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
         sl = g_slist_next (sl);
 
         if (gs->s == NULL) {
-            printf("gs %p (%d) has not attached star\n", gs, gs->sort);
+            printf("gs %p (%d) has no attached star\n", gs, gs->sort);
             fflush(NULL);
             continue;
         }

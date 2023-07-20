@@ -169,6 +169,7 @@ int is_zip_name(char *fn)
 }
 
 // drop extension by converting last '.' (if found) to 0
+// return position of trailing 0 (strlen(result) + 1)
 int drop_dot_extension(char *fn)
 {
     int i = strlen(fn);
@@ -181,7 +182,7 @@ int drop_dot_extension(char *fn)
         }
         i--;
     }
-    return i;
+    return i + 1;
 }
 
 // return position of '.' of (last) extension
@@ -304,6 +305,7 @@ char *save_name(char *in_full_name, char *file_name_stub, int *seq, double *jd)
     char *in_copy = strdup(in_full_name);
 
     char *in_file_name = basename(in_copy);
+
     int extens = has_extension(in_file_name);
     if (extens > 0) in_file_name[extens] = 0; // drop extens
 
@@ -313,16 +315,16 @@ char *save_name(char *in_full_name, char *file_name_stub, int *seq, double *jd)
 
     char *X_slot = out_copy;
     int X_size = get_slot(&X_slot, 'X');
-    if (X_size >= 0) *X_slot = 0; // drop X's
+    if (X_size > 0) *X_slot = 0; // drop X's
 
     char *T_slot = out_copy;
     int T_size = get_slot(&T_slot, 'T');
-    if (T_size >= 0) *T_slot = 0; // drop T's
+    if (T_size > 0) *T_slot = 0; // drop T's
 
     char *out_file_name = NULL;
     char *out_base_name = basename(out_copy);
 
-    if ((X_size && T_size) && (seq == NULL) ^ (jd == NULL)) out_file_name = out_base_name;
+    if ((X_size <= 0 && T_size <= 0) && (seq == NULL) ^ (jd == NULL)) out_file_name = out_base_name;
     if ((X_size == 0) ^ (T_size == 0) && (seq && jd)) out_file_name = out_base_name;
 
     if (strcmp(out_base_name, "_") == 0) out_file_name = in_file_name;
@@ -340,26 +342,30 @@ char *save_name(char *in_full_name, char *file_name_stub, int *seq, double *jd)
         str_join_str(&fn, "%s", out_file_name);
 
     if (out_file_name != in_file_name) {
-        if (seq) {
-            if (X_size)
-                str_join_varg(&fn, "%0.*d", X_size, *seq);
-            else
-                str_join_varg(&fn, "%0.3d", *seq);
-
-            (*seq)++;
-        }
-
+        double short_jd;
         if (jd) {
             double i;
-            double short_jd = modf(*jd / 1000, &i) * 1000;
+            short_jd = modf(*jd / 1000, &i) * 1000;
             if (short_jd >= 1000) short_jd = 0;
-
-            if (T_size)
-                str_join_varg(&fn, "%0*.*f", 4 + T_size, T_size, short_jd);
-            else
-                str_join_varg(&fn, "%09.5f", short_jd);
         }
+
+        if (seq && X_size > 0) {
+            str_join_varg(&fn, "%0.*d", X_size, *seq);
+            (*seq)++;
+
+        } else if (jd && T_size > 0)
+            str_join_varg(&fn, "%0*.*f", 4 + T_size, T_size, short_jd);
+
+        else if (seq) {
+            str_join_varg(&fn, "%0.3d", *seq);
+            (*seq)++;
+
+        } else if (jd)
+            str_join_varg(&fn, "%09.5f", short_jd);
+
     }
+
+    if (fn == NULL) fn = strdup(in_file_name);
 
     free(dir_copy);
     free(in_copy);

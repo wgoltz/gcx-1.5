@@ -57,7 +57,7 @@
 //extern struct obsdata obs;
 
 // max number of frames that we combine in one operation
-#define COMB_MAX 256
+#define COMB_MAX 500
 
 // stacking methods
 #define STACK_MMEDIAN 0

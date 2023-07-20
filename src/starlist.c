@@ -654,7 +654,8 @@ int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
 //                }
                 gs->type = (star_type)cats->type;
                 gui_star_label_from_cats(gs);
-                continue;
+//                continue;
+                break;
 
             }
         }
