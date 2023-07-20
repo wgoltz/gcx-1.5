@@ -1627,6 +1627,13 @@ d3_printf("load alignment stars");
 	}
 	g_return_val_if_fail(ccdr->alignref != NULL, -1);
 
+// if imf->filename has been updated free align_stars and reload
+    int reloaded = imf_check_reload(ccdr->alignref);
+    if (reloaded > 0) {
+        g_slist_free(ccdr->align_stars);
+        ccdr->align_stars = NULL;
+    }
+
     if (! ccdr->align_stars) { // no valid align_stars yet
         int res = imf_load_frame(ccdr->alignref);
         if (res < 0) return -1;
