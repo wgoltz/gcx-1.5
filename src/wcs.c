@@ -188,24 +188,7 @@ void refresh_wcs(gpointer window) {
     if (wcs == NULL) return;
 
     struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr) {
-        if (fr->imf) {
-            struct wcs *imf_wcs = fr->imf->fim;
-            if (imf_wcs->wcsset > fr->fim.wcsset) {
-                if (imf_wcs->wcsset >= wcs->wcsset) {
-                    wcs_clone(&fr->fim, imf_wcs);
-                }
-            } else {
-                wcs->wcsset = WCS_INITIAL;
-            }
-//            wcs_from_frame(fr, wcs);
-
-        } else {
-            printf("refresh_wcs no imf\n");
-        }
-
-        wcs_from_frame(fr, wcs);
-    }
+    if (fr) wcs_from_frame(fr, wcs);
 
     wcsedit_refresh(window);
 }
@@ -223,7 +206,8 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
         if (fr_wcs->wcsset == WCS_INVALID) { // reload everything, ignore hints
 
-            fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
+            if (window_wcs->wcsset == WCS_INVALID)
+                fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
 
             // if unset: copy pos, scale and loc from window_wcs, if they are set there
             if ((fr_wcs->flags & WCS_HAVE_POS) == 0 && (window_wcs->flags & WCS_HAVE_POS)) {
