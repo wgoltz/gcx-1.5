@@ -824,7 +824,10 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->flags & IMG_OP_WCS) ) {
 
-            if ( fit_wcs(imf, ccdr, progress, data) ) REPORT( " (FAILED)" )
+            if ( fit_wcs(imf, ccdr, progress, data) ) {
+                REPORT( " (FAILED)" )
+                imf->flags |= IMG_SKIP;
+            }
 
         } else REPORT( " (already_done)" )
 
@@ -836,7 +839,10 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
             REPORT( " phot" )
-            if ( aphot_imf(imf, ccdr, progress, data) ) REPORT( " (FAILED)" )
+            if ( aphot_imf(imf, ccdr, progress, data) ) {
+                REPORT( " (FAILED)" )
+                imf->flags |= IMG_SKIP;
+            }
         }
 
         // else REPORT( " (already_done)" )

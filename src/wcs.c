@@ -204,10 +204,12 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
     if (fr_wcs->wcsset < WCS_VALID) {
 
-        if (fr_wcs->wcsset == WCS_INVALID) { // reload everything, ignore hints
+//        if (fr_wcs->wcsset == WCS_INVALID) { // reload everything, ignore hints
 
             if (window_wcs->wcsset == WCS_INVALID)
                 fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
+            else
+                fr_wcs->flags = 0; // window_wcs more likely better than fr_wcs
 
             // if unset: copy pos, scale and loc from window_wcs, if they are set there
             if ((fr_wcs->flags & WCS_HAVE_POS) == 0 && (window_wcs->flags & WCS_HAVE_POS)) {
@@ -231,7 +233,7 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
                 fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
                 fr_wcs->flags |= WCS_HINTED; // not yet validated
             }
-        }              
+//        }
     }
 
     if (fr_wcs->flags != 0) { // && window_wcs->flags & WCS_HINTED) {
