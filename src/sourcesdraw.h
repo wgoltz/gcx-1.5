@@ -31,6 +31,11 @@ typedef enum {
     STAR_TYPES // 8
 } star_type;
 
+/* gui_star type bits (8 bits) */
+#define STAR_TYPE_ALL 0x000000ff
+
+#define TYPE_MASK(type) (1 << (type)) /* convert gui_star type to gui_star flag bit */
+
 /* the structure that holds the source markers we display */
 struct gui_star {
     int sort; /* gui_star_list sorted by sort value, prepend new gs: sort(new gs) = sort(first gs) + 1 */
@@ -51,10 +56,6 @@ struct gui_star {
 			 * is deleted, star is unref'd */
 };
 
-/* gui_star type bits (8 bits) */
-#define STAR_TYPE_ALL 0x000000ff
-
-#define TYPE_MASK(type) (1 << (type)) /* convert gui_star type to gui_star flag bit */
 
 /* star flags */
 #define STAR_SELECTED 0x100 /* star is selected and should be rendered as such */
@@ -90,8 +91,8 @@ struct gui_star_list {
 #define STAR_SHAPE_DIAMOND 4
 #define STAR_SHAPE_CROSS 5
 
-#define GSTAR_OF_TYPE(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
-#define GSTAR_TYPE(gs) ((gs)->type)
+#define STAR_OF_TYPE(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
+#define STAR_TYPE(gs) ((gs)->type)
 
 /* selection mask for catalog and reference stars */
 #define TYPE_CATREF (TYPE_MASK(STAR_TYPE_SREF)|TYPE_MASK(STAR_TYPE_CAT)|TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))

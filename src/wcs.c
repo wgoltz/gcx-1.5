@@ -538,7 +538,7 @@ void cat_change_wcs(GSList *sl, struct wcs *wcs)
         if (gs->flags & STAR_DELETED) continue;
         if (gs->s == NULL) continue;
 
-        if (GSTAR_OF_TYPE(gs, TYPE_CATREF)) {
+        if (STAR_OF_TYPE(gs, TYPE_CATREF)) {
             struct cat_star *cats = CAT_STAR(gs->s);
 //            if (cats->gs != gs) {
 //                printf("bad cats for gs->sort %d\n", gs->sort);
@@ -691,12 +691,12 @@ double pairs_fit(GSList *pairs, double *dxo, double *dyo, double *dso, double *d
         struct gui_star *gs = GUI_STAR(sl->data);
         sl = g_slist_next(sl);
 
-        if ( ! GSTAR_OF_TYPE(gs, TYPE_FRSTAR)) {
+        if ( ! STAR_OF_TYPE(gs, TYPE_FRSTAR)) {
 //            err_printf("pairs_cs_diff: first star in pair must be a frstar \n");
             continue;
         }
         struct gui_star *gsp = GUI_STAR(gs->pair);
-        if ( ! GSTAR_OF_TYPE(gsp, TYPE_CATREF | TYPE_ALIGN) ) {
+        if ( ! STAR_OF_TYPE(gsp, TYPE_CATREF | TYPE_ALIGN) ) {
 //            err_printf("pairs_cs_diff: second star in pair must be a catref \n");
             continue;
         }
@@ -803,13 +803,13 @@ static int fit_pairs(GSList *pairs, struct wcs *wcs)
 		struct gui_star *gs, *cgs;
 		struct cat_star *cats;
 		gs = GUI_STAR(p->data);
-        if ( ! GSTAR_OF_TYPE(gs, TYPE_FRSTAR)) {
+        if ( ! STAR_OF_TYPE(gs, TYPE_FRSTAR)) {
             err_printf("fit_pairs: first star in pair must be a frstar\n");
 			ret = -1;
 			goto fexit;
 		}
 		cgs = GUI_STAR(gs->pair);
-        if ( ! GSTAR_OF_TYPE(cgs, TYPE_CATREF) || (cgs->s == NULL) ) {
+        if ( ! STAR_OF_TYPE(cgs, TYPE_CATREF) || (cgs->s == NULL) ) {
 			err_printf("fit_pairs: second star in pair must be a catref \n");
 			ret = -1;
 			goto fexit;
@@ -874,7 +874,7 @@ int window_fit_wcs(GtkWidget *window)
 			pairs = g_slist_append(pairs, gs);
 
             struct gui_star *cgs = GUI_STAR(gs->pair);
-            if (GSTAR_OF_TYPE(cgs, TYPE_CATREF) && (cgs->s != NULL)) {
+            if (STAR_OF_TYPE(cgs, TYPE_CATREF) && (cgs->s != NULL)) {
 				if (CAT_STAR(cgs->s)->perr < BIG_ERR)
 					goodpairs = g_slist_append(goodpairs, gs);
 			}
@@ -998,7 +998,7 @@ int auto_pairs(struct gui_star_list *gsl)
 //        printf("auto_pairs: %d TYPE_MASK_GSTAR(gs) %08x %s\n", gs->sort, TYPE_MASK_GSTAR(gs), cats->name);
 //        fflush(NULL);
 
-        if (GSTAR_OF_TYPE(gs, TYPE_CATREF)) { // skips field stars?
+        if (STAR_OF_TYPE(gs, TYPE_CATREF)) { // skips field stars?
 
             if (P_INT(AP_MOVE_TARGETS) && (cats->flags & CATS_FLAG_ASTROMET) == 0) continue;
 

@@ -1417,12 +1417,12 @@ void act_stars_rm_user (GtkAction *action, gpointer window)
 
 void act_stars_rm_field (GtkAction *action, gpointer window)
 {
-	remove_stars(window, TYPE_MASK(STAR_TYPE_SREF), 0);
+    remove_stars(window, TYPE_MASK(STAR_TYPE_SREF), 0);
 }
 
 void act_stars_rm_catalog (GtkAction *action, gpointer window)
 {
-	remove_stars(window, TYPE_MASK(STAR_TYPE_CAT), 0);
+    remove_stars(window, TYPE_MASK(STAR_TYPE_CAT), 0);
 }
 
 void act_stars_rm_off_frame (GtkAction *action, gpointer window)

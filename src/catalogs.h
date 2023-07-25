@@ -22,7 +22,8 @@ typedef enum {
     CATS_TYPES
 } cats_type;
 
-#define CATS_TYPE(cats) ( cats->type )
+// use gui_star type if the cats has a gui_star
+#define CATS_TYPE(cats) ( (cats)->gs ? STAR_TYPE((cats)->gs) : (cats)->type )
 
 /* flags for catalogs and stars */
 
