@@ -280,6 +280,21 @@ static int indigui_get_switch_type(struct indi_prop_t *iprop)
     return SWITCH_COMBOBOX;
 }
 
+static void label_set_text(GtkLabel *label, char *markup, char *text)
+{
+    if (markup && markup[0]) {
+        char *markup_text = g_markup_printf_escaped (markup, text);
+        if (markup_text) {
+            gtk_label_set_markup(label, markup_text);
+            g_free (markup_text);
+
+            return;
+        }
+    }
+
+    gtk_label_set_text(label, text);
+}
+
 void indigui_update_widget(struct indi_prop_t *iprop)
 {
 	indigui_prop_set_signals(iprop, 0);
@@ -288,66 +303,65 @@ void indigui_update_widget(struct indi_prop_t *iprop)
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
 
-        char *val = NULL;
-        char *bold_text;
-
         GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
         GtkWidget *value;
 
         switch (iprop->type) {
         case INDI_PROP_TEXT:
 
-//            if (iprop->permission != INDI_RO) {
-//                GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
-//                gtk_entry_set_text(GTK_ENTRY (entry), elem->value.str);
-//            }
-
             value = (GtkWidget *)g_object_get_data(G_OBJECT (element), "value");
 
-            bold_text = g_markup_printf_escaped ("<b>%s</b>", elem->value.str);
-            gtk_label_set_markup(GTK_LABEL(value), bold_text);
-            g_free (bold_text);
+            if (value) label_set_text(GTK_LABEL(value), "<b>%s</b>", elem->value.str);
+
+            if (iprop->permission != INDI_RO) {
+                GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
+                if (entry) gtk_entry_set_text(GTK_ENTRY (entry), elem->value.str);
+            }
 
             break;
 
         case INDI_PROP_NUMBER:
 
             value = (GtkWidget *)g_object_get_data(G_OBJECT (element), "value");
+            if (value) {
+                char *val = numberFormat(elem->value.num.fmt, elem->value.num.value);
+                if (val) {
 
-            val = numberFormat(elem->value.num.fmt, elem->value.num.value);
+// bold format does not work for value with history?
+                    if (iprop->permission != INDI_RO) {
 
-//            if (iprop->permission != INDI_RO) {
+//                 if INDI has count-down the entry to 0, restore val from "reset_value"
+                        int reset = 0;
+                        GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
 
-                // if INDI has count-down the entry to 0, restore val from "reset_value"
-//                int reset = 0;
-//                GtkWidget *entry = g_object_get_data(G_OBJECT (value), "entry");
+                        if (entry) {
+                            if (elem->value.num.value == 0) {
+                                GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (value));
+                                GtkTreeIter iter;
+                                if (gtk_tree_model_get_iter_first(history, &iter)) {
+                                    gchar *str;
+                                    gtk_tree_model_get(history, &iter, 0, &str, -1);
+                                    reset = (str && str[0] && strcmp(val, str) != 0); // i.e. str != "0"
+                                    if (reset)
+                                        gtk_entry_set_text(GTK_ENTRY (entry), str);
+                                }
+                            }
+                            if (! reset) {
+                                char *elem_value = NULL;
+                                asprintf(&elem_value, "%s_value", elem->name);
+                                GtkWidget *label = g_object_get_data(G_OBJECT (value), elem_value);
+                                free(elem_value);
+                                gtk_label_set_text(GTK_LABEL(label), val);
 
-//                if (elem->value.num.value == 0) {
-//                    GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (value));
-//                    GtkTreeIter iter;
-//                    if (gtk_tree_model_get_iter_first(history, &iter)) {
-//                        gchar *str;
-//                        gtk_tree_model_get(history, &iter, 0, &str, -1);
-//                        reset = (str && str[0] && strcmp(val, str) != 0); // i.e. str != "0"
-//                        if (reset)
-//                            gtk_entry_set_text(GTK_ENTRY (entry), str);
-//                    }
-//                }
-//                if (! reset) {
-//                    char *elem_value = NULL;
-//                    asprintf(&elem_value, "%s_value", elem->name);
-//                    GtkWidget *label = g_object_get_data(G_OBJECT (value), elem_value);
-//                    free(elem_value);
-//                    gtk_label_set_text(GTK_LABEL(label), val);
+                                gtk_entry_set_text(GTK_ENTRY (entry), val);
+                            }
+                        }
+                    }
 
-//                        gtk_entry_set_text(GTK_ENTRY (entry), val);
-//                }
-//            }
-
-
-            bold_text = g_markup_printf_escaped ("<b>%s</b>", val);
-            gtk_label_set_markup(GTK_LABEL (value), bold_text);
-            g_free (bold_text);
+                    label_set_text(GTK_LABEL (value), "<b>%s</b>", val);
+                }
+                free(val);
+            }
 
             break;
 
@@ -358,11 +372,13 @@ void indigui_update_widget(struct indi_prop_t *iprop)
             case SWITCH_CHECKBOX:
                 gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (element), elem->value.set);
                 break;
+
             case SWITCH_COMBOBOX:
                 if (elem->value.set) {
                     GtkWidget *combo = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), "__combo");
                     long iter = (long)element;
                     gtk_combo_box_set_active(GTK_COMBO_BOX (combo), iter);
+
                 }
                 break;
             }
@@ -375,19 +391,21 @@ void indigui_update_widget(struct indi_prop_t *iprop)
 	indigui_set_state(state_label, iprop->state);
 
 	//Display any message
-	indigui_show_message(iprop->idev->indi, iprop->message);
-	iprop->message[0] = 0;
+    if (iprop->message) {
+        indigui_show_message(iprop->idev->indi, iprop->message);
+        iprop->message[0] = 0;
+    }
 
 	indigui_prop_set_signals(iprop, 1);
 }
 
 
-void indigui_show_message(struct indi_t *indi, const char *message)
+void indigui_show_message(struct indi_t *indi, char *message)
 {
 	GtkTextBuffer *textbuffer;
 	GtkTextIter text_start;
 
-	if (strlen(message) > 0) {
+    if (message && *message) {
 		time_t curtime;
 		char timestr[30];
 		struct tm time_loc;
@@ -491,9 +509,7 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
         GtkWidget *element = gtk_label_new(NULL); // data: "combo", "value"
         g_object_set_data_full(G_OBJECT (iprop->widget), elem->name, element, (GDestroyNotify)g_object_unref);
 
-        gchar *bold_text = g_markup_printf_escaped ("<i>%s</i>", elem->label);
-        gtk_label_set_markup (GTK_LABEL (element), bold_text);
-        g_free(bold_text);
+        label_set_text(GTK_LABEL (element), "<i>%s</i>", elem->label);
 
         x = 1;
         gtk_table_attach(GTK_TABLE (iprop->widget), element, x, x + 1, y, y + 1,
@@ -522,12 +538,7 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
         x++;
         GtkWidget *value = gtk_label_new(NULL); // the value
 
-        if (iprop->permission == INDI_RO) {
-            bold_text = g_markup_printf_escaped ("<b>%s</b>", text);
-            gtk_label_set_markup (GTK_LABEL (value), bold_text);
-            g_free(bold_text);
-        } else
-            gtk_label_set_text (GTK_LABEL (value), text);
+        label_set_text(GTK_LABEL (value), (iprop->permission == INDI_RO) ? "<b>%s</b>" : NULL, text);
 
         g_object_ref(value);
         g_object_set_data_full(G_OBJECT (element), "value", value, (GDestroyNotify)g_object_unref);
@@ -691,6 +702,8 @@ static void indigui_build_prop_widget(struct indi_prop_t *iprop)
 		indigui_create_blob_widget(iprop, num_props);
 		break;
 	}
+// update set values
+    indigui_update_widget(iprop); // try this
 }
 
 

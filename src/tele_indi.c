@@ -57,6 +57,7 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
     if (ra) {
         *ra = indi_prop_get_number(tele->coord_prop, "RA");
         ok = (*ra != NAN);
+        if (ok) *ra *= 15; // hours to degrees
     }
     if (dec) {
         *dec = indi_prop_get_number(tele->coord_prop, "DEC");
@@ -70,8 +71,6 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
  */
 int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
 {
-    struct indi_elem_t *elem = NULL;
-
     if (! tele->ready) {
         err_printf("tele_get_tracking: Tele isn't ready.  Can't get tracking\n");
         return -1;
@@ -168,9 +167,8 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 //	}
 //	else
     if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
-		tele->coord_prop = iprop;
+        tele->coord_prop = iprop;
         tele->coord_set_prop = iprop; // try this
-printf("Found %s for tele %s\n", iprop->name, iprop->idev->name); fflush(NULL);
         indi_prop_add_cb(iprop, (IndiPropCB)tele_get_coords_cb, tele);
 	}
 	else if (strcmp(iprop->name, "ON_COORD_SET") == 0) {
@@ -199,7 +197,7 @@ printf("Found %s for tele %s\n", iprop->name, iprop->idev->name); fflush(NULL);
 		tele->timed_guide_ew_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
-	else if (strcmp(iprop->name, "Slew rate") == 0) {
+    else if (strcmp(iprop->name, "TELESCOPE_SLEW_RATE") == 0) {
 		tele->speed_prop = iprop;
 	}
 	else
@@ -217,10 +215,10 @@ void tele_set_speed(struct tele_t *tele, int type)
 	}
 	switch (type) {
 	case TELE_MOVE_CENTERING:
-		elem = indi_prop_set_switch(tele->speed_prop, "Centering", TRUE);
+        elem = indi_prop_set_switch(tele->speed_prop, "CENTERING", TRUE);
 		break;
 	case TELE_MOVE_GUIDE:
-		elem = indi_prop_set_switch(tele->speed_prop, "Guide", TRUE);
+        elem = indi_prop_set_switch(tele->speed_prop, "GUIDE", TRUE);
 		break;
 	default:
 		err_printf("Unknown speed: %d\n", type);
@@ -294,7 +292,7 @@ void tele_guide_move(struct tele_t *tele, int dx_msec, int dy_msec)
 void tele_center_move(struct tele_t *tele, float dra, float ddec)
 {
     double ra = tele_get_ra(tele);
-    double dec = tele_get_dec(tele);
+    double dec = tele_get_dec(tele); // dec is wrong
     if (ra != NAN && dec != NAN) {
         ra += dra;
         dec += ddec;
@@ -306,7 +304,7 @@ void tele_center_move(struct tele_t *tele, float dra, float ddec)
 double tele_get_ra(struct tele_t *tele)
 {
     if (! tele->coord_prop) return NAN; // 0.0;
-	return indi_prop_get_number(tele->coord_prop, "RA");
+    return indi_prop_get_number(tele->coord_prop, "RA") * 15; // hours to degrees
 }
 
 double tele_get_dec(struct tele_t *tele)

@@ -408,7 +408,7 @@ void indi_send(struct indi_prop_t *iprop, struct indi_elem_t *ielem )
     if (msg) {
 printf("indi_send: %s\n", msg); fflush(NULL);
         iprop->state = INDI_STATE_BUSY;
-        //	indigui_update_widget(iprop);
+        indigui_update_widget(iprop); // what does it do, was commented out
         io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
         free(msg);
     }

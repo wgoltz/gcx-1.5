@@ -188,6 +188,12 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         return -1;
     }
 
+// strip any trailing spaces in filter
+    char *p = filter;
+    while (*p) p++;
+    p--;
+    while (p >= filter && *p == ' ') *(p--) = 0;
+
     GList *asl = stf_find_glist (stf, 0, SYM_STARS);
 	if (asl == NULL) {
 		err_printf("no star list in stf, aborting aphot\n");
@@ -456,7 +462,7 @@ static struct stf * build_stf_from_frame(struct wcs *wcs, GList *sl, struct ccd_
         stf_append_double (st, SYM_R3, ap->r3);
 
         int i = 0;
-		while (sky_methods[i] != NULL) {
+        while (sky_methods[i] != NULL) { // why?
             if (i == ap->sky_method) stf_append_string (st, SYM_SKY_METHOD, sky_methods[i]);
 			i++;
 		}

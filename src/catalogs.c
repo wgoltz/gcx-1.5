@@ -722,6 +722,7 @@ void close_catalog(struct catalog *cat)
 
 static inline int isident(char i) { return ((i == '_') || (isalnum(i)) || (i == '\''));}
 
+
 static int band_crack(char *text, char **name1, char **name2, char **qual, double *mag, double *magerr, char **endp)
 {
 	int ret = 0;
@@ -734,10 +735,14 @@ static int band_crack(char *text, char **name1, char **name2, char **qual, doubl
 	}
 
     char *p = text;
-	do {
-		text++;
+    do {
+        text++;
     } while (*text && isident(*text));
     char c = *text; *text = 0; *name1 = strdup(p); *text = c;
+
+// drop trailing spaces in name1
+//    char *q = *name1 + (text - p);
+//    while (*q == ' ') *(q--) = 0;
 
     while (*text != 0) {
 		if (*text == '-' && !(ret & BAND_QUAL)) {
@@ -749,10 +754,14 @@ static int band_crack(char *text, char **name1, char **name2, char **qual, doubl
 			}
 
             char *p = text;
-			do {
-				text++;
+            do {
+                text++;
             } while (*text && isident(*text));
             char c = *text; *text = 0; *name2 = strdup(p); *text = c;
+
+// drop trailing spaces in name2
+//            char *q = *name2 + (text - p);
+//            while (*q == ' ') *(q--) = 0;
 
 			ret |= BAND_INDEX;
 
@@ -800,6 +809,10 @@ static int band_crack(char *text, char **name1, char **name2, char **qual, doubl
                 text++;
             } while (*text && isident(*text));
             char c = *text; *text = 0; *qual = strdup(p); *text = c;
+
+// drop trailing spaces in qual
+//            char *q = *qual + (text - p);
+//            while (*q == ' ') *(q--) = 0;
 
             ret |= BAND_QUAL;
             while (*text && (*text != ')'))

@@ -838,7 +838,8 @@ static void obs_list_select_cb (GtkTreeSelection *selection, gpointer dialog)
 	char *text = NULL;
 
 	gtk_tree_selection_get_selected (selection, &model, &iter);
-	gtk_tree_model_get (model, &iter, 0, &text, -1);
+// breaks if there is a selection and model has changed
+    gtk_tree_model_get (model, &iter, 0, &text, -1);
 	path = gtk_tree_model_get_path (model, &iter);
 	indices = gtk_tree_path_get_indices (path);
 	index = indices[0];

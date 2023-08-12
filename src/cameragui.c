@@ -129,26 +129,23 @@ static int tele_coords_indi_cb(GtkWidget *dialog)
 
     if (tele) {
         double ra, dec;
-        int state = tele_get_coords(tele, &ra, &dec);
+        int state = tele_get_coords(tele, &ra, &dec); // set ra and dec to last read by tele
         char *msg = NULL;
-        if (tele->change_state) {
+        if (state == INDI_STATE_BUSY)
+            asprintf (&msg, "mount slewing : ra %f dec %f\n", ra, dec);
+        else if (tele->change_state) {
             switch (state) {
-            case INDI_STATE_BUSY: asprintf (&msg, "slewing: ra %f dec %f\n", ra, dec); break;
-            case INDI_STATE_ALERT: asprintf (&msg, "mount stopped at ra %f dec %f\n", ra, dec); break;
+            case INDI_STATE_ALERT: asprintf (&msg, "mount stopped !\n"); break;
             case INDI_STATE_IDLE:
-            case INDI_STATE_OK: asprintf (&msg, "mount tracking ra %f dec %f\n", ra, dec); break;
+            case INDI_STATE_OK: asprintf (&msg, "mount tracking : ra %f dec %f\n", ra, dec); break;
             }
-        } else {
-            if (state == INDI_STATE_BUSY)
-                asprintf (&msg, "slewing: ra %f dec %f\n", ra, dec);
         }
 
         if (msg) {
-            printf("%s\n", msg);
-            fflush(NULL);
+            status_message(dialog, msg);
+            printf("%s\n", msg); fflush(NULL);
             free(msg);
         }
-//        return FALSE;
     }
 
     //Return TRUE to keep callback active on state change or restart with each new slew
@@ -1440,7 +1437,7 @@ void act_control_camera (GtkAction *action, gpointer window)
             camera_set_ready_callback(window, CAMERA_MAIN, cam_ready_indi_cb, window, "cam_ready_indi_cb");
             enable_camera_widgets(cam_control_dialog, camera->ready);
         }
-        struct tele_t *tele = tele_find(window);
+        struct tele_t *tele = tele_find(window); // could be multiple mount drivers
         if (tele) {
             tele_set_ready_callback(window, tele_ready_indi_cb, window, "tele_ready_indi_cb");
             enable_telescope_widgets(cam_control_dialog, tele->ready);

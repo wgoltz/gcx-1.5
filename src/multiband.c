@@ -1101,10 +1101,10 @@ void mbds_smags_from_cmag_avgs(GList *ofrs)
             struct accum *acc = ost->acc[i];
             if (acc == NULL) continue;
 
-            if (acc->n > 2) {
+            if (acc->n) {
                 double m = acc->m / acc->n;
                 double me = SIGMA(acc->m2, acc->m, acc->n);
-                update_band_by_name(&ost->cats->smags, ost->bname[i], m, me);
+                update_band_by_name(&ost->cats->smags, ost->bname[i], m, acc->n > 2 ? me : 0);
             }
 
             free(acc);

@@ -148,7 +148,7 @@ int load_params_rc(void *window)
 
     if (fn) res = (load_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
 
-    if (rcname) free(rcname);
+//    if (rcname) free(rcname);
 
     return res;
 }
@@ -166,7 +166,7 @@ int save_params_rc(void *window)
     char *rcname = NULL;
     if (window) {
         char *last_rc = g_object_get_data(G_OBJECT(window), "rcname");
-
+// need to add param rcname
         if (last_rc == NULL) {
             rcname = strdup(".gcxrc");
             g_object_set_data_full(G_OBJECT(window), "rcname", rcname, (GDestroyNotify)free);
@@ -175,11 +175,11 @@ int save_params_rc(void *window)
     }
 
     int res = 1;
-//    char *fn = NULL; asprintf(&fn, "%s/%s", passwd->pw_dir, rcname);
+    char *fn = NULL; asprintf(&fn, "%s/%s", passwd->pw_dir, rcname);
 
-//    if (fn) res = (save_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
+    if (fn) res = (save_par_file(fn, PAR_NULL) < 0) ? 1 : 0, free(fn);
 
-    res = (save_par_file(rcname, PAR_NULL) < 0) ? 1 : 0;
+//    res = (save_par_file(rcname, PAR_NULL) < 0) ? 1 : 0;
 
     return res;
 }
@@ -1124,7 +1124,7 @@ printf("home_path: %s\n", cwd); fflush(NULL);
             if (interactive) {
                 if (of && of[0]) main_ret = run_obs_file(window, of); /* run obs */
                 if (have_recipe) load_rcp_to_window(window, ccdr->recipe, obj);
-                gtk_main ();
+                    gtk_main ();
             }
         }
     }
