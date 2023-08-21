@@ -43,11 +43,12 @@ struct tele_t {
 	struct indi_prop_t *timed_guide_ns_prop; // property for North/South timed guiding (number)
 	struct indi_prop_t *timed_guide_ew_prop; // property for East/West timed guiding   (number)
 	struct indi_prop_t *speed_prop;          // property for controlling movement rate (switch)
-    struct indi_prop_t *track_state_prop;    // property to monitor tracking?
+    struct indi_prop_t *track_state_prop;    // property to monitor tracking/slewing/stopped (switch)
 
 	double right_ascension;
 	double declination;
     int state;
+    int slewing;
     int change_state;
     void *window;
 };

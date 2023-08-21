@@ -127,19 +127,24 @@ static int tele_coords_indi_cb(GtkWidget *dialog)
     GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
     struct tele_t *tele = tele_find(main_window);
 
+    struct obs_data *obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
+
+//    char *msg = NULL; asprintf(&msg, "Slewing to %s", obs->objname);
+//    if (msg) status_message(dialog, msg), free(msg);
+
     if (tele) {
         double ra, dec;
         int state = tele_get_coords(tele, &ra, &dec); // set ra and dec to last read by tele
         char *msg = NULL;
-        if (state == INDI_STATE_BUSY)
-            asprintf (&msg, "mount slewing : ra %f dec %f\n", ra, dec);
-        else if (tele->change_state) {
-            switch (state) {
-            case INDI_STATE_ALERT: asprintf (&msg, "mount stopped !\n"); break;
-            case INDI_STATE_IDLE:
-            case INDI_STATE_OK: asprintf (&msg, "mount tracking : ra %f dec %f\n", ra, dec); break;
-            }
+
+        if (state == INDI_STATE_BUSY) { // use obs_object_entry as destination
+            str_join_varg(&msg, "Slewing ra %f dec %f", ra, dec);
+            if (obs) str_join_varg(&msg, " to %s", obs->objname);
+            str_join_str(&msg, "%s", "\n");
         }
+
+        if (msg == NULL && tele->change_state)
+            asprintf (&msg, "Tracking : ra %f dec %f %s\n", ra, dec, obs ? obs->objname : "");
 
         if (msg) {
             status_message(dialog, msg);
@@ -579,30 +584,32 @@ static int expose_indi_cb(GtkWidget *dialog)
 
     if (get_named_checkb_val(dialog, "exp_run_button")) // start next capture
         capture_image(dialog);
-
-    if(strncmp(camera->image_format, ".fits", 5) == 0) { // show and save current frame
+// handle other file types, preview, raw
+    if (strncmp(camera->image_format, ".fits", 5) == 0) { // show and save current frame
         // The image has already been unzipped if we get here
         // FILE *fh = fopen("guide.fit", "w+");
         // fwrite(camera->image, camera->image_size, 1, fh);
         // fclose(fh);
 
-        struct ccd_frame *fr = read_fits_file_from_mem(camera->image, camera->image_size, "exposure.fit", 0, NULL);
+        struct ccd_frame *fr = read_file_from_mem(mem_file_fits, camera->image, camera->image_size, "exposure.fit", 0, NULL);
 
         if (!fr) {
             err_printf("Received an unreadable FITS from camera.");
             return FALSE;
         }
 
+        // set fits keywords from settings
+
         // indi records exposure to only 2 decimals
         // update FN_EXPTIME from exp_spin to capture more decimals
 
         double exptime = named_spin_get_value(dialog, "exp_spin");
-        char *lb = NULL;
-        asprintf(&lb, "%20.5f / EXPTIME", exptime);
+
+        char *lb = NULL; asprintf(&lb, "%20.5f / EXPTIME", exptime);
         if (lb) fits_add_keyword(fr, P_STR(FN_EXPTIME), lb), free(lb);
 
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(dialog), "obs_data");
-        ccd_frame_add_obs_info(fr, obs);
+        ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
 
         struct exp_data *exp = & fr->exp;
 
@@ -611,17 +618,14 @@ static int expose_indi_cb(GtkWidget *dialog)
         double eladu = P_DBL(OBS_DEFAULT_ELADU);
         double rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
 
-        fits_get_double(fr, "FN_ELADU", &eladu); // see if these have been set by camera
-        fits_get_double(fr, "FN_RDNOISE", &rdnoise);
+//        fits_get_double(fr, "FN_ELADU", &eladu); // see if these have been set by camera
+//        fits_get_double(fr, "FN_RDNOISE", &rdnoise);
 
         // adjust for binning
-//        exp->scale = eladu / sqrt(exp->bin_x * exp->bin_y);
-        exp->scale = eladu; // / exp->bin_x * exp->bin_y;
-        exp->rdnoise = rdnoise; // / sqrt(exp->bin_x * exp->bin_y);
+        exp->scale = eladu / (exp->bin_x * exp->bin_y);
+        exp->rdnoise = rdnoise / sqrt(exp->bin_x * exp->bin_y);
 
         noise_to_fits_header(fr);
-
-        frame_stats(fr);
 
         // read scope position
         struct tele_t *tele = tele_find(main_window);
@@ -639,6 +643,10 @@ static int expose_indi_cb(GtkWidget *dialog)
             if (decs) asprintf(&line, " '%s'", decs), free(decs);
             if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
         }
+// add_image_file_to_list(imfl, fr, name, IMG_IN_MEMORY_ONLY | IMG_LOADED)
+// may need to refine auto-unload
+// process frame
+        frame_stats(fr);
 
         update_fits_header_display(main_window);
 
@@ -649,7 +657,7 @@ static int expose_indi_cb(GtkWidget *dialog)
 //        refresh_wcs(main_window);
 
         if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) == GET_OPTION_SAVE) {
-// field matching: time waster
+// field matching
 //            GtkWidget *imwin = g_object_get_data(G_OBJECT(dialog), "image_window");
 //            if (imwin != NULL
 //                    && get_named_checkb_val(GTK_WIDGET(dialog), "file_match_wcs_checkb")
@@ -671,7 +679,7 @@ static int expose_indi_cb(GtkWidget *dialog)
     }
 
 	//fwheel_poll(dialog);
-	//obs_list_sm(dialog);
+    obs_list_sm(dialog); // next line of obs_list
 
 	// FALSE will remove the callback event
     return get_named_checkb_val(dialog, "exp_run_button");

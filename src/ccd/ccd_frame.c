@@ -100,21 +100,21 @@ static int frame_count = 0;
 
 struct im_stats *alloc_stats(struct im_stats *st)
 {
-    struct im_stats *new_st = NULL;
+//    if (st) return st; // need to alloc hdat if it has not been done
 
-    if (st == NULL) new_st = calloc(1, sizeof(struct im_stats));
+    struct im_stats *new_st = (st == NULL) ? calloc(1, sizeof(struct im_stats)) : NULL;
 
-     if (new_st) st = new_st;
-
+    if (new_st) {
+        new_st->free_stats = 1;
+        st = new_st;
+    }
     if (st) {
+        st->hist.hsize = H_SIZE;
         if (st->hist.hdat == NULL) {
             st->hist.hdat = (unsigned *)calloc(H_SIZE, sizeof(unsigned));
             if (st->hist.hdat == NULL) {
                 if (new_st) free(new_st);
                 st = NULL;
-            } else {
-                st->hist.hsize = H_SIZE;
-                st->free_stats = (new_st) ? 1 : 0;
             }
         }
     }
@@ -127,7 +127,10 @@ void free_stats(struct im_stats *st)
     if (st == NULL) return;
 
     if (st->hist.hdat) free (st->hist.hdat);
-    if (st->free_stats == 1) free(st); // clangd says st offset by 80 bytes from alloc
+    if (st->free_stats == 1) {
+        printf("freeing stats\n");
+        free(st); // clangd says st offset by 80 bytes from alloc
+    }
 }
 
 
@@ -209,7 +212,7 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
         hd->nvar = 0;
     }
 
-    hd->stats = (struct im_stats) { 0 }; // seems to work without this ?
+    hd->stats = (struct im_stats) { 0 };
     if (alloc_stats(&hd->stats) == NULL) {
         if (var) free(var);
         free(hd);
@@ -267,7 +270,7 @@ void free_frame(struct ccd_frame *fr)
         if (fr->bdat) free(fr->bdat);
         if (fr->name) free(fr->name);
 
-        free_stats(&fr->stats);
+        free_stats(&fr->stats); // just free hist.hdat
 
 //        if (fr->alignment_mask) free_alignment_mask(fr);
         free(fr); // clangd says attempt to free released memory (something in free_stats)
@@ -986,7 +989,7 @@ err_exit:
 }
 
 /* entry points for read_fits. read_fits_file is provided for compatibility */
-struct ccd_frame *read_fits_file(char *filename, int force_unsigned, char *default_cfa)
+struct ccd_frame *read_fits_file(char *filename, int force_unsigned, char *default_cfa) // not used
 {
 	FILE *fp;
 	int zipped;
@@ -1065,12 +1068,16 @@ struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned
 	return read_gz_fits_file(filename, ungz, force_unsigned, default_cfa);
 }
 
-struct ccd_frame *read_fits_file_from_mem(const unsigned char *data, unsigned long len, char *fn,
+struct ccd_frame *read_file_from_mem(mem_file type, const unsigned char *data, unsigned long len, char *fn,
                                      int force_unsigned, char *default_cfa)
 {
-//printf("read_fits_file_from_mem\n");
+//printf("read_file_from_mem\n");
 	void *memFH = mem_open((unsigned char *)data, len);
-	return read_fits_file_generic(memFH, fn, force_unsigned, default_cfa, &read_mem);
+//    if (type == mem_file_fits)
+        return read_fits_file_generic(memFH, fn, force_unsigned, default_cfa, &read_mem);
+
+//    if (type == mem_file_jpeg)
+//        return read_jpeg_file_generic(memFH, fn, force_unsigned, default_cfa, &read_mem);
 }
 
 
@@ -1201,7 +1208,7 @@ int pad;
 		datp++;
 
 		//real value = bzero + bscale * <array_value>
-
+        uint i;
 		for (i = 0; i < all; i ++) {
 			v = floor( (dp[i] - bzero) / bscale + 0.5 );
 			if (v < -32768)

@@ -86,24 +86,31 @@ static void camera_stream_cb(struct indi_prop_t *iprop, void *data)
 
 static void camera_capture_cb(struct indi_prop_t *iprop, void *data)
 {
-	struct camera_t *camera = data;
-	struct indi_elem_t *ielem;
+    struct camera_t *camera = data;
 
-	//We only want to see the requested expose event
-	indi_dev_enable_blob(iprop->idev, FALSE);
+    //We only want to see the requested expose event
+    indi_dev_enable_blob(iprop->idev, FALSE);
 
-	ielem = indi_find_first_elem(iprop);
-	if (! ielem)
-		return;
+    // expose_indi_cb only handle .fits files, ignore anything else
+    struct indi_elem_t *ielem = (struct indi_elem_t *)il_first(iprop->elems);
+    gboolean found_fits = FALSE;
+    for (; ielem != NULL; ielem = (struct indi_elem_t *)il_next(iprop->elems)) {
+        found_fits = (strncmp(ielem->value.blob.fmt, ".fits", 5) == 0);
+        if (found_fits) break;
+    }
 
-	if (! ielem->value.blob.size)
-		return;
+    if (!found_fits) return;
 
-	camera->image = (const unsigned char *)ielem->value.blob.data;
-	camera->image_size = ielem->value.blob.size;
-	camera->image_format = ielem->value.blob.fmt;
+//    ielem = indi_find_first_elem(iprop);
+//    if (ielem == NULL) return;
 
-	INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE);
+    if (ielem->value.blob.size == 0) return;
+
+    camera->image = (const unsigned char *)ielem->value.blob.data;
+    camera->image_size = ielem->value.blob.size;
+    camera->image_format = ielem->value.blob.fmt;
+
+    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE);
 }
 
 void camera_get_binning(struct camera_t *camera, int *x, int *y)

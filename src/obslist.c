@@ -49,6 +49,7 @@
 #include "interface.h"
 #include "fwheel_indi.h"
 #include "multiband.h"
+#include "wcs.h"
 
 static void obslist_background(gpointer window, int action);
 
@@ -223,7 +224,7 @@ static void select_cmd_line(GtkTreeView *view, int index)
 static void obs_list_set_state(GtkWidget *dialog, long state)
 {
 	g_object_set_data(G_OBJECT (dialog), "obs_list_state", (void *)state);
-	g_idle_add((GSourceFunc)obs_list_sm, dialog);
+    g_idle_add((GSourceFunc)obs_list_sm, dialog); // need to add obs_list_set_state(OBS_NEXT) when goto finishes
 }
 
 /* last command has finished, so fire an event to start the next one */
@@ -308,7 +309,7 @@ static int do_exp_cmd (char *args, GtkWidget *dialog)
 	}
 
 	named_spin_set(dialog, "exp_spin", nexp);
-	return OBS_NEXT_COMMAND;
+    return OBS_NEXT_COMMAND; // does it wait?
 }
 
 static int do_dark_cmd (char *args, GtkWidget *dialog)
@@ -332,7 +333,7 @@ static int do_dark_cmd (char *args, GtkWidget *dialog)
 
 /* check that the object in obs in within the limits set in the dialog
  * return 0 if it is, do an err_printf and retun -1 if it isn't */
-int obs_check_limits(struct obs_data *obs, gpointer dialog)
+int obs_check_limits(struct obs_data *obs, gpointer dialog) // fix limits to work on visible horizon
 {
 	double lim, ha;
 	ha = obs_current_hour_angle(obs);
@@ -370,15 +371,17 @@ int obs_check_limits(struct obs_data *obs, gpointer dialog)
 
 static int do_goto_cmd (char *args, GtkWidget *dialog)
 {
-	int ret;
-	char *text, *start, *end, *start2, *end2;
-	int token;
-	gpointer window;
-	struct obs_data *obs;
+    gpointer window =  g_object_get_data(G_OBJECT(dialog), "image_window");
+    if (window == NULL) {
+        err_printf("no image window\n");
+        return OBS_CMD_ERROR;
+    }
 
-	text = args;
+    char *start, *end, *start2, *end2;
+
+    char *text = args;
 	next_token(NULL, NULL, NULL);
-	token = next_token(&text, &start, &end);
+    int token = next_token(&text, &start, &end);
 	if (token != TOK_WORD && token != TOK_STRING) {
 		err_printf("No object\n");
 		return OBS_CMD_ERROR;
@@ -386,13 +389,13 @@ static int do_goto_cmd (char *args, GtkWidget *dialog)
 	token = next_token(&text, &start2, &end2);
 	*(end) = 0;
 
-	obs = obs_data_new();
+    struct obs_data *obs = obs_data_new();
 	if (obs == NULL) {
 		err_printf("Cannot create obs\n");
 		return OBS_CMD_ERROR;
 	}
 
-	ret = obs_set_from_object(obs, start);
+    int ret = obs_set_from_object(obs, start);
 	if (ret < 0) {
 		err_printf("Cannot find object\n");
 		obs_data_release(obs);
@@ -407,21 +410,24 @@ static int do_goto_cmd (char *args, GtkWidget *dialog)
 	set_obs_object(dialog, start);
 	if (token == TOK_WORD || token == TOK_STRING) {
 		*(end2) = 0;
-		window =  g_object_get_data(G_OBJECT(dialog), "image_window");
-		if (window == NULL) {
-			err_printf("no image window\n");
-			return OBS_CMD_ERROR;
-		}
+
 		ret = load_rcp_to_window(window, start2, NULL);
 		if (ret < 0) {
 			err_printf("error loading rcp file\n");
 			return OBS_CMD_ERROR;
 		}
 	}
-	if ( !goto_dialog_obs(dialog))
-		return OBS_CMD_RUNNING;
-	else
+    if ( goto_dialog_obs(dialog))
 		return OBS_CMD_ERROR;
+
+    struct tele_t *tele = tele_find(window);
+    if(! tele) {
+        err_printf("no telescope connected\n");
+        return OBS_CMD_ERROR;
+    }
+
+    INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_cmd_done, dialog, "obs_list_cmd_done");
+    return OBS_CMD_RUNNING;
 }
 
 static int do_match_cmd (char *args, GtkWidget *dialog)
@@ -444,6 +450,7 @@ static int do_match_cmd (char *args, GtkWidget *dialog)
 	}
 	if ( center_matched_field(dialog))
 		return OBS_CMD_ERROR;
+
     INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_cmd_done, dialog, "obs_list_cmd_done");
 	return OBS_CMD_RUNNING;
 }
@@ -667,6 +674,7 @@ void obs_list_start_cb(GtkWidget *widget, gpointer data)
 		obs_list_set_state(dialog, OBS_DO_COMMAND);
 	}
 }
+
 /* called via the idle-handler whenever the obs-list state changes */
 void obs_list_sm(GtkWidget *dialog)
 {
@@ -691,7 +699,7 @@ void obs_list_sm(GtkWidget *dialog)
 		cmd = get_cmd_line(list, index);
 		d3_printf("Command: %s\n", cmd);
 //		state = OBS_CMD_WAIT;
-		state = do_command(cmd, dialog);
+        state = do_command(cmd, dialog);
 		free(cmd);
 		obs_list_set_state(dialog, state);
 		break;
@@ -769,6 +777,8 @@ void obs_list_sm(GtkWidget *dialog)
 			obs_list_set_state(dialog, OBS_DO_COMMAND);
 		}
 		break;
+//    case OBS_CMD_RUNNING:
+//        printf("running\n"); // check for end of slew then set state to mext command
 	default:
 		break;
 	}

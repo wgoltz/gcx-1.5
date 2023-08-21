@@ -409,7 +409,7 @@ int imf_load_frame(struct image_file *imf)
         err_printf("imf_load_frame: null filename\n");
         return -1;
     }
-    if (imf->filename[0] == 0) { // photometry window needs to ref/unref frames
+    if (imf->filename[0] == 0) {
         err_printf("imf_load_frame: empty filename\n");
         return -1;
     }

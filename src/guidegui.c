@@ -423,7 +423,7 @@ static int expose_cb(GtkWidget *window)
 		// fwrite(camera->image, camera->image_size, 1, fh);
 		// fclose(fh);
 
-		fr = read_fits_file_from_mem(
+        fr = read_file_from_mem(mem_file_fits,
 			camera->image,
 			camera->image_size,
 			"guide.fit",

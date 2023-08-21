@@ -640,7 +640,14 @@ int sub_frames (struct ccd_frame *fr, struct ccd_frame *fr1);
 
 
 struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned, char *default_cfa);
-struct ccd_frame *read_fits_file_from_mem(const unsigned char *data, unsigned long len, char *fn, int force_unsigned, char *default_cfa);
+
+typedef enum {
+    mem_file_unknown,
+    mem_file_fits,
+    mem_file_jpeg,
+    mem_file_all
+} mem_file;
+struct ccd_frame *read_file_from_mem(mem_file type, const unsigned char *data, unsigned long len, char *fn, int force_unsigned, char *default_cfa);
 
 extern float *get_color_plane(struct ccd_frame *fr, int plane_iter);
 extern float **get_color_planeptr(struct ccd_frame *fr, int plane_iter);

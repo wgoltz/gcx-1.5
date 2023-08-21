@@ -93,6 +93,14 @@ static void tele_get_coords_cb(struct indi_prop_t *iprop, void *data)
     if (result == -1) return;
 
     tele->change_state = (tele->state != iprop->state);
+
+    if (tele->change_state) {
+        if (tele->slewing && iprop->state != INDI_STATE_BUSY) {
+            tele->slewing = 0;
+            INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_STOP);
+        }
+    }
+
     tele->state = iprop->state;
 
     INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_COORDS);
@@ -102,8 +110,8 @@ static void tele_track_state_cb(struct indi_prop_t *iprop, void *data)
 {
     struct tele_t *tele = data;
 
-    char *result = indi_prop_get_comboswitch(tele->track_state_prop);
-    if (result) {
+    char *result = indi_prop_get_comboswitch(tele->track_state_prop); // tracking or stopped
+    if (result) { // "TRACK_ON" or stopped
 
     }
 }
@@ -174,10 +182,10 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 	else if (strcmp(iprop->name, "ON_COORD_SET") == 0) {
 		tele->coord_set_type_prop = iprop;
 	}
-//    else if (strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) { // might need this to monitor park state
-//        tele->track_state_prop = iprop;
+    else if (strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) { // tracking or stopped
+        tele->track_state_prop = iprop;
 //        indi_prop_add_cb(iprop, (IndiPropCB)tele_track_state_cb, tele);
-//    }
+    }
 	else if (strcmp(iprop->name, "TELESCOPE_ABORT_MOTION") == 0) {
 		tele->abort_prop = iprop;
 	}
@@ -374,7 +382,10 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 	}
     indi_prop_set_number(tele->coord_set_prop, "RA", ra); // ra in hours
     indi_prop_set_number(tele->coord_set_prop, "DEC", dec);
-	indi_send(tele->coord_set_prop, NULL);
+    indi_send(tele->coord_set_prop, NULL);
+
+    tele->slewing = 1; // will this work if already there?
+
 	return 0;
 }
 

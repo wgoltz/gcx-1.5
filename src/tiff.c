@@ -13,11 +13,11 @@ enum TT_TYPE {
 };
 
 struct tt_struct {
-    uint16 bits_per_sample;
-    uint16 samples_per_pixel;
-    uint32 w, h;
+    ushort bits_per_sample;
+    ushort samples_per_pixel;
+    uint w, h;
     tdata_t buf;
-    uint16 type;
+    ushort type;
     tmsize_t scanlinesize;
 };
 
@@ -25,6 +25,7 @@ static struct tt_struct *tiff_get_info (TIFF *tif)
 {
     struct tt_struct *tt = calloc(1, sizeof (struct tt_struct));
     int tt_ok = (tt != NULL);
+    if (!tt_ok) return tt;
 
     tt_ok = tt_ok && (TIFFGetField (tif, TIFFTAG_BITSPERSAMPLE, &(tt->bits_per_sample)) == 1);
     tt_ok = tt_ok && (TIFFGetField (tif, TIFFTAG_SAMPLESPERPIXEL, &(tt->samples_per_pixel)) == 1);
@@ -41,13 +42,13 @@ static struct tt_struct *tiff_get_info (TIFF *tif)
             tt->type = RGBA;
     }
     if (tt->type != UNHANDLED) {
-        tt->buf = _TIFFmalloc(tt->w * tt->h * sizeof (uint32));
+        tt->buf = _TIFFmalloc(tt->w * tt->h * sizeof (uint));
         tt_ok = (tt->buf != NULL) && TIFFReadRGBAImage(tif, tt->w, tt->h, tt->buf, 0);
     }
 
     if (! tt_ok) {
         free(tt);
-        tt == NULL;
+        tt = NULL;
     }
 
     return tt;
@@ -76,16 +77,16 @@ struct ccd_frame *read_tiff_file(char *filename) {
 
         int offset = 0;
 
-        uint32 *iptr = tt->buf;
+        uint *iptr = tt->buf;
 
-        int i;
+        uint i;
         for (i = 0; i < tt->h; i++) {
 
-            int j;
+            uint j;
             for (j = 0; j < tt->w; j++) {
-                uint32 abgr = *iptr;
+                uint abgr = *iptr;
                 int plane_iter = 0;
-                while (plane_iter = color_plane_iter (frame, plane_iter)) {
+                while ((plane_iter = color_plane_iter (frame, plane_iter))) {
                     float *optr = get_color_plane (frame, plane_iter) + offset;
 
                     switch (plane_iter) {
@@ -105,13 +106,13 @@ struct ccd_frame *read_tiff_file(char *filename) {
 
         float *optr = frame->dat;
 
-        int i;
+        uint i;
         for (i = 0; i < tt->h; i++) {
             TIFFReadScanline(tif, tt->buf, i, tt->samples_per_pixel);
 
-            uint32 *iptr = tt->buf;
-            int j;
-            for (j = 0; j< tt->w; j++) // assume scanlinesize == w * sizeof(uint16)
+            uint *iptr = tt->buf;
+            uint j;
+            for (j = 0; j< tt->w; j++) // assume scanlinesize == w * sizeof(ushort)
                 *optr++ = *iptr++;
         }
 

@@ -414,7 +414,7 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
 
 /* read the exp fields from the fits header lines
  * using parametrised field names */
-void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
+void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 {
 //    int update = FALSE;
 	g_return_if_fail(fr != NULL);
@@ -467,7 +467,7 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp)
 }
 
 /* push the noise data from exp into the header fields of fr */
-void noise_to_fits_header(struct ccd_frame *fr)
+void noise_to_fits_header(struct ccd_frame *fr) // exp to fits
 {
     char *line;
     struct exp_data *exp = &fr->exp;

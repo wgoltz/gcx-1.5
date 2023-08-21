@@ -885,7 +885,10 @@ static char *constellations =
 
 int is_constell(char *cc)
 {
+    char endc = cc[3];
+    cc[3] = 0;
     char *found = strstr(constellations, cc);
+    cc[3] = endc;
 
     return (found) ? found - constellations : -1;
 }
