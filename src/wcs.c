@@ -127,7 +127,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
     double eq = 2000;
     gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
-    if (! have_eq) have_eq = (fits_get_double(fr, P_STR(FN_EPOCH), &eq) > 0);
+    if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
 
     wcs->equinox = eq;
 
@@ -342,15 +342,15 @@ void cats_apparent_pos(struct cat_star *cats, double *raa, double *deca, double 
 {
 	double ra = cats->ra;
 	double dec = cats->dec;
-	double epoch = 2000.0 + (jd - JD2000) / 365.25;
+    double epoch = JD_EPOCH(jd);
 
 	/* proper motion */
 	if ((cats->astro) && (cats->astro->flags & ASTRO_HAS_PM)) {
-		ra += (epoch - cats->astro->epoch) * cats->astro->ra_pm / 3600000;
-		dec += (epoch - cats->astro->epoch) * cats->astro->dec_pm / 3600000;
+        ra += (epoch - cats->astro->epoch) * cats->astro->ra_pm / 3600000;
+        dec += (epoch - cats->astro->epoch) * cats->astro->dec_pm / 3600000;
 	}
 	/* precess wcs and star to current epoch */
-	precess_hiprec(cats->equinox, epoch, &ra, &dec);
+    precess_hiprec(cats->equinox, epoch, &ra, &dec);
 	/* refraction */
 	if (raa)
 		*raa = ra;
@@ -386,23 +386,22 @@ int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double
 	double X, E, ra, dec;
 	double xref=wcs->xref;
 	double yref=wcs->yref;
-	double epoch = 2000.0 + (wcs->jd - JD2000) / 365.25;
+    double epoch = JD_EPOCH(wcs->jd);
 
 //	d3_printf("pix x:%.4f y:%.4f\n", xpix, ypix);
 	xy_to_XE(wcs, xpix, ypix, &X, &E);
+
 //	d3_printf("pix X:%.4f E:%.4f\n", X, E);
-    if ((wcs->flags & WCS_JD_VALID) && !P_INT(WCS_IGNORE_PRECESSION)) {
+    if (P_INT(WCS_REFRACTION_EN) && (wcs->flags & (WCS_JD_VALID | WCS_LOC_VALID)) == (WCS_JD_VALID | WCS_LOC_VALID)) {
         precess_hiprec(wcs->equinox, epoch, &xref, &yref);
-        if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
-            refracted_from_true(&xref, &yref, wcs->jd, wcs->lat, wcs->lng);
-        }
+        refracted_from_true(&xref, &yref, wcs->jd, wcs->lat, wcs->lng);
     }
+
     worldpos(X, E, xref, yref, 0.0, 0.0, 1.0, 1.0, 0.0, "-TAN", &ra, &dec);
+
 //	d3_printf("pix apparent ra:%.4f dec:%.4f\n", ra, dec);
-    if ((wcs->flags & WCS_JD_VALID) && !P_INT(WCS_IGNORE_PRECESSION)) {
-        if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
-            true_from_refracted(&ra, &dec, wcs->jd, wcs->lat, wcs->lng);
-        }
+    if (P_INT(WCS_REFRACTION_EN) && (wcs->flags & (WCS_JD_VALID | WCS_LOC_VALID)) == (WCS_JD_VALID | WCS_LOC_VALID)) {
+        true_from_refracted(&ra, &dec, wcs->jd, wcs->lat, wcs->lng);
         precess_hiprec(epoch, wcs->equinox, &ra, &dec);
     }
 
@@ -423,12 +422,12 @@ void cats_to_XE (struct wcs *wcs, struct cat_star *cats, double *X, double *E)
 	double xref=wcs->xref;
 	double yref=wcs->yref;
 	double ra, dec;
-    double epoch = 2000.0 + (wcs->jd - JD2000) / 365.25;
+    double epoch = JD_EPOCH(wcs->jd);
 
 //	d3_printf("\ninitial ra:%.4f dec:%.4f\n", cats->ra, cats->dec);
 	if (wcs->flags & WCS_JD_VALID) {
 		cats_apparent_pos(cats, &ra, &dec, wcs->jd);
-		precess_hiprec(wcs->equinox, epoch, &xref, &yref);
+        precess_hiprec(wcs->equinox, epoch, &xref, &yref);
 		if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
 			refracted_from_true(&ra, &dec, wcs->jd, wcs->lat, wcs->lng);
 			refracted_from_true(&xref, &yref, wcs->jd, wcs->lat, wcs->lng);

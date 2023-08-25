@@ -95,24 +95,25 @@ void image_file_list_release(struct image_file_list *imfl);
 
 int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, char *outf);
 
-int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
-int ccd_reduce_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
-int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
-int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
+typedef  int (* progress_print_func)(char *msg, gpointer processing_dialog);
+
+int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+int ccd_reduce_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq, progress_print_func progress, gpointer processing_dialog);
+int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
+
+struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_reduce *ccdr);
 
 int imf_load_frame(struct image_file *imf);
 void imf_release_frame(struct image_file *imf, char *msg);
 void imf_unload(struct image_file *imf);
-
-struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
-struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_reduce *ccdr);
 void unload_clean_frames(struct image_file_list *imfl);
-int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq, int (* progress)(char *msg, void *data), void *data);
-
 int load_alignment_stars(struct ccd_reduce *ccdr);
-int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
-int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
-int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data);
 void free_alignment_stars(struct ccd_reduce *ccdr);
 int imf_check_reload(struct image_file *imf);
 
@@ -121,6 +122,6 @@ int imf_check_reload(struct image_file *imf);
 void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_list *imfl);
 void window_add_files(GSList *files, gpointer window); /* add list of file names */
 void window_add_frame(struct ccd_frame *fr, char *filename, int flags, gpointer window); /* add new imf with frame and filename */
-int log_msg(char *msg, void *dialog);
+int log_msg(char *msg, gpointer processing_dialog);
 
 #endif

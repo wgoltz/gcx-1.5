@@ -51,22 +51,23 @@
 #include "filegui.h"
 #include "tele_indi.h"
 #include "wcs.h"
+#include "sidereal_time.h"
 
 #define AUTO_FILE_FORMAT "%s%03d.fits"
 #define AUTO_FILE_GZ_FORMAT "%s%03d.fits.gz"
 #define DEFAULT_FRAME_NAME "frame"
 #define DEFAULT_DARK_NAME "dark"
 
-static void auto_filename(GtkWidget *dialog);
-static int expose_indi_cb(GtkWidget *dialog);
-static int stream_indi_cb(GtkWidget *dialog);
-static int exposure_change_cb(GtkWidget *dialog);
+static void auto_filename(gpointer cam_control_dialog);
+static int expose_indi_cb(gpointer cam_control_dialog);
+static int stream_indi_cb(gpointer cam_control_dialog);
+static int exposure_change_cb(gpointer cam_control_dialog);
 
-void status_message(GtkWidget *dialog, char *msg)
+void status_message(gpointer cam_control_dialog, char *msg)
 {
 	GtkWidget *label;
 
-	label = g_object_get_data(G_OBJECT(dialog), "statuslabel");
+    label = g_object_get_data(G_OBJECT(cam_control_dialog), "statuslabel");
 	if (label) {
 		gtk_label_set_text(GTK_LABEL(label), msg);
 	} else {
@@ -87,12 +88,12 @@ static void toggle_button_no_cb(GtkWidget *window, GtkWidget *button, const char
 }
 #endif
 
-static void named_spin_set_limits(GtkWidget *dialog, char *name, double min, double max)
+static void named_spin_set_limits(gpointer cam_control_dialog, char *name, double min, double max)
 {
 	GtkWidget *spin;
 	GtkAdjustment *adj;
-	g_return_if_fail(dialog != NULL);
-	spin = g_object_get_data(G_OBJECT(dialog), name);
+    g_return_if_fail(cam_control_dialog != NULL);
+    spin = g_object_get_data(G_OBJECT(cam_control_dialog), name);
 	g_return_if_fail(spin != NULL);
 	adj = gtk_spin_button_get_adjustment(GTK_SPIN_BUTTON(spin));
 	g_return_if_fail(adj != NULL);
@@ -102,9 +103,9 @@ static void named_spin_set_limits(GtkWidget *dialog, char *name, double min, dou
 }
 
 /* Set current temperature in widget */
-static int temperature_indi_cb(GtkWidget *dialog)
+static int temperature_indi_cb(gpointer cam_control_dialog)
 {
-	GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
 // printf("temperature_indi_cb%s\n", camera ? "" : ": no camera"); fflush(NULL);
@@ -114,7 +115,7 @@ static int temperature_indi_cb(GtkWidget *dialog)
 
         camera_get_temperature(camera, &fvalue, &fmin, &fmax);
         char *buf = NULL; asprintf(&buf, "%3.1f", fvalue);
-        if (buf) named_entry_set(dialog, "cooler_temp_entry", buf), free(buf);
+        if (buf) named_entry_set(cam_control_dialog, "cooler_temp_entry", buf), free(buf);
     }
 
 	//Return TRUE to keep callback active on temperature change
@@ -122,15 +123,15 @@ static int temperature_indi_cb(GtkWidget *dialog)
 }
 
 /* Monitor telescope tracking */
-static int tele_coords_indi_cb(GtkWidget *dialog)
+static int tele_coords_indi_cb(gpointer cam_control_dialog)
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct tele_t *tele = tele_find(main_window);
 
-    struct obs_data *obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
+    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
 
 //    char *msg = NULL; asprintf(&msg, "Slewing to %s", obs->objname);
-//    if (msg) status_message(dialog, msg), free(msg);
+//    if (msg) status_message(cam_control_dialog, msg), free(msg);
 
     if (tele) {
         double ra, dec;
@@ -147,7 +148,7 @@ static int tele_coords_indi_cb(GtkWidget *dialog)
             asprintf (&msg, "Tracking : ra %f dec %f %s\n", ra, dec, obs ? obs->objname : "");
 
         if (msg) {
-            status_message(dialog, msg);
+            status_message(cam_control_dialog, msg);
             printf("%s\n", msg); fflush(NULL);
             free(msg);
         }
@@ -157,9 +158,9 @@ static int tele_coords_indi_cb(GtkWidget *dialog)
     return TRUE;
 }
 
-static int exposure_change_cb(GtkWidget *dialog)
+static int exposure_change_cb(gpointer cam_control_dialog)
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     int ret = FALSE;
@@ -170,7 +171,7 @@ static int exposure_change_cb(GtkWidget *dialog)
         if (elem) {
             double v = elem->value.num.value;
             d3_printf("%f\n", v);
-//            named_spin_set(dialog, "exp_spin", v);
+//            named_spin_set(cam_control_dialog, "exp_spin", v);
             ret = (v != 0.0);
             if (ret) {
 //                restore initial
@@ -186,64 +187,64 @@ static int exposure_change_cb(GtkWidget *dialog)
 const int img_scale[4] = {1000, 1414, 2000, 4000};
 
 /* get the values from cam into the image dialog page */
-void cam_to_img(GtkWidget *dialog)
+void cam_to_img(gpointer cam_control_dialog)
 {
 	int mxsk, mysk;
 	int binx, biny;
 	int value, min, max;
 //	float fvalue, fmin, fmax;
 	struct camera_t *camera;
-	GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
 	camera = camera_find(main_window, CAMERA_MAIN);
 	if (! camera)
 		return;
 
-	g_object_set_data(G_OBJECT (dialog), "disable_signals", (void *)1);
+    g_object_set_data(G_OBJECT (cam_control_dialog), "disable_signals", (void *)1);
 
 	camera_get_binning(camera, &binx, &biny);
     char *buf = NULL; asprintf(&buf, "%dx%d", binx, biny);
-    if (buf) named_cbentry_set(dialog, "img_bin_combo", buf), free(buf);
+    if (buf) named_cbentry_set(cam_control_dialog, "img_bin_combo", buf), free(buf);
 
 //	camera_get_exposure_settings(camera, &fvalue, &fmin, &fmax);
-//	named_spin_set_limits(dialog, "exp_spin", fmin, fmax);
-//	named_spin_set(dialog, "exp_spin", fvalue);
+//	named_spin_set_limits(cam_control_dialog, "exp_spin", fmin, fmax);
+//	named_spin_set(cam_control_dialog, "exp_spin", fvalue);
 
 
-//    GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(dialog), "img_size_combo_box");
+//    GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(cam_control_dialog), "img_size_combo_box");
 
 //    int active = gtk_combo_box_get_active(GTK_COMBO_BOX(img_size_combo_box));
 
 //    double v;
 
 	camera_get_size(camera, "WIDTH", &value, &min, &max);
-    named_spin_set_limits(dialog, "img_width_spin", 0, 1.0 * max);
+    named_spin_set_limits(cam_control_dialog, "img_width_spin", 0, 1.0 * max);
 
 //    v = value * 1000.0 / img_scale[active] / binx;
-    named_spin_set(dialog, "img_width_spin", 1.0 * value / binx);
+    named_spin_set(cam_control_dialog, "img_width_spin", 1.0 * value / binx);
     mxsk = 0; //max - value * binx;
 
 	camera_get_size(camera, "HEIGHT", &value, &min, &max);
-    named_spin_set_limits(dialog, "img_height_spin", 0, 1.0 * max);
+    named_spin_set_limits(cam_control_dialog, "img_height_spin", 0, 1.0 * max);
 
 //    v = value * 1000.0 / img_scale[active] / biny;
-    named_spin_set(dialog, "img_height_spin", 1.0 * value / biny);
+    named_spin_set(cam_control_dialog, "img_height_spin", 1.0 * value / biny);
     mysk = 0; //max - value * biny;
 
-	named_spin_set_limits(dialog, "img_x_skip_spin", 0, 1.0 * mxsk);
+    named_spin_set_limits(cam_control_dialog, "img_x_skip_spin", 0, 1.0 * mxsk);
 	camera_get_size(camera, "OFFX", &value, &min, &max);
-	named_spin_set(dialog, "img_x_skip_spin", 1.0 * value);
+    named_spin_set(cam_control_dialog, "img_x_skip_spin", 1.0 * value);
 
-	named_spin_set_limits(dialog, "img_y_skip_spin", 0, 1.0 * mysk);
+    named_spin_set_limits(cam_control_dialog, "img_y_skip_spin", 0, 1.0 * mysk);
     camera_get_size(camera, "OFFY", &value, &min, &max);
-	named_spin_set(dialog, "img_y_skip_spin", 1.0 * value);
+    named_spin_set(cam_control_dialog, "img_y_skip_spin", 1.0 * value);
 
 //	camera_get_temperature(camera, &fvalue, &fmin, &fmax);
-//	named_spin_set_limits(dialog, "cooler_tempset_spin", fmin, fmax);
-//	named_spin_set(dialog, "cooler_tempset_spin", fvalue);
-//	cooler_temperature_cb(dialog);
+//	named_spin_set_limits(cam_control_dialog, "cooler_tempset_spin", fmin, fmax);
+//	named_spin_set(cam_control_dialog, "cooler_tempset_spin", fvalue);
+//	cooler_temperature_cb(cam_control_dialog);
 
-	g_object_set_data(G_OBJECT (dialog), "disable_signals", 0L);
+    g_object_set_data(G_OBJECT (cam_control_dialog), "disable_signals", 0L);
 }
 
 /* convert a bin string like "1 1" or "1,1" or "1x2" to
@@ -267,9 +268,9 @@ static int parse_bin_string(char *text, int *bx, int *by)
 }
 
 /* called when bin size changed in img window */
-static void binning_changed_cb( GtkWidget *widget, gpointer dialog)
+static void binning_changed_cb( GtkWidget *widget, gpointer cam_control_dialog)
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     if(! camera) {
@@ -277,7 +278,7 @@ static void binning_changed_cb( GtkWidget *widget, gpointer dialog)
         return;
     }
 
-    GtkComboBox *img_bin_combo = g_object_get_data(G_OBJECT(dialog), "img_bin_combo");
+    GtkComboBox *img_bin_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "img_bin_combo");
     g_return_if_fail(img_bin_combo != NULL);
 
     int bx, by;
@@ -287,47 +288,47 @@ static void binning_changed_cb( GtkWidget *widget, gpointer dialog)
 
     if (!ret) {
         camera_set_binning(camera, bx, by);
-        cam_to_img(dialog);
+        cam_to_img(cam_control_dialog);
     }
 }
 
-static void img_display_set_cb( GtkWidget *widget, gpointer dialog )
+static void img_display_set_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
     struct image_channel *i_channel = g_object_get_data(G_OBJECT(main_window), "i_channel");
-    named_spin_set(dialog, "img_width_spin", i_channel->width);
-    named_spin_set(dialog, "img_height_spin", i_channel->height);
-    named_spin_set(dialog, "img_x_skip_spin", i_channel->x);
-    named_spin_set(dialog, "img_y_skip_spin", i_channel->y);
+    named_spin_set(cam_control_dialog, "img_width_spin", i_channel->width);
+    named_spin_set(cam_control_dialog, "img_height_spin", i_channel->height);
+    named_spin_set(cam_control_dialog, "img_x_skip_spin", i_channel->x);
+    named_spin_set(cam_control_dialog, "img_y_skip_spin", i_channel->y);
     camera_set_size(camera,
-        named_spin_get_value(dialog, "img_width_spin"),
-        named_spin_get_value(dialog, "img_height_spin"),
-        named_spin_get_value(dialog, "img_x_skip_spin"),
-        named_spin_get_value(dialog, "img_y_skip_spin"));
+        named_spin_get_value(cam_control_dialog, "img_width_spin"),
+        named_spin_get_value(cam_control_dialog, "img_height_spin"),
+        named_spin_get_value(cam_control_dialog, "img_x_skip_spin"),
+        named_spin_get_value(cam_control_dialog, "img_y_skip_spin"));
 
-    cam_to_img(dialog);
+    cam_to_img(cam_control_dialog);
 }
 
 /* read the exp settings from the img page into the cam structure */
-//void set_exp_from_img_dialog(struct camera_t *camera, GtkWidget *dialog)
+//void set_exp_from_img_dialog(struct camera_t *camera, gpointer cam_control_dialog)
 //{
 //	camera_set_size(camera,
-//		named_spin_get_value(dialog, "img_width_spin"),
-//		named_spin_get_value(dialog, "img_height_spin"),
-//		named_spin_get_value(dialog, "img_x_skip_spin"),
-//		named_spin_get_value(dialog, "img_y_skip_spin"));
+//		named_spin_get_value(cam_control_dialog, "img_width_spin"),
+//		named_spin_get_value(cam_control_dialog, "img_height_spin"),
+//		named_spin_get_value(cam_control_dialog, "img_x_skip_spin"),
+//		named_spin_get_value(cam_control_dialog, "img_y_skip_spin"));
 
-//    cam_to_img(dialog);
+//    cam_to_img(cam_control_dialog);
 //}
 
 /* called when image size entries change */
-static void img_changed_cb( GtkWidget *widget, gpointer dialog )
+static void img_changed_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
-    long *disable_signals = g_object_get_data(G_OBJECT(dialog), "disable_signals");
+    long *disable_signals = g_object_get_data(G_OBJECT(cam_control_dialog), "disable_signals");
 
     if(! camera) {
         err_printf("no camera connected\n");
@@ -347,7 +348,7 @@ static void img_changed_cb( GtkWidget *widget, gpointer dialog )
         int binx, biny;
         camera_get_binning(camera, &binx, &biny);
 
-        GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(dialog), "img_size_combo_box");
+        GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(cam_control_dialog), "img_size_combo_box");
 
         int active = gtk_combo_box_get_active(GTK_COMBO_BOX(img_size_combo_box));
 
@@ -361,12 +362,12 @@ static void img_changed_cb( GtkWidget *widget, gpointer dialog )
         camera_set_size(camera, width, height, skip_x, skip_y);
 
         // update img
-        cam_to_img(dialog);
+        cam_to_img(cam_control_dialog);
     }
 }
 
 /* save a frame with the name specified by the dialog; increment seq number, etc */
-void save_frame_auto_name(struct ccd_frame *fr, GtkWidget *cam_control_dialog)
+void save_frame_auto_name(struct ccd_frame *fr, gpointer cam_control_dialog)
 {
 //    auto_filename(cam_control_dialog);
 
@@ -408,7 +409,7 @@ void save_frame_auto_name(struct ccd_frame *fr, GtkWidget *cam_control_dialog)
     }
 }
 
-static void dither_move(gpointer dialog, double amount)
+static void dither_move(gpointer cam_control_dialog, double amount)
 {
 	double dr, dd;
 
@@ -419,7 +420,7 @@ static void dither_move(gpointer dialog, double amount)
 
     char *msg = NULL;
     asprintf(&msg, "Dither move: %.1f %.1f", 3600 * dr, 3600 * dd);
-    if (msg) status_message(dialog, msg), free(msg);
+    if (msg) status_message(cam_control_dialog, msg), free(msg);
 
 	err_printf("dither move TODO\n");
 }
@@ -433,10 +434,10 @@ enum get_options { GET_OPTION_PREVIEW, GET_OPTION_SAVE, GET_OPTION_STREAM };
 
 /* see if we need to save the frame and save it if we do; update names and
  * start the next frame if required */
-static void save_frame(struct ccd_frame *fr, GtkWidget *dialog)
+static void save_frame(struct ccd_frame *fr, gpointer cam_control_dialog)
 {
     int seq = -1;
-    char *text = named_entry_text(dialog, "exp_frame_entry");
+    char *text = named_entry_text(cam_control_dialog, "exp_frame_entry");
     if (text) {
         seq = strtol(text, NULL, 10);
         free(text);
@@ -445,34 +446,34 @@ static void save_frame(struct ccd_frame *fr, GtkWidget *dialog)
     d4_printf("Sequence %d\n", seq);
     if (seq > 0) {
         seq --;
-        if (seq > 0) capture_image(dialog); // start capturing another image
+        if (seq > 0) capture_image(cam_control_dialog); // start capturing another image
 
         char *mb = NULL;
         asprintf(&mb, "%d", seq);
-        if (mb) named_entry_set(dialog, "exp_frame_entry", mb), free(mb);
+        if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
     }
 
-//    GtkWidget *imwin = g_object_get_data(G_OBJECT(dialog), "image_window");
+//    GtkWidget *imwin = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 //    if (imwin != NULL
-//            && get_named_checkb_val(GTK_WIDGET(dialog), "file_match_wcs_checkb")
-//            && ! get_named_checkb_val(GTK_WIDGET(dialog), "img_dark_checkb"))
+//            && get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "file_match_wcs_checkb")
+//            && ! get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "img_dark_checkb"))
 //    {
 //        match_field_in_window_quiet(imwin);
 //    }
     /* restart exposure if needed */
     if (P_INT(TELE_DITHER_ENABLE)) {
-        dither_move(dialog, P_DBL(TELE_DITHER_AMOUNT));
+        dither_move(cam_control_dialog, P_DBL(TELE_DITHER_AMOUNT));
     }
 
-    save_frame_auto_name(fr, dialog);
+    save_frame_auto_name(fr, cam_control_dialog);
 
     if (seq == 0) { // revert to preview
-        GtkWidget *mode_combo = g_object_get_data(G_OBJECT(dialog), "exp_mode_combo");
+        GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
         gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), GET_OPTION_PREVIEW);
     }
 }
 
-static void set_filter_list(GtkWidget *dialog, struct fwheel_t *fw)
+static void set_filter_list(gpointer cam_control_dialog, struct fwheel_t *fw)
 {
 
 	printf("set_filter_list is not yet implemented\n");
@@ -483,7 +484,7 @@ static void set_filter_list(GtkWidget *dialog, struct fwheel_t *fw)
 	GList *filter_list = NULL;
 	char **filters;
 
-	combo = g_object_get_data(G_OBJECT(dialog), "obs_filter_combo");
+    combo = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_filter_combo");
 	g_return_if_fail(combo != NULL);
 	gtk_combo_disable_activate(GTK_COMBO(combo));
 	filters = fwheel_get_filter_names(fw);
@@ -493,17 +494,17 @@ static void set_filter_list(GtkWidget *dialog, struct fwheel_t *fw)
 		filters ++;
 	}
 	if (filter_list != NULL) {
-		gtk_signal_handler_block_by_data(G_OBJECT(GTK_COMBO(combo)->list), dialog);
+        gtk_signal_handler_block_by_data(G_OBJECT(GTK_COMBO(combo)->list), cam_control_dialog);
 		gtk_list_clear_items(GTK_LIST(GTK_COMBO(combo) -> list), 0, -1);
 		gtk_combo_set_popdown_strings(GTK_COMBO(combo), filter_list);
 		gtk_list_select_item(GTK_LIST(GTK_COMBO(combo) -> list), fw->filter);
 		gtk_editable_set_editable(GTK_EDITABLE(GTK_COMBO(combo)->entry), 0);
-		gtk_signal_handler_unblock_by_data(G_OBJECT(GTK_COMBO(combo)->list), dialog);
+        gtk_signal_handler_unblock_by_data(G_OBJECT(GTK_COMBO(combo)->list), cam_control_dialog);
 	}
 #endif
 }
 
-static void filter_list_select_cb(gpointer list, GtkWidget *widget, gpointer dialog)
+static void filter_list_select_cb(gpointer list, GtkWidget *widget, gpointer cam_control_dialog)
 {
 	printf("filter_list_select_cb is not yet implemented\n");
 	/* please don't use GtkCombo */
@@ -513,29 +514,29 @@ static void filter_list_select_cb(gpointer list, GtkWidget *widget, gpointer dia
 	GtkWidget *combo;
 	char msg[128];
 
-	fw = g_object_get_data(G_OBJECT(dialog), "open_fwheel");
+    fw = g_object_get_data(G_OBJECT(cam_control_dialog), "open_fwheel");
 	if (fw == NULL)
 		return;
 	pos = gtk_list_child_position(list, widget);
 	if (pos == fw->filter)
 		return;
-	combo = g_object_get_data(G_OBJECT(dialog), "obs_filter_combo");
+    combo = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_filter_combo");
 	if (fw->state != FWHEEL_READY) {
-		gtk_signal_handler_block_by_data(G_OBJECT(GTK_COMBO(combo)->list), dialog);
+        gtk_signal_handler_block_by_data(G_OBJECT(GTK_COMBO(combo)->list), cam_control_dialog);
 		gtk_list_select_item(GTK_LIST(GTK_COMBO(combo) -> list), fw->filter);
-		gtk_signal_handler_unblock_by_data(G_OBJECT(GTK_COMBO(combo)->list), dialog);
+        gtk_signal_handler_unblock_by_data(G_OBJECT(GTK_COMBO(combo)->list), cam_control_dialog);
 		return;
 	}
 	ret = fwheel_goto_filter(fw, pos);
 	if (!ret) {
 		snprintf(msg, 128, "Selecting filter %d", pos);
-		status_message(dialog, msg);
+        status_message(cam_control_dialog, msg);
 	} else {
 		error_beep();
 		/* reverting switching to the true filter */
-		gtk_signal_handler_block_by_data(G_OBJECT(GTK_COMBO(combo)->list), dialog);
+        gtk_signal_handler_block_by_data(G_OBJECT(GTK_COMBO(combo)->list), cam_control_dialog);
 		gtk_list_select_item(GTK_LIST(GTK_COMBO(combo) -> list), fw->filter);
-		gtk_signal_handler_unblock_by_data(G_OBJECT(GTK_COMBO(combo)->list), dialog);
+        gtk_signal_handler_unblock_by_data(G_OBJECT(GTK_COMBO(combo)->list), cam_control_dialog);
 	}
 	gtk_widget_set_sensitive(combo, 0);
 #endif
@@ -554,16 +555,16 @@ gint delete_event( GtkWidget *widget, GdkEvent  *event, gpointer data )
 
 
 // called when a new image is ready for processing (not streaming)
-static int expose_indi_cb(GtkWidget *dialog)
+static int expose_indi_cb(gpointer cam_control_dialog)
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
-    GtkWidget *mode_combo = g_object_get_data(G_OBJECT(dialog), "exp_mode_combo");
+    GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
 
     if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) != GET_OPTION_PREVIEW) {
         int seq = -1;
-        char *text = named_entry_text(dialog, "exp_frame_entry");
+        char *text = named_entry_text(cam_control_dialog, "exp_frame_entry");
         if (text) {
             seq = strtol(text, NULL, 10);
             free(text);
@@ -578,12 +579,12 @@ static int expose_indi_cb(GtkWidget *dialog)
 
             char *mb = NULL;
             asprintf(&mb, "%d", seq);
-            if (mb) named_entry_set(dialog, "exp_frame_entry", mb), free(mb);
+            if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
         }
     }
 
-    if (get_named_checkb_val(dialog, "exp_run_button")) // start next capture
-        capture_image(dialog);
+    if (get_named_checkb_val(cam_control_dialog, "exp_run_button")) // start next capture
+        capture_image(cam_control_dialog);
 // handle other file types, preview, raw
     if (strncmp(camera->image_format, ".fits", 5) == 0) { // show and save current frame
         // The image has already been unzipped if we get here
@@ -603,12 +604,12 @@ static int expose_indi_cb(GtkWidget *dialog)
         // indi records exposure to only 2 decimals
         // update FN_EXPTIME from exp_spin to capture more decimals
 
-        double exptime = named_spin_get_value(dialog, "exp_spin");
+        double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
 
         char *lb = NULL; asprintf(&lb, "%20.5f / EXPTIME", exptime);
         if (lb) fits_add_keyword(fr, P_STR(FN_EXPTIME), lb), free(lb);
 
-        struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(dialog), "obs_data");
+        struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
         ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
 
         struct exp_data *exp = & fr->exp;
@@ -658,19 +659,19 @@ static int expose_indi_cb(GtkWidget *dialog)
 
         if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) == GET_OPTION_SAVE) {
 // field matching
-//            GtkWidget *imwin = g_object_get_data(G_OBJECT(dialog), "image_window");
+//            GtkWidget *imwin = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 //            if (imwin != NULL
-//                    && get_named_checkb_val(GTK_WIDGET(dialog), "file_match_wcs_checkb")
+//                    && get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "file_match_wcs_checkb")
 //                    && not_dark)
 //            {
 //                match_field_in_window_quiet(imwin);
 //            }
             /* restart exposure if needed */
             if (P_INT(TELE_DITHER_ENABLE)) {
-                dither_move(dialog, P_DBL(TELE_DITHER_AMOUNT));
+                dither_move(cam_control_dialog, P_DBL(TELE_DITHER_AMOUNT));
             }
 
-            save_frame_auto_name(fr, dialog);
+            save_frame_auto_name(fr, cam_control_dialog);
         }
 
         release_frame(fr, "expose_indi_cb");
@@ -678,11 +679,11 @@ static int expose_indi_cb(GtkWidget *dialog)
         err_printf("Received unsupported image format: %s\n", camera->image_format);
     }
 
-	//fwheel_poll(dialog);
-    obs_list_sm(dialog); // next line of obs_list
+    //fwheel_poll(cam_control_dialog);
+    obs_list_sm(cam_control_dialog); // next line of obs_list
 
 	// FALSE will remove the callback event
-    return get_named_checkb_val(dialog, "exp_run_button");
+    return get_named_checkb_val(cam_control_dialog, "exp_run_button");
 }
 
 
@@ -720,7 +721,7 @@ static char *postfix_XXX(char *filename) {
     return name;
 }
 
-static void setup_streaming(struct camera_t *camera, GtkWidget *cam_control_dialog)
+static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog)
 {
     // set local file name
     char *full_name = named_entry_text(cam_control_dialog, "exp_file_entry");
@@ -755,14 +756,14 @@ static void setup_streaming(struct camera_t *camera, GtkWidget *cam_control_dial
 }
 
 // called at start exposure in stream/preview
-static int stream_indi_cb(GtkWidget *dialog)
+static int stream_indi_cb(gpointer cam_control_dialog)
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     // update countdown
     int seq = -1;
-    char *text = named_entry_text(dialog, "exp_frame_entry");
+    char *text = named_entry_text(cam_control_dialog, "exp_frame_entry");
     if (text) {
         seq = strtol(text, NULL, 10);
         free(text);
@@ -770,7 +771,7 @@ static int stream_indi_cb(GtkWidget *dialog)
 
     char *mb;
     if (seq >= 0) {
-        int count = named_spin_get_value(dialog, "exp_number_spin");
+        int count = named_spin_get_value(cam_control_dialog, "exp_number_spin");
         int c_count = indi_prop_get_number(camera->streaming_prop, "COUNT");
 
         if (c_count != count) {
@@ -778,16 +779,16 @@ static int stream_indi_cb(GtkWidget *dialog)
             struct indi_elem_t *elem = indi_find_elem(camera->filepath_prop, "FILE_PATH");
 
             mb = NULL; asprintf(&mb, "Streamed: %s", elem->value.str);
-            if (mb) status_message(dialog, mb), free(mb);
+            if (mb) status_message(cam_control_dialog, mb), free(mb);
         }
     }
 
-    if (get_named_checkb_val(dialog, "exp_run_button")) {
+    if (get_named_checkb_val(cam_control_dialog, "exp_run_button")) {
         if (seq == 0) { // revert to preview
-            GtkWidget *mode_combo = g_object_get_data(G_OBJECT(dialog), "exp_mode_combo");
+            GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
             gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), GET_OPTION_PREVIEW);
 
-            capture_image(dialog);
+            capture_image(cam_control_dialog);
 
             return FALSE;
         }
@@ -795,16 +796,16 @@ static int stream_indi_cb(GtkWidget *dialog)
         seq--;
 
         mb = NULL; asprintf(&mb, "%d", seq);
-        if (mb) named_entry_set(dialog, "exp_frame_entry", mb), free(mb);
+        if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
     }
 //    indi_send(camera->streaming_prop, NULL);
 
-    return get_named_checkb_val(dialog, "exp_run_button"); // remain active
+    return get_named_checkb_val(cam_control_dialog, "exp_run_button"); // remain active
 }
 
-int capture_image( GtkWidget *dialog)
+int capture_image(gpointer cam_control_dialog)
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     if (! (camera && camera->ready)) {
@@ -812,11 +813,11 @@ int capture_image( GtkWidget *dialog)
         return 0; // ?
     }
 
-    GtkWidget *mode_combo = g_object_get_data(G_OBJECT(dialog), "exp_mode_combo");
+    GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
     if (gtk_combo_box_get_active(GTK_COMBO_BOX(mode_combo)) == GET_OPTION_STREAM) {
-        setup_streaming(camera, dialog);
+        setup_streaming(camera, cam_control_dialog);
 
-        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM, stream_indi_cb, dialog,  "stream_indi_cb");
+        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM, stream_indi_cb, cam_control_dialog,  "stream_indi_cb");
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_LOCAL);
         indi_dev_enable_blob(camera->expose_prop->idev, FALSE);
         indi_send(camera->streaming_prop, NULL);
@@ -824,11 +825,11 @@ int capture_image( GtkWidget *dialog)
 //        INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM); // start streaming
 
     } else {
-        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, dialog,  "expose_indi_cb");
+        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog,  "expose_indi_cb");
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
         indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
 
-        indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(dialog, "exp_spin"));
+        indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(cam_control_dialog, "exp_spin"));
         indi_send(camera->expose_prop, NULL);
 //    camera_expose(camera, exptime);
     }
@@ -837,9 +838,9 @@ int capture_image( GtkWidget *dialog)
 }
 
 /* called when the temp setpoint is changed */
-static void cooler_temp_cb( GtkWidget *widget, gpointer dialog )
+static void cooler_temp_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
 	struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 	if(! camera) {
@@ -852,36 +853,36 @@ static void cooler_temp_cb( GtkWidget *widget, gpointer dialog )
 }
 
 /* update obs fields in the dialog */
-static void update_obs_entries( GtkWidget *dialog, struct obs_data *obs)
+static void update_obs_entries( gpointer cam_control_dialog, struct obs_data *obs)
 {
     char *buf;
 
 	if (obs->objname != NULL)
-		named_entry_set(dialog, "obs_object_entry", obs->objname);
+        named_entry_set(cam_control_dialog, "obs_object_entry", obs->objname);
 
     buf = NULL; asprintf(&buf, "%.0f", obs->equinox);
-    if (buf) named_entry_set(dialog, "obs_epoch_entry", buf), free(buf);
+    if (buf) named_entry_set(cam_control_dialog, "obs_epoch_entry", buf), free(buf);
 
     char *ras = degrees_to_hms(obs->ra);
-    if (ras) named_entry_set(dialog, "obs_ra_entry", ras), free(ras);
+    if (ras) named_entry_set(cam_control_dialog, "obs_ra_entry", ras), free(ras);
 
     char *decs = degrees_to_dms_pr(obs->dec, 1);
-    if (decs) named_entry_set(dialog, "obs_dec_entry", decs), free(decs);
+    if (decs) named_entry_set(cam_control_dialog, "obs_dec_entry", decs), free(decs);
 
 	if (obs->filter != NULL)
-		named_cbentry_set(dialog, "obs_filter_combo", obs->filter);
+        named_cbentry_set(cam_control_dialog, "obs_filter_combo", obs->filter);
 
     double ha = obs_current_hour_angle(obs);
     double airm = obs_current_airmass(obs);
 
     buf = NULL; asprintf(&buf, "HA: %.3f, Airmass: %.2f", ha, airm);
-    if (buf) named_label_set(dialog, "obj_comment_label", buf), free(buf);
+    if (buf) named_label_set(cam_control_dialog, "obj_comment_label", buf), free(buf);
 }
 
 
 /* if we are in auto filename mode, generate a new name based on the
  * current obs. Reset the sequence number if the name has changed */
-static void auto_filename(GtkWidget *cam_control_dialog)
+static void auto_filename(gpointer cam_control_dialog)
 {
 
 // move this to obsdata_cb
@@ -1099,33 +1100,33 @@ static gboolean obsdata_focus_out_cb (GtkWidget *widget, GdkEventFocus *event, g
 
 /* external interface for setting the obs object */
 /* returns 0 if the object was found */
-int set_obs_object(GtkWidget *dialog, char *objname)
+int set_obs_object(gpointer cam_control_dialog, char *objname)
 {
 	GtkWidget *wid;
-	wid = g_object_get_data(G_OBJECT(dialog), "obs_object_entry");
+    wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_object_entry");
 	g_return_val_if_fail(wid != NULL, -1);
-	named_entry_set(dialog, "obs_object_entry", objname);
-	obsdata_cb(wid, dialog);
+    named_entry_set(cam_control_dialog, "obs_object_entry", objname);
+    obsdata_cb(wid, cam_control_dialog);
 	return 0;
 }
 
-static void img_mode_changed_cb( GtkWidget *widget, gpointer dialog )
+static void img_mode_changed_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    int nf = named_spin_get_value(dialog, "exp_number_spin");
+    int nf = named_spin_get_value(cam_control_dialog, "exp_number_spin");
 
     char *buf = NULL; asprintf(&buf, "%d", nf);
-    if (buf) named_entry_set(dialog, "exp_frame_entry", buf), free(buf);
+    if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
 
-    if (get_named_checkb_val(dialog, "exp_run_button"))
-        capture_image(dialog);
+    if (get_named_checkb_val(cam_control_dialog, "exp_run_button"))
+        capture_image(cam_control_dialog);
 }
 
-static void img_run_cb( GtkWidget *widget, gpointer dialog )
+static void img_run_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    int nf = named_spin_get_value(dialog, "exp_number_spin");
+    int nf = named_spin_get_value(cam_control_dialog, "exp_number_spin");
 
     char *buf = NULL; asprintf(&buf, "%d", nf);
-    if (buf) named_entry_set(dialog, "exp_frame_entry", buf), free(buf);
+    if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
 
     if (! gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)) ) {
         gtk_label_set_text(GTK_LABEL(GTK_BIN(widget)->child), "Run");
@@ -1133,8 +1134,8 @@ static void img_run_cb( GtkWidget *widget, gpointer dialog )
     } else {
         gtk_label_set_text(GTK_LABEL(GTK_BIN(widget)->child), "Stop");
 
-        GtkWidget *mode_combo = g_object_get_data(G_OBJECT(dialog), "exp_mode_combo");
-        img_mode_changed_cb(mode_combo, dialog);
+        GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
+        img_mode_changed_cb(mode_combo, cam_control_dialog);
     }
 }
 
@@ -1148,39 +1149,37 @@ static void img_file_browse_cb( GtkWidget *widget, gpointer cam_control_dialog )
 }
 
 /* send an abort slew message */
-static void scope_abort_cb( GtkWidget *widget, gpointer dialog )
+static void scope_abort_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 	struct tele_t *tele = tele_find(main_window);
 
 	if (tele) {
 		tele_abort(tele);
-        status_message(dialog, "Slewing aborted");
+        status_message(cam_control_dialog, "Slewing aborted");
 		err_printf("Aborted");
 	}
 }
 
 
 /* slew to the current obs coordinates */
-static int scope_goto_cb( GtkWidget *widget, gpointer dialog )
+static int scope_goto_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-	int ret;
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
     struct tele_t *tele = tele_find(main_window);
 	if (! tele) {
         char *msg = NULL; asprintf(&msg, "Telescope not connected");
-        if (msg) status_message(dialog, msg), free(msg);
+        if (msg) status_message(cam_control_dialog, msg), free(msg);
 
 		err_printf("No telescope found\n");
 		return -1;
 	}
 
-    struct obs_data *obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
-	if (obs == NULL)
-		return -1;
+    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
+    if (obs == NULL) return -1;
 
-    if (obs_check_limits(obs, dialog)) {
+    if (obs_check_limits(obs, cam_control_dialog)) {
         char *msg = NULL; asprintf(&msg, "Object %s (ha=%.2f dec=%.2f)\n"
 			 "is outside slew limits\n"
 			 "%s\nStart slew?", obs->objname,
@@ -1196,25 +1195,25 @@ static int scope_goto_cb( GtkWidget *widget, gpointer dialog )
 
     if (tele_set_coords(tele, TELE_COORDS_SLEW, obs->ra / 15.0, obs->dec, obs->equinox)) {
         char *msg = NULL; asprintf(&msg, "Failed to slew to %s", obs->objname);
-        if (msg) status_message(dialog, msg), free(msg);
+        if (msg) status_message(cam_control_dialog, msg), free(msg);
 
 		err_printf("Failed to slew to target\n");
 		return -1;
 	}
 
     char *msg = NULL; asprintf(&msg, "Slewing to %s", obs->objname);
-    if (msg) status_message(dialog, msg), free(msg);
+    if (msg) status_message(cam_control_dialog, msg), free(msg);
 
 	return 0;
 }
 
 /* sync to the current obs coordinates */
-static void scope_sync_cb( GtkWidget *widget, gpointer dialog )
+static void scope_sync_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
 	struct obs_data *obs;
 	int ret;
 	struct tele_t *tele;
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
 	tele = tele_find(main_window);
 
@@ -1223,24 +1222,25 @@ static void scope_sync_cb( GtkWidget *widget, gpointer dialog )
 		return;
 	}
 
-    obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
+    obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
 	if (obs == NULL) {
 		error_beep();
-        status_message(dialog, "Set obs first");
+        status_message(cam_control_dialog, "Set obs first");
 		return;
 	}
+
     ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
 	if (!ret) {
-        status_message(dialog, "Synchronised");
+        status_message(cam_control_dialog, "Synchronised");
 	} else {
 		err_printf("Failed to synchronize\n");
 	}
 }
 
 /* external interface for slew_cb */
-int goto_dialog_obs(GtkWidget *dialog)
+int goto_dialog_obs(gpointer cam_control_dialog)
 {
-	return scope_goto_cb(NULL, dialog);
+    return scope_goto_cb(NULL, cam_control_dialog);
 }
 
 
@@ -1248,47 +1248,52 @@ int goto_dialog_obs(GtkWidget *dialog)
  * the current image window wcs (if fitted) and the telescope
  * position.  Note that this function returns once the movement
  * has been submitted, and does not wait for movement to complete */
-static int scope_auto_cb( GtkWidget *widget, gpointer dialog )
+static int scope_auto_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *imw = g_object_get_data(G_OBJECT(dialog), "image_window");
+    GtkWidget *imw = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 	g_return_val_if_fail(imw != NULL, -1);
 
     struct tele_t *tele = tele_find(imw);
     if (! tele) return -1;
 
-    struct obs_data *obs = g_object_get_data(G_OBJECT(dialog), "obs_data");
+    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
     if (obs == NULL) return -1;
 
     struct wcs *wcs = window_get_wcs(imw);
 	g_return_val_if_fail(wcs != NULL, -1);
 	g_return_val_if_fail(wcs->wcsset != WCS_INVALID, -1);
 
-	tele_center_move(tele, obs->ra - wcs->xref, obs->dec - wcs->yref);
+    double ra = wcs->xref;
+    double dec = wcs->yref;
+
+    if (P_INT(TELE_PRECESS_TO_EOD) && (wcs->equinox != obs->equinox))
+        precess_hiprec(wcs->equinox, obs->equinox, &ra, &dec);
+
+    tele_center_move(tele, obs->ra - ra, obs->dec - dec); // difference should be independent if precessed to same epoch ?
 	return 0;
 }
 
 /* external interface for auto_cb */
-int center_matched_field(GtkWidget *dialog)
+int center_matched_field(gpointer cam_control_dialog)
 {
-	return scope_auto_cb(NULL, dialog);
+    return scope_auto_cb(NULL, cam_control_dialog);
 }
 
-static void enable_camera_widgets(GtkWidget *dialog, int state)
+static void enable_camera_widgets(gpointer cam_control_dialog, int state)
 {
 
 //	gtk_widget_set_sensitive(
-//		GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "img_get_img_button")),
+//		GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "img_get_img_button")),
 //		state);
-    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "exp_mode_combo")), state);
+    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo")), state);
 }
 
-static void enable_telescope_widgets(GtkWidget *dialog, int state)
+static void enable_telescope_widgets(gpointer cam_control_dialog, int state)
 {
-
-    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "scope_goto_button")), state);
-    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "scope_abort_button")), state);
-    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "scope_auto_button")), state);
-    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "scope_sync_button")), state);
+    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_goto_button")), state);
+    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_abort_button")), state);
+    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_auto_button")), state);
+    gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_sync_button")), state);
 }
 
 static gboolean cam_ready_indi_cb(gpointer data)
@@ -1299,13 +1304,13 @@ static gboolean cam_ready_indi_cb(gpointer data)
 //printf("cam_ready_callback\n"); fflush(NULL);
 
     if (camera) {
-        GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+        gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
 
-        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE, temperature_indi_cb, dialog, "temperature_indi_cb");
+        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE, temperature_indi_cb, cam_control_dialog, "temperature_indi_cb");
 
         if (camera->ready) {
-            enable_camera_widgets(dialog, TRUE);
-            cam_to_img(dialog);
+            enable_camera_widgets(cam_control_dialog, TRUE);
+            cam_to_img(cam_control_dialog);
         }
 	}
 
@@ -1315,16 +1320,15 @@ static gboolean cam_ready_indi_cb(gpointer data)
 static gboolean tele_ready_indi_cb(gpointer data)
 {
 	GtkWidget *window = data;
-	GtkWidget *dialog;
 	struct tele_t *tele;
 
-	dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
 	tele = tele_find(window);
     if (tele) {
-        INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_COORDS, tele_coords_indi_cb, dialog, "tele_coords_indi_cb");
+        INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_COORDS, tele_coords_indi_cb, cam_control_dialog, "tele_coords_indi_cb");
 
         if (tele->ready)
-            enable_telescope_widgets(dialog, TRUE);
+            enable_telescope_widgets(cam_control_dialog, TRUE);
 	}
 	//Return FALSE to remove the callback event
 	return FALSE;
@@ -1333,20 +1337,20 @@ static gboolean tele_ready_indi_cb(gpointer data)
 static gboolean fwheel_ready_indi_cb(gpointer data)
 {
 	GtkWidget *window = data;
-	GtkWidget *dialog;
+
 	struct fwheel_t *fwheel;
 
-	dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
 	fwheel = fwheel_find(window);
 	if (fwheel) {
-        gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(dialog), "fwheel_combo")), TRUE);
-		set_filter_list(dialog, fwheel);
+        gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "fwheel_combo")), TRUE);
+        set_filter_list(cam_control_dialog, fwheel);
 	}
 	//Return FALSE to remove the callback event
 	return FALSE;
 }
 
-void cam_set_callbacks(GtkWidget *cam_control_dialog)
+void cam_set_callbacks(gpointer cam_control_dialog)
 {
     g_signal_connect (G_OBJECT (cam_control_dialog), "delete_event", G_CALLBACK (delete_event), cam_control_dialog);
 
@@ -1421,7 +1425,7 @@ void act_control_camera (GtkAction *action, gpointer window)
 {
 	GtkWidget* create_camera_control (void);
 
-    GtkWidget *cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
 // try this:
 //    cam_control_dialog = NULL;
 //    g_object_set_data(G_OBJECT(window), "cam_dialog", dialog); // clear dialog and rebuild
@@ -1461,7 +1465,7 @@ void act_control_camera (GtkAction *action, gpointer window)
 //		gtk_widget_show(cam_control_dialog);
     }
     gtk_widget_show_all(cam_control_dialog);
-    gdk_window_raise(cam_control_dialog->window);
+    gdk_window_raise(((GtkWidget *)cam_control_dialog)->window);
 
 //    cam_dialog_update(cam_control_dialog);
 //    cam_dialog_edit(cam_control_dialog);

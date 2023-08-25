@@ -26,7 +26,6 @@
 #endif
 
 
-#define JD2000 2451545.0
 #define	hrdeg(x)	((x)*15.)
 #define	deghr(x)	((x)/15.)
 #define	hrrad(x)	degrad(hrdeg(x))

@@ -18,6 +18,7 @@ Copyright (C) 2000 Liam Girdwood <liam@nova-ioe.org>
 */
 
 #include "nutation.h"
+#include "sidereal_time.h"
 #include <math.h>
 
 #ifndef PI
@@ -195,7 +196,7 @@ void get_nutation (double JD, struct ln_nutation * nutation)
 		/* JDE = get_jde (JD); Not Sure */
 		
 		/* calc T */
-		T = (JD - 2451545.0)/36525;
+        T = (JD - JD2000)/36525;
 		T2 = T * T;
 		T3 = T2 * T;
 

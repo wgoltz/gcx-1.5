@@ -62,7 +62,7 @@
 //#include "warpaffine.h"
 
 
-int progress_print(char *msg, void *data)
+int progress_print(char *msg, gpointer processing_dialog)
 {
 	info_printf(msg);
 	return 0;
@@ -198,12 +198,12 @@ static float pix_ks(float *dp[], int n, float sigmas, int iter)
     if (progress) { \
         char *msg = NULL; \
         asprintf(&msg, (s), __VA_ARGS__); \
-        if (msg) (* progress)(msg, data), free(msg); \
+        if (msg) (* progress)(msg, processing_dialog), free(msg); \
     } \
 }
 
 /* overwrite the original file */
-static int save_image_file_inplace(struct image_file *imf, int (* progress)(char *msg, void *data), void *data)
+static int save_image_file_inplace(struct image_file *imf, progress_print_func progress, gpointer processing_dialog)
 {
 	g_return_val_if_fail(imf != NULL, -1);
 	g_return_val_if_fail(imf->fr != NULL, -1);
@@ -219,7 +219,7 @@ static int save_image_file_inplace(struct image_file *imf, int (* progress)(char
 
 
 /* outf is a dir name: use the original file names and this dir */
-static int save_image_file_to_dir(struct image_file *imf, char *dir, int (* progress)(char *msg, void *data), void *data)
+static int save_image_file_to_dir(struct image_file *imf, char *dir, progress_print_func progress, gpointer processing_dialog)
 {
 	g_return_val_if_fail(imf != NULL, -1);
 	g_return_val_if_fail(imf->fr != NULL, -1);
@@ -252,7 +252,7 @@ static int save_image_file_to_dir(struct image_file *imf, char *dir, int (* prog
  * append any extensions after seq
  * if stub is zippish, zip the output */
 
-static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq, int (* progress)(char *msg, void *data), void *data)
+static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq, progress_print_func progress, gpointer processing_dialog)
 {
 	g_return_val_if_fail(imf != NULL, -1);
     g_return_val_if_fail(imf->fr != NULL, -1);
@@ -295,7 +295,7 @@ static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq,
  * a non-zero value, abort remaining operations and return an error (non-zero) */
 
 int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
-		    int (* progress)(char *msg, void *data), void *data)
+            progress_print_func progress, gpointer processing_dialog)
 {
 	struct stat st;
 	int ret;
@@ -303,7 +303,7 @@ int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
 	d3_printf("save_image_file\n");
 
 	if (inplace) {
-		return save_image_file_inplace(imf, progress, data);
+        return save_image_file_inplace(imf, progress, processing_dialog);
 	}
 	if (outf == NULL || outf[0] == 0) {
 		err_printf("need a file or dir name to save reduced files to\n");
@@ -311,11 +311,11 @@ int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
 	}
 	ret = stat(outf, &st);
     if ( ! ret && S_ISDIR(st.st_mode) ) {
-		return save_image_file_to_dir(imf, outf, progress, data);
+        return save_image_file_to_dir(imf, outf, progress, processing_dialog);
 	} else {
-        return save_image_file_to_stub(imf, outf, seq, progress, data);
+        return save_image_file_to_stub(imf, outf, seq, progress, processing_dialog);
 	}
-    if (progress) (* progress)("mock save\n", data);
+    if (progress) (* progress)("mock save\n", processing_dialog);
 
     imf->flags &= ~IMG_DIRTY;
 
@@ -528,7 +528,7 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 }
 
 
-int setup_for_ccd_reduce(struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
     if (ccdr->ops & IMG_OP_BIAS) {
 
@@ -608,10 +608,10 @@ static int normalize_CFA(struct ccd_frame *fr);
  * call progress with a short progress message from time to time. If progress returns
  * a non-zero value, abort remaining operations and return an error (-1) */
 
-static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
 
-#define REPORT(s) { if ( (progress) && ((*progress)((s), data) != 0) ) return -1; }
+#define REPORT(s) { if ( (progress) && ((*progress)((s), processing_dialog) != 0) ) return -1; }
 
     char *lb;
     g_return_val_if_fail(imf != NULL, -1);
@@ -805,7 +805,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         if ( ! (imf->flags & IMG_OP_ALIGN) ) {
             int result_ok = 0;
             if (ccdr->alignref->fr)
-                result_ok = align_imf(imf, ccdr, progress, data) == 0;
+                result_ok = align_imf(imf, ccdr, progress, processing_dialog) == 0;
 
             if (result_ok) {
                 fits_add_history(imf->fr, "'ALIGNED'");
@@ -824,7 +824,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->flags & IMG_OP_WCS) ) {
 
-            if ( fit_wcs(imf, ccdr, progress, data) ) {
+            if ( fit_wcs(imf, ccdr, progress, processing_dialog) ) {
                 REPORT( " (FAILED)" )
                 imf->flags |= IMG_SKIP;
             }
@@ -839,7 +839,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
             REPORT( " phot" )
-            if ( aphot_imf(imf, ccdr, progress, data) ) {
+            if ( aphot_imf(imf, ccdr, progress, processing_dialog) ) {
                 REPORT( " (FAILED)" )
                 imf->flags |= IMG_SKIP;
             }
@@ -861,7 +861,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
 /* load imf and reduce. return 1 for skip, -1 abort or error. */
 
-int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
     REPORT( imf->filename );
 
@@ -874,7 +874,7 @@ int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, int (* prog
 
     REPORT( " loaded" );
 
-    int ret = ccd_reduce_imf_body (imf, ccdr, progress, data);
+    int ret = ccd_reduce_imf_body (imf, ccdr, progress, processing_dialog);
 
     imf_release_frame (imf, "ccd_reduce_imf");
 
@@ -886,16 +886,16 @@ int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, int (* prog
  * call progress with a short progress message from time to time. If progress returns
  * a non-zero value, abort remaining operations and return an error (-1) */
 
-int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
-    int ret = setup_for_ccd_reduce (ccdr, progress, data);
+    int ret = setup_for_ccd_reduce (ccdr, progress, processing_dialog);
     if (ret) return ret;
 
     if (imf->flags & IMG_SKIP) return 1;
 
     load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 
-    return ccd_reduce_imf (imf, ccdr, progress, data);
+    return ccd_reduce_imf (imf, ccdr, progress, processing_dialog);
 }
 
 
@@ -904,12 +904,12 @@ int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, int (* pro
  * call progress with a short progress message from time to time. If progress returns
  * a non-zero value, abort remaining operations and return an error (-1) */
 
-int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
 
 //printf("reduce.reduce_frames\n");
 
-    int ret = setup_for_ccd_reduce (ccdr, progress, data);
+    int ret = setup_for_ccd_reduce (ccdr, progress, processing_dialog);
     if (ret == 0) {
         GList *gl = imfl->imlist;
 
@@ -922,7 +922,7 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, int (* 
 
             if (imf->flags & IMG_SKIP) break;
 
-            ret = ccd_reduce_imf (imf, ccdr, progress, data);
+            ret = ccd_reduce_imf (imf, ccdr, progress, processing_dialog);
             if (ret < 0) break;
         }
     }
@@ -1012,7 +1012,7 @@ static int get_unskipped_frames (struct image_file_list *imfl, struct ccd_frame 
  * return -1 for errors */
 
 static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
-            int (* progress)(char *msg, void *data), void *data)
+            progress_print_func progress, gpointer processing_dialog)
 {
     float *dp[COMB_MAX];
     struct ccd_frame *frames[COMB_MAX];
@@ -1083,7 +1083,7 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
 /* the real work of median-stacking frames
  * return -1 for errors */
 static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
-			   int (* progress)(char *msg, void *data), void *data)
+               progress_print_func progress, gpointer processing_dialog)
 {
 	struct ccd_frame *frames[COMB_MAX];
     float *dp[COMB_MAX];
@@ -1145,7 +1145,7 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
 /* the real work of k-s-stacking frames
  * return -1 for errors */
 static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
-			int (* progress)(char *msg, void *data), void *data)
+            progress_print_func progress, gpointer processing_dialog)
 {
 	float *dp[COMB_MAX];
 	struct ccd_frame *frames[COMB_MAX];
@@ -1179,7 +1179,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
         char *msg = NULL;
         asprintf(&msg, "kappa-sigma s=%.1f iter=%d (%d frames)", P_DBL(CCDRED_SIGMAS), P_INT(CCDRED_ITER), i);
         if (msg) {
-            ret = (* progress)(msg, data);
+            ret = (* progress)(msg, processing_dialog);
             free(msg);
             if (ret) {
                 d1_printf("aborted\n");
@@ -1204,7 +1204,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
         int y;
 		for (y = 0; y < h; y++) {
 			if (t-- == 0 && progress) {
-                int ret = (* progress)(".", data);
+                int ret = (* progress)(".", processing_dialog);
                 if (ret) { d1_printf("aborted\n"); return -1; }
 
 				t = h / 16;
@@ -1223,7 +1223,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
 		}
 	}
 	if (progress) {
-		(* progress)("\n", data);
+        (* progress)("\n", processing_dialog);
 	}
 
 	return 0;
@@ -1232,7 +1232,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
 /* the real work of mean-median-stacking frames
  * return -1 for errors */
 static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
-			int (* progress)(char *msg, void *data), void *data)
+            progress_print_func progress, gpointer processing_dialog)
 {
 	float *dp[COMB_MAX];
 	struct ccd_frame *frames[COMB_MAX];
@@ -1267,7 +1267,7 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
         char *msg = NULL;
         asprintf(&msg, "mean-median s=%.1f (%d frames)", P_DBL(CCDRED_SIGMAS), i);
         if (msg) {
-            int ret = (* progress)(msg, data); free(msg);
+            int ret = (* progress)(msg, processing_dialog); free(msg);
             if (ret) { d1_printf("aborted\n"); return -1; }
 		}
 	}
@@ -1288,7 +1288,7 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
         int y;
 		for (y = 0; y < h; y++) {
             if ((t-- == 0) && progress) {
-                int ret = (* progress)(".", data);
+                int ret = (* progress)(".", processing_dialog);
                 if (ret) { d1_printf("aborted\n"); return -1; }
 
 				t = h / 16;
@@ -1306,14 +1306,14 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
 		}
 	}
 	if (progress) {
-		(* progress)("\n", data);
+        (* progress)("\n", processing_dialog);
 	}
 	return 0;
 }
 
 /* add to output frame the equivalent integration time, frame time and median airmass */
 static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
-			int (* progress)(char *msg, void *data), void *data)
+            progress_print_func progress, gpointer processing_dialog)
 {
 	double expsum = 0.0;
 	double exptime = 0.0;
@@ -1344,7 +1344,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
         double jd = frame_jdate(imf->fr);
 //printf("%s %20.5f\n", imf->filename, jd);
 		if (jd == 0) {
-            if (progress) (*progress)("stack_time: bad time\n", data);
+            if (progress) (*progress)("stack_time: bad time\n", processing_dialog);
 //			continue;
 		}
 
@@ -1353,13 +1353,13 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
             d1_printf("stack time: using exptime = %.5f from %s\n", expv, P_STR(FN_EXPTIME));
             if ((i != 1) && (last_exptime != expv))
                 if (progress)
-                    (*progress)("stack_time: exposures dont all have same exptime\n", data);
+                    (*progress)("stack_time: exposures dont all have same exptime\n", processing_dialog);
 
             last_exptime = expv;
 
 		} else {
             if (progress)
-                (*progress)("stack_time: bad exptime\n", data);
+                (*progress)("stack_time: bad exptime\n", processing_dialog);
 
 //			continue;
 		}
@@ -1372,7 +1372,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
     char *lb;
 	if (progress) {
         lb = NULL; asprintf (&lb, "%d exposures: total exposure %.5fs, center at jd:%.7f\n", i, expsum, exptime / expsum);
-        if (lb) (*progress)(lb, data), free(lb);
+        if (lb) (*progress)(lb, processing_dialog), free(lb);
 	}
     
     lb = NULL; asprintf (&lb, "%20.5f / TOTAL EXPOSURE TIME IN SECONDS", expsum);
@@ -1421,7 +1421,7 @@ void print_header(struct ccd_frame *fr) {
 
 /* stack the frames; return a newly created frame, or NULL for an error */
 struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr,
-		 int (* progress)(char *msg, void *data), void *data)
+         progress_print_func progress, gpointer processing_dialog)
 {
 	int nf = 0;
     double b = 0, rdnsq = 0, fln = 0, sc = 0;
@@ -1482,7 +1482,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
         if (progress) {
             char *msg = NULL;
             asprintf(&msg, "Frame stack: output size %d x %d\n", ow, oh);
-            if (msg) (*progress)(msg, data), free(msg);
+            if (msg) (*progress)(msg, processing_dialog), free(msg);
         }
 
         /* do the actual stack */
@@ -1493,24 +1493,24 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
         switch(P_INT(CCDRED_STACK_METHOD)) {
         case PAR_STACK_METHOD_AVERAGE:
             eff = 1.0;
-            err = (do_stack_avg(imfl, fr, progress, data) != 0);
+            err = (do_stack_avg(imfl, fr, progress, processing_dialog) != 0);
             break;
         case PAR_STACK_METHOD_WEIGHTED_AVERAGE:
             eff = 1.0;
-//            err = (do_stack_weighted_avg(imfl, fr, progress, data) != 0);
+//            err = (do_stack_weighted_avg(imfl, fr, progress, processing_dialog) != 0);
             err = 1;
             break;
         case PAR_STACK_METHOD_KAPPA_SIGMA:
             eff = 0.9;
-            err = (do_stack_ks(imfl, fr, progress, data) != 0);
+            err = (do_stack_ks(imfl, fr, progress, processing_dialog) != 0);
             break;
         case PAR_STACK_METHOD_MEDIAN:
             eff = 0.65;
-            err = (do_stack_median(imfl, fr, progress, data) != 0);
+            err = (do_stack_median(imfl, fr, progress, processing_dialog) != 0);
             break;
         case PAR_STACK_METHOD_MEAN_MEDIAN:
             eff = 0.85;
-            err = (do_stack_mm(imfl, fr, progress, data) != 0);
+            err = (do_stack_mm(imfl, fr, progress, processing_dialog) != 0);
             break;
         default:
             err_printf("unknown/unsupported stacking method %d\n", P_INT(CCDRED_STACK_METHOD));
@@ -1522,7 +1522,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             fr = NULL;
 
         } else {
-            do_stack_time(imfl, fr, progress, data);
+            do_stack_time(imfl, fr, progress, processing_dialog);
             fr->exp.rdnoise = sqrt(rdnsq) / nf / eff;   // sum n frames
             fr->exp.flat_noise = fln / nf;
             fr->exp.scale = sc;
@@ -1677,7 +1677,7 @@ d3_printf("load alignment stars");
 }
 
 
-int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
     g_return_val_if_fail(ccdr->align_stars != NULL, -1);
 
@@ -1755,7 +1755,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
         }
 
     }  else {
-        if (progress) (* progress)(" no match", data);
+        if (progress) (* progress)(" no match", processing_dialog);
     }
 
     GSList *sl = fsl;
@@ -1778,7 +1778,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
     return 0;
 }
 
-int wcs_align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int wcs_align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {  
     if (imf_load_frame(imf) < 0) return -1;
     if (imf_load_frame(ccdr->alignref) < 0) return -1;
@@ -1809,7 +1809,7 @@ int wcs_align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progre
     return 0;
 }
 
-int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
 	g_return_val_if_fail(ccdr->align_stars != NULL, -1);
 
@@ -1940,7 +1940,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
                     }
 
                 }  else {
-                    if (progress) (* progress)(" no match", data);
+                    if (progress) (* progress)(" no match", processing_dialog);
 
                     printf("align_imf: n == 0\n"); fflush(NULL);
                 }
@@ -1980,7 +1980,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(
 }
 
 
-int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
     if (imf_load_frame(imf) < 0) return -1;
 
@@ -2024,7 +2024,7 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
     return 0;
 }
 
-int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, int (* progress)(char *msg, void *data), void *data)
+int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
     
     if (imf_load_frame(imf) < 0) return -1;

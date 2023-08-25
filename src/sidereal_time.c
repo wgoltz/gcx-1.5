@@ -18,6 +18,7 @@ Copyright (C) 2000 Liam Girdwood <liam@nova-ioe.org>
 
 #include <math.h>
 #include "nutation.h"
+#include "sidereal_time.h"
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -62,10 +63,10 @@ double get_mean_sidereal_time (double JD)
     double sidereal;
     double T;
     
-    T = (JD - 2451545.0) / 36525.0;
+    T = (JD - JD2000) / 36525.0;
         
     /* calc mean angle */
-    sidereal = 280.46061837 + (360.98564736629 * (JD - 2451545.0)) + 
+    sidereal = 280.46061837 + (360.98564736629 * (JD - JD2000)) +
 	    (0.000387933 * T * T) - (T * T * T / 38710000.0);
     
     /* add a convenient multiple of 360 degrees */

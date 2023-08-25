@@ -29,6 +29,8 @@
 
 #include "libindiclient/indi.h"
 #include "tele_indi.h"
+#include "sidereal_time.h"
+#include "obsdata.h"
 
 #include <glib-object.h>
 
@@ -300,12 +302,12 @@ void tele_guide_move(struct tele_t *tele, int dx_msec, int dy_msec)
 void tele_center_move(struct tele_t *tele, float dra, float ddec)
 {
     double ra = tele_get_ra(tele);
-    double dec = tele_get_dec(tele); // dec is wrong
+    double dec = tele_get_dec(tele);
     if (ra != NAN && dec != NAN) {
         ra += dra;
         dec += ddec;
         tele_set_speed(tele, TELE_MOVE_CENTERING);
-        tele_set_coords(tele, TELE_COORDS_SLEW, ra / 15.0, dec, 0.0);
+        tele_set_coords(tele, TELE_COORDS_SLEW, ra / 15.0, dec, NAN);
     }
 }
 
@@ -380,8 +382,14 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 //			return -1;
 //		}
 	}
-    indi_prop_set_number(tele->coord_set_prop, "RA", ra); // ra in hours
-    indi_prop_set_number(tele->coord_set_prop, "DEC", dec);
+    // precess coords to current equinox
+    double pra = ra * 15; // hrs to degrees
+    double pdc = dec;
+
+    if (P_INT(TELE_PRECESS_TO_EOD) && equinox != NAN) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
+
+    indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours
+    indi_prop_set_number(tele->coord_set_prop, "DEC", pdc);
     indi_send(tele->coord_set_prop, NULL);
 
     tele->slewing = 1; // will this work if already there?

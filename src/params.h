@@ -214,7 +214,6 @@ typedef enum {
 
 	WCSFIT_MODEL,
 	WCS_REFRACTION_EN,
-    WCS_IGNORE_PRECESSION,
 
 
 /* obs */

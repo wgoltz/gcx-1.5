@@ -545,12 +545,6 @@ void init_ptable(void)
 			    "this option is better turned off."
 		);
 
-    add_par_int(WCS_IGNORE_PRECESSION, PAR_WCS_OPTIONS, FMT_BOOL, "precession",
-               "Ignore Precession", 0);
-    set_par_description(WCS_IGNORE_PRECESSION,
-                "Ignore precession in WCS calculations."
-        );
-
 
 /* obs */
     add_par_double(OBS_DEFAULT_ELADU, PAR_OBS_DEFAULTS, FMT_DEC, "eladu", "default ELADU", 1.0);

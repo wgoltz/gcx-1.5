@@ -56,7 +56,6 @@ typedef struct catalog_entry {
 } CATALOG_ENTRY;
 
 
-#define JD2000 2451545.0
 //#define	degrad(x)	((x)*PI/180.)
 #//define	raddeg(x)	((x)*180./PI)
 #define	hrdeg(x)	((x)*15.)

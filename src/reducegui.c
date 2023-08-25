@@ -62,32 +62,32 @@
 
 
 
-static int progress_pr(char *msg, void *dialog);
-int log_msg(char *msg, void *dialog);
+static int progress_pr(char *msg, void *processing_dialog);
+int log_msg(char *msg, void *processing_dialog);
 
-static void imf_display_cb(GtkAction *action, gpointer dialog);
-static void imf_prev_cb(GtkAction *action, gpointer dialog);
-static void imf_next_cb(GtkAction *action, gpointer dialog);
-static void imf_rm_cb(GtkAction *action, gpointer dialog);
-static void imf_reload_cb(GtkAction *action, gpointer dialog);
-static void imf_skip_cb(GtkAction *action, gpointer dialog);
-static void imf_toggle_skip_cb(GtkAction *action, gpointer dialog);
-static void imf_invert_selection_cb(GtkAction *action, gpointer dialog);
-static void imf_select_skipped_cb(GtkAction *action, gpointer dialog);
-static void imf_selall_cb(GtkAction *action, gpointer dialog);
-static void imf_add_cb (GtkAction *action, gpointer dialog);
-static void ccdred_run_cb(GtkAction *action, gpointer dialog);
-static void ccdred_one_cb(GtkAction *action, gpointer dialog);
-static void ccdred_qphotone_cb(GtkAction *action, gpointer dialog);
-static void show_align_cb(GtkAction *action, gpointer dialog);
-static void mframe_cb(GtkAction *action, gpointer dialog);
+static void imf_display_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_prev_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_next_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_rm_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_reload_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_skip_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_toggle_skip_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_invert_selection_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_select_skipped_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_selall_cb(GtkAction *action, gpointer processing_dialog);
+static void imf_add_cb (GtkAction *action, gpointer processing_dialog);
+static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog);
+static void ccdred_one_cb(GtkAction *action, gpointer processing_dialog);
+static void ccdred_qphotone_cb(GtkAction *action, gpointer processing_dialog);
+static void show_align_cb(GtkAction *action, gpointer processing_dialog);
+static void mframe_cb(GtkAction *action, gpointer processing_dialog);
 
-static void update_selected_mband_status_label(gpointer dialog);
-static void update_mband_status_labels(gpointer dialog);
-static void imf_red_activate_cb(GtkWidget *wid_entry, gpointer dialog);
-static void update_dialog_from_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr);
+static void update_selected_mband_status_label(gpointer processing_dialog);
+static void update_mband_status_labels(gpointer processing_dialog);
+static void imf_red_activate_cb(GtkWidget *wid_entry, gpointer processing_dialog);
+static void update_dialog_from_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr);
 static void imf_update_mband_status_label(GtkTreeModel *image_file_store, GtkTreeIter *iter);
-static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer dialog);
+static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer processing_dialog);
 /*
 static long alloc_size = 0;
 static void * my_malloc(int size)
@@ -129,11 +129,11 @@ static gboolean close_processing_window( GtkWidget *widget, gpointer data )
 	return TRUE;
 }
 
-static void mframe_cb(GtkAction *action, gpointer dialog)
+static void mframe_cb(GtkAction *action, gpointer processing_dialog)
 {
 	gpointer im_window;
 
-	im_window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    im_window = g_object_get_data(G_OBJECT(processing_dialog), "im_window");
 	g_return_if_fail(im_window != NULL);
 
 	act_control_mband(NULL, im_window);
@@ -262,53 +262,52 @@ static void reduce_switch_accels (GtkNotebook *notebook, GtkWidget *page, int pa
 
 
 
-/* create an image processing dialog and set the callbacks, but don't show it */
+/* create an image processing processing_dialog and set the callbacks, but don't show it */
 static GtkWidget *make_image_processing(gpointer window)
 {
-	GtkWidget *dialog;
 	GtkWidget *menubar, *top_hb;
 	GtkNotebook *notebook;
 	GtkWidget *page;
 	GtkAccelGroup *accel_group;
 
-	dialog = create_image_processing();
+    GtkWidget *processing_dialog = create_image_processing();
 
-	g_object_set_data(G_OBJECT(dialog), "im_window", window);
-	g_object_set_data_full(G_OBJECT(window), "processing", dialog, (GDestroyNotify)(gtk_widget_destroy));
+    g_object_set_data(G_OBJECT(processing_dialog), "im_window", window);
+    g_object_set_data_full(G_OBJECT(window), "processing", processing_dialog, (GDestroyNotify)(gtk_widget_destroy));
 
-//    g_signal_connect (G_OBJECT (dialog), "delete_event", G_CALLBACK (close_processing_window), window);
-    g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
-    g_object_set(G_OBJECT (dialog), "destroy-with-parent", TRUE, NULL);
+//    g_signal_connect (G_OBJECT (processing_dialog), "delete_event", G_CALLBACK (close_processing_window), window);
+    g_signal_connect (G_OBJECT (processing_dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
+    g_object_set(G_OBJECT (processing_dialog), "destroy-with-parent", TRUE, NULL);
 
 //printf("reducegui.make_image_processing\n");
 
-    set_named_callback (G_OBJECT (dialog), "bias_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "dark_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "flat_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "badpix_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "align_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "output_file_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "recipe_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
-    set_named_callback (G_OBJECT (dialog), "bias_entry", "activate", G_CALLBACK (imf_red_activate_cb));
-    set_named_callback (G_OBJECT (dialog), "dark_entry", "activate", G_CALLBACK (imf_red_activate_cb));
-    set_named_callback (G_OBJECT (dialog), "flat_entry", "activate", G_CALLBACK (imf_red_activate_cb));
-    set_named_callback (G_OBJECT (dialog), "badpix_entry", "activate", G_CALLBACK (imf_red_activate_cb));
-    set_named_callback (G_OBJECT (dialog), "recipe_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "bias_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "dark_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "flat_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "badpix_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "align_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "output_file_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "recipe_browse", "clicked", G_CALLBACK (imf_red_browse_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "bias_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "dark_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "flat_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "badpix_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+    set_named_callback (G_OBJECT (processing_dialog), "recipe_entry", "activate", G_CALLBACK (imf_red_activate_cb));
 
 // or something else?
-//    set_named_callback (G_OBJECT (dialog), "align_entry", "activate", G_CALLBACK (imf_red_activate_cb));
+//    set_named_callback (G_OBJECT (processing_dialog), "align_entry", "activate", G_CALLBACK (imf_red_activate_cb));
 
 	/* each page should remember its accelerators, we need to switch them
 	   (as they apply on the whole window) when switching pages */
-    notebook = g_object_get_data (G_OBJECT(dialog), "reduce_notebook");
+    notebook = g_object_get_data (G_OBJECT(processing_dialog), "reduce_notebook");
 	g_return_val_if_fail (notebook != NULL, NULL);
 
 	page = gtk_notebook_get_nth_page (notebook, 0);
-	menubar = get_main_menu_bar(dialog, page);
+    menubar = get_main_menu_bar(processing_dialog, page);
 
-	/* activate reduce page accels for the dialog */
+    /* activate reduce page accels for the processing_dialog */
 	accel_group = g_object_get_data(G_OBJECT(page), "reduce-accel-group");
-	gtk_window_add_accel_group (GTK_WINDOW (dialog), accel_group);
+    gtk_window_add_accel_group (GTK_WINDOW (processing_dialog), accel_group);
 
 	/* setup dummy accels for the setup page */
 	page = gtk_notebook_get_nth_page (notebook, 1);
@@ -317,21 +316,21 @@ static GtkWidget *make_image_processing(gpointer window)
     g_object_set_data_full (G_OBJECT(page), "reduce-accel-group", accel_group, (GDestroyNotify) g_object_unref);
 
 	/* the ole switcheroo */
-    g_signal_connect (G_OBJECT(notebook), "switch-page", G_CALLBACK (reduce_switch_accels), dialog);
+    g_signal_connect (G_OBJECT(notebook), "switch-page", G_CALLBACK (reduce_switch_accels), processing_dialog);
 
-	g_object_set_data(G_OBJECT(dialog), "menubar", menubar);
+    g_object_set_data(G_OBJECT(processing_dialog), "menubar", menubar);
 
-	top_hb = g_object_get_data(G_OBJECT(dialog), "top_hbox");
+    top_hb = g_object_get_data(G_OBJECT(processing_dialog), "top_hbox");
 	gtk_box_pack_start(GTK_BOX(top_hb), menubar, TRUE, TRUE, 0);
 	gtk_box_reorder_child(GTK_BOX(top_hb), menubar, 0);
 //	d3_printf("menubar: %p\n", menubar);
 	gtk_widget_show(menubar);
 
-    update_dialog_from_ccdr(dialog, NULL);
-	return dialog;
+    update_dialog_from_ccdr(processing_dialog, NULL);
+    return processing_dialog;
 }
 
-static void demosaic_method_activate(GtkComboBox *combo, gpointer dialog)
+static void demosaic_method_activate(GtkComboBox *combo, gpointer processing_dialog)
 {
 	int i = gtk_combo_box_get_active (combo);
 
@@ -342,7 +341,7 @@ static void demosaic_method_activate(GtkComboBox *combo, gpointer dialog)
 }
 
 
-static void stack_method_activate(GtkComboBox *combo, gpointer dialog)
+static void stack_method_activate(GtkComboBox *combo, gpointer processing_dialog)
 {
 	int i = gtk_combo_box_get_active (combo);
 
@@ -352,16 +351,16 @@ static void stack_method_activate(GtkComboBox *combo, gpointer dialog)
 	}
 }
 
-/* update the dialog to match the supplied ccdr */
+/* update the processing_dialog to match the supplied ccdr */
 /* if ccdr is null, just update the settings from the pars */
-static void update_dialog_from_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
+static void update_dialog_from_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr)
 {
 	GtkComboBox *stack_combo, *demosaic_combo;
 	char **c;
 	long i;
 	int nvals;
 
-	stack_combo = g_object_get_data (G_OBJECT(dialog), "stack_method_combo");
+    stack_combo = g_object_get_data (G_OBJECT(processing_dialog), "stack_method_combo");
 	g_return_if_fail(stack_combo != NULL);
 
 	nvals = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(stack_combo), "stack_method_combo_nvals"));
@@ -380,12 +379,12 @@ static void update_dialog_from_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 	gtk_editable_set_editable (GTK_EDITABLE(GTK_BIN(stack_combo)->child), FALSE);
 	gtk_combo_box_set_active (stack_combo, P_INT(CCDRED_STACK_METHOD));
-    g_signal_connect (G_OBJECT(stack_combo), "changed", G_CALLBACK(stack_method_activate), dialog);
+    g_signal_connect (G_OBJECT(stack_combo), "changed", G_CALLBACK(stack_method_activate), processing_dialog);
 
-	named_spin_set(dialog, "stack_sigmas_spin", P_DBL(CCDRED_SIGMAS));
-	named_spin_set(dialog, "stack_iter_spin", 1.0 * P_INT(CCDRED_ITER));
+    named_spin_set(processing_dialog, "stack_sigmas_spin", P_DBL(CCDRED_SIGMAS));
+    named_spin_set(processing_dialog, "stack_iter_spin", 1.0 * P_INT(CCDRED_ITER));
 
-	demosaic_combo = g_object_get_data (G_OBJECT(dialog), "demosaic_method_combo");
+    demosaic_combo = g_object_get_data (G_OBJECT(processing_dialog), "demosaic_method_combo");
 	g_return_if_fail(demosaic_combo != NULL);
 
 	nvals = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(demosaic_combo), "demosaic_method_combo_nvals"));
@@ -405,76 +404,76 @@ static void update_dialog_from_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 
 	gtk_editable_set_editable (GTK_EDITABLE(GTK_BIN(demosaic_combo)->child), FALSE);
 	gtk_combo_box_set_active (demosaic_combo, P_INT(CCDRED_DEMOSAIC_METHOD));
-    g_signal_connect (G_OBJECT(demosaic_combo), "changed", G_CALLBACK(demosaic_method_activate), dialog);
+    g_signal_connect (G_OBJECT(demosaic_combo), "changed", G_CALLBACK(demosaic_method_activate), processing_dialog);
 
 	if (ccdr == NULL)
 		return;
 
 	if ((ccdr->bias) && (ccdr->ops & IMG_OP_BIAS)) {
-		named_entry_set(dialog, "bias_entry", ccdr->bias->filename);
-		set_named_checkb_val(dialog, "bias_checkb", 1);
+        named_entry_set(processing_dialog, "bias_entry", ccdr->bias->filename);
+        set_named_checkb_val(processing_dialog, "bias_checkb", 1);
 	}
 	if ((ccdr->dark) && (ccdr->ops & IMG_OP_DARK)) {
-		named_entry_set(dialog, "dark_entry", ccdr->dark->filename);
-		set_named_checkb_val(dialog, "dark_checkb", 1);
+        named_entry_set(processing_dialog, "dark_entry", ccdr->dark->filename);
+        set_named_checkb_val(processing_dialog, "dark_checkb", 1);
 	}
 	if ((ccdr->flat) && (ccdr->ops & IMG_OP_FLAT)) {
-		named_entry_set(dialog, "flat_entry", ccdr->flat->filename);
-		set_named_checkb_val(dialog, "flat_checkb", 1);
+        named_entry_set(processing_dialog, "flat_entry", ccdr->flat->filename);
+        set_named_checkb_val(processing_dialog, "flat_checkb", 1);
 	}
 	if ((ccdr->bad_pix_map) && (ccdr->ops & IMG_OP_BADPIX)) {
-		named_entry_set(dialog, "badpix_entry", ccdr->bad_pix_map->filename);
-		set_named_checkb_val(dialog, "badpix_checkb", 1);
+        named_entry_set(processing_dialog, "badpix_entry", ccdr->bad_pix_map->filename);
+        set_named_checkb_val(processing_dialog, "badpix_checkb", 1);
 	}
 	if ((ccdr->alignref) && (ccdr->ops & IMG_OP_ALIGN)) {
-		named_entry_set(dialog, "align_entry", ccdr->alignref->filename);
-        GtkWidget *align_combo = g_object_get_data(G_OBJECT(dialog), "align_combo");
+        named_entry_set(processing_dialog, "align_entry", ccdr->alignref->filename);
+        GtkWidget *align_combo = g_object_get_data(G_OBJECT(processing_dialog), "align_combo");
         gtk_combo_box_set_active(GTK_COMBO_BOX(align_combo), 1);
-//		set_named_checkb_val(dialog, "align_checkb", 1);
+//		set_named_checkb_val(processing_dialog, "align_checkb", 1);
 	}
 //    if (ccdr->recipe && ccdr->recipe[0]) {
     if (ccdr->recipe) {
-        named_entry_set(dialog, "recipe_entry", ccdr->recipe);
-        set_named_checkb_val(dialog, "phot_en_checkb", 1);
+        named_entry_set(processing_dialog, "recipe_entry", ccdr->recipe);
+        set_named_checkb_val(processing_dialog, "phot_en_checkb", 1);
     }
 	if ((ccdr->ops & IMG_OP_BLUR)) {
-		named_spin_set(dialog, "blur_spin", ccdr->blurv);
-		set_named_checkb_val(dialog, "blur_checkb", 1);
+        named_spin_set(processing_dialog, "blur_spin", ccdr->blurv);
+        set_named_checkb_val(processing_dialog, "blur_checkb", 1);
 	}
 	if ((ccdr->ops & IMG_OP_ADD)) {
-		named_spin_set(dialog, "add_spin", ccdr->addv);
-		set_named_checkb_val(dialog, "add_checkb", 1);
+        named_spin_set(processing_dialog, "add_spin", ccdr->addv);
+        set_named_checkb_val(processing_dialog, "add_checkb", 1);
 	}
 	if ((ccdr->ops & IMG_OP_MUL)) {
-        named_spin_set(dialog, "mul_spin", ccdr->mulv);
-        GtkWidget *mul_combo = g_object_get_data(G_OBJECT(dialog), "mul_combo");
+        named_spin_set(processing_dialog, "mul_spin", ccdr->mulv);
+        GtkWidget *mul_combo = g_object_get_data(G_OBJECT(processing_dialog), "mul_combo");
         gtk_combo_box_set_active(GTK_COMBO_BOX(mul_combo), 1);
-//                set_named_checkb_val(dialog, "mul_checkb", 1);
+//                set_named_checkb_val(processing_dialog, "mul_checkb", 1);
 	}
 	if ((ccdr->ops & IMG_OP_DEMOSAIC)) {
-		set_named_checkb_val(dialog, "demosaic_checkb", 1);
+        set_named_checkb_val(processing_dialog, "demosaic_checkb", 1);
 	}
 	if ((ccdr->ops & IMG_OP_STACK)) {
-		set_named_checkb_val(dialog, "stack_checkb", 1);
+        set_named_checkb_val(processing_dialog, "stack_checkb", 1);
 	}
     if ((ccdr->ops & IMG_OP_BG_ALIGN_MUL)) {
-        set_named_checkb_val(dialog, "bg_match_mul_rb", 1);
+        set_named_checkb_val(processing_dialog, "bg_match_mul_rb", 1);
     } else if ((ccdr->ops & IMG_OP_BG_ALIGN_ADD)){
-        set_named_checkb_val(dialog, "bg_match_add_rb", 1);
+        set_named_checkb_val(processing_dialog, "bg_match_add_rb", 1);
     } else {
-        set_named_checkb_val(dialog, "bg_match_off_rb", 1);
+        set_named_checkb_val(processing_dialog, "bg_match_off_rb", 1);
     }
 	if ((ccdr->ops & IMG_OP_INPLACE)) {
-		set_named_checkb_val(dialog, "overwrite_checkb", 1);
+        set_named_checkb_val(processing_dialog, "overwrite_checkb", 1);
 	}
 }
 
 
 
-/* replace the file list in the dialog with the supplied one */
-void dialog_update_from_imfl(GtkWidget *dialog, struct image_file_list *imfl)
+/* replace the file list in the processing_dialog with the supplied one */
+void dialog_update_from_imfl(GtkWidget *processing_dialog, struct image_file_list *imfl)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     tree_view_select_path_rel (image_file_view, NULL, SELECT_PATH_NEXT); // select last of old imfl
@@ -498,17 +497,15 @@ void dialog_update_from_imfl(GtkWidget *dialog, struct image_file_list *imfl)
 	}
 
     if (tree_view_restore_path (image_file_view))
-        imf_next_cb (NULL, dialog);
+        imf_next_cb (NULL, processing_dialog);
     else
-        imf_display_cb (NULL, dialog);
+        imf_display_cb (NULL, processing_dialog);
 }
 
 
-static struct image_file_list *dialog_set_imfl(gpointer dialog, struct image_file_list *imfl)
+static struct image_file_list *dialog_set_imfl(gpointer processing_dialog, struct image_file_list *imfl)
 {
-    struct image_file_list *dialog_imfl;
-
-    dialog_imfl = g_object_get_data (G_OBJECT(dialog), "imfl");
+    struct image_file_list *dialog_imfl = g_object_get_data (G_OBJECT(processing_dialog), "imfl");
 
     if (dialog_imfl == NULL) {
         if (imfl)
@@ -520,16 +517,16 @@ static struct image_file_list *dialog_set_imfl(gpointer dialog, struct image_fil
 
         image_file_list_ref (imfl);
     }
-    g_object_set_data_full (G_OBJECT(dialog), "imfl", imfl, (GDestroyNotify)(image_file_list_release));
+    g_object_set_data_full (G_OBJECT(processing_dialog), "imfl", imfl, (GDestroyNotify)(image_file_list_release));
 
-    dialog_update_from_imfl (dialog, imfl); // set from imfl
+    dialog_update_from_imfl (processing_dialog, imfl); // set from imfl
 
     return imfl;
 }
 
-static struct ccd_reduce *dialog_set_ccdr(gpointer dialog, struct ccd_reduce *ccdr)
+static struct ccd_reduce *dialog_set_ccdr(gpointer processing_dialog, struct ccd_reduce *ccdr)
 {
-    struct ccd_reduce *dialog_ccdr = g_object_get_data (G_OBJECT(dialog), "ccdred");
+    struct ccd_reduce *dialog_ccdr = g_object_get_data (G_OBJECT(processing_dialog), "ccdred");
 
     if (dialog_ccdr == NULL) {
         if (ccdr)
@@ -541,9 +538,9 @@ static struct ccd_reduce *dialog_set_ccdr(gpointer dialog, struct ccd_reduce *cc
 
         ccd_reduce_ref (ccdr);
     }
-    g_object_set_data_full (G_OBJECT(dialog), "ccdred", ccdr, (GDestroyNotify)(ccd_reduce_release));
+    g_object_set_data_full (G_OBJECT(processing_dialog), "ccdred", ccdr, (GDestroyNotify)(ccd_reduce_release));
 
-    update_dialog_from_ccdr (dialog, ccdr);
+    update_dialog_from_ccdr (processing_dialog, ccdr);
 
     return ccdr;
 }
@@ -552,21 +549,20 @@ static struct ccd_reduce *dialog_set_ccdr(gpointer dialog, struct ccd_reduce *cc
 void set_imfl_ccdr(gpointer window, struct ccd_reduce *ccdr, struct image_file_list *imfl)
 {
 //printf("reducegui.set_imfl_ccdr\n");
-    GtkWidget *dialog;
-    dialog = g_object_get_data (G_OBJECT(window), "processing");
-    if (dialog == NULL) dialog = make_image_processing (window);
+    GtkWidget *processing_dialog = g_object_get_data (G_OBJECT(window), "processing");
+    if (processing_dialog == NULL) processing_dialog = make_image_processing (window);
 
-    g_return_if_fail (dialog != NULL);
+    g_return_if_fail (processing_dialog != NULL);
 
-    dialog_set_imfl (dialog, imfl);
-    ccdr = dialog_set_ccdr (dialog, ccdr);
+    dialog_set_imfl (processing_dialog, imfl);
+    ccdr = dialog_set_ccdr (processing_dialog, ccdr);
 
     if (ccdr) ccdr->window = window;
 }
 
-static void imf_skip_cb(GtkAction *action, gpointer dialog)
+static void imf_skip_cb(GtkAction *action, gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
@@ -588,13 +584,13 @@ static void imf_skip_cb(GtkAction *action, gpointer dialog)
     g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
     g_list_free (sel);
 
-    update_selected_mband_status_label (dialog);
+    update_selected_mband_status_label (processing_dialog);
 }
 
 /* toggle skip for selected files */
-static void imf_toggle_skip_cb(GtkAction *action, gpointer dialog)
+static void imf_toggle_skip_cb(GtkAction *action, gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
@@ -616,13 +612,13 @@ static void imf_toggle_skip_cb(GtkAction *action, gpointer dialog)
 	g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
 	g_list_free (sel);
 
-    update_selected_mband_status_label (dialog);
+    update_selected_mband_status_label (processing_dialog);
 }
 
 
-static void imf_invert_selection_cb(GtkAction *action, gpointer dialog)
+static void imf_invert_selection_cb(GtkAction *action, gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     tree_view_invert_selection(image_file_view);
@@ -643,9 +639,9 @@ static gboolean select_skipped(GtkTreeModel *image_file_store, GtkTreePath *path
 }
 
 /* select skipped frames */
-static void imf_select_skipped_cb(GtkAction *action, gpointer dialog)
+static void imf_select_skipped_cb(GtkAction *action, gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeSelection *selection = gtk_tree_view_get_selection (image_file_view);
@@ -656,14 +652,14 @@ static void imf_select_skipped_cb(GtkAction *action, gpointer dialog)
     gtk_tree_selection_unselect_all(selection);
     gtk_tree_model_foreach(image_file_store, select_skipped, selection);
 
-    update_selected_mband_status_label (dialog);
+    update_selected_mband_status_label (processing_dialog);
 }
 
 /* remove selected files */
-static void imf_rm_cb(GtkAction *action, gpointer dialog)
+static void imf_rm_cb(GtkAction *action, gpointer processing_dialog)
 {
 //printf("reducegui.imf_rm_cb\n");
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
@@ -671,7 +667,7 @@ static void imf_rm_cb(GtkAction *action, gpointer dialog)
 
     GList *sel = tree_view_get_selected_rows (image_file_view);
 
-    struct image_file_list *imfl = g_object_get_data (G_OBJECT(dialog), "imfl");
+    struct image_file_list *imfl = g_object_get_data (G_OBJECT(processing_dialog), "imfl");
     g_return_if_fail (imfl != NULL);
 
 // set mark to prev/next of first selected ?
@@ -711,11 +707,11 @@ static void imf_rm_cb(GtkAction *action, gpointer dialog)
     tree_view_select_path (image_file_view, NULL);
 }
 
-/* select imf from dialog, SELECT_PATH_NEXT or SELECT_PATH_PREV, return path changed */
-static gboolean select_imf(gpointer dialog, int direction)
+/* select imf from processing_dialog, SELECT_PATH_NEXT or SELECT_PATH_PREV, return path changed */
+static gboolean select_imf(gpointer processing_dialog, int direction)
 {
     //printf("reducegui.imf_prev_cb\n");
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_val_if_fail (image_file_view != NULL, FALSE);
 
     GList *sel = tree_view_get_selected_rows (image_file_view);
@@ -733,20 +729,20 @@ static gboolean select_imf(gpointer dialog, int direction)
 }
 
 /* select and display next frame in list */
-static void imf_next_cb(GtkAction *action, gpointer dialog)
+static void imf_next_cb(GtkAction *action, gpointer processing_dialog)
 {
-    if (select_imf(dialog, SELECT_PATH_NEXT)) imf_display_cb (NULL, dialog);
+    if (select_imf(processing_dialog, SELECT_PATH_NEXT)) imf_display_cb (NULL, processing_dialog);
 }
 
 /* select and display previous frame in list */
-static void imf_prev_cb(GtkAction *action, gpointer dialog)
+static void imf_prev_cb(GtkAction *action, gpointer processing_dialog)
 {
-    if (select_imf(dialog, SELECT_PATH_PREV)) imf_display_cb (NULL, dialog);
+    if (select_imf(processing_dialog, SELECT_PATH_PREV)) imf_display_cb (NULL, processing_dialog);
 }
 
-static void update_mband_status_labels(gpointer dialog) // update all labels
+static void update_mband_status_labels(gpointer processing_dialog) // update all labels
 {
-    GtkTreeView *image_file_view = g_object_get_data(G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data(G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
@@ -763,13 +759,13 @@ static void update_mband_status_labels(gpointer dialog) // update all labels
 }
 
 
-static void imf_display_cb(GtkAction *action, gpointer dialog)
+static void imf_display_cb(GtkAction *action, gpointer processing_dialog)
 {
 d2_printf("reducegui.imf_display_cb\n");
-    GtkWidget *im_window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    GtkWidget *im_window = g_object_get_data(G_OBJECT(processing_dialog), "im_window");
     g_return_if_fail (im_window != NULL);
 
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GList *sel = tree_view_get_selected_rows (image_file_view);
@@ -802,28 +798,28 @@ d2_printf("reducegui.imf_display_cb load %s ref_count: %d\n", imf->filename, imf
 
 //	} else {
 //		error_beep();
-//		log_msg("\nNo Frame selected\n", dialog);
+//		log_msg("\nNo Frame selected\n", processing_dialog);
 	}
 
     if (imf) { // new frame has been loaded
         if (P_INT(FILE_SAVE_MEM)) {
             if (!(imf->flags & IMG_DIRTY)) get_frame(imf->fr, "imf_display_cb new frame loaded"); // keep current frame loaded
 
-            struct image_file_list *imfl = g_object_get_data (G_OBJECT(dialog), "imfl");
+            struct image_file_list *imfl = g_object_get_data (G_OBJECT(processing_dialog), "imfl");
             g_return_if_fail (imfl != NULL);
 
             unload_clean_frames (imfl);
         }
 
-        update_mband_status_labels (dialog); // display
+        update_mband_status_labels (processing_dialog); // display
 //        update_fits_header_display(im_window);
     }
 }
 
 /* select all files */
-static void imf_selall_cb(GtkAction *action, gpointer dialog)
+static void imf_selall_cb(GtkAction *action, gpointer processing_dialog)
 {
-    GtkTreeView *view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
 	g_return_if_fail (view != NULL);
 
     GtkTreeSelection *selection = gtk_tree_view_get_selection (view);
@@ -831,11 +827,11 @@ static void imf_selall_cb(GtkAction *action, gpointer dialog)
 }
 
 
-static void dialog_add_files(GSList *files, gpointer dialog)
+static void dialog_add_files(GSList *files, gpointer processing_dialog)
 {
     struct image_file_list *imfl;
 
-    imfl = dialog_set_imfl (G_OBJECT(dialog), NULL);
+    imfl = dialog_set_imfl (G_OBJECT(processing_dialog), NULL);
     g_return_if_fail (imfl != NULL);
 
     while (files != NULL) {
@@ -843,17 +839,17 @@ static void dialog_add_files(GSList *files, gpointer dialog)
         files = g_slist_next (files);
     }
 
-    dialog_update_from_imfl(dialog, imfl);
+    dialog_update_from_imfl(processing_dialog, imfl);
 }
 
 
 void window_add_files(GSList *files, gpointer window)
 {
-    GtkWidget *dialog = g_object_get_data( G_OBJECT(window), "processing");
-    if (dialog == NULL) dialog = make_image_processing (window);
-    g_return_if_fail(dialog != NULL);
+    GtkWidget *processing_dialog = g_object_get_data( G_OBJECT(window), "processing");
+    if (processing_dialog == NULL) processing_dialog = make_image_processing (window);
+    g_return_if_fail(processing_dialog != NULL);
 
-    dialog_add_files (files, dialog);
+    dialog_add_files (files, processing_dialog);
 }
 
 static void dialog_add_frame(struct ccd_frame *fr, char *filename, int flags, gpointer processing_dialog)
@@ -875,16 +871,16 @@ void window_add_frame(struct ccd_frame *fr, char *filename, int flags, gpointer 
     dialog_add_frame (fr, filename, flags, processing_dialog);
 }
 
-static void imf_add_cb(GtkAction *action, gpointer dialog)
+static void imf_add_cb(GtkAction *action, gpointer processing_dialog)
 {
-    file_select_list (dialog, "Select files", "*.fits", dialog_add_files);
+    file_select_list (processing_dialog, "Select files", "*.fits", dialog_add_files);
 }
 
 
 /* reload selected files */
-static void imf_reload_cb(GtkAction *action, gpointer dialog)
+static void imf_reload_cb(GtkAction *action, gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model (image_file_view);
@@ -919,35 +915,34 @@ d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
 	g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
 	g_list_free (sel);
 
-    update_selected_mband_status_label (dialog); // reload
+    update_selected_mband_status_label (processing_dialog); // reload
 }
 
 static void switch_frame_cb(gpointer window, guint action)
 {
-	GtkWidget *dialog;
-    dialog = g_object_get_data (G_OBJECT(window), "processing");
+    GtkWidget *processing_dialog = g_object_get_data (G_OBJECT(window), "processing");
 
-    if (dialog == NULL) dialog = make_image_processing (window);
-    g_return_if_fail (dialog != NULL);
+    if (processing_dialog == NULL) processing_dialog = make_image_processing (window);
+    g_return_if_fail (processing_dialog != NULL);
 
 	switch(action) {
 	case SWF_NEXT:
-		imf_next_cb(NULL, dialog);
+        imf_next_cb(NULL, processing_dialog);
 		break;
 	case SWF_SKIP:
-		imf_skip_cb(NULL, dialog);
+        imf_skip_cb(NULL, processing_dialog);
 		break;
 	case SWF_PREV:
-		imf_prev_cb(NULL, dialog);
+        imf_prev_cb(NULL, processing_dialog);
 		break;
 	case SWF_QPHOT:
-		ccdred_qphotone_cb(NULL, dialog);
+        ccdred_qphotone_cb(NULL, processing_dialog);
 		break;
 	case SWF_RED:
-		ccdred_one_cb(NULL, dialog);
+        ccdred_one_cb(NULL, processing_dialog);
 		break;
 	}
-    update_selected_mband_status_label (dialog); // switch frame
+    update_selected_mband_status_label (processing_dialog); // switch frame
     update_fits_header_display(window);
 }
 
@@ -1009,9 +1004,9 @@ if (imf->flags) {
     if (msg) gtk_list_store_set (GTK_LIST_STORE(image_file_store), iter, IMFL_COL_STATUS, msg, -1), free(msg);
 }
 
-static void update_selected_mband_status_label(gpointer dialog) // update selected labels
+static void update_selected_mband_status_label(gpointer processing_dialog) // update selected labels
 {
-    GtkTreeView *image_file_view = g_object_get_data(G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data(G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
@@ -1034,23 +1029,23 @@ static void update_selected_mband_status_label(gpointer dialog) // update select
 
 
 /*
-static void list_button_cb(GtkWidget *wid, GdkEventButton *event, gpointer dialog)
+static void list_button_cb(GtkWidget *wid, GdkEventButton *event, gpointer processing_dialog)
 {
 	if (event->type == GDK_2BUTTON_PRESS) {
         while(gtk_events_pending()) gtk_main_iteration();
-		imf_display_cb(NULL, dialog);
+        imf_display_cb(NULL, processing_dialog);
 	}
 }
 */
 
 
-int log_msg(char *msg, void *dialog)
+int log_msg(char *msg, gpointer processing_dialog)
 {
 	GtkWidget *text;
     GtkTextIter iter;
     GtkTextBuffer *buffer;
 
-	text = g_object_get_data(G_OBJECT(dialog), "processing_log_text");
+    text = g_object_get_data(G_OBJECT(processing_dialog), "processing_log_text");
 	g_return_val_if_fail(text != NULL, 0);
 
     buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW(text));
@@ -1064,9 +1059,9 @@ int log_msg(char *msg, void *dialog)
 	return 0;
 }
 
-static int progress_pr(char *msg, void *dialog)
+static int progress_pr(char *msg, void *processing_dialog)
 {
-	log_msg (msg, dialog);
+    log_msg (msg, processing_dialog);
 
     while (gtk_events_pending()) gtk_main_iteration();
 
@@ -1074,12 +1069,12 @@ static int progress_pr(char *msg, void *dialog)
 }
 
 
-static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
+static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr)
 {
 	g_return_if_fail (ccdr != NULL);
 
-	if (get_named_checkb_val(dialog, "bias_checkb")) {
-        char *text = named_entry_text(dialog, "bias_entry");
+    if (get_named_checkb_val(processing_dialog, "bias_checkb")) {
+        char *text = named_entry_text(processing_dialog, "bias_entry");
         if (text) {
             if ((ccdr->ops & IMG_OP_BIAS) && ccdr->bias && strcmp(text, ccdr->bias->filename)) {
                 image_file_release(ccdr->bias);
@@ -1098,8 +1093,8 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 		ccdr->ops &= ~IMG_OP_BIAS;
 	}
 
-	if (get_named_checkb_val(dialog, "dark_checkb")) {
-        char *text = named_entry_text(dialog, "dark_entry");
+    if (get_named_checkb_val(processing_dialog, "dark_checkb")) {
+        char *text = named_entry_text(processing_dialog, "dark_entry");
         if (text) {
             if ((ccdr->ops & IMG_OP_DARK) && ccdr->dark && strcmp(text, ccdr->dark->filename)) {
                 image_file_release(ccdr->dark);
@@ -1118,8 +1113,8 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 		ccdr->ops &= ~IMG_OP_DARK;
 	}
 
-	if (get_named_checkb_val(dialog, "flat_checkb")) {
-        char *text = named_entry_text(dialog, "flat_entry");
+    if (get_named_checkb_val(processing_dialog, "flat_checkb")) {
+        char *text = named_entry_text(processing_dialog, "flat_entry");
         if (text) {
             if ((ccdr->ops & IMG_OP_FLAT) && ccdr->flat && strcmp(text, ccdr->flat->filename)) {
                 image_file_release(ccdr->flat);
@@ -1138,8 +1133,8 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 		ccdr->ops &= ~IMG_OP_FLAT;
 	}
 
-	if (get_named_checkb_val(dialog, "badpix_checkb")) {
-        char *text = named_entry_text(dialog, "badpix_entry");
+    if (get_named_checkb_val(processing_dialog, "badpix_checkb")) {
+        char *text = named_entry_text(processing_dialog, "badpix_entry");
         if (text) {
             if (ccdr->ops & IMG_OP_BADPIX)
                 if (ccdr->bad_pix_map)
@@ -1160,11 +1155,11 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 	}
 
 
-//	if (get_named_checkb_val(dialog, "align_checkb")) {
-    GtkWidget *align_combo = g_object_get_data(G_OBJECT(dialog), "align_combo");
+//	if (get_named_checkb_val(processing_dialog, "align_checkb")) {
+    GtkWidget *align_combo = g_object_get_data(G_OBJECT(processing_dialog), "align_combo");
     int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
     if (active) {
-        char *text = named_entry_text(dialog, "align_entry");
+        char *text = named_entry_text(processing_dialog, "align_entry");
         if (text) {
             if ((ccdr->ops & IMG_OP_ALIGN) && ccdr->alignref && strcmp(text, ccdr->alignref->filename)) {
                 image_file_release(ccdr->alignref);
@@ -1188,33 +1183,33 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
         ccdr->ops &= ~IMG_OP_ALIGN;
 	}
 
-    GtkWidget *mul_combo = g_object_get_data(G_OBJECT(dialog), "mul_combo");
+    GtkWidget *mul_combo = g_object_get_data(G_OBJECT(processing_dialog), "mul_combo");
     active = gtk_combo_box_get_active(GTK_COMBO_BOX(mul_combo));
 
     if (active) {
 		ccdr->ops |= IMG_OP_MUL;
-        double v = named_spin_get_value(dialog, "mul_spin");
+        double v = named_spin_get_value(processing_dialog, "mul_spin");
         if (active == 2) v = 1.0 / v;
         ccdr->mulv = v;
 	} else {
 		ccdr->ops &= ~IMG_OP_MUL;
 	}
 
-	if (get_named_checkb_val(dialog, "add_checkb")) {
+    if (get_named_checkb_val(processing_dialog, "add_checkb")) {
 		ccdr->ops |= IMG_OP_ADD;
-		ccdr->addv = named_spin_get_value(dialog, "add_spin");
+        ccdr->addv = named_spin_get_value(processing_dialog, "add_spin");
 	} else {
 		ccdr->ops &= ~IMG_OP_ADD;
 	}
 
-	if (get_named_checkb_val(dialog, "blur_checkb")) {
+    if (get_named_checkb_val(processing_dialog, "blur_checkb")) {
 		ccdr->ops |= IMG_OP_BLUR;
 	} else {
 		ccdr->ops &= ~IMG_OP_BLUR;
 	}
-    ccdr->blurv = named_spin_get_value(dialog, "blur_spin");  // set blur anyway
+    ccdr->blurv = named_spin_get_value(processing_dialog, "blur_spin");  // set blur anyway
 
-	if (get_named_checkb_val(dialog, "phot_en_checkb")) {
+    if (get_named_checkb_val(processing_dialog, "phot_en_checkb")) {
 		if (ccdr->wcs) {
             ccdr->wcs = wcs_release(ccdr->wcs);
 		}
@@ -1222,9 +1217,9 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
             free(ccdr->recipe);
         }
 
-        ccdr->recipe = named_entry_text(dialog, "recipe_entry");
+        ccdr->recipe = named_entry_text(processing_dialog, "recipe_entry");
 
-		if (get_named_checkb_val(dialog, "phot_reuse_wcs_checkb")) {
+        if (get_named_checkb_val(processing_dialog, "phot_reuse_wcs_checkb")) {
             struct wcs *wcs = window_get_wcs(ccdr->window);
             if ( wcs && (wcs->wcsset == WCS_VALID) ) {
                 if (! ccdr->wcs) ccdr->wcs = wcs_new();
@@ -1242,39 +1237,39 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 		ccdr->ops &= ~(IMG_OP_PHOT | IMG_OP_PHOT_REUSE_WCS);
 	}
 
-    char *text = named_entry_text(dialog, "recipe_entry");
+    char *text = named_entry_text(processing_dialog, "recipe_entry");
     if (text) {
         if (ccdr->recipe && strcmp(text, ccdr->recipe)) free(ccdr->recipe);
 
         ccdr->recipe = text;
     }
 
-	if (get_named_checkb_val(dialog, "demosaic_checkb")) {
+    if (get_named_checkb_val(processing_dialog, "demosaic_checkb")) {
 		ccdr->ops |= IMG_OP_DEMOSAIC;
 	} else {
 		ccdr->ops &= ~IMG_OP_DEMOSAIC;
 	}
 
-    if (get_named_checkb_val(dialog, "bg_match_add_rb")) {
+    if (get_named_checkb_val(processing_dialog, "bg_match_add_rb")) {
         ccdr->ops |= IMG_OP_BG_ALIGN_ADD;
     } else {
         ccdr->ops &= ~IMG_OP_BG_ALIGN_ADD;
     }
-    if (get_named_checkb_val(dialog, "bg_match_mul_rb")) {
+    if (get_named_checkb_val(processing_dialog, "bg_match_mul_rb")) {
         ccdr->ops |= IMG_OP_BG_ALIGN_MUL;
     } else {
         ccdr->ops &= ~IMG_OP_BG_ALIGN_MUL;
     }
 
-	if (get_named_checkb_val(dialog, "stack_checkb")) {
+    if (get_named_checkb_val(processing_dialog, "stack_checkb")) {
 		ccdr->ops |= IMG_OP_STACK;
 
-        if (get_named_checkb_val(dialog, "bg_match_off_rb")) printf("background matching is OFF\n");
+        if (get_named_checkb_val(processing_dialog, "bg_match_off_rb")) printf("background matching is OFF\n");
 
-        P_DBL(CCDRED_SIGMAS) = named_spin_get_value(dialog, "stack_sigmas_spin");
+        P_DBL(CCDRED_SIGMAS) = named_spin_get_value(processing_dialog, "stack_sigmas_spin");
 		par_touch(CCDRED_SIGMAS);
 
-        P_INT(CCDRED_ITER) = named_spin_get_value(dialog, "stack_iter_spin");
+        P_INT(CCDRED_ITER) = named_spin_get_value(processing_dialog, "stack_iter_spin");
 		par_touch(CCDRED_ITER);
 	} else {
 		ccdr->ops &= ~IMG_OP_STACK;
@@ -1282,9 +1277,9 @@ static void dialog_to_ccdr(GtkWidget *dialog, struct ccd_reduce *ccdr)
 }
 
 
-static struct image_file * current_imf(gpointer dialog)
+static struct image_file * current_imf(gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_val_if_fail (image_file_view != NULL, NULL);
 
     GtkTreeModel *image_file_store = gtk_tree_view_get_model(image_file_view);
@@ -1337,9 +1332,9 @@ static int first_loaded_imf(struct image_file_list *imfl, struct image_file **im
 }
 
 
-static void select_first_imf(gpointer dialog)
+static void select_first_imf(gpointer processing_dialog)
 {
-    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(dialog), "image_file_view");
+    GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
     tree_view_select_path (image_file_view, NULL);
@@ -1373,12 +1368,12 @@ static gpointer get_mband_from_window(gpointer im_window)
 //}
 
 static int save_clipped_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
-                        int (* progress)(char *msg, void *data), void *dialog)
+                        int (* progress)(char *msg, void *data), void *processing_dialog)
 {
-    int top = named_spin_get_value(dialog, "top_spin");
-    int left = named_spin_get_value(dialog, "left_spin");
-    int width = named_spin_get_value(dialog, "width_spin");
-    int height = named_spin_get_value(dialog, "height_spin");
+    int top = named_spin_get_value(processing_dialog, "top_spin");
+    int left = named_spin_get_value(processing_dialog, "left_spin");
+    int width = named_spin_get_value(processing_dialog, "width_spin");
+    int height = named_spin_get_value(processing_dialog, "height_spin");
 // move this to ccd_frame
 //    struct image_file *clipped_imf = image_file_new();
 //    clipped_imf->filename = strdup(imf->filename);
@@ -1391,24 +1386,24 @@ static int save_clipped_image_file(struct image_file *imf, char *outf, int inpla
 
 //    frame_stats(clipped_imf);
 
-//    int ret = save_image_file (clipped_imf, outf, inplace, seq, progress, dialog);
+//    int ret = save_image_file (clipped_imf, outf, inplace, seq, progress, processing_dialog);
 
 //    image_file_release(clipped_imf);
 
 //    return ret;
 }
 
-static void ccdred_run_cb(GtkAction *action, gpointer dialog)
+static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
 {
 //printf("reducegui.ccdred_run_cb\n");
 
-    GtkWidget *im_window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    GtkWidget *im_window = g_object_get_data(G_OBJECT(processing_dialog), "im_window");
     g_return_if_fail (im_window != NULL);
 
-    struct image_file_list *imfl = g_object_get_data(G_OBJECT(dialog), "imfl");
+    struct image_file_list *imfl = g_object_get_data(G_OBJECT(processing_dialog), "imfl");
 	g_return_if_fail (imfl != NULL);
 
-    struct ccd_reduce *ccdr = g_object_get_data(G_OBJECT(dialog), "ccdred");
+    struct ccd_reduce *ccdr = g_object_get_data(G_OBJECT(processing_dialog), "ccdred");
     g_return_if_fail (ccdr != NULL);
 
     ccdr->bg = 0;
@@ -1421,17 +1416,17 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
         ccdr->ops |= CCDR_BG_VAL_SET;
     }
 
-    dialog_to_ccdr(dialog, ccdr);
+    dialog_to_ccdr(processing_dialog, ccdr);
 
-    GtkWidget *menubar = g_object_get_data (G_OBJECT(dialog), "menubar");
+    GtkWidget *menubar = g_object_get_data (G_OBJECT(processing_dialog), "menubar");
     gtk_widget_set_sensitive(menubar, FALSE);
 
     if ( (ccdr->ops & IMG_OP_PHOT) && (ccdr->multiband == NULL) ) {
         ccdr->multiband = get_mband_from_window (im_window);
-        g_object_set_data_full (G_OBJECT(dialog), "mband_window", ccdr->multiband, (GDestroyNotify)(g_object_unref));
+        g_object_set_data_full (G_OBJECT(processing_dialog), "mband_window", ccdr->multiband, (GDestroyNotify)(g_object_unref));
 	}
 
-    if (setup_for_ccd_reduce (ccdr, progress_pr, dialog)) {
+    if (setup_for_ccd_reduce (ccdr, progress_pr, processing_dialog)) {
         printf("processing setup failed: couldn't load bias/dark/flat/align or badpix\n");
         return;
     }
@@ -1443,15 +1438,15 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
     int nframes = g_list_length(imfl->imlist);
     int seq = 1;
 
-    GtkWidget *image_file_view = g_object_get_data(G_OBJECT(dialog), "image_file_view");
+    GtkWidget *image_file_view = g_object_get_data(G_OBJECT(processing_dialog), "image_file_view");
     gtk_widget_set_sensitive(image_file_view, FALSE);
 
-    select_first_imf (dialog);
+    select_first_imf (processing_dialog);
 
     load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 // window wcs is initial
 
-    char *outf = named_entry_text (dialog, "output_file_entry");
+    char *outf = named_entry_text (processing_dialog, "output_file_entry");
 
     int ret = 0;
     GList *gl = imfl->imlist;
@@ -1461,26 +1456,26 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 
         if (! (imf->flags & IMG_SKIP)) {
 
-            imf_display_cb (NULL, dialog); // before run
+            imf_display_cb (NULL, processing_dialog); // before run
 
-            ret = ccd_reduce_imf (imf, ccdr, progress_pr, dialog);
+            ret = ccd_reduce_imf (imf, ccdr, progress_pr, processing_dialog);
 
-            imf_display_cb (NULL, dialog); // after run
+            imf_display_cb (NULL, processing_dialog); // after run
 
             if (ret == 0) {
                 if ( ! (ccdr->ops & IMG_OP_STACK) ) { // no stack
                     if (outf) {
                         if (ccdr->ops & IMG_OP_INPLACE) {
-                            if (get_named_checkb_val(dialog, "clip_checkb"))
-                                save_clipped_image_file(imf, outf, 1, NULL, progress_pr, dialog);
+                            if (get_named_checkb_val(processing_dialog, "clip_checkb"))
+                                save_clipped_image_file(imf, outf, 1, NULL, progress_pr, processing_dialog);
                             else
-                                save_image_file (imf, outf, 1, NULL, progress_pr, dialog);
+                                save_image_file (imf, outf, 1, NULL, progress_pr, processing_dialog);
 
                         } else {
-                            if (get_named_checkb_val(dialog, "clip_checkb"))
-                                save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
+                            if (get_named_checkb_val(processing_dialog, "clip_checkb"))
+                                save_clipped_image_file(imf, outf, 0, &seq, progress_pr, processing_dialog);
                             else
-                                save_image_file (imf, outf, 0, &seq, progress_pr, dialog);
+                                save_image_file (imf, outf, 0, &seq, progress_pr, processing_dialog);
 
                         }
                     } else if ( (ccdr->ops & IMG_OP_PHOT) && !(ccdr->ops & IMG_OP_ALIGN) ) {
@@ -1490,14 +1485,14 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
                 }
             }
         }
-        select_imf (dialog, SELECT_PATH_NEXT);
+        select_imf (processing_dialog, SELECT_PATH_NEXT);
     }
 
-//    imf_display_cb (NULL, dialog); // after all run
+//    imf_display_cb (NULL, processing_dialog); // after all run
 
     if ( (ccdr->ops & IMG_OP_STACK) && ret >= 0 ) { // stack
 
-        struct ccd_frame *fr = stack_frames (imfl, ccdr, progress_pr, dialog);
+        struct ccd_frame *fr = stack_frames (imfl, ccdr, progress_pr, processing_dialog);
         if (fr && fr->imf) {
             struct image_file *imf = fr->imf;
 
@@ -1505,24 +1500,24 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 //            get_frame(imf->fr, "ccdred_run_cb");
 
             if (outf) {
-                if (get_named_checkb_val(dialog, "clip_checkb"))
-//                    save_clipped_image_file(imf, outf, 0, &seq, progress_pr, dialog);
-                    save_clipped_image_file(imf, outf, 0, NULL, progress_pr, dialog);
+                if (get_named_checkb_val(processing_dialog, "clip_checkb"))
+//                    save_clipped_image_file(imf, outf, 0, &seq, progress_pr, processing_dialog);
+                    save_clipped_image_file(imf, outf, 0, NULL, progress_pr, processing_dialog);
                 else
-//                    save_image_file (imf, outf, 0, &seq, progress_pr, dialog);
-                    save_image_file (imf, outf, 0, NULL, progress_pr, dialog);
+//                    save_image_file (imf, outf, 0, &seq, progress_pr, processing_dialog);
+                    save_image_file (imf, outf, 0, NULL, progress_pr, processing_dialog);
 
 //                if (fr->name) free(fr->name);
 //                fr->name = strdup(imf->filename);
 
             }
 
-            dialog_update_from_imfl (dialog, imfl);
-            imf_display_cb (NULL, dialog);
+            dialog_update_from_imfl (processing_dialog, imfl);
+            imf_display_cb (NULL, processing_dialog);
         }
     }
 
-    update_mband_status_labels (dialog);
+    update_mband_status_labels (processing_dialog);
     gtk_widget_set_sensitive (menubar, TRUE);
     gtk_widget_set_sensitive(image_file_view, TRUE);
 
@@ -1531,48 +1526,48 @@ static void ccdred_run_cb(GtkAction *action, gpointer dialog)
 
 
 
-static void ccdred_one_cb(GtkAction *action, gpointer dialog)
+static void ccdred_one_cb(GtkAction *action, gpointer processing_dialog)
 {
-    struct image_file *imf = current_imf (dialog);
+    struct image_file *imf = current_imf (processing_dialog);
     if (imf == NULL || imf->flags & IMG_SKIP) return;
 
-    struct ccd_reduce *ccdr = g_object_get_data (G_OBJECT(dialog), "ccdred");
+    struct ccd_reduce *ccdr = g_object_get_data (G_OBJECT(processing_dialog), "ccdred");
 	g_return_if_fail (ccdr != NULL);
 
-    dialog_to_ccdr (dialog, ccdr);
+    dialog_to_ccdr (processing_dialog, ccdr);
 
-    GtkWidget *menubar = g_object_get_data (G_OBJECT(dialog), "menubar");
+    GtkWidget *menubar = g_object_get_data (G_OBJECT(processing_dialog), "menubar");
     gtk_widget_set_sensitive (menubar, 0);
 
     if ( (ccdr->ops & IMG_OP_PHOT) && (ccdr->multiband == NULL) ) {
-        GtkWidget *im_window = g_object_get_data (G_OBJECT(dialog), "im_window");
+        GtkWidget *im_window = g_object_get_data (G_OBJECT(processing_dialog), "im_window");
         g_return_if_fail (im_window != NULL);
 
         ccdr->multiband = get_mband_from_window(im_window);
-        g_object_set_data_full(G_OBJECT(dialog), "mband_window", ccdr->multiband, (GDestroyNotify)(g_object_unref));
+        g_object_set_data_full(G_OBJECT(processing_dialog), "mband_window", ccdr->multiband, (GDestroyNotify)(g_object_unref));
     }
 
-    imf_display_cb (NULL, dialog);
+    imf_display_cb (NULL, processing_dialog);
 
-    int ret = reduce_one_frame (imf, ccdr, progress_pr, dialog);
+    int ret = reduce_one_frame (imf, ccdr, progress_pr, processing_dialog);
 
-    imf_display_cb (NULL, dialog); // refresh display
+    imf_display_cb (NULL, processing_dialog); // refresh display
 
 	if (ret >= 0) {
 // change outf name to follow imf name
-        char *outf = named_entry_text (dialog, "output_file_entry");
+        char *outf = named_entry_text (processing_dialog, "output_file_entry");
         if (outf) {
             if (ccdr->ops & IMG_OP_INPLACE) {
-                if (get_named_checkb_val(dialog, "clip_checkb"))
-                    save_clipped_image_file(imf, outf, 1, NULL, progress_pr, dialog);
+                if (get_named_checkb_val(processing_dialog, "clip_checkb"))
+                    save_clipped_image_file(imf, outf, 1, NULL, progress_pr, processing_dialog);
                 else
-                    save_image_file (imf, outf, 1, NULL, progress_pr, dialog);
+                    save_image_file (imf, outf, 1, NULL, progress_pr, processing_dialog);
 
             } else {
-                if (get_named_checkb_val(dialog, "clip_checkb"))
-                    save_clipped_image_file(imf, outf, 0, NULL, progress_pr, dialog);
+                if (get_named_checkb_val(processing_dialog, "clip_checkb"))
+                    save_clipped_image_file(imf, outf, 0, NULL, progress_pr, processing_dialog);
                 else
-                    save_image_file (imf, outf, 0, NULL, progress_pr, dialog);
+                    save_image_file (imf, outf, 0, NULL, progress_pr, processing_dialog);
             }
             free(outf);
 
@@ -1583,55 +1578,55 @@ d2_printf("reducegui.ccdred_one_cb unload: phot and not align\n");
 
 		}
 	}
-    update_selected_mband_status_label (dialog); // run finish
+    update_selected_mband_status_label (processing_dialog); // run finish
 
     gtk_widget_set_sensitive (menubar, 1);
 }
 
 /* run quick phot on one frame */
-static void ccdred_qphotone_cb(GtkAction *action, gpointer dialog)
+static void ccdred_qphotone_cb(GtkAction *action, gpointer processing_dialog)
 {
-    struct image_file *imf = current_imf(dialog);
+    struct image_file *imf = current_imf(processing_dialog);
     if (imf == NULL || imf->flags & IMG_SKIP) return;
 
-    struct ccd_reduce *ccdr = g_object_get_data(G_OBJECT(dialog), "ccdred");
+    struct ccd_reduce *ccdr = g_object_get_data(G_OBJECT(processing_dialog), "ccdred");
 	g_return_if_fail (ccdr != NULL);
 
-    dialog_to_ccdr (dialog, ccdr); // setup ccdr to reduce single frame
+    dialog_to_ccdr (processing_dialog, ccdr); // setup ccdr to reduce single frame
 
-    GtkWidget *menubar = g_object_get_data (G_OBJECT(dialog), "menubar");
+    GtkWidget *menubar = g_object_get_data (G_OBJECT(processing_dialog), "menubar");
     gtk_widget_set_sensitive (menubar, 0);
 
     ccdr->ops |= (IMG_OP_PHOT | IMG_QUICKPHOT);
 
-    imf_display_cb (NULL, dialog);
+    imf_display_cb (NULL, processing_dialog);
 
-    reduce_one_frame (imf, ccdr, progress_pr, dialog);
+    reduce_one_frame (imf, ccdr, progress_pr, processing_dialog);
 
-    imf_display_cb (NULL, dialog);
+    imf_display_cb (NULL, processing_dialog);
 
 	ccdr->ops &= ~IMG_QUICKPHOT;
 //	imf->flags &= ~IMG_OP_PHOT;
 
-    update_selected_mband_status_label (dialog);
+    update_selected_mband_status_label (processing_dialog);
 
     gtk_widget_set_sensitive (menubar, 1);
 }
 
 
-static void show_align_cb(GtkAction *action, gpointer dialog)
+static void show_align_cb(GtkAction *action, gpointer processing_dialog)
 {
-    struct ccd_reduce *ccdr = dialog_set_ccdr (G_OBJECT(dialog), NULL);
-    dialog_to_ccdr (dialog, ccdr);
+    struct ccd_reduce *ccdr = dialog_set_ccdr (G_OBJECT(processing_dialog), NULL);
+    dialog_to_ccdr (processing_dialog, ccdr);
 
-    GtkWidget *im_window = g_object_get_data (G_OBJECT(dialog), "im_window");
+    GtkWidget *im_window = g_object_get_data (G_OBJECT(processing_dialog), "im_window");
     g_return_if_fail (im_window != NULL);
 
 	d3_printf("ops: %08x, align_stars: %08p\n", ccdr->ops, ccdr->align_stars);
 
 	if (!(ccdr->ops & IMG_OP_ALIGN)) {
         error_beep ();
-        log_msg ("\nPlease select an alignment ref frame first\n", dialog);
+        log_msg ("\nPlease select an alignment ref frame first\n", processing_dialog);
 		return;
 	}
 
@@ -1676,16 +1671,16 @@ struct {
 } process_entry[] = PROCESS_ENTRIES;
 
 
-static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer dialog)
+static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer processing_dialog)
 {
     GtkWidget *wid_entry;
 
     int i;
     for (i = 0; i < ALL_PROCESS_ENTRIES; i++) {
-        if (wid_browse == g_object_get_data(G_OBJECT(dialog), process_entry[i].browse)) {
-            wid_entry = g_object_get_data(G_OBJECT(dialog), process_entry[i].entry);
+        if (wid_browse == g_object_get_data(G_OBJECT(processing_dialog), process_entry[i].browse)) {
+            wid_entry = g_object_get_data(G_OBJECT(processing_dialog), process_entry[i].entry);
             g_return_if_fail(wid_entry != NULL);
-            file_select_to_entry (dialog, wid_entry, process_entry[i].message,
+            file_select_to_entry (processing_dialog, wid_entry, process_entry[i].message,
                                   process_entry[i].name, "*", 1, process_entry[i].open_or_save);
             break;
         }
@@ -1693,7 +1688,7 @@ static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer dialog)
     g_return_if_fail(i < ALL_PROCESS_ENTRIES);
 
     /* free old values */
-    struct ccd_reduce *ccdr =g_object_get_data(G_OBJECT(dialog), "ccdred");
+    struct ccd_reduce *ccdr =g_object_get_data(G_OBJECT(processing_dialog), "ccdred");
     if (ccdr) {
         struct image_file *imf = NULL;
         switch (i) {
@@ -1713,12 +1708,12 @@ static void imf_red_browse_cb(GtkWidget *wid_browse, gpointer dialog)
 
 /* set the enable check buttons when the user activates a file entry */
 /* if cleared, unload the file so it will be reloaded to catch changes to it */
-static void imf_red_activate_cb(GtkWidget *wid_entry, gpointer dialog)
+static void imf_red_activate_cb(GtkWidget *wid_entry, gpointer processing_dialog)
 {
     int i;
     for (i = 0; i < ALL_PROCESS_ENTRIES; i++) {      
-        if (wid_entry == g_object_get_data (G_OBJECT(dialog), process_entry[i].entry)) {
-            set_named_checkb_val (dialog, process_entry[i].checkb, 1);
+        if (wid_entry == g_object_get_data (G_OBJECT(processing_dialog), process_entry[i].entry)) {
+            set_named_checkb_val (processing_dialog, process_entry[i].checkb, 1);
 // and reload the file
             break;
         }
@@ -1728,17 +1723,17 @@ static void imf_red_activate_cb(GtkWidget *wid_entry, gpointer dialog)
 
 void act_control_processing (GtkAction *action, gpointer window)
 {
-	GtkWidget *dialog;
+    GtkWidget *processing_dialog;
 
-    dialog = g_object_get_data (G_OBJECT(window), "processing");
-	if (dialog == NULL) {
-        dialog = make_image_processing (window);
-//        gtk_widget_show_all  (dialog);
+    processing_dialog = g_object_get_data (G_OBJECT(window), "processing");
+    if (processing_dialog == NULL) {
+        processing_dialog = make_image_processing (window);
+//        gtk_widget_show_all  (processing_dialog);
 //	} else {
-//        gtk_widget_show (dialog);
-//        gdk_window_raise (dialog->window);
+//        gtk_widget_show (processing_dialog);
+//        gdk_window_raise (processing_dialog->window);
 	}
-    gtk_widget_show_all (dialog);
-    gdk_window_raise(dialog->window);
+    gtk_widget_show_all (processing_dialog);
+    gdk_window_raise(processing_dialog->window);
 }
 

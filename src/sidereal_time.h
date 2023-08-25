@@ -20,6 +20,13 @@ Copyright (C) 2000 Liam Girdwood <liam@nova-ioe.org>
 #ifndef LN_SIDEREAL_TIME_H
 #define LN_SIDEREAL_TIME_H
 
+#include <time.h>
+
+#define JD2000 2451545.0 // 12h UT Jan 1, 2000
+#define JD_NOW (((time(NULL) / 86400.0 + 2440587.5 - 0.41 / 86400.0)))
+#define CURRENT_EPOCH (2000.0 + (JD_NOW - JD2000) / 365.25)
+#define JD_EPOCH(jd) (2000.0 + ((jd) - JD2000) / 365.25)
+
 double get_apparent_sidereal_time (double JD);
 double get_mean_sidereal_time (double JD);
 double range_degrees (double angle);
