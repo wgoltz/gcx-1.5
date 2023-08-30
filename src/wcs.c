@@ -78,8 +78,11 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->binning = sqrt(bin_x * bin_y);
 
     double jd = frame_jdate (fr); // frame center jd
-    wcs->jd = (jd != NAN) ? jd : JD_NOW;
-    err_printf("using JD_NOW for frame jdate !");
+    if (jd == NAN) {
+        jd = JD_NOW;
+        err_printf("using JD_NOW for frame jdate !\n");
+    }
+    wcs->jd = jd;
     wcs->flags |= WCS_JD_VALID;
 
 // FN_RA, FN_DEC are coords at jd epoch, FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
@@ -1338,7 +1341,7 @@ static int short_match(GSList *field, GSList *cat)
 
     struct gui_star *fb = (field->next) ? GUI_STAR(field->next->data) : NULL;
 
-    if ((MIN_PAIRS == 1) && (fb == NULL)) {
+    if (fb == NULL) {
 //        find best match star in cat nearish to fa
         return 0; // fix this
     }
