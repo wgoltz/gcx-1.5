@@ -16,7 +16,6 @@ void named_cbentry_set(GtkWidget *dialog, char *name, char *text);
 long set_named_callback(void *dialog, char *name, char *callback, void *func);
 long set_named_callback_data(void *dialog, char *name, char *callback, void *func, gpointer data);
 void set_named_checkb_val(GtkWidget *dialog, char *name, int val);
-int check_seq_number(char *file, int *sqn);
 void clamp_spin_value(GtkSpinButton *spin);
 void named_label_set(GtkWidget *dialog, char *name, char *text);
 
@@ -24,8 +23,16 @@ int dot_extension(char *fn);
 int drop_dot_extension(char *fn);
 int is_zip_name(char *fn);
 int has_extension(char *fn);
-int get_seq(char *fn);
-char *save_name(char *in_file_name, char *file_name_stub, int *seq, double *jd);
+
+typedef enum {
+    no_seq,
+    num_seq, // integer suffix
+    time_seq // floating point time suffix
+} sequence_type;
+
+int check_seq_number(char *file, int *sqn); // check for file+seqn and update sqn to next
+sequence_type get_seq(char *fn, int *suf_n, double *suf_t); // find (and return) numeric (nnn) or time (nnn.nnn) suffix
+char *save_name(char *in_file_name, char *file_name_stub, double *jd);
 
 double angular_dist(double a, double b);
 void update_timer(struct timeval *tv_old);

@@ -57,32 +57,66 @@ struct wcs *window_get_wcs(gpointer window)
 
 /* try to get an inital (frame) wcs from frame data and local params */
 void fits_frame_params_to_fim(struct ccd_frame *fr)
-{
-    double ra;
+{    
+    double eq = NAN;
+    gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
+    if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
+
+    // now set frame fim
+    struct wcs *wcs = & fr->fim;
+
+// these should have been set earlier?
+    wcs->xrefpix = fr->w / 2;
+    wcs->yrefpix = fr->h / 2;
+
+    int bin_x = 1;
+    fits_get_int(fr, P_STR(FN_BIN_X), &bin_x);
+
+    int bin_y = 1;
+    fits_get_int(fr, P_STR(FN_BIN_X), &bin_y);
+
+    wcs->binning = sqrt(bin_x * bin_y);
+
+    double jd = frame_jdate (fr); // frame center jd
+    wcs->jd = (jd != NAN) ? jd : JD_NOW;
+    err_printf("using JD_NOW for frame jdate !");
+    wcs->flags |= WCS_JD_VALID;
+
+// FN_RA, FN_DEC are coords at jd epoch, FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
+    double ra, dec;
+
     gboolean have_ra = (fits_get_double(fr, P_STR(FN_RA), &ra) > 0);
     if (! have_ra) {
         int d_type = fits_get_dms(fr, P_STR(FN_RA), &ra);
         have_ra = (d_type >= 0);
         if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0; // sexa hh:mm:ss else decimal
     }
-    if (! have_ra) {
+    gboolean have_dec = (fits_get_double(fr, P_STR(FN_DEC), &dec) > 0);
+    if (! have_dec) {
+        have_dec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) >= 0);
+    }
+
+    wcs->equinox = (eq != NAN) ? eq : 2000;
+
+    if (have_ra && have_dec)
+        precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec); // precess epoch jd coords to wcs->equinox
+
+    else {
+
         have_ra = (fits_get_double(fr, P_STR(FN_OBJCTRA), &ra) > 0);
         if (! have_ra) {
             int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
             have_ra = (d_type >= 0);
             if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0;
         }
-    }
 
-    double dec;
-    gboolean have_dec = (fits_get_double(fr, P_STR(FN_DEC), &dec) > 0);
-    if (! have_dec) {
-        have_dec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) >= 0);
-    }
-    if (! have_dec) {
         have_dec = (fits_get_double(fr, P_STR(FN_OBJCTDEC), &dec) > 0);
         if (! have_dec) {
             have_dec = (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) >= 0);
+        }
+
+        if (have_ra && have_dec) {
+        // precess from obs equinox to wcs equinox
         }
     }
 
@@ -119,30 +153,6 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     }
 
 
-// now set frame fim
-    struct wcs *wcs = & fr->fim;
-
-    wcs->xrefpix = fr->w / 2;
-    wcs->yrefpix = fr->h / 2;
-
-    double eq = 2000;
-    gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
-    if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
-
-    wcs->equinox = eq;
-
-    int bin_x = 1;
-    fits_get_int(fr, P_STR(FN_BIN_X), &bin_x);
-
-    int bin_y = 1;
-    fits_get_int(fr, P_STR(FN_BIN_X), &bin_y);
-
-    wcs->binning = sqrt(bin_x * bin_y);
-
-    wcs->jd = frame_jdate (fr); // frame center jd
-    if (wcs->jd != 0.0)
-        wcs->flags |= WCS_JD_VALID;
-
     if (have_pos) {
         wcs->xref = ra;
         wcs->yref = dec;
@@ -152,7 +162,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->lng = lng;
     wcs->lat = lat;
     wcs->flags |= WCS_LOC_VALID;
-
+// probably already done elsewhere
     gboolean have_transform = (wcs_transform_from_frame (fr, &fr->fim) == 0);
 
     if (have_transform) {

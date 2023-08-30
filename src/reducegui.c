@@ -1478,6 +1478,9 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
                                 save_image_file (imf, outf, 0, &seq, progress_pr, processing_dialog);
 
                         }
+                        if (P_INT(FILE_SAVE_MEM))
+                            imf->flags &= ~IMG_DIRTY;
+
                     } else if ( (ccdr->ops & IMG_OP_PHOT) && !(ccdr->ops & IMG_OP_ALIGN) ) {
                         d2_printf("reducegui.ccdred_run_cb phot and not align\n");
                         //               imf->flags &= ~(IMG_LOADED); // needs checking

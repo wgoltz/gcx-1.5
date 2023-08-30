@@ -510,7 +510,7 @@ double make_jdate(int y, int m, int d, double hours)
 /* try to get the jdate from the header fields */
 double frame_jdate(struct ccd_frame *fr)
 {
-    double jd = 0;
+    double jd = NAN;
 
     double v;
     if (fits_get_double(fr, P_STR(FN_MJD), &v) > 0) {

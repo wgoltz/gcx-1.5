@@ -1170,7 +1170,7 @@ static struct stf * stf_va_find(struct stf *stf, int level, va_list ap)
 		s = va_arg(ap, int);
 		while (stf != NULL) {
 			if (STF_IS_SYMBOL(stf) && STF_SYMBOL(stf) == s) {
-printf("found symbol %s as %p\n", symname[s], stf); fflush(NULL);
+//printf("found symbol %s as %p\n", symname[s], stf); fflush(NULL);
 				break;
 			}
 			stf = stf->next;

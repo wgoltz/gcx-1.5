@@ -632,9 +632,9 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         struct tele_t *tele = tele_find(main_window);
         double ra, dec;
         if (tele_read_coords(tele, &ra, &dec) == 0) {
-
+// these are now coords
             // write coords to fits header
-            char *ras = degrees_to_hms_pr(ra * 15, 2);
+            char *ras = degrees_to_hms_pr(ra, 2);
             char *line = NULL;
             if (ras) asprintf(&line, " '%s'", ras), free(ras);
             if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
@@ -1263,13 +1263,21 @@ static int scope_auto_cb( GtkWidget *widget, gpointer cam_control_dialog )
 	g_return_val_if_fail(wcs != NULL, -1);
 	g_return_val_if_fail(wcs->wcsset != WCS_INVALID, -1);
 
-    double ra = wcs->xref;
-    double dec = wcs->yref;
+    double obs_ra = obs->ra;
+    double obs_dec = obs->dec;
 
-    if (P_INT(TELE_PRECESS_TO_EOD) && (wcs->equinox != obs->equinox))
-        precess_hiprec(wcs->equinox, obs->equinox, &ra, &dec);
+    // precess obs coords to wcs coords
+    if (obs->equinox != wcs->equinox)
+        precess_hiprec(obs->equinox, wcs->equinox, &obs_ra, &obs_dec);
 
-    tele_center_move(tele, obs->ra - ra, obs->dec - dec); // difference should be independent if precessed to same epoch ?
+    double ra = tele->right_ascension;
+    double dec = tele->declination;
+
+    // precess now coords to wcs coords
+    if (P_INT(TELE_PRECESS_TO_EOD))
+        precess_hiprec(CURRENT_EPOCH, wcs->equinox, &ra, &dec);
+
+    tele_center_move(tele, obs_ra - ra, obs_dec - dec);
 	return 0;
 }
 

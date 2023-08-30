@@ -53,6 +53,7 @@
 #include "params.h"
 #include "misc.h"
 #include "reduce.h"
+#include "obsdata.h"
 
 #define MAX_FLAT_GAIN 1.5	// max gain accepted when flatfielding
 #define FITS_HROWS 36	// number of fits header lines in a block
@@ -980,6 +981,9 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 		hd->x_skip = 0;
 	if (fits_get_int(hd, "CCDSKIP2", &hd->y_skip) <= 0)
 		hd->y_skip = 0;
+// try this
+    rescan_fits_exp(hd, &(hd->exp));
+    wcs_transform_from_frame (hd, &hd->fim);
 
 err_exit:
 	rd->fnclose(fp);

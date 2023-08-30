@@ -268,7 +268,7 @@ static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq,
     int in_extens = (in_zipped) ? drop_dot_extension(imf->filename) : 0;
 
     double jd = frame_jdate(imf->fr);
-    char *fn = save_name(imf->filename, outf, seq, &jd);
+    char *fn = save_name(imf->filename, outf, &jd);
 
     if (out_extens) outf[out_extens] = '.'; // restore zip extension
     if (in_extens) imf->filename[in_extens] = '.';
@@ -453,7 +453,7 @@ int imf_load_frame(struct image_file *imf)
 
 /* unload all ccd_frames that are not marked dirty */
 void unload_clean_frames(struct image_file_list *imfl)
-{
+{ // imfl imf (name and flags need to be updated when it is saved)
     GList *fl = imfl->imlist;
     while(fl != NULL) {
         struct image_file *imf = fl->data;
