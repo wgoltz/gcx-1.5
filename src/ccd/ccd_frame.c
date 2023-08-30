@@ -312,7 +312,7 @@ struct ccd_frame *release_frame(struct ccd_frame *fr, char *msg)
 d2_printf("release %p '%s'\n", fr, fr->name);
         if (fr->ref_count < 1) g_warning("frame has ref_count of %d on release\n", fr->ref_count);
         fr->ref_count --;
-printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
+// printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
 
         if (fr->ref_count < 1) {
             struct image_file *imf = fr->imf;

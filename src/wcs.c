@@ -1020,20 +1020,20 @@ int auto_pairs(struct gui_star_list *gsl)
 
     cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare_size);
 
-printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
-for (sl = cat; sl != NULL; sl = sl->next) {
-    struct gui_star *gs = GUI_STAR(sl->data);
-    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
-}
+//printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
+//for (sl = cat; sl != NULL; sl = sl->next) {
+//    struct gui_star *gs = GUI_STAR(sl->data);
+//    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
+//}
 
     field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
     field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
-printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
-for (sl = field; sl != NULL; sl = sl->next) {
-    struct gui_star *gs = GUI_STAR(sl->data);
-    printf("FIELD: x: %.1f y: %.1f size: %.1f\n", gs->x, gs->y, gs->size);
-}
+//printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
+//for (sl = field; sl != NULL; sl = sl->next) {
+//    struct gui_star *gs = GUI_STAR(sl->data);
+//    printf("FIELD: x: %.1f y: %.1f size: %.1f\n", gs->x, gs->y, gs->size);
+//}
 
     if (cat == NULL || field == NULL) {
         if (cat) g_slist_free(cat);
