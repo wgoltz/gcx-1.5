@@ -1817,13 +1817,23 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 
     if ( imf_load_frame(imf) < 0 ) return -1;
 
-    GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
-    //        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
+    gboolean match_WCS = FALSE;
+    gboolean rotate = FALSE;
+    gboolean smooth = FALSE;
 
-    GtkWidget *align_combo = g_object_get_data(G_OBJECT(ccdred), "align_combo");
-    int active = gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo));
+    if (ccdr->window) { // get options for gui mode
+        GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
+        //        struct gui_star_list *gsl = g_object_get_data(ccdr->window, "gui_star_list");
 
-    if (active == 2) { // match WCS
+        if (ccdred) {
+            GtkWidget *align_combo = g_object_get_data(G_OBJECT(ccdred), "align_combo");
+            match_WCS = (gtk_combo_box_get_active(GTK_COMBO_BOX(align_combo)) == 2);
+            rotate = get_named_checkb_val(ccdred, "align_rotate");
+            smooth = get_named_checkb_val(ccdred, "align_smooth");
+        }
+    }
+
+    if (match_WCS) { // not working yet
         if (imf_load_frame(ccdr->alignref) < 0) {
             imf_release_frame(imf, "align_imf");
             printf("align_imf: can't load alignment frame\n"); fflush(NULL);
@@ -1858,9 +1868,6 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
         return_ok = (pass == 0);
 
         struct ccd_frame *fr = NULL;
-
-        int rotate = get_named_checkb_val(ccdred, "align_rotate");
-        int smooth = get_named_checkb_val(ccdred, "align_smooth");
 
         if (rotate || smooth) {
             fr = clone_frame(imf->fr); // make a copy to work on
