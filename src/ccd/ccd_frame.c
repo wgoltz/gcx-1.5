@@ -129,7 +129,7 @@ void free_stats(struct im_stats *st)
 
     if (st->hist.hdat) free (st->hist.hdat);
     if (st->free_stats == 1) {
-        printf("freeing stats\n");
+        printf("freeing stats\n"); fflush(NULL);
         free(st); // clangd says st offset by 80 bytes from alloc
     }
 }

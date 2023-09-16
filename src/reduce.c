@@ -417,7 +417,7 @@ int imf_load_frame(struct image_file *imf)
     struct ccd_frame *fr = imf->fr;
 
     int reloaded = imf_check_reload(imf);
-    if (reloaded > 0) {
+    if (fr == NULL || reloaded > 0) {
         fr = read_image_file(imf->filename, P_STR(FILE_UNCOMPRESS), P_INT(FILE_UNSIGNED_FITS), default_cfa[P_INT(FILE_DEFAULT_CFA)]);
 
         if (fr == NULL) {
@@ -468,6 +468,7 @@ void unload_clean_frames(struct image_file_list *imfl)
 
 void imf_release_frame(struct image_file *imf, char *msg)
 {
+    if (imf->ofr) ofr_unlink_imf(imf->ofr); // unlink from ofr
     imf->fr = release_frame(imf->fr, msg);
     if (imf->fr == NULL) imf->flags &= IMG_SKIP; // we keep the skip flag
 }
@@ -496,22 +497,28 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 //printf("reduce.reduce_frames_load\n");
     if (!(ccdr->ops & IMG_OP_STACK)) { // no stack
 
-        GList *gl = imfl->imlist;
-		while (gl != NULL) {
-            struct image_file *imf = gl->data;
+//        GList *gl = imfl->imlist;
+//		while (gl != NULL) {
+//            struct image_file *imf = gl->data;
 
-            if (fr == NULL)
-                fr = imf->fr;
+//            if (fr == NULL) fr = imf->fr; // first frame
 
-			gl = g_list_next(gl);
-            if (imf->flags & IMG_SKIP) continue;
+//			gl = g_list_next(gl);
+//            if (imf->flags & IMG_SKIP) continue;
 
-            if (reduce_one_frame(imf, ccdr, progress_print, NULL)) continue;
+//            if (reduce_one_frame(imf, ccdr, progress_print, NULL)) continue;
 
-            if (ccdr->ops & IMG_OP_INPLACE)
-                save_image_file(imf, NULL, 1, NULL, progress_print, NULL);
-		}
+//            if (ccdr->ops & IMG_OP_INPLACE)
+//                save_image_file(imf, NULL, 1, NULL, progress_print, NULL);
+//		}
+        // try this
+        if (imfl->imlist && imfl->imlist->data) {
+            struct image_file *imf = imfl->imlist->data;
 
+            fr = imf->fr; // first frame
+
+            reduce_frames(imfl, ccdr, progress_print, NULL); // reduce failed somehow
+        }
     } else { // stack
 
         if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA ||

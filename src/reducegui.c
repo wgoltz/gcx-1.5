@@ -431,8 +431,8 @@ static void update_dialog_from_ccdr(GtkWidget *processing_dialog, struct ccd_red
         gtk_combo_box_set_active(GTK_COMBO_BOX(align_combo), 1);
 //		set_named_checkb_val(processing_dialog, "align_checkb", 1);
 	}
-//    if (ccdr->recipe && ccdr->recipe[0]) {
-    if (ccdr->recipe) {
+    if (ccdr->recipe && ccdr->recipe[0]) {
+//    if (ccdr->recipe) {
         named_entry_set(processing_dialog, "recipe_entry", ccdr->recipe);
         set_named_checkb_val(processing_dialog, "phot_en_checkb", 1);
     }
@@ -1481,8 +1481,10 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
                         if (P_INT(FILE_SAVE_MEM))
                             imf->flags &= ~IMG_DIRTY;
 
-                    } else if ( (ccdr->ops & IMG_OP_PHOT) && !(ccdr->ops & IMG_OP_ALIGN) ) {
-                        d2_printf("reducegui.ccdred_run_cb phot and not align\n");
+//                    } else if ( (ccdr->ops & IMG_OP_PHOT) && !(ccdr->ops & IMG_OP_ALIGN) ) {
+                    } else if (ccdr->ops & IMG_OP_PHOT && P_INT(FILE_SAVE_MEM)) { // ignore dirty and release if save_mem
+                        imf->flags &= ~IMG_DIRTY;
+// have to clear link back to frame when frame is deleted
                         //               imf->flags &= ~(IMG_LOADED); // needs checking
                     }
                 }

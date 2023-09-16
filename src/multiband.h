@@ -74,7 +74,7 @@ struct o_frame {
 	double airmass;
 //    gpointer ccd_frame; /* link back to ccd_frame (if gui active) */
     char *fr_name;      /* strdup'd copy of frame name */
-    gpointer imf;
+    gpointer imf;  // link to imf
 
     /* a few useful statistics of the fit */
 	double tweight; 	/* total weight of obseravtions used for fit */
@@ -173,6 +173,7 @@ char * mbds_short_result(struct o_frame *ofr);
 
 void ofr_link_imf(struct o_frame *ofr, struct image_file *imf);
 void ofr_unlink_imf(struct o_frame *imf);
+// probably need oframe_release
 
 /* from photometry.c */
 int stf_centering_stats(struct stf *stf, struct wcs *wcs, double *rms, double *max);

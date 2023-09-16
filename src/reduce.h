@@ -13,6 +13,7 @@ struct image_file {
 	char *filename;
     struct wcs *fim; // wcs if validated
 	struct ccd_frame *fr;
+    struct o_frame *ofr; // ofr if it has been linked by mband
     struct timespec mtime; // last stat.st_mtim to check for reload
 };
 

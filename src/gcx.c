@@ -840,72 +840,76 @@ int fake_main(int ac, char **av)
             }
 
             if (ccdr == NULL) ccdr = ccd_reduce_new();
-            // setup ccdr
+            if (ccdr) {
+                main_ret = 0;
 
-            switch(oc) {
+                // setup ccdr
 
-            case 'p': ccdr->recipe = strdup(optarg); continue;// batch = TRUE; // set recipe file, interactive
+                switch(oc) {
 
-            case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
-                ccdr->alignref = image_file_new(NULL, optarg);
-                continue;
+                case 'p': ccdr->ops |= IMG_OP_PHOT; batch = TRUE;
+                    ccdr->recipe = strdup(optarg);
+                    continue;
 
-            case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
-                ccdr->bias = image_file_new(NULL, optarg);
-                continue;
+                case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
+                    ccdr->alignref = image_file_new(NULL, optarg);
+                    continue;
 
-            case 'f':
-                ccdr->flat = image_file_new(NULL, optarg);
-                ccdr->ops |= IMG_OP_FLAT;
-                batch = TRUE;
-                continue;
+                case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
+                    ccdr->bias = image_file_new(NULL, optarg);
+                    continue;
 
-            case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
-                ccdr->dark = image_file_new(NULL, optarg);
-                continue;
+                case 'f': ccdr->ops |= IMG_OP_FLAT; batch = TRUE;
+                    ccdr->flat = image_file_new(NULL, optarg);
+                    continue;
 
-            case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
-                ccdr->bad_pix_map = bad_pix_map_new(optarg);
-                continue;
+                case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
+                    ccdr->dark = image_file_new(NULL, optarg);
+                    continue;
 
-            case 'P': run_phot = REP_STAR_ALL|REP_FMT_DATASET; batch = TRUE; // set recipe file, batch run
-                ccdr->recipe = strdup(optarg);
-                continue;
+                case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
+                    ccdr->bad_pix_map = bad_pix_map_new(optarg);
+                    continue;
 
-            case 'V': run_phot = REP_STAR_TGT|REP_FMT_AAVSO; batch = TRUE; // set recipe file, batch run aavso
-                ccdr->recipe = strdup(optarg);
-                continue;
-            }
-            //                    default:
-            if (oc == 'G' || oc == 'M' || oc == 'A') {
-                char *endp;
-                double v = strtod(optarg, &endp);
+                case 'P': run_phot = REP_STAR_ALL|REP_FMT_DATASET; batch = TRUE;
+                    ccdr->recipe = strdup(optarg);
+                    continue;
 
-                if (endp != optarg) {
-                    batch = TRUE;
-                    switch (oc) {
+                case 'V': run_phot = REP_STAR_TGT|REP_FMT_AAVSO; batch = TRUE;
+                    ccdr->recipe = strdup(optarg);
+                    continue;
+                }
+                //                    default:
+                if (oc == 'G' || oc == 'M' || oc == 'A') {
+                    char *endp;
+                    double v = strtod(optarg, &endp);
 
-                    case 'G': ccdr->blurv = v; ccdr->ops |= IMG_OP_BLUR; continue;
+                    if (endp != optarg) {
+                        batch = TRUE;
+                        switch (oc) {
 
-                    case 'M': ccdr->mulv = v; ccdr->ops |= IMG_OP_MUL; continue;
+                        case 'G': ccdr->blurv = v; ccdr->ops |= IMG_OP_BLUR; continue;
 
-                    case 'A': ccdr->addv = v; ccdr->ops |= IMG_OP_ADD; continue;
+                        case 'M': ccdr->mulv = v; ccdr->ops |= IMG_OP_MUL; continue;
+
+                        case 'A': ccdr->addv = v; ccdr->ops |= IMG_OP_ADD; continue;
+                        }
                     }
                 }
-            }
 
-        } else if (oc == 'u' || oc == 's' || oc == 'F' || oc == 'c') {
-            if (ccdr == NULL) ccdr = ccd_reduce_new();
+            } else if (oc == 'u' || oc == 's' || oc == 'F' || oc == 'c') {
+                if (ccdr == NULL) ccdr = ccd_reduce_new();
 
-            switch (oc) {
-            case 'u': ccdr->ops |= IMG_OP_INPLACE; update_files = TRUE; continue;
+                switch (oc) {
+                case 'u': ccdr->ops |= IMG_OP_INPLACE; update_files = TRUE; continue;
 
-            case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
+                case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
 
-            case 'F': ccdr->ops |= (IMG_OP_STACK | IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
+                case 'F': ccdr->ops |= (IMG_OP_STACK | IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
 
-            case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
+                case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
 
+                }
             }
         }
 

@@ -57,7 +57,7 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
     gboolean ok = TRUE;
 
     if (ra) {
-        *ra = indi_prop_get_number(tele->coord_prop, "RA");
+        *ra = indi_prop_get_number(tele->coord_prop, "RA"); // these appear to be equinox 2000
         ok = (*ra != NAN);
         if (ok) *ra *= 15; // hours to degrees
     }

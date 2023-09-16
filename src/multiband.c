@@ -128,8 +128,9 @@ void ofr_link_imf(struct o_frame *ofr, struct image_file *imf)
             if (ofr->fr_name) printf("ofr_link_frame fr_name already set!\n");
             ofr->fr_name = strdup(imf->filename);
         }
-        ofr->imf = imf; // ref it?
+        ofr->imf = imf;
         image_file_ref(imf);
+        imf->ofr = ofr;
     }
 }
 
@@ -143,7 +144,10 @@ void ofr_unlink_imf(struct o_frame *ofr)
             free(ofr->fr_name);
             ofr->fr_name = NULL;
         }
-        image_file_release(ofr->imf);
+
+        struct image_file *imf = ofr->imf;
+        imf->ofr = NULL; // clear link back to ofr
+        image_file_release(imf);
         ofr->imf = NULL;
     }
 }
