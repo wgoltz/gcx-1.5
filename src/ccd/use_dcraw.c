@@ -137,7 +137,7 @@ int read_ppm(struct ccd_frame *frame, FILE *handle)
 		}
         if (maxcolor > 255) {
 			unsigned short *ppm16 = (unsigned short *)ppm;
-			if (htons(0x55aa) != 0x55aa) {
+            if (htons(0x55aa) != 0x55aa) {
                 swab(ppm, ppm,  row_len);
 			}
 

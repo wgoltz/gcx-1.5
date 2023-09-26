@@ -82,7 +82,7 @@ void *io_indi_open_server(const char *host, int port, void (*cb)(void *fd, void 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr =
 			    ((struct in_addr *)(hp->h_addr_list[0]))->s_addr;
-	serv_addr.sin_port = htons(port);
+    serv_addr.sin_port = htons(port);
 	if ((sockfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
 		return NULL;
 	}

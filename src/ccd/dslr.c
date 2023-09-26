@@ -30,6 +30,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <endian.h>
 #include <errno.h>
 
 #include "ccd.h"
@@ -53,7 +54,7 @@ static struct {
 static inline uint32_t endian_to_host_32(int endian, uint32_t val)
 {
 	if (endian != LITTLE_ENDIAN)
-		return ntohl(val);
+        return ntohl(val);
 
 	return val;
 }
@@ -61,7 +62,7 @@ static inline uint32_t endian_to_host_32(int endian, uint32_t val)
 static inline uint16_t endian_to_host_16(int endian, uint16_t val)
 {
 	if (endian != LITTLE_ENDIAN)
-		return ntohs(val);
+        return ntohs(val);
 
 	return val;
 }
@@ -1044,7 +1045,7 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 
 	case 4:
 		while (i < all) {
-			*data++ = (float) (ntohs(*(uint16_t *) ptr));
+            *data++ = (float) (ntohs(*(uint16_t *) ptr));
 
 			ptr += 2;
 			i++;

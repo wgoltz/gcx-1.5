@@ -27,8 +27,7 @@
 #include <unistd.h>
 
 #include <sys/types.h>
-#include <netinet/in.h>
-
+//#include <netinet/in.h>
 #include <zlib.h>
 
 #include "lilxml.h"

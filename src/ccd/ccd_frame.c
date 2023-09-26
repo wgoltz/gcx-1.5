@@ -41,7 +41,8 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-#include <netinet/in.h>
+//#include <netinet/in.h>
+#include <endian.h>
 #include <errno.h>
 #include <glib.h>
 
@@ -770,7 +771,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 		goto err_exit;
 	}
 
-	if (bitpix !=  8 && bitpix != 16 && bitpix != -32 && bitpix != 32) {
+    if (bitpix !=  8 && bitpix != 16 && bitpix != -32 && bitpix != 32 && bitpix != -64 && bitpix != 64) {
 		err_printf("bad BITPIX = %d\n", bitpix);
 		goto err_exit;
 	}
@@ -836,8 +837,12 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     float *b_data = (float *)(hd->bdat);
 
     int block_size = FITS_HCOLS * FITS_HROWS;
-    int inbytes_per_pixel = abs(bitpix) / 8;
-    int out_size = block_size >> (inbytes_per_pixel / sizeof(short));
+    int inbytes_per_pixel = abs(bitpix) / 8; // 1,2,4,8
+//    int out_size = block_size >> (inbytes_per_pixel / sizeof(short));
+    int out_size = block_size;
+    int i;
+    for (i = inbytes_per_pixel; i > 1; i /= 2)
+        out_size /= 2;
 
     int nt = 10; // control printing of error messages for out of scale pixels
     float f_sum = 0, r_sum = 0, g_sum = 0, b_sum = 0;
@@ -846,6 +851,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     do {
 
         short v[block_size / sizeof(short)];
+        unsigned long *dv = (unsigned long *) v;
         unsigned int *fv = (unsigned int *) v;
         unsigned char *cv = (unsigned char *) v;
 
@@ -869,11 +875,13 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 			case 16:
 				if (force_unsigned && bz == 0 ){
 				  //du = (((v[i] >> 8) & 0x0ff) | ((v[i] << 8) & 0xff00));
-                    f = (unsigned short)ntohs(v[i]) * bs;
-				} else {
+//                    f = (unsigned short)ntohs(v[i]) * bs;
+                    f = (unsigned short)be16toh(v[i]) * bs;
+                } else {
 				  //ds = (((v[i] >> 8) & 0x0ff) | ((v[i] << 8) & 0xff00));
-                    f = (short)ntohs(v[i]) * bs + bz;
-				}
+//                    f = (short)ntohs(v[i]) * bs + bz;
+                    f = (short)be16toh(v[i]) * bs + bz;
+                }
 				break;
 			case 32:
 			case -32:
@@ -882,7 +890,8 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 					// Defeat type-punning rules using a union
 					union {float f32; unsigned int u32; } cnvt;
 
-					cnvt.u32 = ntohl(fv[i]);
+//                    cnvt.u32 = ntohl(fv[i]);
+                    cnvt.u32 = be32toh(fv[i]);
 					if (bitpix == -32) {
 						fds = cnvt.f32;
 					} else {
@@ -898,6 +907,29 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
                     f = bs * fds + bz;
 				}
 				break;
+            case 64:
+            case -64:
+                {
+                    double dds;
+                    // Defeat type-punning rules using a union
+                    union {double d64; unsigned long int u64; } cnvt;
+
+                    cnvt.u64 = be64toh(dv[i]);
+                    if (bitpix == -64) {
+                        dds = cnvt.d64;
+                    } else {
+                        dds = cnvt.u64 * 1.0;
+                    }
+                    int pos = j % frame;
+
+                    if (nt && (dds < -65000.0 || dds > 100000.0)) {
+                        d4_printf("pixv[%d,%d]=%8g [%08x]\n", pos % hd->w, pos / hd->w, dds, dv[i]);
+                        nt --;
+                    }
+
+                    f = bs * dds + bz;
+                }
+                break;
 			}
 
 			if (naxis == 3) {

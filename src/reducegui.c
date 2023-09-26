@@ -930,7 +930,7 @@ static void switch_frame_cb(gpointer window, guint action)
         imf_next_cb(NULL, processing_dialog);
 		break;
 	case SWF_SKIP:
-        imf_skip_cb(NULL, processing_dialog);
+        imf_toggle_skip_cb(NULL, processing_dialog);
 		break;
 	case SWF_PREV:
         imf_prev_cb(NULL, processing_dialog);
