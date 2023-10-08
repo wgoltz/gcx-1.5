@@ -46,31 +46,32 @@ void INDI_connect_cb(struct indi_prop_t *iprop, struct INDI_common_t *device)
 // add a callback to device callback list
 void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *func, void *data, char *msg)
 {
-	GSList *gsl;
-	struct INDI_callback_t *cb;
-
 	if(type >= device->callback_max) {
 		err_printf("unknown callback for %s, type %d\n", device->name, type);
 		return;
 	}
+
+    GSList *gsl;
 	for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
-		cb = (struct INDI_callback_t *)gsl->data;
-		if (cb->type == type && cb->func == func) {
+        struct INDI_callback_t *cb = (struct INDI_callback_t *)gsl->data;
+        if (cb->type == type && cb->func == func && cb->active) {
 			// Any func can only exist once per type
 			return;
 		}
 	}
 
-    cb = g_new0(struct INDI_callback_t, 1);
+    struct INDI_callback_t *cb = g_new0(struct INDI_callback_t, 1);
 	cb->func = func;
 	cb->data = data;
 	cb->type = type;
 	cb->device = device;
     cb->msg = (msg) ? strdup(msg) : NULL;
+    cb->active = TRUE;
 	device->callbacks = g_slist_append(device->callbacks, cb);
 printf("INDI_set_callback: \"%s\" callback \"%s\" type %d\n", device->name, (cb->msg) ? cb->msg : "", type); fflush(NULL);
 }
 
+// only if the callbacks are inactive:
 void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void *func)
 {
 	GSList *gsl;
@@ -82,7 +83,7 @@ void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void 
 	}
 	for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
 		cb = gsl->data;
-		if (cb->type == type && cb->func == func) {
+        if (cb->type == type && cb->func == func) {
 			device->callbacks = g_slist_remove(device->callbacks, cb);
             if (cb->msg)
                 free(cb->msg);
@@ -145,15 +146,15 @@ static int INDI_callback(struct INDI_callback_t *cb)
 {
 	int (*func)(void *data) = cb->func;
 
-    if (cb->func && cb->device) {
+    if (cb->func && cb->device && cb->active) {
         int result = func(cb->data);
         if (result == FALSE) {
-            // If fucntion returns false, remove self from callback list
-            cb->device->callbacks = g_slist_remove(cb->device->callbacks, cb);
-printf("INDI_callback: \"%s\" removed callback \"%s\"\n", cb->device->name, (cb->msg != NULL) ? cb->msg : ""); fflush(NULL);
-            if (cb->msg)
-                free(cb->msg);
-            g_free(cb);
+// If function returns false, remove callback (but not here!)
+//            cb->device->callbacks = g_slist_remove(cb->device->callbacks, cb);
+//            if (cb->msg)
+//                free(cb->msg);
+//            g_free(cb);
+            cb->active = FALSE;
         }
     }
 	return FALSE;
@@ -163,18 +164,23 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
 {
 	GSList *gsl;
 	struct INDI_callback_t *cb;
-//printf("INDI_exec_callbacks: type %d ", type);
-//if (! device->callbacks) printf("device->callbacks == NULL");
-int i = 0;
+
 	for(gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
-i++;
 		cb = gsl->data;
 
-        if (cb->type == type) {
+        if (cb->type == type && cb->active) {
             g_idle_add((GSourceFunc)INDI_callback, cb);
         }
-//printf("%d %s ", i, (cb->type == type) ? "found" : "not found");
 	}
-//printf("\n"); fflush(NULL);
+    // free inactive callbacks
+    for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
+        cb = gsl->data;
+        if (cb->type == type && ! cb->active) {
+            device->callbacks = g_slist_remove(device->callbacks, cb);
+            if (cb->msg)
+                free(cb->msg);
+            g_free(cb);
+        }
+    }
 }
 

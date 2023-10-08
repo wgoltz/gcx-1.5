@@ -10,6 +10,8 @@ struct INDI_callback_t {
 	void *func;
 	void *data;
     char *msg;
+    gboolean active; /* ignore if not active
+     cb should be removed somewhere */
 };
 
 #define INDI_COMMON (struct INDI_common_t *)
