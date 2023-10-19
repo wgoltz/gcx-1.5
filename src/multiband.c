@@ -124,10 +124,6 @@ struct mband_dataset *mband_dataset_new(void)
 void ofr_link_imf(struct o_frame *ofr, struct image_file *imf)
 {
     if (imf) {
-        if (imf->filename) {
-            if (ofr->fr_name) printf("ofr_link_frame fr_name already set!\n");
-            ofr->fr_name = strdup(imf->filename);
-        }
         ofr->imf = imf;
         image_file_ref(imf);
         imf->ofr = ofr;
@@ -140,11 +136,6 @@ void ofr_unlink_imf(struct o_frame *ofr)
     g_return_if_fail(ofr != NULL);
 
     if (ofr->imf) {
-        if (ofr->fr_name) {
-            free(ofr->fr_name);
-            ofr->fr_name = NULL;
-        }
-
         struct image_file *imf = ofr->imf;
         imf->ofr = NULL; // clear link back to ofr
         image_file_release(imf);
@@ -245,7 +236,7 @@ void mband_dataset_release(struct mband_dataset *mbds)
 
     g_hash_table_destroy(mbds->objhash);
     g_list_free(mbds->sobs);
-//    g_list_free_full(mbds->ofrs, (GDestroyNotify) ofr_unlink_imf); // apparently not
+    g_list_free_full(mbds->ofrs, (GDestroyNotify) ofr_unlink_imf); // apparently not
     g_list_free(mbds->ofrs);
     g_list_free(mbds->ostars);
     free(mbds);
@@ -429,6 +420,8 @@ struct o_frame* mband_dataset_add_stf(struct mband_dataset *mbds, struct stf *st
     double v;
     if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_AIRMASS)) ofr->airmass = v;
     if (stf_find_double(stf, &v, 1, SYM_OBSERVATION, SYM_MJD)) ofr->mjd = v;
+
+    ofr->fr_name = stf_find_string (stf, 1, SYM_OBSERVATION, SYM_FILE_NAME);
 
     mbds->ofrs = g_list_prepend(mbds->ofrs, ofr);
 

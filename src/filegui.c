@@ -311,8 +311,7 @@ static void open_fits(GtkWidget *chooser, gpointer user_data)
 
 static void stf_free_all_(struct stf *stf)
 {
-//    stf_free_all(stf, "freeing window recipe");
-    stf_free_all(stf, "");
+    stf_free_all(stf, "freeing window recipe");
 }
 
 /* load stars from a rcp file into the given windows's gsl */

@@ -73,7 +73,7 @@ struct o_frame {
     double mjd;
 	double airmass;
 //    gpointer ccd_frame; /* link back to ccd_frame (if gui active) */
-    char *fr_name;      /* strdup'd copy of frame name */
+    char *fr_name;      /* SYM_FILE_NAME from stf */
     gpointer imf;  // link to imf
 
     /* a few useful statistics of the fit */

@@ -815,9 +815,10 @@ double get_star(struct ccd_frame *fr, double x, double y, struct ap_params *p,
 
 int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct bad_pix_map *bp)
 {
-	if (s->x < 0 || s->x > fr->w - 1 || s->y < 0 || s->y > fr->h - 1) {
-		return -1;
-	}
+// check before calling
+//	if (s->x < 0 || s->x > fr->w - 1 || s->y < 0 || s->y > fr->h - 1) {
+//		return -1;
+//	}
 
     struct stats sky_stats;
     struct stats star_stats;

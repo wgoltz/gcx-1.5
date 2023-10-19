@@ -320,8 +320,8 @@ static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, s
     add_ofr_store_entry( OFR_AIRMASS_COL, "%.2f", ofr->airmass );
     add_ofr_store_entry( OFR_JD_COL, "%.6f", mjd_to_jd(ofr->mjd) );
 
-    if (ofr->fr_name)
-        add_ofr_store_entry( OFR_FILENAME_COL, "%s", basename(ofr->fr_name) );
+    char *fr_name = stf_find_string(ofr->stf, 1, SYM_OBSERVATION, SYM_FILE_NAME);
+    if (fr_name) add_ofr_store_entry( OFR_FILENAME_COL, "%s", basename(fr_name) );
 }
 
 static void mbds_to_ofr_list(GtkWidget *mband_dialog, GtkWidget *ofr_list)
@@ -1703,7 +1703,7 @@ struct o_frame *stf_to_mband(gpointer mband_dialog, struct stf *stf)
         return NULL;
     }
 
-    mband_dataset_add_sobs_to_ofr(mbds, ofr);
+    mband_dataset_add_sobs_to_ofr(mbds, ofr); // need reference to fr to get fr_name
 
     mbds_print_summary(mband_dialog);
     mb_rebuild_ofr_list(mband_dialog);

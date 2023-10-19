@@ -187,6 +187,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         err_printf("no filter in stf, aborting aphot\n");
         return -1;
     }
+//    char *fr_name = stf_find_string (stf, 1, SYM_OBSERVATION, SYM_FILE_NAME);
 
 // strip any trailing spaces in filter
     char *p = filter;
@@ -450,6 +451,7 @@ static struct stf * build_stf_from_frame(struct wcs *wcs, GList *sl, struct ccd_
 	}
 
     struct stf *stf = stf_append_list (NULL, SYM_OBSERVATION, create_obs_alist (fr, wcs));
+
     struct stf *st = stf_append_double (NULL, SYM_READ, fr->exp.rdnoise);
 
     stf_append_double (st, SYM_ELADU, fr->exp.scale);
@@ -474,11 +476,12 @@ static struct stf * build_stf_from_frame(struct wcs *wcs, GList *sl, struct ccd_
 				stf_append_string(st, SYM_AP_SHAPE, ap_shapes[i]);
 			i++;
 		}
-		stf_append_list(stf, SYM_AP_PAR, st);
 */
+		stf_append_list(stf, SYM_AP_PAR, st);
 	}
 	stf_append_glist(stf, SYM_STARS, apsl);
-	return stf;
+
+    return stf;
 }
 
 /* keep only the non-invalid, apstd or apstar stars */
@@ -569,37 +572,47 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
     // create stf: should have same sort order as gui_star_list->sl
     struct stf *stf = build_stf_from_frame (wcs, asl, fr, &apdef);
 
-    // get the sequence source and maybe object name from rcp
-    struct stf *rcp = g_object_get_data (G_OBJECT(window), "recipe");
-    if (rcp) {
-        char *seq = stf_find_string (rcp, 0, SYM_SEQUENCE); // recipe sequence source
-        if (seq)
-            stf_append_string (stf, SYM_SEQUENCE, seq);
+    if (stf) {
+        struct stf *obs_stf = stf_find (stf, 0, SYM_OBSERVATION); // observations list
 
-        if (stf_find (stf, 1, SYM_OBSERVATION, SYM_OBJECT) == NULL) { // no SYM_OBJECT set for observations in stf
+        // get the sequence source and maybe object name from rcp
+        struct stf *rcp = g_object_get_data (G_OBJECT(window), "recipe");
+        if (rcp) {
+            char *seq = stf_find_string (rcp, 0, SYM_SEQUENCE); // recipe sequence source
+            if (seq)
+                stf_append_string (stf, SYM_SEQUENCE, seq);
 
-            char *object = stf_find_string (rcp, 1, SYM_RECIPE, SYM_OBJECT); // SYM_OBJECT name from recipe
-            if (object) {
-                struct stf *obs_stf = stf_find (stf, 0, SYM_OBSERVATION); // observations list
-                if (obs_stf && obs_stf->next && STF_IS_LIST(obs_stf->next)) {
-                    stf_append_string (STF_LIST(obs_stf->next), SYM_OBJECT, object);
-				}
-			}
-		}
-	}
+            if (stf_find (stf, 1, SYM_OBSERVATION, SYM_OBJECT) == NULL) { // no SYM_OBJECT set for observations in stf
 
-    // do the photometry
-    stf_aphot (stf, fr, wcs, &apdef); // aphot results are in cats->imags for single plane images or in imags for rgb images
+                char *object = stf_find_string (rcp, 1, SYM_RECIPE, SYM_OBJECT); // SYM_OBJECT name from recipe
+                if (object) {
+                    if (obs_stf && obs_stf->next && STF_IS_LIST(obs_stf->next)) {
+                        stf_append_string (STF_LIST(obs_stf->next), SYM_OBJECT, object);
+                    }
+                }
+            }
+        }
 
-    // update gui stars positions    
-    for (asl = stf_find_glist (stf, 0, SYM_STARS); asl != NULL; asl = asl->next) {
-        struct cat_star *cats = CAT_STAR (asl->data);
-        struct gui_star *gs = window_find_gs_by_cats_name (window, cats->name);
-        if (gs != NULL && (cats->flags & INFO_POS)) {
-            gs->x = cats->pos [POS_X];
-            gs->y = cats->pos [POS_Y];
-		}
-	}
+        if (fr->imf && fr->imf->filename) { // add filename to stf
+            if (obs_stf && obs_stf->next && STF_IS_LIST(obs_stf->next)) {
+//                stf_append_string (STF_LIST(obs_stf->next), SYM_FILE_NAME, fr->imf->filename);
+            }
+        }
+//            stf_append_string(stf, SYM_FILE_NAME, fr->imf->filename);
+
+        // do the photometry
+        stf_aphot (stf, fr, wcs, &apdef); // aphot results are in cats->imags for single plane images or in imags for rgb images
+
+        // update gui stars positions
+        for (asl = stf_find_glist (stf, 0, SYM_STARS); asl != NULL; asl = asl->next) {
+            struct cat_star *cats = CAT_STAR (asl->data);
+            struct gui_star *gs = window_find_gs_by_cats_name (window, cats->name);
+            if (gs != NULL && (cats->flags & INFO_POS)) {
+                gs->x = cats->pos [POS_X];
+                gs->y = cats->pos [POS_Y];
+            }
+        }
+    }
 
 //    stf_keep_good_phot (stf);
 

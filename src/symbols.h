@@ -137,6 +137,7 @@ typedef enum {
     SYM_RES_STATS,
     SYM_OUTLIERS,
     SYM_DIFFAM,
+    SYM_FILE_NAME,
     SYM_LAST
 } RcpSymbol;
 
@@ -238,7 +239,8 @@ extern char *symname[]; // declared in recipe.c : char *symname[SYM_LAST] = SYM_
     "ap_shape",\
     "res_stats",\
     "outliers",\
-    "diffam"\
+    "diffam",\
+    "filename"\
 }
 
 #endif
