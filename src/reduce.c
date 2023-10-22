@@ -468,8 +468,11 @@ void unload_clean_frames(struct image_file_list *imfl)
 
 void imf_release_frame(struct image_file *imf, char *msg)
 {
-    if (imf->ofr) ofr_unlink_imf(imf->ofr); // unlink from ofr
+    if (imf->ofr) // unlink from ofr
+        ofr_unlink_imf(imf->ofr);
+
     imf->fr = release_frame(imf->fr, msg);
+
     if (imf->fr == NULL) imf->flags &= IMG_SKIP; // we keep the skip flag
 }
 
@@ -853,7 +856,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         }
 
         // else REPORT( " (already_done)" )
-        // imf->flags |= IMG_OP_PHOT;
+        imf->flags |= IMG_DIRTY; // even though it isnt
     }
 
     REPORT( "\n" )
@@ -2040,8 +2043,9 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
 
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
-    
-    if (imf_load_frame(imf) < 0) return -1;
+
+    if (! imf->flags & IMG_LOADED)  return -1;
+//    if (imf_load_frame(imf) < 0) return -1;
 
     gpointer window = ccdr->window;
     g_return_val_if_fail (window != NULL, -1);
@@ -2129,7 +2133,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
         break;
     }
 
-    imf_release_frame(imf, "aphot_imf");
+//    imf_release_frame(imf, "aphot_imf"); // apparently not
 
     if ( ! result_ok )
         return -1;
@@ -2180,19 +2184,17 @@ d2_printf("imf release %d '%s'\n", imf->ref_count, imf->filename);
 
 	g_return_if_fail(imf->ref_count >= 1);
 
-    imf_release_frame(imf, "image_file_release");
+//    imf->fr = release_frame(imf->fr, "image_file_release");
 
 	if (imf->ref_count > 1) {
 		imf->ref_count--;
 		return;
 	}
-d3_printf("imf freed '%s'\n", imf->filename);
+printf("imf freed '%s'\n", imf->filename); fflush(NULL);
     if (imf->filename) free(imf->filename);
     if (imf->fim) wcs_release(imf->fim);
 
-    struct ccd_frame *fr = imf->fr;
-    if (fr)
-        fr->imf = NULL;
+    if (imf->fr) imf->fr->imf = NULL;
 
     free(imf);
 }

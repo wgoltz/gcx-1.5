@@ -1552,7 +1552,7 @@ static void ccdred_one_cb(GtkAction *action, gpointer processing_dialog)
         g_object_set_data_full(G_OBJECT(processing_dialog), "mband_window", ccdr->multiband, (GDestroyNotify)(g_object_unref));
     }
 
-    imf_display_cb (NULL, processing_dialog);
+//    imf_display_cb (NULL, processing_dialog); // not needed?
 
     int ret = reduce_one_frame (imf, ccdr, progress_pr, processing_dialog);
 

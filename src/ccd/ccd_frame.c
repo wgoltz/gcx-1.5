@@ -310,18 +310,21 @@ void get_frame(struct ccd_frame *fr, char *msg)
 struct ccd_frame *release_frame(struct ccd_frame *fr, char *msg)
 {
     if (fr) {
-d2_printf("release %p '%s'\n", fr, fr->name);
-        if (fr->ref_count < 1) g_warning("frame has ref_count of %d on release\n", fr->ref_count);
-        fr->ref_count --;
-// printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
-
         if (fr->ref_count < 1) {
-            struct image_file *imf = fr->imf;
-            if (imf)
-                imf->fr = NULL;
+            printf("release %p %s\n", fr, msg); fflush(NULL);
 
-            free_frame(fr);
-            fr = NULL;
+            g_warning("frame has ref_count of %d on release\n", fr->ref_count);
+
+        } else {
+            fr->ref_count --;
+            printf("release_frame %d %s\n", fr->ref_count, msg); fflush(NULL);
+
+            if (fr->ref_count < 1) {
+                if (fr->imf) fr->imf->fr = NULL; // unlink frame from imf
+
+                free_frame(fr);
+                fr = NULL;
+            }
         }
     }
 

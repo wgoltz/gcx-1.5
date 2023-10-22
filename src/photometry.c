@@ -595,10 +595,10 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
 
         if (fr->imf && fr->imf->filename) { // add filename to stf
             if (obs_stf && obs_stf->next && STF_IS_LIST(obs_stf->next)) {
-//                stf_append_string (STF_LIST(obs_stf->next), SYM_FILE_NAME, fr->imf->filename);
+                stf_append_string (STF_LIST(obs_stf->next), SYM_FILE_NAME, fr->imf->filename);
             }
         }
-//            stf_append_string(stf, SYM_FILE_NAME, fr->imf->filename);
+//        stf_append_string(stf, SYM_FILE_NAME, fr->imf->filename);
 
         // do the photometry
         stf_aphot (stf, fr, wcs, &apdef); // aphot results are in cats->imags for single plane images or in imags for rgb images

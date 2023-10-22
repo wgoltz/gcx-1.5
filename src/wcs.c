@@ -784,7 +784,7 @@ static void fit_pairs_old(GSList *pairs, struct wcs *wcs, gboolean scale_en, gbo
 	int iteration = 0;
 	double fit_err = HUGE;
 //printf("wcs.fit_pairs_old\n");
-printf("fit_pairs_old\n"); fflush(NULL);
+//printf("fit_pairs_old\n"); fflush(NULL);
 	while (iteration < MAX_ITER) {
 //printf("iteration: %d err: %f\n", iteration, fit_err);
 		iteration ++;
@@ -816,7 +816,7 @@ static int fit_pairs(GSList *pairs, struct wcs *wcs)
 		struct cat_star *cats;
 		gs = GUI_STAR(p->data);
         if ( ! STAR_OF_TYPE(gs, TYPE_FRSTAR)) {
-            err_printf("fit_pairs: first star in pair must be a frstar\n");
+//            err_printf("fit_pairs: first star in pair must be a frstar\n");
 			ret = -1;
 			goto fexit;
 		}
