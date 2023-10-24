@@ -186,8 +186,8 @@ static char *fs_sexa(double a, int w, int fracbase)
     return result;
 }
 
-/* fill buf with properly formatted INumber string. return length */
-static char *numberFormat(const char *format, double value)
+/* fill buf with properly formatted INumber string. return string */
+char *numberFormat(const char *format, double value)
 {
     int w, f, s;
     char m;
@@ -431,9 +431,9 @@ static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
 
         GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), elem->name);
-        GtkWidget *combo = (GtkWidget *)g_object_get_data(G_OBJECT (element), "combo");
-        if (combo) {
-            GtkWidget *entry = (GtkWidget *)g_object_get_data(G_OBJECT (combo), "entry");
+        GtkWidget *ctwh = (GtkWidget *)g_object_get_data(G_OBJECT (element), "ctwh");
+        if (ctwh) {
+            GtkWidget *entry = (GtkWidget *)g_object_get_data(G_OBJECT (ctwh), "entry");
 
             const char *valstr = gtk_entry_get_text(GTK_ENTRY (entry));
 
@@ -441,14 +441,14 @@ static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
             case INDI_PROP_TEXT:
 
                 elem->value.str = strdup(valstr);
-                set_combo_text_with_history(combo, elem->value.str);
+                set_combo_text_with_history(ctwh, elem->value.str);
 
                 break;
 
             case INDI_PROP_NUMBER:
 //check elem for range and convert if necessary
                 f_scansexa(valstr, &elem->value.num.value);
-                set_combo_text_with_history(combo, valstr);
+                set_combo_text_with_history(ctwh, valstr);
                 break;
 
             }
@@ -524,14 +524,14 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
 
         if (iprop->permission != INDI_RO) { // user entry
             x++;
-            GtkWidget *combo = create_combo_text_with_history(text);
-            g_object_ref(combo);
-            g_object_set_data_full(G_OBJECT (element), "combo", combo, (GDestroyNotify)g_object_unref);
+            GtkWidget *ctwh = create_combo_text_with_history(text);
+            g_object_ref(ctwh);
+            g_object_set_data_full(G_OBJECT (element), "ctwh", ctwh, (GDestroyNotify)g_object_unref);
 
-            GtkWidget *entry = g_object_get_data(G_OBJECT (combo), "entry");
+            GtkWidget *entry = g_object_get_data(G_OBJECT (ctwh), "entry");
             gtk_entry_set_text(GTK_ENTRY(entry), text); // try this
 
-            gtk_table_attach(GTK_TABLE (iprop->widget), combo, x, x + 1, y, y + 1,
+            gtk_table_attach(GTK_TABLE (iprop->widget), ctwh, x, x + 1, y, y + 1,
                              (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
         }
 
@@ -544,6 +544,8 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
         g_object_set_data_full(G_OBJECT (element), "value", value, (GDestroyNotify)g_object_unref);
         gtk_table_attach(GTK_TABLE (iprop->widget), value, x, x + 1, y, y + 1,
                          (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+
+        if (text) free(text);
     }
 
     x++;

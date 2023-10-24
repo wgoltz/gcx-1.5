@@ -1451,6 +1451,7 @@ void act_control_camera (GtkAction *action, gpointer window)
 
         cam_set_callbacks(cam_control_dialog);
         set_scope_params_from_par(cam_control_dialog);
+    }
 
         struct camera_t *camera = camera_find(window, CAMERA_MAIN);
         if (camera) {
@@ -1471,7 +1472,7 @@ void act_control_camera (GtkAction *action, gpointer window)
 //        gtk_widget_show_all(cam_control_dialog);
 //	} else {
 //		gtk_widget_show(cam_control_dialog);
-    }
+//    }
     gtk_widget_show_all(cam_control_dialog);
     gdk_window_raise(((GtkWidget *)cam_control_dialog)->window);
 

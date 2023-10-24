@@ -180,6 +180,7 @@ struct indi_elem_t *indi_prop_set_number(struct indi_prop_t *iprop, const char *
     if(! ielem) return NULL;
 
 	ielem->value.num.value = value;
+
 	return ielem;
 }
 

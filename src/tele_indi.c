@@ -28,9 +28,11 @@
 #include "params.h"
 
 #include "libindiclient/indi.h"
+#include "libindiclient/indigui.h"
 #include "tele_indi.h"
 #include "sidereal_time.h"
 #include "obsdata.h"
+#include "combo_text_with_history.h"
 
 #include <glib-object.h>
 
@@ -345,7 +347,6 @@ void tele_abort(struct tele_t *tele)
 
 int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox)
 {
-	struct indi_elem_t *elem = NULL;
 	if (! tele) {
 		err_printf("No telescope found\n");
 		return -1;
@@ -367,6 +368,7 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 		return -1;
 	}
 	if (tele->coord_set_type_prop) {
+        struct indi_elem_t *elem = NULL;
 		switch (type) {
 		case TELE_COORDS_SYNC: 
 			elem = indi_prop_set_switch(tele->coord_set_type_prop, "SYNC", 1);
@@ -375,21 +377,43 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 			elem = indi_prop_set_switch(tele->coord_set_type_prop, "SLEW", 1);
 			break;
 		}
-//		if (elem) {
-//			indi_send(tele->abort_prop, elem);
-//		} else {
-//			err_printf("Telescope failed to change mode\n");
-//			return -1;
-//		}
+// elem returns as null
+//        if (elem) {
+//            indi_send(tele->abort_prop, elem); // stop any previous active move?
+//        } else {
+//            err_printf("Telescope failed to change mode\n");
+//            return -1;
+//        }
 	}
+
     // precess coords to current equinox
     double pra = ra * 15; // hrs to degrees
     double pdc = dec;
 
     if (P_INT(TELE_PRECESS_TO_EOD) && equinox != NAN) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
 
+    // set entries in indi dialog
+
     indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours
+
+    struct indi_elem_t *elem = indi_find_elem(tele->coord_set_prop, "RA");
+    GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (elem->iprop->widget), elem->name);
+    GtkWidget *ctwh = (GtkWidget *)g_object_get_data(G_OBJECT (element), "ctwh");
+
+    char *ras = numberFormat(elem->value.num.fmt, elem->value.num.value);
+    set_combo_text_with_history(ctwh, ras);
+    free(ras);
+
     indi_prop_set_number(tele->coord_set_prop, "DEC", pdc);
+
+    elem = indi_find_elem(tele->coord_set_prop, "DEC");
+    element = (GtkWidget *)g_object_get_data(G_OBJECT (elem->iprop->widget), elem->name);
+    ctwh = (GtkWidget *)g_object_get_data(G_OBJECT (element), "ctwh");
+
+    char *decs = numberFormat(elem->value.num.fmt, elem->value.num.value);
+    set_combo_text_with_history(ctwh, decs);
+    free(decs);
+
     indi_send(tele->coord_set_prop, NULL);
 
     tele->slewing = 1; // will this work if already there?

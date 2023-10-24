@@ -2,13 +2,13 @@
 #include <string.h>
 
 /* implement text entry with history */
-void set_combo_text_with_history(GtkWidget *widget, char *val)
+void set_combo_text_with_history(GtkWidget *ctwh, char *val)
 {
 //    GtkWidget *entry = gtk_bin_get_child(GTK_BIN (widget));
-    GtkEntry *entry = g_object_get_data(G_OBJECT (widget), "entry");
+    GtkEntry *entry = g_object_get_data(G_OBJECT (ctwh), "entry");
     gtk_entry_set_text(entry, val);
 
-    GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (widget));
+    GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (ctwh));
 
     GtkTreeIter iter;
     if (gtk_tree_model_get_iter_first(history, &iter)) {
@@ -60,14 +60,14 @@ GtkWidget *create_combo_text_with_history(char *val)
 
     return widget;
 */
-    GtkWidget *widget = gtk_combo_box_text_new_with_entry();
+    GtkWidget *ctwh = gtk_combo_box_text_new_with_entry();
     // entry is the displayed value
-    GtkWidget *entry = gtk_bin_get_child(GTK_BIN (widget));
+    GtkWidget *entry = gtk_bin_get_child(GTK_BIN (ctwh));
     g_object_ref(entry);
-    g_object_set_data_full(G_OBJECT (widget), "entry", entry, (GDestroyNotify)g_object_unref); // quick access to entry widget
+    g_object_set_data_full(G_OBJECT (ctwh), "entry", entry, (GDestroyNotify)g_object_unref); // quick access to entry widget
 
-    gtk_combo_box_text_prepend_text(widget, val);
+    gtk_combo_box_text_prepend_text(GTK_COMBO_BOX_TEXT(ctwh), val);
 
-    return widget;
+    return ctwh;
 }
 
