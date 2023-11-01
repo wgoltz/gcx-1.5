@@ -460,7 +460,6 @@ void save_frame_auto_name(struct ccd_frame *fr, gpointer cam_control_dialog)
             if (short_jd >= 1000) short_jd = 0;
             asprintf(&fn, (zipped) ? AUTO_FILE_TIME_GZ_FORMAT : AUTO_FILE_TIME_FORMAT, text, short_jd);
         } else {
-//            seq++;
             asprintf(&fn, (zipped) ? AUTO_FILE_GZ_FORMAT : AUTO_FILE_FORMAT, text, seq);
         }
 

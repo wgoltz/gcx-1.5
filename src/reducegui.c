@@ -1315,7 +1315,7 @@ static struct image_file * current_imf(gpointer processing_dialog)
     return imf;
 }
 
-// count number of imfs that have loaded frames (output n), return the first loaded imf
+// count number of imfs that have loaded frames (output n), return the first loaded imf (not skipped)
 static int first_loaded_imf(struct image_file_list *imfl, struct image_file **imf0) {
     int n = 0;
     *imf0 = NULL;
@@ -1323,7 +1323,7 @@ static int first_loaded_imf(struct image_file_list *imfl, struct image_file **im
     while (gl != NULL) {
         struct image_file *imf = gl->data;
         gl = g_list_next(gl);
-        if (imf->flags & IMG_LOADED) {
+        if (imf->flags & IMG_LOADED & ~IMG_SKIP) {
             if (*imf0 == NULL) *imf0 = imf;
             n++;
         }
@@ -1409,12 +1409,12 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
     ccdr->bg = 0;
     ccdr->ops &= ~CCDR_BG_VAL_SET;
 
-    struct image_file *imf;
-    if (first_loaded_imf (imfl, &imf) > 0) {
-        ccdr->bg = imf->fr->stats.median;
-//        ccdr->bg = imf->fr->stats.avg;
-        ccdr->ops |= CCDR_BG_VAL_SET;
-    }
+//    struct image_file *imf; // this is not right
+//    if (first_loaded_imf (imfl, &imf) > 0) {
+//        ccdr->bg = imf->fr->stats.median;
+////        ccdr->bg = imf->fr->stats.avg;
+//        ccdr->ops |= CCDR_BG_VAL_SET;
+//    }
 
     dialog_to_ccdr(processing_dialog, ccdr);
 
@@ -1451,12 +1451,18 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
     int ret = 0;
     GList *gl = imfl->imlist;
     while (gl && ret >= 0) {
-        imf = gl->data;
+        struct image_file *imf = gl->data;
         gl = g_list_next(gl);
 
         if (! (imf->flags & IMG_SKIP)) {
 
             imf_display_cb (NULL, processing_dialog); // before run
+
+            if ((ccdr->ops & CCDR_BG_VAL_SET) == 0) { // bg before processing
+                ccdr->bg = imf->fr->stats.median;
+            //        ccdr->bg = imf->fr->stats.avg;
+                ccdr->ops |= CCDR_BG_VAL_SET;
+            }
 
             ret = ccd_reduce_imf (imf, ccdr, progress_pr, processing_dialog);
 

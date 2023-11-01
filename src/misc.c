@@ -346,7 +346,6 @@ int check_seq_number(char *file, int *sqn)
     char *p = pend;
 
     gboolean found_time = FALSE;
-    gboolean found_seq = FALSE;
 
     while (p > fcopy) {
         p--;
@@ -355,12 +354,13 @@ int check_seq_number(char *file, int *sqn)
             found_time = ! found_time && (*p == '.'); // looking for integer part of time
             if (! found_time) break; // no time part
         }
-        found_seq = TRUE; // found seq part
     }
 
     int pos = (p >= fcopy) ? p - fcopy + 1 : 0; // end of name part in file name
 
-    if (! found_time) {
+    if (found_time)
+        *sqn = -1;
+    else {
         int lseq = 0;
         char *fn = basename(fcopy);
         int sz = p - fn + 1; // size of name part
@@ -378,10 +378,6 @@ int check_seq_number(char *file, int *sqn)
             d3_printf("check_seq_number: adjusting sqn to %d\n", *sqn);
         }
     }
-
-    if (found_time) *sqn = -1;
-
-//    if (!found_time && !found_seq) *sqn = 1;
 
     free(fcopy);
     closedir(dir);
