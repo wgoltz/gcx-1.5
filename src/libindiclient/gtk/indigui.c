@@ -528,9 +528,6 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
             g_object_ref(ctwh);
             g_object_set_data_full(G_OBJECT (element), "ctwh", ctwh, (GDestroyNotify)g_object_unref);
 
-            GtkWidget *entry = g_object_get_data(G_OBJECT (ctwh), "entry");
-            gtk_entry_set_text(GTK_ENTRY(entry), text); // try this
-
             gtk_table_attach(GTK_TABLE (iprop->widget), ctwh, x, x + 1, y, y + 1,
                              (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
         }

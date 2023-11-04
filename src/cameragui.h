@@ -8,6 +8,7 @@ int goto_dialog_obs(gpointer cam_control_dialog);
 int set_obs_object(gpointer cam_control_dialog, char *objname);
 int center_matched_field(gpointer cam_control_dialog);
 void save_frame_auto_name(struct ccd_frame *fr, gpointer cam_control_dialog);
+void iprop_param_update_entry(gpointer iprop, const char *param);
 
 void test_camera_open(void);
 void status_message(gpointer cam_control_dialog, char *msg);

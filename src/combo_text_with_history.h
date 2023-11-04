@@ -7,6 +7,7 @@
 
 void set_combo_text_with_history(GtkWidget *widget, char *val);
 GtkWidget *create_combo_text_with_history(char *val);
+const char *get_combo_text_with_history(GtkWidget *ctwh);
 
 
 

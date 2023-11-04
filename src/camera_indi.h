@@ -22,6 +22,7 @@ enum CAMERA_CALLBACKS {
 	CAMERA_CALLBACK_MAX
 };
 
+
 struct camera_t {
 	//This must be fist in the structure
 	COMMON_INDI_VARS
@@ -53,7 +54,7 @@ void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix);
 void camera_abort_exposure(struct camera_t *camera);
 void camera_get_binning(struct camera_t *camera, int *x, int *y);
 void camera_set_binning(struct camera_t *camera, int x, int y);
-void camera_get_size(struct camera_t *camera, const char *param, int *value, int *min, int *max);
+void camera_get_size(struct camera_t *camera, const char *par, int *value, int *min, int *max);
 void camera_set_size(struct camera_t *camera, int width, int height, int x_offset, int y_offset);
 void camera_get_temperature(struct camera_t *camera, float *value, float *min, float *max);
 void camera_set_temperature(struct camera_t *camera, float value);

@@ -499,22 +499,27 @@ short locate_by_name(char *inname, CATALOG_ENTRY * objout, char *edbdir)
                     have_vstar = TRUE;
                 } else if (len == 5 && *desc >= 'A' && *desc <= 'Z' && *(desc + 1) >= 'A' && *(desc + 1) <= 'Z') {
                     // name of variable star of type 'XX CCC'
+                    // could be Mu/Nu then need to use YBS
+                    have_vstar = TRUE;
+                } else if (len == 6 && *desc >= 'M' && *desc <= 'N' && *(desc + 1) == 'I') {
+                    // gcvs.edb uses MIU/NIU for greek letters mu/nu or greek name clipped to 5 letters
                     have_vstar = TRUE;
                 } else if ((len == 7 || len == 8) && *desc == 'V' && isdigit(*(desc + 1))) {
                     // name of variable star of type 'Vnnn CCC' or 'Vnnnn CCC'
                     have_vstar = TRUE;
                     desc++; // skip the 'V'
-                    len--;
                 }
 
                 if (have_vstar) {
                     char *fmt;
                     switch (len) {
                     case 4 :
-                    case 5 : fmt = "%.*s %.3s"; break;
-                    case 6 : fmt = "V %.*s%.3s"; break;
-                    case 7 : fmt = "V%.*s%.3s"; break;
+                    case 5 :
+                    case 6 : fmt = "%.*s %.3s"; break;
+                    case 7 : fmt = "V %.*s%.3s"; break;
+                    case 8 : fmt = "V%.*s%.3s"; break;
                     }
+                    if (len > 6) len--;
 
                     str_join_varg(&rename, fmt, len - 3, desc, cons);
 
@@ -536,6 +541,7 @@ short locate_by_name(char *inname, CATALOG_ENTRY * objout, char *edbdir)
         }
 
         if (rename) {
+            // if mui/nui constellation need to look in YBS for mu/nu if gcvs search fails
             *objout = locate_in_edb(rename, edbfile, edbdir);
             if (!objout->filled && edbfile == YBS_EDB) { // try SKY2k65.edb
                 edbfile = "SKY2k65.edb";

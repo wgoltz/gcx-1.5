@@ -13,6 +13,7 @@
 
 #include "interface.h"
 #include "params.h"
+#include "combo_text_with_history.h"
 
 #define TABLE_ATTACH(table, item, row, column, row_width, col_width) (gtk_table_attach (GTK_TABLE ((table)), \
     (item), (column), (column) + (col_width), (row), (row) + (row_width), \
@@ -497,68 +498,86 @@ GtkWidget* create_camera_control (void)
   TABLE_ATTACH(table, label, 0, 1, 1, 1);
   TABLE_ATTACH(table, item, 0, 0, 1, 1);
 
-  item = gtk_combo_box_text_new();
-  g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_size_combo_box", item, (GDestroyNotify) g_object_unref);
+//  item = gtk_combo_box_text_new();
+//  g_object_ref (item);
+//  g_object_set_data_full (G_OBJECT (camera_control), "img_size_combo_box", item, (GDestroyNotify) g_object_unref);
 
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Full Size");
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Half Size");
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Quarter Size");
-  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Eighth Size");
-  gtk_combo_box_set_active(GTK_COMBO_BOX (item), 0);
+//  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Full Size");
+//  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Half Size");
+//  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Quarter Size");
+//  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Eighth Size");
+//  gtk_combo_box_set_active(GTK_COMBO_BOX (item), 0);
 
-  TABLE_ATTACH(table, item, 1, 0, 1, 1);
+//  TABLE_ATTACH(table, item, 1, 0, 1, 1);
 
+
+// change these to combo box text (number) with history, add single button for change
   label = gtk_label_new ("Width");
   gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5);
   gtk_misc_set_padding (GTK_MISC (label), 3, 0);
-  adjustment = gtk_adjustment_new (1, 0, 100, 10, 10, 0);
-  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+//  adjustment = gtk_adjustment_new (1, 0, 100, 10, 10, 0);
+//  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+  item = create_combo_text_with_history("");
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_width_spin", item, (GDestroyNotify) g_object_unref);
-  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE);
+//  g_object_set_data_full (G_OBJECT (camera_control), "img_width_spin", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "img_width_ctwh", item, (GDestroyNotify) g_object_unref);
+//  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE);
 
-  TABLE_ATTACH(table, label, 2, 1, 1, 1);
-  TABLE_ATTACH(table, item, 2, 0, 1, 1);
+  TABLE_ATTACH(table, label, 1, 1, 1, 1);
+  TABLE_ATTACH(table, item, 1, 0, 1, 1);
 
   label = gtk_label_new ("Height");
   gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5);
   gtk_misc_set_padding (GTK_MISC (label), 3, 0);
-  adjustment = gtk_adjustment_new (1, 0, 100, 10, 10, 0);
-  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+//  adjustment = gtk_adjustment_new (1, 0, 100, 10, 10, 0);
+//  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+  item = create_combo_text_with_history("");
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_height_spin", item, (GDestroyNotify) g_object_unref);
+//  g_object_set_data_full (G_OBJECT (camera_control), "img_height_spin", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "img_height_ctwh", item, (GDestroyNotify) g_object_unref);
+
+  TABLE_ATTACH(table, label, 2, 1, 1, 1);
+  TABLE_ATTACH(table, item, 2, 0, 1, 1);
+
+  label = gtk_label_new ("X-TopLeft");
+  gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5);
+  gtk_misc_set_padding (GTK_MISC (label), 3, 0);
+//  adjustment = gtk_adjustment_new (1, 0, 100, 10, 10, 0);
+//  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+  item = create_combo_text_with_history("");
+  g_object_ref (item);
+//  g_object_set_data_full (G_OBJECT (camera_control), "img_x_skip_spin", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "img_x_topleft_ctwh", item, (GDestroyNotify) g_object_unref);
 
   TABLE_ATTACH(table, label, 3, 1, 1, 1);
   TABLE_ATTACH(table, item, 3, 0, 1, 1);
 
-  label = gtk_label_new ("X-Skip");
+  label = gtk_label_new ("Y-TopLeft");
   gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5);
   gtk_misc_set_padding (GTK_MISC (label), 3, 0);
-  adjustment = gtk_adjustment_new (1, 0, 100, 10, 10, 0);
-  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+//  adjustment = gtk_adjustment_new  (1, 0, 100, 10, 10, 0);
+//  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
+  item = create_combo_text_with_history("");
   g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_x_skip_spin", item, (GDestroyNotify) g_object_unref);
+//  g_object_set_data_full (G_OBJECT (camera_control), "img_y_skip_spin", item, (GDestroyNotify) g_object_unref);
+  g_object_set_data_full (G_OBJECT (camera_control), "img_y_topleft_ctwh", item, (GDestroyNotify) g_object_unref);
 
   TABLE_ATTACH(table, label, 4, 1, 1, 1);
   TABLE_ATTACH(table, item, 4, 0, 1, 1);
 
-  label = gtk_label_new ("Y-Skip");
-  gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5);
-  gtk_misc_set_padding (GTK_MISC (label), 3, 0);
-  adjustment = gtk_adjustment_new  (1, 0, 100, 10, 10, 0);
-  item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 0);
-  g_object_ref (item);
-  g_object_set_data_full (G_OBJECT (camera_control), "img_y_skip_spin", item, (GDestroyNotify) g_object_unref);
+//  create dimensions set button
 
-  TABLE_ATTACH(table, label, 5, 1, 1, 1);
-  TABLE_ATTACH(table, item, 5, 0, 1, 1);
-
-  item = gtk_button_new_with_label("Set from display");
+  item = gtk_button_new_with_label("Get from display");
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "img_display_set", item, (GDestroyNotify) g_object_unref);
 
-  gtk_table_attach (GTK_TABLE (table), item, 0, 2, 6, 7, (GtkAttachOptions) (GTK_EXPAND | GTK_FILL), (GtkAttachOptions) (0), 0, 0);
+  gtk_table_attach (GTK_TABLE (table), item, 2, 3, 1, 2, (GtkAttachOptions) (GTK_EXPAND | GTK_FILL), (GtkAttachOptions) (0), 0, 0);
+
+  item = gtk_button_new_with_label("Set Image Dimensions");
+  g_object_ref (item);
+  g_object_set_data_full (G_OBJECT (camera_control), "img_dimensions_set", item, (GDestroyNotify) g_object_unref);
+
+  gtk_table_attach (GTK_TABLE (table), item, 2, 3, 2, 3, (GtkAttachOptions) (GTK_EXPAND | GTK_FILL), (GtkAttachOptions) (0), 0, 0);
 
   /**************** end frame tab ******************/
 

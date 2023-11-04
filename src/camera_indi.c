@@ -29,6 +29,7 @@
 
 #include "libindiclient/indi.h"
 #include "camera_indi.h"
+#include "cameragui.h"
 
 #include <glib-object.h>
 
@@ -150,33 +151,24 @@ void camera_set_binning(struct camera_t *camera, int x, int y)
 		indi_send(camera->binning_prop, NULL);
 }
 
-void camera_get_size(struct camera_t *camera, const char *param, int *value, int *min, int *max)
+// get image size from indi
+void camera_get_size(struct camera_t *camera, const char *par, int *value, int *min, int *max)
 {
 	struct indi_elem_t *elem = NULL;
 
 	*value = 0;
 	*min = 0;
 	*max = 99999;
-	if (! camera->ready) {
-//        err_printf("camera_get_size: Camera isn't ready.  Can't get size\n");
-		return;
-	}
+    if (! camera->ready) return;
+
 	if (! camera->frame_prop) {
         err_printf("camera_get_size: Camera doesn't support size\n");
 		return;
 	}
-	if (strcmp(param, "WIDTH") == 0)
-		elem = indi_find_elem(camera->frame_prop, "WIDTH");
-	else if (strcmp(param, "HEIGHT") == 0)
-		elem = indi_find_elem(camera->frame_prop, "HEIGHT");
-	else if (strcmp(param, "OFFX") == 0)
-		elem = indi_find_elem(camera->frame_prop, "X");
-	else if (strcmp(param, "OFFY") == 0)
-		elem = indi_find_elem(camera->frame_prop, "Y");
-	else
-		err_printf("Unknown image size parameter: %s\n", param);
-	if (elem)
-	{
+
+    elem = indi_find_elem(camera->frame_prop, par);
+
+    if (elem) {
 		*value = elem->value.num.value;
 		*min = elem->value.num.min;
 		*max = elem->value.num.max;
@@ -187,21 +179,26 @@ void camera_get_size(struct camera_t *camera, const char *param, int *value, int
 void camera_set_size(struct camera_t *camera, int width, int height, int x_offset, int y_offset)
 {
 	int changed = 0;
-	if (! camera->ready) {
-//        err_printf("camera_set_size: Camera isn't ready.  Can't set image size\n");
-		return;
-	}
+    if (! camera->ready) return;
 
 	if (! camera->frame_prop) {
         err_printf("camera_set_size: Camera doesn't support changing image_sIze\n");
 		return;
 	}
-	changed |= INDI_update_elem_if_changed(camera->frame_prop, "WIDTH",  width);
-	changed |= INDI_update_elem_if_changed(camera->frame_prop, "HEIGHT", height);
+
+    changed |= INDI_update_elem_if_changed(camera->frame_prop, "WIDTH",  width);
+    iprop_param_update_entry(camera->frame_prop, "WIDTH");
+
+    changed |= INDI_update_elem_if_changed(camera->frame_prop, "HEIGHT", height);
+    iprop_param_update_entry(camera->frame_prop, "HEIGHT");
+
     changed |= INDI_update_elem_if_changed(camera->frame_prop, "X", x_offset);
+    iprop_param_update_entry(camera->frame_prop, "X");
+
     changed |= INDI_update_elem_if_changed(camera->frame_prop, "Y", y_offset);
-	if (changed) 
-		indi_send(camera->frame_prop, NULL);
+    iprop_param_update_entry(camera->frame_prop, "Y");
+
+    if (changed) indi_send(camera->frame_prop, NULL);
 }
 
 void camera_get_temperature(struct camera_t *camera, float *value, float *min, float *max)
@@ -387,10 +384,14 @@ printf("camera_connect\n"); fflush(NULL);
         camera->filepath_prop = iprop;
 //        indi_prop_add_cb(iprop, (IndiPropCB)camera_filepath_cb, camera);
     }
-    else if (strcmp(iprop->name, "CCD_FRAME_TYPE") == 0) {
+//    else if (strcmp(iprop->name, "CCD_FRAME_TYPE") == 0) {
+//        d3_printf("Found CCD_FRAME_TYPE for camera %s\n", iprop->idev->name);
+//		camera->frame_prop = iprop;
+//	}
+    else if (strcmp(iprop->name, "CCD_FRAME") == 0) {
         d3_printf("Found CCD_FRAME_TYPE for camera %s\n", iprop->idev->name);
-		camera->frame_prop = iprop;
-	}
+        camera->frame_prop = iprop;
+    }
     else if (strcmp(iprop->name, "CCD_BINNING") == 0) {
         d3_printf("Found CCD_BINNING for camera %s\n", iprop->idev->name);
 		camera->binning_prop = iprop;

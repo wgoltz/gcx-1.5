@@ -33,6 +33,7 @@
 #include "sidereal_time.h"
 #include "obsdata.h"
 #include "combo_text_with_history.h"
+#include "cameragui.h"
 
 #include <glib-object.h>
 
@@ -395,24 +396,10 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
     // set entries in indi dialog
 
     indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours
-
-    struct indi_elem_t *elem = indi_find_elem(tele->coord_set_prop, "RA");
-    GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (elem->iprop->widget), elem->name);
-    GtkWidget *ctwh = (GtkWidget *)g_object_get_data(G_OBJECT (element), "ctwh");
-
-    char *ras = numberFormat(elem->value.num.fmt, elem->value.num.value);
-    set_combo_text_with_history(ctwh, ras);
-    free(ras);
+    iprop_param_update_entry(tele->coord_set_prop, "RA");
 
     indi_prop_set_number(tele->coord_set_prop, "DEC", pdc);
-
-    elem = indi_find_elem(tele->coord_set_prop, "DEC");
-    element = (GtkWidget *)g_object_get_data(G_OBJECT (elem->iprop->widget), elem->name);
-    ctwh = (GtkWidget *)g_object_get_data(G_OBJECT (element), "ctwh");
-
-    char *decs = numberFormat(elem->value.num.fmt, elem->value.num.value);
-    set_combo_text_with_history(ctwh, decs);
-    free(decs);
+    iprop_param_update_entry(tele->coord_set_prop, "DEC");
 
     indi_send(tele->coord_set_prop, NULL);
 

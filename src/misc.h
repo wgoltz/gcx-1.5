@@ -7,12 +7,14 @@
 void str_join_str(char **str, char *join, char *append);
 void str_join_varg(char **str, char *join, ...);
 
+int named_ctwh_get_value(GtkWidget *dialog, char *name);
+void named_ctwh_set_value(GtkWidget *dialog, char *name, int val);
 double named_spin_get_value(GtkWidget *dialog, char *name);
 void named_spin_set(GtkWidget *dialog, char *name, double val);
 int get_named_checkb_val(GtkWidget *dialog, char *name);
 char *named_entry_text(GtkWidget *dialog, char *name);
 void named_entry_set(GtkWidget *dialog, char *name, char *text);
-void named_cbentry_set(GtkWidget *dialog, char *name, char *text);
+void named_combo_text_entry_set(GtkWidget *dialog, char *name, char *text);
 long set_named_callback(void *dialog, char *name, char *callback, void *func);
 long set_named_callback_data(void *dialog, char *name, char *callback, void *func, gpointer data);
 void set_named_checkb_val(GtkWidget *dialog, char *name, int val);

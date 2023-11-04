@@ -1,6 +1,8 @@
 #include <gtk/gtk.h>
 #include <string.h>
 
+#define HISTORY_MAX 5
+
 /* implement text entry with history */
 void set_combo_text_with_history(GtkWidget *ctwh, char *val)
 {
@@ -10,64 +12,67 @@ void set_combo_text_with_history(GtkWidget *ctwh, char *val)
 
     GtkTreeModel *history = gtk_combo_box_get_model(GTK_COMBO_BOX (ctwh));
 
-    GtkTreeIter iter;
-    if (gtk_tree_model_get_iter_first(history, &iter)) {
-        for (;;) { // remove any old ref
-            gchar *str = NULL;
-            gtk_tree_model_get(history, &iter, 0, &str, -1);
-            if (! (str && str[0])) break;
+    if (val && val[0] != 0) {
+        gboolean in_history = FALSE;
 
-            gboolean in_history = (strcmp(str, val) == 0);
-            g_free(str);
+        GtkTreeIter iter, last_iter;
+        if (gtk_tree_model_get_iter_first(history, &iter)) {
+            int i = HISTORY_MAX - 1;
 
-            if (in_history) {
-                gtk_list_store_remove(GTK_LIST_STORE (history), &iter);
-                break;
+            for (;;) { // look for existing
+                gchar *str = NULL;
+                gtk_tree_model_get(history, &iter, 0, &str, -1);
+                if (str == NULL || str[0] == 0) break;
+
+                in_history = (strcmp(str, val) == 0);
+                g_free(str);
+
+                if (in_history) break;
+
+                last_iter = iter;
+
+                if (i == 0) { // drop row if exceeds history size
+                    gtk_list_store_remove(GTK_LIST_STORE (history), &iter);
+                    iter = last_iter;
+                    break;
+                }
+
+                if (! gtk_tree_model_iter_next(history, &iter)) {
+                    iter = last_iter;
+                    break;
+                }
+
+                i--;
             }
+        }
 
-            if (! gtk_tree_model_iter_next(history, &iter)) break;
+        if (! in_history) {
+            gtk_list_store_prepend(GTK_LIST_STORE (history), &iter); // add to history
+            gtk_list_store_set(GTK_LIST_STORE (history), &iter, 0, val, -1);
         }
     }
+}
 
-    gtk_list_store_prepend(GTK_LIST_STORE (history), &iter); // add to history
-    gtk_list_store_set(GTK_LIST_STORE (history), &iter, 0, val, -1);       
+const char *get_combo_text_with_history(GtkWidget *ctwh)
+{
+    GtkEntry *entry = g_object_get_data(G_OBJECT (ctwh), "entry");
+    const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
+
+    return text;
 }
 
 GtkWidget *create_combo_text_with_history(char *val)
 {
-/*
-    GtkListStore *history = gtk_list_store_new(1, G_TYPE_STRING);
-
-    GtkWidget *widget = gtk_combo_box_new_with_model_and_entry(GTK_TREE_MODEL (history));
-    g_object_unref(history); // now owned by widget
-
-    GtkCellRenderer *renderer = gtk_cell_renderer_combo_new();
-    g_object_set(renderer, "has_entry", TRUE, "model", history, "text-column", 0, NULL);
-
-    gtk_combo_box_set_entry_text_column(GTK_COMBO_BOX (widget), 0);
-
-    // entry is the displayed value
-    GtkWidget *entry = gtk_bin_get_child(GTK_BIN (widget));
-    g_object_ref(entry);
-    g_object_set_data_full(G_OBJECT (widget), "entry", entry, (GDestroyNotify)g_object_unref); // quick access to entry widget
-
-    gtk_entry_set_text(GTK_ENTRY (entry), val);
-
-    // set first history value
-    GtkTreeIter iter;
-    gtk_list_store_prepend(history, &iter);
-    gtk_list_store_set(history, &iter, 0, val, -1);
-
-    return widget;
-*/
     GtkWidget *ctwh = gtk_combo_box_text_new_with_entry();
+
     // entry is the displayed value
     GtkWidget *entry = gtk_bin_get_child(GTK_BIN (ctwh));
-    g_object_ref(entry);
-    g_object_set_data_full(G_OBJECT (ctwh), "entry", entry, (GDestroyNotify)g_object_unref); // quick access to entry widget
+    g_object_set_data(G_OBJECT (ctwh), "entry", entry); // quick access to entry widget
 
-    gtk_combo_box_text_prepend_text(GTK_COMBO_BOX_TEXT(ctwh), val);
+    if (val && val[0] != 0) {
+        gtk_entry_set_text(GTK_ENTRY(entry), val);
+        gtk_combo_box_text_prepend_text(GTK_COMBO_BOX_TEXT(ctwh), val);
+    }
 
     return ctwh;
 }
-

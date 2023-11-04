@@ -52,9 +52,13 @@
 #include "tele_indi.h"
 #include "wcs.h"
 #include "sidereal_time.h"
+#include "combo_text_with_history.h"
 
 #define AUTO_FILE_FORMAT "%s%03d.fits"
 #define AUTO_FILE_GZ_FORMAT "%s%03d.fits.gz"
+#define AUTO_FILE_TIME_FORMAT "%s%03.5f.fits"
+#define AUTO_FILE_TIME_GZ_FORMAT "%s%03.5f.fits.gz"
+
 #define DEFAULT_FRAME_NAME "frame"
 #define DEFAULT_DARK_NAME "dark"
 
@@ -87,6 +91,17 @@ static void toggle_button_no_cb(GtkWidget *window, GtkWidget *button, const char
 
 }
 #endif
+
+// update iprop's entry widget to match the param's value
+void iprop_param_update_entry(gpointer iprop, const char *param) {
+    struct indi_elem_t *elem = indi_find_elem(iprop, param);
+    GtkWidget *element = (GtkWidget *)g_object_get_data(G_OBJECT (elem->iprop->widget), elem->name);
+    GtkWidget *ctwh = (GtkWidget *)g_object_get_data(G_OBJECT (element), "ctwh");
+
+    char *buf = numberFormat(elem->value.num.fmt, elem->value.num.value);
+    set_combo_text_with_history(ctwh, buf);
+    free(buf);
+}
 
 static void named_spin_set_limits(gpointer cam_control_dialog, char *name, double min, double max)
 {
@@ -184,7 +199,7 @@ static int exposure_change_cb(gpointer cam_control_dialog)
     return ret;
 }
 
-const int img_scale[4] = {1000, 1414, 2000, 4000};
+//const int img_scale[4] = {1000, 1414, 2000, 4000};
 
 /* get the values from cam into the image dialog page */
 void cam_to_img(gpointer cam_control_dialog)
@@ -197,18 +212,17 @@ void cam_to_img(gpointer cam_control_dialog)
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
 	camera = camera_find(main_window, CAMERA_MAIN);
-	if (! camera)
-		return;
+    if (! camera  || ! camera->ready) return;
 
     g_object_set_data(G_OBJECT (cam_control_dialog), "disable_signals", (void *)1);
 
 	camera_get_binning(camera, &binx, &biny);
     char *buf = NULL; asprintf(&buf, "%dx%d", binx, biny);
-    if (buf) named_cbentry_set(cam_control_dialog, "img_bin_combo", buf), free(buf);
+    if (buf) named_combo_text_entry_set(cam_control_dialog, "img_bin_combo", buf), free(buf); // runs binning_changed_cb
 
-//	camera_get_exposure_settings(camera, &fvalue, &fmin, &fmax);
-//	named_spin_set_limits(cam_control_dialog, "exp_spin", fmin, fmax);
-//	named_spin_set(cam_control_dialog, "exp_spin", fvalue);
+//    camera_get_exposure_settings(camera, &fvalue, &fmin, &fmax);
+//    named_spin_set_limits(cam_control_dialog, "exp_spin", fmin, fmax);
+//    named_spin_set(cam_control_dialog, "exp_spin", fvalue);
 
 
 //    GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(cam_control_dialog), "img_size_combo_box");
@@ -217,27 +231,50 @@ void cam_to_img(gpointer cam_control_dialog)
 
 //    double v;
 
-	camera_get_size(camera, "WIDTH", &value, &min, &max);
-    named_spin_set_limits(cam_control_dialog, "img_width_spin", 0, 1.0 * max);
+//    camera_get_size(camera, "WIDTH", &value, &min, &max);
+
+//    named_spin_set_limits(cam_control_dialog, "img_width_spin", 0, 1.0 * max);
 
 //    v = value * 1000.0 / img_scale[active] / binx;
-    named_spin_set(cam_control_dialog, "img_width_spin", 1.0 * value / binx);
-    mxsk = 0; //max - value * binx;
+//    named_spin_set(cam_control_dialog, "img_width_spin", 1.0 * value / binx);
+//    mxsk = 0; //max - value * binx;
 
-	camera_get_size(camera, "HEIGHT", &value, &min, &max);
-    named_spin_set_limits(cam_control_dialog, "img_height_spin", 0, 1.0 * max);
+//    camera_get_size(camera, "HEIGHT", &value, &min, &max);
+
+//    named_spin_set_limits(cam_control_dialog, "img_height_spin", 0, 1.0 * max);
 
 //    v = value * 1000.0 / img_scale[active] / biny;
-    named_spin_set(cam_control_dialog, "img_height_spin", 1.0 * value / biny);
-    mysk = 0; //max - value * biny;
+//    named_spin_set(cam_control_dialog, "img_height_spin", 1.0 * value / biny);
+//    mysk = 0; //max - value * biny;
 
-    named_spin_set_limits(cam_control_dialog, "img_x_skip_spin", 0, 1.0 * mxsk);
-	camera_get_size(camera, "OFFX", &value, &min, &max);
-    named_spin_set(cam_control_dialog, "img_x_skip_spin", 1.0 * value);
+//    named_spin_set_limits(cam_control_dialog, "img_x_skip_spin", 0, 1.0 * mxsk);
+//    camera_get_size(camera, "OFFX", &value, &min, &max);
+//    named_spin_set(cam_control_dialog, "img_x_skip_spin", 1.0 * value);
 
-    named_spin_set_limits(cam_control_dialog, "img_y_skip_spin", 0, 1.0 * mysk);
-    camera_get_size(camera, "OFFY", &value, &min, &max);
-    named_spin_set(cam_control_dialog, "img_y_skip_spin", 1.0 * value);
+//    named_spin_set_limits(cam_control_dialog, "img_y_skip_spin", 0, 1.0 * mysk);
+//    camera_get_size(camera, "OFFY", &value, &min, &max);
+//    named_spin_set(cam_control_dialog, "img_y_skip_spin", 1.0 * value);
+
+    camera_get_size(camera, /*camera_frame_width*/ "WIDTH", &value, &min, &max);
+
+    int width = value < max ? (value > min ? value : min) : max;
+    named_ctwh_set_value(cam_control_dialog, "img_width_ctwh", width);
+
+    camera_get_size(camera, /*camera_frame_height*/ "HEIGHT", &value, &min, &max);
+
+    int height = value < max ? (value > min ? value : min) : max;
+    named_ctwh_set_value(cam_control_dialog, "img_height_ctwh", height);
+
+    camera_get_size(camera, /*camera_frame_X*/ "X", &value, &min, &max);
+
+    int x_topleft = value < max ? (value > min ? value : min) : max;
+    named_ctwh_set_value(cam_control_dialog, "img_x_topleft_ctwh", x_topleft);
+
+    camera_get_size(camera, /*camera_frame_Y*/ "Y", &value, &min, &max);
+
+    int y_topleft = value < max ? (value > min ? value : min) : max;
+    named_ctwh_set_value(cam_control_dialog, "img_y_topleft_ctwh", y_topleft);
+
 
 //	camera_get_temperature(camera, &fvalue, &fmin, &fmax);
 //	named_spin_set_limits(cam_control_dialog, "cooler_tempset_spin", fmin, fmax);
@@ -288,72 +325,97 @@ static void binning_changed_cb( GtkWidget *widget, gpointer cam_control_dialog)
 
     if (!ret) {
         camera_set_binning(camera, bx, by);
-        cam_to_img(cam_control_dialog);
+//        cam_to_img(cam_control_dialog); // binning_changed_cb is called within cam_to_img
     }
+}
+
+static void img_dimensions_set_cb( GtkWidget *widget, gpointer cam_control_dialog )
+{
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
+
+    struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
+    if (camera == NULL) return;
+
+//    struct image_channel *i_channel = g_object_get_data(G_OBJECT(main_window), "i_channel");
+//    if (i_channel == NULL) return;
+
+//    named_spin_set(cam_control_dialog, "img_width_ctwh", i_channel->width);
+//    named_spin_set(cam_control_dialog, "img_height_spin", i_channel->height);
+//    named_spin_set(cam_control_dialog, "img_x_skip_spin", i_channel->x);
+//    named_spin_set(cam_control_dialog, "img_y_skip_spin", i_channel->y);
+//    camera_set_size(camera,
+//        named_spin_get_value(cam_control_dialog, "img_width_spin"),
+//        named_spin_get_value(cam_control_dialog, "img_height_spin"),
+//        named_spin_get_value(cam_control_dialog, "img_x_skip_spin"),
+//        named_spin_get_value(cam_control_dialog, "img_y_skip_spin"));
+
+    // set indi dialog dimensions from camera frame dimensions
+
+    // check dimensions against i_channel
+//    named_ctwh_set_value(cam_control_dialog, "img_width_ctwh", i_channel->width);
+//    named_ctwh_set_value(cam_control_dialog, "img_height_ctwh", i_channel->height);
+//    named_ctwh_set_value(cam_control_dialog, "img_x_topleft_ctwh", i_channel->x);
+//    named_ctwh_set_value(cam_control_dialog, "img_y_topleft_ctwh", i_channel->y);
+
+    camera_set_size(camera,
+        named_ctwh_get_value(cam_control_dialog, "img_width_ctwh"),
+        named_ctwh_get_value(cam_control_dialog, "img_height_ctwh"),
+        named_ctwh_get_value(cam_control_dialog, "img_x_topleft_ctwh"),
+        named_ctwh_get_value(cam_control_dialog, "img_y_topleft_ctwh"));
+
+
+    cam_to_img(cam_control_dialog); // ? resets img from actual cam values
 }
 
 static void img_display_set_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
-    struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
-    struct image_channel *i_channel = g_object_get_data(G_OBJECT(main_window), "i_channel");
-    named_spin_set(cam_control_dialog, "img_width_spin", i_channel->width);
-    named_spin_set(cam_control_dialog, "img_height_spin", i_channel->height);
-    named_spin_set(cam_control_dialog, "img_x_skip_spin", i_channel->x);
-    named_spin_set(cam_control_dialog, "img_y_skip_spin", i_channel->y);
-    camera_set_size(camera,
-        named_spin_get_value(cam_control_dialog, "img_width_spin"),
-        named_spin_get_value(cam_control_dialog, "img_height_spin"),
-        named_spin_get_value(cam_control_dialog, "img_x_skip_spin"),
-        named_spin_get_value(cam_control_dialog, "img_y_skip_spin"));
-
-    cam_to_img(cam_control_dialog);
+    // set dimensions from display
+    // call img_dimensions_set_cb
 }
-
-/* read the exp settings from the img page into the cam structure */
-//void set_exp_from_img_dialog(struct camera_t *camera, gpointer cam_control_dialog)
-//{
-//	camera_set_size(camera,
-//		named_spin_get_value(cam_control_dialog, "img_width_spin"),
-//		named_spin_get_value(cam_control_dialog, "img_height_spin"),
-//		named_spin_get_value(cam_control_dialog, "img_x_skip_spin"),
-//		named_spin_get_value(cam_control_dialog, "img_y_skip_spin"));
-
-//    cam_to_img(cam_control_dialog);
-//}
 
 /* called when image size entries change */
 static void img_changed_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
-    struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
-
-    long *disable_signals = g_object_get_data(G_OBJECT(cam_control_dialog), "disable_signals");
-
-    if(! camera) {
+    struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);    
+    if(camera == NULL || ! camera->ready) {
         err_printf("no camera connected\n");
         return;
     }
+
+    long *disable_signals = g_object_get_data(G_OBJECT(cam_control_dialog), "disable_signals");
+
     if (! disable_signals) {
 
-        // get current size and binning
+        // get current size and binning from indi
         int min, max_w, max_h, width, height ;
-        camera_get_size(camera, "WIDTH", &width, &min, &max_w);
-        camera_get_size(camera, "HEIGHT", &height, &min, &max_h);
+        camera_get_size(camera, /*camera_frame_width*/ "WIDTH", &width, &min, &max_w);
+        camera_get_size(camera, /*camera_frame_height*/ "HEIGHT", &height, &min, &max_h);
 
         int min_skip, max_skip, skip_x, skip_y;
-        camera_get_size(camera, "OFFX", &skip_x, &min_skip, &max_skip);
-        camera_get_size(camera, "OFFY", &skip_y, &min_skip, &max_skip);
+        camera_get_size(camera, /*camera_frame_X*/ "X", &skip_x, &min_skip, &max_skip);
+        camera_get_size(camera, /*camera_frame_Y*/ "Y", &skip_y, &min_skip, &max_skip);
 
         int binx, biny;
         camera_get_binning(camera, &binx, &biny);
 
-        GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(cam_control_dialog), "img_size_combo_box");
+// currently wait for changed: try add a button and look for click
+// change to top, left, bottom, right or leave as width, height, or both?
+// use combo box with history
+//        "img_width_spin"
+//        "img_height_spin"
+//        "img_x_skip_spin"
+//        "img_y_skip_spin"
+// clicked: use seperate callback to change above then call img_changed_cb
+//        "img_display_set"
 
-        int active = gtk_combo_box_get_active(GTK_COMBO_BOX(img_size_combo_box));
+// too confusing: just use binning and set from display
+//        GtkWidget *img_size_combo_box = g_object_get_data(G_OBJECT(cam_control_dialog), "img_size_combo_box");
 
-        width = max_w * 1000 / img_scale[active];
-        height = max_h * 1000 / img_scale[active];
+//        int active = gtk_combo_box_get_active(GTK_COMBO_BOX(img_size_combo_box));
+
+//        width = max_w * 1000 / img_scale[active];
+//        height = max_h * 1000 / img_scale[active];
 
     //	skip_x = (max_w - (binx * width)) / 2;
     //	skip_y = (max_h - (biny * height)) / 2;
@@ -379,32 +441,45 @@ void save_frame_auto_name(struct ccd_frame *fr, gpointer cam_control_dialog)
 
     wcs_to_fits_header(fr); // ?
 
-    int seq = named_spin_get_value(cam_control_dialog, "file_seqn_spin");
-    if (seq >= 0) {
-        int append = check_seq_number(text, &seq);
-        if (append >= 0) {
+//    int seq = named_spin_get_value(cam_control_dialog, "file_seqn_spin");
+//    if (seq >= 0) {
+    int seq = 0;
+    int append = check_seq_number(text, &seq);
 
-            gboolean zipped = (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "exp_compress_checkb") > 0);
+    if (append >= 0) {
 
-            text[append] = 0;
-            char *fn = NULL; asprintf(&fn, (zipped) ? AUTO_FILE_GZ_FORMAT : AUTO_FILE_FORMAT, text, seq);
-            free(text);
+        gboolean zipped = (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "exp_compress_checkb") > 0);
+        zipped = zipped || file_is_zipped(text);
 
-            if (fn) {
-                int ret = write_fits_frame(fr, fn);
+        text[append] = 0;
 
-                char *mb = NULL;
-                if (ret) {
-                    asprintf(&mb, "WRITE FAILED: %s", fn);
-                } else {
-                    asprintf(&mb, "Wrote file: %s", fn);
-                    seq ++;
-                    named_spin_set(cam_control_dialog, "file_seqn_spin", seq);
-                }
-                free(fn);
+        char *fn = NULL;
+        if (seq == -1) {
+            double i;
+            double short_jd = modf(frame_jdate(fr) / 1000, &i) * 1000;
+            if (short_jd >= 1000) short_jd = 0;
+            asprintf(&fn, (zipped) ? AUTO_FILE_TIME_GZ_FORMAT : AUTO_FILE_TIME_FORMAT, text, short_jd);
+        } else {
+//            seq++;
+            asprintf(&fn, (zipped) ? AUTO_FILE_GZ_FORMAT : AUTO_FILE_FORMAT, text, seq);
+        }
 
-                if (mb) status_message(cam_control_dialog, mb), free(mb);
+        free(text);
+
+        if (fn) {
+            int ret = write_fits_frame(fr, fn);
+
+            char *mb = NULL;
+            if (ret) {
+                asprintf(&mb, "WRITE FAILED: %s", fn);
+            } else {
+                asprintf(&mb, "Wrote file: %s", fn);
+                seq ++;
+                named_spin_set(cam_control_dialog, "file_seqn_spin", seq);
             }
+            free(fn);
+
+            if (mb) status_message(cam_control_dialog, mb), free(mb);
         }
     }
 }
@@ -870,7 +945,7 @@ static void update_obs_entries( gpointer cam_control_dialog, struct obs_data *ob
     if (decs) named_entry_set(cam_control_dialog, "obs_dec_entry", decs), free(decs);
 
 	if (obs->filter != NULL)
-        named_cbentry_set(cam_control_dialog, "obs_filter_combo", obs->filter);
+        named_combo_text_entry_set(cam_control_dialog, "obs_filter_combo", obs->filter);
 
     double ha = obs_current_hour_angle(obs);
     double airm = obs_current_airmass(obs);
@@ -1382,14 +1457,16 @@ void cam_set_callbacks(gpointer cam_control_dialog)
 
     //set_named_callback(cam_control_dialog, "exp_spin", "changed", img_changed_cb);
 
-    set_named_callback(cam_control_dialog, "img_width_spin", "value-changed", img_changed_cb);
-    set_named_callback(cam_control_dialog, "img_height_spin", "value-changed", img_changed_cb);
-    set_named_callback(cam_control_dialog, "img_x_skip_spin", "value-changed", img_changed_cb);
-    set_named_callback(cam_control_dialog, "img_y_skip_spin", "value-changed", img_changed_cb);
+//    set_named_callback(cam_control_dialog, "img_width_spin", "value-changed", img_changed_cb);
+//    set_named_callback(cam_control_dialog, "img_height_spin", "value-changed", img_changed_cb);
+//    set_named_callback(cam_control_dialog, "img_x_skip_spin", "value-changed", img_changed_cb);
+//    set_named_callback(cam_control_dialog, "img_y_skip_spin", "value-changed", img_changed_cb);
+
     set_named_callback(cam_control_dialog, "img_display_set", "clicked", img_display_set_cb);
+    set_named_callback(cam_control_dialog, "img_dimensions_set", "clicked", img_dimensions_set_cb);
 
     set_named_callback(cam_control_dialog, "img_bin_combo", "changed", binning_changed_cb);
-    set_named_callback(cam_control_dialog, "img_size_combo_box", "changed", img_changed_cb);
+//    set_named_callback(cam_control_dialog, "img_size_combo_box", "changed", img_changed_cb);
 
     set_named_callback(cam_control_dialog, "obs_filter_combo", "changed", filter_list_select_cb);
 
@@ -1457,6 +1534,8 @@ void act_control_camera (GtkAction *action, gpointer window)
         if (camera) {
             camera_set_ready_callback(window, CAMERA_MAIN, cam_ready_indi_cb, window, "cam_ready_indi_cb");
             enable_camera_widgets(cam_control_dialog, camera->ready);
+
+            cam_to_img(cam_control_dialog);
         }
         struct tele_t *tele = tele_find(window); // could be multiple mount drivers
         if (tele) {
@@ -1468,7 +1547,6 @@ void act_control_camera (GtkAction *action, gpointer window)
             fwheel_set_ready_callback(window, fwheel_ready_indi_cb, window, "fwheel_ready_indi_cb");
 		}
 
-        cam_to_img(cam_control_dialog);
 //        gtk_widget_show_all(cam_control_dialog);
 //	} else {
 //		gtk_widget_show(cam_control_dialog);

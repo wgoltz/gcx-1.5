@@ -47,6 +47,7 @@
 #include "gcx.h"
 #include "misc.h"
 #include "sidereal_time.h"
+#include "combo_text_with_history.h"
 //#include "getline.h"
 
 /* str append to str
@@ -359,7 +360,7 @@ int check_seq_number(char *file, int *sqn)
 
     int pos = (p >= fcopy) ? p - fcopy + 1 : 0; // end of name part in file name
 
-    if (found_seq && ! found_time) {
+    if (! found_time) {
         int lseq = 0;
         char *fn = basename(fcopy);
         int sz = p - fn + 1; // size of name part
@@ -379,6 +380,8 @@ int check_seq_number(char *file, int *sqn)
     }
 
     if (found_time) *sqn = -1;
+
+//    if (!found_time && !found_seq) *sqn = 1;
 
     free(fcopy);
     closedir(dir);
@@ -441,7 +444,7 @@ char *save_name(char *in_full_name, char *file_name_stub, double *jd)
         if (X_size || jd == NULL) { // num sequence (if set in stub) gets priority
             int seq = 1;
             char *check_fn = NULL; str_join_varg(&check_fn, "%s%d", fn, seq);
-            if (check_fn) check_seq_number(check_fn, &seq); free(check_fn); // check for existing and update seq to next
+            if (check_fn) check_seq_number(check_fn, &seq), free(check_fn); // check for existing and update seq to next
 
             if (seq != -1) // skip if time suffix
                 str_join_varg(&fn, "%0.*d", X_size, seq);
@@ -479,8 +482,10 @@ void named_entry_set(GtkWidget *dialog, char *name, char *text)
 	gtk_entry_set_text(GTK_ENTRY(entry), text);
 }
 
-/* set the entry named name under dialog to the given text */
-void named_cbentry_set(GtkWidget *dialog, char *name, char *text)
+/* set the combo_text named name under dialog to the given text
+ * appends text if it is new
+ */
+void named_combo_text_entry_set(GtkWidget *dialog, char *name, char *text)
 {
 	GtkWidget *entry;
 	GtkTreeModel *model;
@@ -497,7 +502,7 @@ void named_cbentry_set(GtkWidget *dialog, char *name, char *text)
 		ok = gtk_tree_model_iter_next(model, &iter), count++)
 	{
 		gtk_tree_model_get(model, &iter, 0, &data, -1);
-		if (strcmp(data, text) == 0) {
+        if (strcmp(data, text) == 0) {
 			gtk_combo_box_set_active_iter(GTK_COMBO_BOX (entry), &iter);
 			return;
 		}
@@ -553,6 +558,36 @@ double named_spin_get_value(GtkWidget *dialog, char *name)
     GtkWidget *spin = g_object_get_data(G_OBJECT(dialog), name);
     if (spin == NULL) return -1;
 	return gtk_spin_button_get_value(GTK_SPIN_BUTTON(spin));
+}
+
+/* set the combo_text_with_history named name under dialog to the given value */
+void named_ctwh_set_value(GtkWidget *dialog, char *name, int val)
+{
+    if (val == NAN) return;
+
+    g_return_if_fail(dialog != NULL);
+
+    GtkWidget *ctwh = g_object_get_data(G_OBJECT(dialog), name);
+    g_return_if_fail(ctwh != NULL);
+
+    char *buf = NULL; asprintf(&buf, "%d", val);
+    if (buf) set_combo_text_with_history(ctwh, buf), free(buf);
+}
+
+int named_ctwh_get_value(GtkWidget *dialog, char *name)
+{
+    GtkWidget *ctwh = g_object_get_data(G_OBJECT(dialog), name);
+    if (ctwh == NULL) return NAN;
+
+    GtkWidget *entry = g_object_get_data(G_OBJECT(ctwh), "entry");
+    if (entry == NULL) return NAN;
+
+    const gchar *text = gtk_entry_get_text(GTK_ENTRY(entry));
+    if (text == NULL) return NAN;
+
+    char *endp = NULL;
+    int val = strtol(text, &endp, 10);
+    return val;
 }
 
 /* return the value of a named checkbutton */
