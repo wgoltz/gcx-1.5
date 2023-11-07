@@ -479,7 +479,7 @@ if (isnan(v))
         bv += hstep;
         b += hdata[i];
 
-        if (b < s) {
+        if (b < s) { // index < lower half-max
             is = i;
             continue;
         }
@@ -492,24 +492,23 @@ if (isnan(v))
                 median = (i - 0.5) * hstep + hmin - HIST_OFFSET;
             }
         }
-// here ?
-//        n += hdata[i];
-//        sum += hdata[i] * bv;
-//        sumsq += hdata[i] * bv * bv;
 
-        if (b > e) break;
-// or here ?
+//        if (b > e) break; // index > upper half-max
+
         n += hdata[i];
         sum += hdata[i] * bv;
         sumsq += hdata[i] * bv * bv;
+
+        if (b > e) break; // index > upper half-max
 	}
-//	i = is;
-    st->hist.cst = is;
+
+    st->hist.cst = is; // not used
+    st->hist.cend = i; // not used
 
 //	info_printf("new cavg %.3f csigm %.3f median %.3f, sigma, %.3f ", sum / n,
 //		    sqrt(sumsq / n - sqr(sum / n)), median, hd->stats.sigma);
 
-	if (n != 0) {
+    if (n > 1) {
 		st->cavg = sum / n;
 // try this:
         st->csigma = 2.8 * SIGMA(sumsq, sum, n); // guess
