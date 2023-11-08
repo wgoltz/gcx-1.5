@@ -348,6 +348,8 @@ void tele_abort(struct tele_t *tele)
 
 int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox)
 {
+    struct indi_elem_t *elem = NULL;
+
 	if (! tele) {
 		err_printf("No telescope found\n");
 		return -1;
@@ -369,22 +371,23 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 		return -1;
 	}
 	if (tele->coord_set_type_prop) {
-        struct indi_elem_t *elem = NULL;
 		switch (type) {
 		case TELE_COORDS_SYNC: 
 			elem = indi_prop_set_switch(tele->coord_set_type_prop, "SYNC", 1);
 			break;
 		case TELE_COORDS_SLEW: 
-			elem = indi_prop_set_switch(tele->coord_set_type_prop, "SLEW", 1);
+            elem = indi_prop_set_switch(tele->coord_set_type_prop, "TRACK", 1);
 			break;
 		}
 // elem returns as null
-//        if (elem) {
+        if (elem) {
 //            indi_send(tele->abort_prop, elem); // stop any previous active move?
-//        } else {
-//            err_printf("Telescope failed to change mode\n");
-//            return -1;
-//        }
+        } else {
+            err_printf("Telescope failed to change mode\n");
+            return -1;
+        }
+        // try this
+        indi_send(tele->coord_set_type_prop, elem);
 	}
 
     // precess coords to current equinox
@@ -394,7 +397,6 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
     if (P_INT(TELE_PRECESS_TO_EOD) && equinox != NAN) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
 
     // set entries in indi dialog
-
     indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours
     iprop_param_update_entry(tele->coord_set_prop, "RA");
 

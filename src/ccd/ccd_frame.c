@@ -390,7 +390,7 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
     for (hix = 0; hix < hsize; hix++) hdata[hix] = 0;
 
     double hmin = H_MIN;
-    double hstep = (H_MAX - H_MIN) / hsize; // clangd says division by 0 (stats not setup correctly)
+    double hstep = (H_MAX - H_MIN) / hsize; // clangd says division by 0
     unsigned binmax = 0;
 
     double sum = 0.0;
@@ -410,12 +410,6 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
         int x;
 		for (x = rx; x < rx + rw; x++) {
             float v = get_pixel_luminence(fr, x, y);
-if (isnan(v))
-    printf("found NaN at %d, %d", x, y);
-//			if (v < -HIST_OFFSET)
-//				v = -HIST_OFFSET;
-//			if (v > H_MAX)
-//				v = H_MAX;
 
             unsigned b;
             if (HIST_OFFSET < floor((v - hmin) / hstep))
@@ -479,7 +473,7 @@ if (isnan(v))
         bv += hstep;
         b += hdata[i];
 
-        if (b < s) { // index < lower half-max
+        if (b < s) { // < lower half-max
             is = i;
             continue;
         }
@@ -487,30 +481,23 @@ if (isnan(v))
         if (b - hdata[i] < c && b >= c) { // we are at the median point
             if (hdata[i] != 0) { // get the interpolated median
                 median = (b - c) / hdata[i] * hstep + i + hmin - HIST_OFFSET;
-                //				info_printf("M: %.3f\n", median);
             } else {
                 median = (i - 0.5) * hstep + hmin - HIST_OFFSET;
             }
         }
 
-//        if (b > e) break; // index > upper half-max
-
         n += hdata[i];
         sum += hdata[i] * bv;
         sumsq += hdata[i] * bv * bv;
 
-        if (b > e) break; // index > upper half-max
+        if (b > e) break; // > upper half-max
 	}
 
     st->hist.cst = is; // not used
     st->hist.cend = i; // not used
 
-//	info_printf("new cavg %.3f csigm %.3f median %.3f, sigma, %.3f ", sum / n,
-//		    sqrt(sumsq / n - sqr(sum / n)), median, hd->stats.sigma);
-
     if (n > 1) {
 		st->cavg = sum / n;
-// try this:
         st->csigma = 2.8 * SIGMA(sumsq, sum, n); // guess
     } else {
 		st->cavg = st->avg;
@@ -518,10 +505,7 @@ if (isnan(v))
 	}
 	st->median = median;
 	st->statsok = 1;
-//	info_printf("min=%.2f max=%.2f avg=%.2f sigma=%.2f cavg=%.2f csigma=%.2f\n",
-//		    hd->stats.min, hd->stats.max, hd->stats.avg, hd->stats.sigma,
-//		    hd->stats.cavg, hd->stats.csigma);
-//printf("%.2f %.2f %.2f %.2f\n", st->avgs[0], st->avgs[1], st->avgs[2], st->avgs[3]);
+
 	return 0;
 }
 

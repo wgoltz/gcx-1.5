@@ -2044,7 +2044,7 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
 
-    if (! imf->flags & IMG_LOADED)  return -1;
+    if (! (imf->flags & IMG_LOADED))  return -1;
 //    if (imf_load_frame(imf) < 0) return -1;
 
     gpointer window = ccdr->window;
