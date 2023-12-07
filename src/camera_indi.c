@@ -297,8 +297,8 @@ void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix)
         return;
     }
 //    indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
-    indi_prop_set_string(camera->upload_settings_prop, "UPLOAD_DIR", dir);
-    indi_prop_set_string(camera->upload_settings_prop, "UPLOAD_PREFIX", prefix);
+    if (dir) indi_prop_set_string(camera->upload_settings_prop, "UPLOAD_DIR", dir);
+    if (prefix) indi_prop_set_string(camera->upload_settings_prop, "UPLOAD_PREFIX", prefix);
     indi_send(camera->upload_settings_prop, NULL);
 }
 

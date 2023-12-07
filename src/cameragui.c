@@ -803,10 +803,14 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
     char *dirpath = NULL;
     if (full_name) {
         filename = postfix_XXX(full_name);
+// use home_path
+//        gpointer main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
+//        dirpath = g_object_get_data(G_OBJECT(main_window), "home_path");
         dirpath = dir_path(full_name);
     } else {
         // construct path
     }
+    printf("setup_streaming %s %s", dirpath, filename); fflush(NULL);
     camera_upload_settings(camera, dirpath, filename);
 
     if (dirpath) free(dirpath);
@@ -1049,17 +1053,22 @@ static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
 
         char *exp_text = named_entry_text(cam_control_dialog, "exp_file_entry");
 
-        char *name = NULL;
         if (exp_text == NULL) {
+            char *name = NULL;
+
             if (obs->filter != NULL)
                 asprintf(&name, "%s-%s-", obs->objname, obs->filter);
             else
                 asprintf(&name, "%s-", obs->objname);
-        } else {
-            name = strdup(exp_text);
+
+// default exp_file_entry if unset
+            if (name) {
+                named_entry_set(cam_control_dialog, "exp_file_entry", name);
+                free(name);
+            }
         }
+
         if (exp_text) g_free(exp_text);
-        if (name) free(name);
 
         auto_filename(cam_control_dialog);
 	}
@@ -1386,7 +1395,7 @@ static gboolean cam_ready_indi_cb(gpointer data)
 //printf("cam_ready_callback\n"); fflush(NULL);
 
     if (camera) {
-        gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+        gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 
         INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE, temperature_indi_cb, cam_control_dialog, "temperature_indi_cb");
 
@@ -1404,7 +1413,7 @@ static gboolean tele_ready_indi_cb(gpointer data)
 	GtkWidget *window = data;
 	struct tele_t *tele;
 
-    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 	tele = tele_find(window);
     if (tele) {
         INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_COORDS, tele_coords_indi_cb, cam_control_dialog, "tele_coords_indi_cb");
@@ -1422,7 +1431,7 @@ static gboolean fwheel_ready_indi_cb(gpointer data)
 
 	struct fwheel_t *fwheel;
 
-    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 	fwheel = fwheel_find(window);
 	if (fwheel) {
         gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "fwheel_combo")), TRUE);
@@ -1509,15 +1518,15 @@ void act_control_camera (GtkAction *action, gpointer window)
 {
 	GtkWidget* create_camera_control (void);
 
-    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 // try this:
 //    cam_control_dialog = NULL;
-//    g_object_set_data(G_OBJECT(window), "cam_dialog", dialog); // clear dialog and rebuild
+//    g_object_set_data(G_OBJECT(window), "cam_control_dialog", dialog); // clear dialog and rebuild
 
     if (cam_control_dialog == NULL) {
         cam_control_dialog = create_camera_control();
         g_object_ref(cam_control_dialog);
-        g_object_set_data_full(G_OBJECT(window), "cam_dialog", cam_control_dialog, (GDestroyNotify)gtk_widget_destroy);
+        g_object_set_data_full(G_OBJECT(window), "cam_control_dialog", cam_control_dialog, (GDestroyNotify)gtk_widget_destroy);
 
         g_object_set_data(G_OBJECT(cam_control_dialog), "image_window", window);
 //		g_signal_connect (G_OBJECT(cam_control_dialog), "destroy", G_CALLBACK(close_cam_dialog), window);

@@ -1798,6 +1798,9 @@ gint sources_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer window)
                 single_selection(window, found);
 
             show_star_data(found, window);
+
+            star_if = g_object_get_data(G_OBJECT(window), "star_popup");
+            if (star_if) do_sources_popup(window, star_if, found, event);
         }
 	}
 

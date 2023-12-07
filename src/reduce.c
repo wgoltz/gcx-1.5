@@ -439,12 +439,13 @@ int imf_load_frame(struct image_file *imf)
 
     get_frame(fr, "imf_load_frame");
 
-    rescan_fits_exp(fr, &(fr->exp));
+// try this
+//    rescan_fits_exp(fr, &(fr->exp));
 
-    if (reloaded > 0) {
-        struct wcs *wcs = &fr->fim;
-        wcs_transform_from_frame (fr, wcs);
-    }
+//    if (reloaded > 0) {
+//        struct wcs *wcs = &fr->fim;
+//        wcs_transform_from_frame (fr, wcs);
+//    }
     if (! fr->stats.statsok) frame_stats(fr);
 
 //printf("reduce.imf_load_frame return ok\n");

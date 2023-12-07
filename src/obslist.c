@@ -932,7 +932,7 @@ int run_obs_file(gpointer window, char *obsf)
 /* launch the cam dialog */
 	act_control_camera(NULL, window);
 
-    GtkWidget *cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_dialog");
+    GtkWidget *cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
     if (cam_control_dialog == NULL) {
 		err_printf("Could not create camera dialog\n");
 		return -1;

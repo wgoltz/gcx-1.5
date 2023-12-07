@@ -383,11 +383,10 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 
     if (st->hist.hdat == NULL) return -1;
 
-    unsigned *hdata = st->hist.hdat;
     unsigned hsize = st->hist.hsize;
 
     unsigned int hix; // clear histogram
-    for (hix = 0; hix < hsize; hix++) hdata[hix] = 0;
+    for (hix = 0; hix < hsize; hix++) st->hist.hdat[hix] = 0;
 
     double hmin = H_MIN;
     double hstep = (H_MAX - H_MIN) / hsize; // clangd says division by 0
@@ -404,23 +403,24 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 
     double min, max;
 	min = max = get_pixel_luminence(fr, rx, ry);
-
+//min = 0; max = 9;
     int y;
 	for (y = ry; y < ry + rh; y++) {
         int x;
 		for (x = rx; x < rx + rw; x++) {
             float v = get_pixel_luminence(fr, x, y);
-
-            unsigned b;
+//int k = (x % 2);
+//v = (k) ? 0 : 9;
+            unsigned bix;
             if (HIST_OFFSET < floor((v - hmin) / hstep))
-                b = 0;
+                bix = 0;
             else
-                b = HIST_OFFSET + floor((v - hmin) / hstep);
+                bix = HIST_OFFSET + floor((v - hmin) / hstep);
 
-            if (b >= hsize) b = hsize - 1;
+            if (bix >= hsize) bix = hsize - 1;
 
-			hdata[b] ++;
-            if (hdata[b] > binmax) binmax = hdata[b];
+            st->hist.hdat[bix] ++;
+            if (st->hist.hdat[bix] > binmax) binmax = st->hist.hdat[bix];
 
             if (v > max)
 				max = v;
@@ -459,38 +459,53 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
 
     unsigned n = 0;
 
-    unsigned s = all / POP_CENTER;
-    unsigned e = all - all / POP_CENTER;
+    unsigned s = all / POP_CENTER; // bottom 1/4
+    unsigned e = all - all / POP_CENTER; // top 1/4
 
     unsigned b = 0;
-    double bv = hmin - HIST_OFFSET;
+    double bv0 = hmin - HIST_OFFSET;
     double c = all / 2;
 
     double median = 0.0;
+    gboolean median_set = FALSE;
 
     unsigned i, is;
-    for (i = 0; i < hsize; i++) {
-        bv += hstep;
-        b += hdata[i];
 
-        if (b < s) { // < lower half-max
+    unsigned *hdp = st->hist.hdat;
+    int nzero = 0;
+    for (i = 0; i < hsize; i++, hdp++) {
+        b += *hdp;
+
+        if (b < s) { // ignore bottom quarter
             is = i;
             continue;
         }
 
-        if (b - hdata[i] < c && b >= c) { // we are at the median point
-            if (hdata[i] != 0) { // get the interpolated median
-                median = (b - c) / hdata[i] * hstep + i + hmin - HIST_OFFSET;
-            } else {
-                median = (i - 0.5) * hstep + hmin - HIST_OFFSET;
+        double diff = b - c;
+        double bv = bv0 + i * hstep;
+
+        if (! median_set) {
+            if (diff == 0) { // at median point
+                if (*(hdp + 1) != 0) {
+                    median = bv + 0.5 * (1 - nzero);
+                    median_set = TRUE;
+                } else
+                    nzero++;
+
+            } else if (diff > 0) { // we are past the median point
+                if (*hdp) {
+                    median = bv + diff / *hdp * hstep - 0.5 * (1 + nzero);
+                    median_set = TRUE;
+                } else
+                    nzero++;
             }
         }
 
-        n += hdata[i];
-        sum += hdata[i] * bv;
-        sumsq += hdata[i] * bv * bv;
+        n += *hdp;
+        sum += *hdp * bv;
+        sumsq += *hdp * bv * bv;
 
-        if (b > e) break; // > upper half-max
+        if (b > e) break; // ignore top quarter
 	}
 
     st->hist.cst = is; // not used
@@ -1001,7 +1016,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 		hd->y_skip = 0;
 // try this
     rescan_fits_exp(hd, &(hd->exp));
-    wcs_transform_from_frame (hd, &hd->fim);
+//    wcs_transform_from_frame (hd, &hd->fim);
 
 err_exit:
 	rd->fnclose(fp);

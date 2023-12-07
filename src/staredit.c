@@ -151,27 +151,27 @@ void update_star_edit(GtkWidget *dialog)
 			      cats->pos[POS_DX], cats->pos[POS_DY] );
 	}
 	if (cats->flags & INFO_NOISE) {
-        str_join_varg(&buf, "\nphoton:%.3f  read:%.3f  sky:%.3f  scint:%.3f",
+        str_join_varg(&buf, "\nphoton: %.3f  read: %.3f  sky: %.3f  scint: %.3f",
 			      cats->noise[NOISE_PHOTON], cats->noise[NOISE_READ],
 			      cats->noise[NOISE_SKY], cats->noise[NOISE_SCINT]);
 	}
 
     // update from sob
 	if (cats->flags & (INFO_RESIDUAL | INFO_STDERR)) {
-        if (cats->flags & (INFO_RESIDUAL)) str_join_varg(&buf, "\nresidual:%.3f", cats->residual);
-        if (cats->flags & (INFO_STDERR)) str_join_varg(&buf, "\nstderr:%.3f", cats->std_err);
+        if (cats->flags & (INFO_RESIDUAL)) str_join_varg(&buf, "\nresidual: %.3f", cats->residual);
+        if (cats->flags & (INFO_STDERR)) str_join_varg(&buf, "\nstderr: %.3f", cats->std_err);
 	}
 
 	if (cats->astro) {
-        str_join_varg(&buf, "\nEpoch:%.4f", cats->astro->epoch);
-        if ((cats->astro->ra_err < 1000 * BIG_ERR) && (cats->astro->dec_err < 1000 * BIG_ERR))
-            str_join_varg(&buf, "\nRAerr:%.0f DECerr:%.0f", cats->astro->ra_err, cats->astro->dec_err);
+        str_join_varg(&buf, "\nEpoch: %.1f", cats->astro->epoch);
+        if ((cats->astro->ra_err != BIG_ERR) && (cats->astro->dec_err != BIG_ERR))
+            str_join_varg(&buf, "\nerrRA: %.1f  errDE: %.1f", cats->astro->ra_err, cats->astro->dec_err);
 
         if (cats->astro->flags & ASTRO_HAS_PM)
-            str_join_varg(&buf, "\nRApm:%.0f DECpm:%.0f", cats->astro->ra_pm, cats->astro->dec_pm);
+            str_join_varg(&buf, "\npmRA: %.1f  pmDE: %.1f", cats->astro->ra_pm, cats->astro->dec_pm);
 
         if (cats->astro->catalog)
-            str_join_varg(&buf, "\nCat:%s", cats->astro->catalog);
+            str_join_varg(&buf, "\nCat: %s", cats->astro->catalog);
 	}
     if (buf) named_label_set(dialog, "pstar_star_details_label", buf), free(buf);
 }

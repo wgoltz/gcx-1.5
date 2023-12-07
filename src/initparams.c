@@ -612,6 +612,10 @@ void init_ptable(void)
                 "the frame header. Overrides scale calculated from "
                 "flen and pixel_scale. (arcsec per pixel)" );
 
+    add_par_int(OBS_SECPIX_UNBINNED, PAR_OBS_DEFAULTS, FMT_BOOL, "image_scale_unbinned", "Unbinned secpix", 1);
+    set_par_description(OBS_SECPIX_UNBINNED,
+                "Secpix value is the image scale ignoring binning." );
+
     add_par_int(OBS_FLIPPED, PAR_OBS_DEFAULTS, FMT_BOOL, "flipped", "Flipped field", 0);
 	set_par_description(OBS_FLIPPED,
 			    "Set the inital wcs as flipped (CDELT1 and CDELT2 "

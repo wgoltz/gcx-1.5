@@ -61,12 +61,12 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
 
     if (ra) {
         *ra = indi_prop_get_number(tele->coord_prop, "RA"); // these appear to be equinox 2000
-        ok = (*ra != NAN);
+        ok = (! isnan(*ra));
         if (ok) *ra *= 15; // hours to degrees
     }
     if (dec) {
         *dec = indi_prop_get_number(tele->coord_prop, "DEC");
-        ok = ok && (*dec != NAN);
+        ok = ok && (! isnan(*dec));
     }
 
     return ok ? 0 : -1;
@@ -306,7 +306,7 @@ void tele_center_move(struct tele_t *tele, float dra, float ddec)
 {
     double ra = tele_get_ra(tele);
     double dec = tele_get_dec(tele);
-    if (ra != NAN && dec != NAN) {
+    if (! isnan(ra) && ! isnan(dec)) {
         ra += dra;
         dec += ddec;
         tele_set_speed(tele, TELE_MOVE_CENTERING);
@@ -394,7 +394,7 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
     double pra = ra * 15; // hrs to degrees
     double pdc = dec;
 
-    if (P_INT(TELE_PRECESS_TO_EOD) && equinox != NAN) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
+    if (P_INT(TELE_PRECESS_TO_EOD) && ! isnan(equinox)) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
 
     // set entries in indi dialog
     indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours

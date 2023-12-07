@@ -57,73 +57,70 @@ struct wcs *window_get_wcs(gpointer window)
 
 /* try to get an inital (frame) wcs from frame data and local params */
 void fits_frame_params_to_fim(struct ccd_frame *fr)
-{    
+{
+    struct wcs *wcs = & fr->fim;
+
+    // if hinted flag set we have already done this
+    // clear hinted flag if there are updates in params
+    if (wcs->flags & WCS_HINTED) return;
+
     double eq = NAN;
     gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
     if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
-
-    // now set frame fim
-    struct wcs *wcs = & fr->fim;
-
-// these should have been set earlier?
-    wcs->xrefpix = fr->w / 2;
-    wcs->yrefpix = fr->h / 2;
 
     int bin_x = 1;
     fits_get_int(fr, P_STR(FN_BIN_X), &bin_x);
 
     int bin_y = 1;
-    fits_get_int(fr, P_STR(FN_BIN_X), &bin_y);
+    fits_get_int(fr, P_STR(FN_BIN_Y), &bin_y);
 
     wcs->binning = sqrt(bin_x * bin_y);
 
     double jd = frame_jdate (fr); // frame center jd
-    if (jd == NAN) {
+    if (isnan(jd)) {
         jd = JD_NOW;
         err_printf("using JD_NOW for frame jdate !\n");
     }
     wcs->jd = jd;
     wcs->flags |= WCS_JD_VALID;
 
-// FN_RA, FN_DEC are coords at jd epoch, FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
-    double ra, dec;
+    wcs->equinox = (!isnan(eq)) ? eq : 2000;
 
-    gboolean have_ra = (fits_get_double(fr, P_STR(FN_RA), &ra) > 0);
-    if (! have_ra) {
-        int d_type = fits_get_dms(fr, P_STR(FN_RA), &ra);
+// FN_RA, FN_DEC are coords at current epoch (jd), FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
+    double ra, dec;
+    char **p;
+    gboolean use_object_coords = FALSE; // what equinox are object coords?
+
+    gboolean have_ra = FALSE;
+
+    char *ra_coords[] = { P_STR(FN_RA), P_STR(FN_OBJCTRA), NULL };
+
+    for (p = ra_coords; *p != NULL; p++) {
+        have_ra = (fits_get_double(fr, *p, &ra) > 0);
+        if (have_ra) break;
+
+        int d_type = fits_get_dms(fr, *p, &ra);
         have_ra = (d_type >= 0);
         if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0; // sexa hh:mm:ss else decimal
+        if (have_ra) break;
+
+        use_object_coords = TRUE;
     }
-    gboolean have_dec = (fits_get_double(fr, P_STR(FN_DEC), &dec) > 0);
-    if (! have_dec) {
-        have_dec = (fits_get_dms(fr, P_STR(FN_DEC), &dec) >= 0);
-    }
 
-    wcs->equinox = (eq != NAN) ? eq : 2000;
+    gboolean have_dec = FALSE;
 
-    if (have_ra && have_dec)
-        precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec); // precess epoch jd coords to wcs->equinox
+    if (have_ra) {
+        char *p = (use_object_coords) ? P_STR(FN_OBJCTDEC) : P_STR(FN_DEC);
 
-    else {
-
-        have_ra = (fits_get_double(fr, P_STR(FN_OBJCTRA), &ra) > 0);
-        if (! have_ra) {
-            int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
-            have_ra = (d_type >= 0);
-            if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0;
-        }
-
-        have_dec = (fits_get_double(fr, P_STR(FN_OBJCTDEC), &dec) > 0);
+        have_dec = (fits_get_double(fr, p, &dec) > 0);
         if (! have_dec) {
-            have_dec = (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) >= 0);
-        }
-
-        if (have_ra && have_dec) {
-        // precess from obs equinox to wcs equinox
+            int d_type = fits_get_dms(fr, p, &dec);
+            have_dec = (d_type >= 0);
         }
     }
 
     gboolean have_pos = (have_ra && have_dec);
+
     if (! have_pos) {
         char *name = fits_get_string(fr, P_STR(FN_OBJECT));
         if (name) {
@@ -132,9 +129,13 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
             if (have_pos) {
                 ra = cats->ra;
                 dec = cats->dec;
+                use_object_coords = TRUE;
             }
         }
     }
+
+    if (have_pos && ! use_object_coords) // precess, unless they are object coords (assumed to have same equinox as wcs)
+        precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
 
     double lat;
     gboolean have_lat = (fits_get_double (fr, P_STR(FN_LATITUDE), &lat) > 0);
@@ -155,7 +156,6 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         }
     }
 
-
     if (have_pos) {
         wcs->xref = ra;
         wcs->yref = dec;
@@ -166,12 +166,16 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->lat = lat;
     wcs->flags |= WCS_LOC_VALID;
 // probably already done elsewhere
-    gboolean have_transform = (wcs_transform_from_frame (fr, &fr->fim) == 0);
+//    gboolean have_transform = (wcs_transform_from_frame (fr, &fr->fim) == 0);
 
-    if (have_transform) {
-        wcs->flags |= WCS_HAVE_SCALE | WCS_HAVE_POS;
+//    if (have_transform) {
+//        wcs->flags |= WCS_HAVE_SCALE | WCS_HAVE_POS;
 
-    } else {
+//    if ((wcs->flags & WCS_HAVE_SCALE) == 0) {
+
+    wcs->xrefpix = fr->w / 2.0;
+    wcs->yrefpix = fr->h / 2.0;
+
         double scale;
         gboolean have_scale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
 
@@ -182,8 +186,13 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
                 err_printf("scale derived from (OBS_PIXSZ / OBS_FLEN) differs from (OBS_SECPIX)\n");
         }
 
-        wcs->xinc = - scale / 3600.0 * wcs->binning;
-        wcs->yinc = - scale / 3600.0 * wcs->binning;
+        if (have_scale && P_INT(OBS_SECPIX_UNBINNED))
+            scale /= wcs->binning; // unbinned scale
+
+        if (P_INT(OBS_SECPIX_UNBINNED)) {
+            wcs->xinc = - scale / 3600.0 * wcs->binning; // actual scale
+            wcs->yinc = - scale / 3600.0 * wcs->binning;
+        }
         wcs->flags |= WCS_HAVE_SCALE;
 
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
@@ -192,7 +201,12 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
 
         if (have_rot) wcs->rot = rot;
-    }
+
+// use hinted flag to indicate we have called this function already
+// (need to clear flag if there are changes in params)
+        wcs->flags |= WCS_HINTED;
+
+//    }
 }
 
 
@@ -217,36 +231,52 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
     if (fr_wcs->wcsset < WCS_VALID) {
 
-//        if (fr_wcs->wcsset == WCS_INVALID) { // reload everything, ignore hints
+//        if (fr_wcs->wcsset == WCS_INVALID) {
+//            fr_wcs->xrefpix = fr->w / 2.0;
+//            fr_wcs->yrefpix = fr->h / 2.0;
 
-            if (window_wcs->wcsset == WCS_INVALID)
-                fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
-            else
-                fr_wcs->flags = 0; // window_wcs more likely better than fr_wcs
+//            if (fr_wcs->equinox == WCS_INVALID)
+//                fr_wcs->equinox = 2000;
 
-            // if unset: copy pos, scale and loc from window_wcs, if they are set there
-            if ((fr_wcs->flags & WCS_HAVE_POS) == 0 && (window_wcs->flags & WCS_HAVE_POS)) {
+//            fr_wcs->jd = JD_NOW;
+//            err_printf("using JD_NOW for frame jdate !\n");
+
+//            fr_wcs->flags |= WCS_JD_VALID;
+//        }
+
+        if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
+            fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
+//        else
+//            fr_wcs->flags = 0; // window_wcs more likely better than fr_wcs
+
+        // if unset: copy pos, scale and loc from window_wcs, if they are set there
+        if ((fr_wcs->flags & WCS_HINTED) || ! (fr_wcs->flags & WCS_HAVE_POS)) {
+            if (window_wcs->flags & WCS_HAVE_POS) {
                 fr_wcs->xref = window_wcs->xref;
                 fr_wcs->yref = window_wcs->yref;
                 fr_wcs->flags |= WCS_HAVE_POS;
             }
-            if ((fr_wcs->flags & WCS_HAVE_SCALE) == 0 && (window_wcs->flags & WCS_HAVE_SCALE)) {
+        }
+        if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
+            if (window_wcs->flags & WCS_HAVE_SCALE) {
                 fr_wcs->xinc = window_wcs->xinc;
                 fr_wcs->yinc = window_wcs->yinc;
                 fr_wcs->rot = window_wcs->rot;
                 fr_wcs->flags |= WCS_HAVE_SCALE;
             }
-            if ((fr_wcs->flags & WCS_LOC_VALID) == 0 && (window_wcs->flags & WCS_LOC_VALID)) {
+        }
+        if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_LOC_VALID)) {
+            if (window_wcs->flags & WCS_LOC_VALID) {
                 fr_wcs->lat = window_wcs->lat;
                 fr_wcs->lng = window_wcs->lng;
                 fr_wcs->flags |= WCS_LOC_VALID;
             }
+        }
 
-            if (WCS_HAVE_INITIAL(fr_wcs)) {
-                fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
-                fr_wcs->flags |= WCS_HINTED; // not yet validated
-            }
-//        }
+        if (WCS_HAVE_INITIAL(fr_wcs)) {
+            fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
+//            fr_wcs->flags |= WCS_HINTED; // not yet validated
+        }
     }
 
     if (fr_wcs->flags != 0) { // && window_wcs->flags & WCS_HINTED) {

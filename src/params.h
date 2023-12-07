@@ -220,6 +220,7 @@ typedef enum {
 
 	OBS_FLEN ,
     OBS_SECPIX ,
+    OBS_SECPIX_UNBINNED ,
     OBS_PIXSZ ,
     OBS_PIX_XY_RATIO ,
 	OBS_APERTURE ,

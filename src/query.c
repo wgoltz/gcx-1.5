@@ -51,6 +51,7 @@
 static struct {
     char *name;
     char *search_mag;
+    char *out_fields;
 } vizquery_catalog[] = CAT_QUERY_NAMES;
 
 enum {
@@ -63,29 +64,39 @@ enum {
     QTABLE_HIP,
     QTABLE_TYCHO,
     QTABLE_APASS,
+    QTABLE_GAIA,
 //	QTABLE_GSC2,
 //	QTABLE_UCAC3,
     QTABLES,
 };
 
 char *table_names[] = {"I_289_out", "I_294_ucac2bss", "I_284_out", "I_255_out",  "I_305_out", "I_322A_out",
-                       "I_239_hip_main", "I_259_tyc2", "II_336_apass9", /* "I_271_out", "I_315_out", */ NULL};
+                       "I_239_hip_main", "I_259_tyc2", "II_336_apass9", "I_355_gaiadr3", /* "I_271_out", "I_315_out", */ NULL};
 
 
 static int detabify(char *line, int cols[], int n)
 {
 	int nc = 0;
-	int i;
+    char *pi = line;
 
-	i = 0;
 	cols[nc++] = 0;
-	while (line[i] && nc < n) {
-		if (line[i] == '\t') {
-			line[i] = 0;
-			cols[nc++] = i+1;
+    while (*pi && nc < n) {
+        if (*pi == '\t') {
+            *pi = 0;
+            cols[nc++] = pi - line + 1;
 		}
-		i++;
+        pi++;
 	}
+    // catch '\n' at end of line
+    if (nc == n) {
+        while (*pi) {
+            if (*pi == '\n') {
+                *pi = 0;
+                break;
+            }
+            pi++;
+        }
+    }
 	return nc;
 }
 
@@ -123,7 +134,7 @@ static struct cat_star * parse_cat_line_ucac2_main(char *line)
 	char *endp;
 	int ret = 0;
 
-	nc = detabify(line, cols, 32);
+    nc = detabify(line, cols, 10);
 
     d2_printf("[ucac2-%d]%s\n", nc, line);
 
@@ -204,7 +215,7 @@ static struct cat_star * parse_cat_line_ucac2_bss(char *line)
 
 //	d3_printf("%s", line);
 
-	nc = detabify(line, cols, 32);
+    nc = detabify(line, cols, 17);
 
 	d4_printf("[ucac2bss-%d]%s\n", nc, line);
 
@@ -307,7 +318,7 @@ static struct cat_star * parse_cat_line_ucac3(char *line)
 	double uc, m, j, k;
 	char *endp;
 
-	nc = detabify(line, cols, 32);
+    nc = detabify(line, cols, 12);
 
 	d4_printf("[ucac3-%d]%s\n", nc, line);
 
@@ -389,17 +400,16 @@ static struct cat_star * parse_cat_line_gsc2(char *line)
 	char buf[256];
 	int n;
 
-	nc = detabify(line, cols, 32);
+    nc = detabify(line, cols, 9);
 
 	if (nc < 9)
 		return NULL;
 
 	u = strtod(line+cols[1], &endp);
-	if (line+cols[1] == endp)
-		return NULL;
+    if (line+cols[1] == endp) return NULL;
+
 	v = strtod(line+cols[2], &endp);
-	if (line+cols[2] == endp)
-		return NULL;
+    if (line+cols[2] == endp) return NULL;
 
 	cats = cat_star_new();
     asprintf(&cats->name, "%s", line+cols[0]);
@@ -473,19 +483,21 @@ static struct cat_star * parse_cat_line_gsc23(char *line)
 	double u, v;
     double vm, fm, jm, nm, a, e;
     int class;
-	char *endp;
+    char *endp, *p;
 	char buf[256];
 	int n;
 
-    int nc = detabify(line, cols, 32);
+    int nc = detabify(line, cols, 11);
 
     if (nc < 11) return NULL;
 
-    double ra = strtod(line + cols[1], &endp);
-    if (line + cols[1] == endp) return NULL;
+    p = line + cols[1];
+    double ra = strtod(p, &endp);
+    if (p == endp) return NULL;
 
-    double dc = strtod(line + cols[2], &endp);
-    if (line + cols[2] == endp) return NULL;
+    p = line + cols[2];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
 
 	cats = cat_star_new();
     asprintf(&cats->name, "GSC%s", line + cols[0]);
@@ -546,10 +558,10 @@ static struct cat_star * parse_cat_line_gsc_act(char *line)
 {
 	int cols[32];
 
-	char *endp;
+    char *endp, *p;
 	int ret = 0;
 
-    int nc = detabify(line, cols, 32);
+    int nc = detabify(line, cols, 9);
 
 	d4_printf("[gsc_act-%d]%s\n", nc, line);
 
@@ -563,50 +575,56 @@ static struct cat_star * parse_cat_line_gsc_act(char *line)
     double id = strtod(line + cols[0] + 5, &endp);
     asprintf(&cats->name, "%s-%04.0f", line + cols[0], id);
 
-    double ra = strtod(line + cols[1], &endp);
-    if (line + cols[1] == endp) return NULL;
+    p = line + cols[1];
+    double ra = strtod(p, &endp);
+    if (p == endp) return NULL;
 
-    double dc = strtod(line + cols[2], &endp);
-    if (line + cols[2] == endp) return NULL;
+    p = line + cols[2];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
 
     cats->ra = ra;
     cats->dec = dc;
 
 	cats->equinox = 2000.0;
     cats->type = CATS_TYPE_SREF;
-    cats->perr = strtod(line + cols[3], &endp);
-    if (cats->perr == 0.0) cats->perr = BIG_ERR;
 
-    double p = strtod(line + cols[4], &endp);
-    double pe = strtod(line + cols[5], &endp);
+    p = line + cols[3];
+    cats->perr = strtod(p, &endp);
+    if (p == endp) cats->perr = BIG_ERR;
+
+    double pmag = strtod(line + cols[4], &endp);
+    double e_pmag = strtod(line + cols[5], &endp);
     double class = strtod(line + cols[7], &endp);
 
-	cats->mag = p;
+    cats->mag = pmag;
 
     if (-1 == asprintf(&cats->comments, "p=G gsc_class=%.0f", class)) cats->comments = NULL;
 
     if (p > 0) {
-		if (pe > 0)
-            ret = asprintf(&cats->cmags, "p=%.3f/%.3f ", p, pe);
+        if (e_pmag > 0)
+            ret = asprintf(&cats->cmags, "p=%.3f/%.3f ", pmag, e_pmag);
 		else
-            ret = asprintf(&cats->cmags, "p=%.3f ", p);
+            ret = asprintf(&cats->cmags, "p=%.3f ", pmag);
 	}
     if (ret == -1) cats->cmags = NULL;
 
 	cats->flags |= CATS_FLAG_ASTROMET;
-    double ep = strtod(line + cols[8], &endp);
-    if (ep <= 0.0) return cats;
+
+    p = line + cols[8];
+    double epoch = strtod(p, &endp);
+    if (p == endp) return cats;
 
 	cats->astro = calloc(1, sizeof(struct cats_astro));
 	g_return_val_if_fail(cats->astro != NULL, cats);
 
-	cats->astro->epoch = ep;
+    cats->astro->epoch = epoch;
 	if (cats->perr < BIG_ERR) {
 		cats->astro->ra_err = 707 * cats->perr;
 		cats->astro->dec_err = 707 * cats->perr;
 	} else {
-		cats->astro->ra_err = 1000 * BIG_ERR;
-		cats->astro->dec_err = 1000 * BIG_ERR;
+        cats->astro->ra_err = BIG_ERR;
+        cats->astro->dec_err = BIG_ERR;
 	}
 	return cats;
 }
@@ -641,7 +659,7 @@ static struct cat_star * parse_cat_line_usnob(char *line)
 	int cols[32];
 	char buf[256];	
 
-	char *endp;
+    char *endp, *p;
 	int n;
 
 	d4_printf("%s", line);
@@ -652,15 +670,17 @@ static struct cat_star * parse_cat_line_usnob(char *line)
 
     if (nc < 11) return NULL;
 
-    double ra = strtod(line+cols[1], &endp);
-    if (line + cols[1] == endp) return NULL;
+    p = line + cols[1];
+    double ra = strtod(p, &endp);
+    if (p == endp) return NULL;
 
-    double dc = strtod(line+cols[2], &endp);
-    if (line + cols[2] == endp) return NULL;
+    p = line + cols[2];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
 
     struct cat_star *cats = cat_star_new();
 
-    asprintf(&cats->name, "USNO-B%s", line+cols[0]);
+    asprintf(&cats->name, "USNO-B%s", line + cols[0]);
     cats->ra = ra;
     cats->dec = dc;
 	cats->equinox = 2000.0;
@@ -675,7 +695,7 @@ static struct cat_star * parse_cat_line_usnob(char *line)
         r2 = strtod(line + cols[12], &endp);
         in = strtod(line + cols[13], &endp);
 	} else {
-		b2 = r2 = in = 0.0;
+        b2 = r2 = in = MAG_UNSET;
 	}
 
 	if (r1 > 0)
@@ -687,7 +707,7 @@ static struct cat_star * parse_cat_line_usnob(char *line)
 	else if (b2 > 0)
         cats->mag = b2;
 	else
-		cats->mag = 20.0;
+        cats->mag = MAG_UNSET;
 
 	if (r1 > 0 && r2 > 0)
 		r1 = (r1 + r2) / 2;
@@ -708,36 +728,42 @@ static struct cat_star * parse_cat_line_usnob(char *line)
         cats->cmags = strdup(buf);
     }
 
-    double w = strtod(line+cols[6], &endp);
-    if (line+cols[6] == endp) return cats;
+    p = line + cols[6];
+    double pmRA = strtod(p, &endp);
+    if (p == endp) return cats;
 
-    double x = strtod(line+cols[7], &endp);
-    if (line+cols[7] == endp) return cats;
+    p = line + cols[7];
+    double pmDE = strtod(p, &endp);
+    if (p == endp) return cats;
 
 	cats->astro = calloc(1, sizeof(struct cats_astro));
 	g_return_val_if_fail(cats->astro != NULL, cats);
 
     cats->flags |= CATS_FLAG_ASTROMET;
 
-    double u = strtod(line + cols[3], &endp);
-    double v = strtod(line + cols[4], &endp);
-    if (u > 0 && v > 0) {
-        cats->perr = sqrt(sqr(u) + sqr(v)) / 1000.0;
+    p = line + cols[3];
+    double e_RA = strtod(p, &endp);
+    gboolean have_e_RA = (p != endp);
+
+    p = line + cols[4];
+    double e_DE = strtod(p, &endp);
+    gboolean have_e_DE = (p != endp);
+
+    if (have_e_RA && have_e_DE) {
+        cats->perr = sqrt(sqr(e_RA) + sqr(e_DE)); // / 1000.0;
     } else {
         cats->perr = BIG_ERR;
     }
 
     cats->astro->epoch = 2000.0;
-	cats->astro->ra_err = u;
-	cats->astro->dec_err = v;
+//	cats->astro->ra_err = u;
+//	cats->astro->dec_err = v;
 
-	if (w != 0.0 || x != 0.0) {
-		cats->astro->ra_pm = w*cos(degrad(cats->dec));
-		cats->astro->dec_pm = x;
-		cats->astro->flags = ASTRO_HAS_PM;
-	}
+    cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
+    cats->astro->dec_pm = pmDE;
+    cats->astro->flags = ASTRO_HAS_PM;
 
-	cats->astro->catalog = strdup("usnob");
+    cats->astro->catalog = strdup("usnob");
 	return cats;
 }
 
@@ -781,22 +807,24 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
     int cols[32];
     char buf[256];
 
-    char *endp;
+    char *endp, *p;
     int n;
 
     d2_printf("%s", line);
 
-    int nc = detabify(line, cols, 32);
+    int nc = detabify(line, cols, 24);
 
     d2_printf("[ucac4-%d]%s\n", nc, line);
 
     if (nc < 24) return NULL;
 
-    double ra = strtod(line + cols[1], &endp);
-    if (line + cols[1] == endp) return NULL;
+    p = line + cols[1];
+    double ra = strtod(p, &endp);
+    if (p == endp) return NULL;
 
-    double dc = strtod(line + cols[2], &endp);
-    if (line + cols[2] == endp) return NULL;
+    p = line + cols[2];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
 
     struct cat_star *cats = cat_star_new();
 
@@ -826,7 +854,7 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
     else if (km > 0)
         cats->mag = km;
     else
-        cats->mag = 20.0;
+        cats->mag = MAG_UNSET;
 
     n = 0;
     if (bm > 0) n += snprintf(buf+n, 255-n, "B=%.3f ", bm);
@@ -840,23 +868,26 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
         cats->cmags = strdup(buf);
     }
 
-    double w = strtod(line + cols[7], &endp);
-    if (line + cols[7] == endp) return cats;
+    p = line + cols[7];
+    double pmRA = strtod(p, &endp);
+    if (p == endp) return cats;
 
-    double x = strtod(line + cols[8], &endp);
-    if (line + cols[8] == endp) return cats;
+    p = line + cols[8];
+    double pmDE = strtod(p, &endp);
+    if (p == endp) return cats;
 
     cats->astro = calloc(1, sizeof(struct cats_astro));
     g_return_val_if_fail(cats->astro != NULL, cats);
 
     cats->flags |= CATS_FLAG_ASTROMET;
 
-    double pe = strtod(line + cols[3], &endp);
-    if (pe > 0) {
-        cats->perr = pe / 1000.0;
-        pe = sqrt(pe) / 2;
-        cats->astro->ra_err = pe;
-        cats->astro->dec_err = pe;
+    p = line + cols[3];
+    double e_pos = strtod(p, &endp);
+    if (p != endp) { // have e_pos
+        cats->perr = e_pos; // / 1000.0;
+        e_pos = sqrt(e_pos) / 2;
+        cats->astro->ra_err = e_pos;
+        cats->astro->dec_err = e_pos;
     } else {
         cats->perr = BIG_ERR;
         cats->astro->ra_err = BIG_ERR;
@@ -865,13 +896,12 @@ static struct cat_star * parse_cat_line_ucac4(char *line)
 
     cats->astro->epoch = 2000.0;
 
-    if (w != 0.0 || x != 0.0) {
-        cats->astro->ra_pm = w*cos(degrad(cats->dec));
-        cats->astro->dec_pm = x;
-        cats->astro->flags = ASTRO_HAS_PM;
-    }
+    cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
+    cats->astro->dec_pm = pmDE;
+    cats->astro->flags = ASTRO_HAS_PM;
 
     cats->astro->catalog = strdup("ucac4");
+
     return cats;
 }
 
@@ -901,22 +931,24 @@ static struct cat_star * parse_cat_line_tycho(char *line)
     int cols[32];
     char buf[256];
 
-    char *endp;
+    char *endp, *p;
     int n;
 
     d2_printf("%s", line);
 
-    int nc = detabify(line, cols, 32);
+    int nc = detabify(line, cols, 10);
 
     d2_printf("[tycho-%d]%s\n", nc, line);
 
     if (nc < 10) return NULL;
 
-    double ra = strtod(line + cols[8], &endp);
-    if (line + cols[8] == endp) return NULL;
+    p = line + cols[8];
+    double ra = strtod(p, &endp);
+    if (p == endp) return NULL;
 
-    double dc = strtod(line + cols[9], &endp);
-    if (line + cols[9] == endp) return NULL;
+    p = line + cols[9];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
 
     struct cat_star *cats = cat_star_new();
 
@@ -939,7 +971,7 @@ static struct cat_star * parse_cat_line_tycho(char *line)
     else if (bm > 0)
         cats->mag = bm;
     else
-        cats->mag = 20.0;
+        cats->mag = MAG_UNSET;
 
     n = 0;
     if (bm > 0) n += snprintf(buf+n, 255-n, "Bt=%.3f ", bm);
@@ -949,19 +981,21 @@ static struct cat_star * parse_cat_line_tycho(char *line)
         cats->cmags = strdup(buf);
     }
 
-    double u = strtod(line + cols[3], &endp);
-    double v = strtod(line + cols[4], &endp);
-    if (u > 0 && v > 0) {
-        cats->perr = sqrt(sqr(u) + sqr(v)) / 1000.0;
-    } else {
-        cats->perr = BIG_ERR;
-    }
+//    double u = strtod(line + cols[3], &endp);
+//    double v = strtod(line + cols[4], &endp);
+//    if (u > 0 && v > 0) {
+//        cats->perr = sqrt(sqr(u) + sqr(v)) / 1000.0;
+//    } else {
+//        cats->perr = BIG_ERR;
+//    }
 
-    double w = strtod(line + cols[3], &endp);
-    if (line + cols[3] == endp) return cats;
+    p = line + cols[3];
+    double pmRA = strtod(p, &endp);
+    if (p == endp) return cats;
 
-    double x = strtod(line + cols[4], &endp);
-    if (line + cols[4] == endp) return cats;
+    p = line + cols[4];
+    double pmDE = strtod(p, &endp);
+    if (p == endp) return cats;
 
     cats->astro = calloc(1, sizeof(struct cats_astro));
     g_return_val_if_fail(cats->astro != NULL, cats);
@@ -969,15 +1003,15 @@ static struct cat_star * parse_cat_line_tycho(char *line)
     cats->flags |= CATS_FLAG_ASTROMET;
 
     cats->astro->epoch = 2000.0;
-    cats->astro->ra_err = u;
-    cats->astro->dec_err = v;
-    if (w != 0.0 || x != 0.0) {
-        cats->astro->ra_pm = w*cos(degrad(cats->dec));
-        cats->astro->dec_pm = x;
-        cats->astro->flags = ASTRO_HAS_PM;
-    }
+    cats->astro->ra_err = BIG_ERR;
+    cats->astro->dec_err = BIG_ERR;
+
+    cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
+    cats->astro->dec_pm = pmDE;
+    cats->astro->flags = ASTRO_HAS_PM;
 
     cats->astro->catalog = strdup("tycho");
+
     return cats;
 }
 
@@ -1010,22 +1044,24 @@ static struct cat_star * parse_cat_line_hip(char *line)
     int cols[32];
     char buf[256];
 
-    char *endp;
+    char *endp, *p;
     int n;
 
     d2_printf("%s", line);
 
-    int nc = detabify(line, cols, 32);
+    int nc = detabify(line, cols, 12);
 
     d2_printf("[hip-%d]%s\n", nc, line);
 
     if (nc < 12) return NULL;
 
+    p = line + cols[4];
     double ra = strtod(line + cols[4], &endp);
-    if (line + cols[4] == endp) return NULL;
+    if (p == endp) return NULL;
 
-    double dc = strtod(line + cols[5], &endp);
-    if (line + cols[5] == endp) return NULL;
+    p = line + cols[5];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
 
     struct cat_star *cats = cat_star_new();
 
@@ -1043,7 +1079,7 @@ static struct cat_star * parse_cat_line_hip(char *line)
     else if (bm > 0)
         cats->mag = bm;
     else
-        cats->mag = 20.0;
+        cats->mag = MAG_UNSET;
 
     n = 0;
     if (vm > 0) n += snprintf(buf+n, 255-n, "V=%.3f ", vm);
@@ -1053,11 +1089,13 @@ static struct cat_star * parse_cat_line_hip(char *line)
 
 //    cats->comments = strdup("p=b");
 
-    double w = strtod(line + cols[7], &endp);
-    if (line + cols[7] == endp) return cats;
+    p = line + cols[7];
+    double pmRA = strtod(p, &endp);
+    if (p == endp) return cats;
 
-    double x = strtod(line + cols[8], &endp);
-    if (line + cols[8] == endp) return cats;
+    p = line + cols[8];
+    double pmDE = strtod(p, &endp);
+    if (p == endp) return cats;
 
     cats->flags |= CATS_FLAG_ASTROMET;
 
@@ -1065,24 +1103,24 @@ static struct cat_star * parse_cat_line_hip(char *line)
     g_return_val_if_fail(cats->astro != NULL, cats);
 
     double pe = strtod(line + cols[9], &endp); // actually parallax error not position error
-    if (pe > 0) {
-        cats->perr = pe / 1000.0;
-        pe = sqrt(pe) / 2;
-        cats->astro->ra_err = pe;
-        cats->astro->dec_err = pe;
-    } else {
-        cats->perr = BIG_ERR;
-        cats->astro->ra_err = BIG_ERR;
-        cats->astro->dec_err = BIG_ERR;
-    }
+//    if (pe > 0) {
+//        cats->perr = pe / 1000.0;
+//        pe = sqrt(pe) / 2;
+//        cats->astro->ra_err = pe;
+//        cats->astro->dec_err = pe;
+//    } else {
+//        cats->perr = BIG_ERR;
+//        cats->astro->ra_err = BIG_ERR;
+//        cats->astro->dec_err = BIG_ERR;
+//    }
 
     cats->astro->epoch = 2000.0;
+    cats->astro->ra_err = BIG_ERR;
+    cats->astro->dec_err = BIG_ERR;
 
-    if (w != 0.0 || x != 0.0) {
-        cats->astro->ra_pm = w*cos(degrad(cats->dec));
-        cats->astro->dec_pm = x;
-        cats->astro->flags = ASTRO_HAS_PM;
-    }
+    cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
+    cats->astro->dec_pm = pmDE;
+    cats->astro->flags = ASTRO_HAS_PM;
 
     cats->astro->catalog = strdup("hip");
     return cats;
@@ -1123,21 +1161,23 @@ static struct cat_star * parse_cat_line_apass(char *line)
     int cols[32];
     char buf[256];
 
-    char *endp;
+    char *endp, *p;
     int n;
 
     d2_printf("%s", line);
 
-    int nc = detabify(line, cols, 32);
+    int nc = detabify(line, cols, 20);
 
     d2_printf("[apass-%d]%s\n", nc, line);
 
     if (nc < 20) return NULL;
 
-    double ra = strtod(line + cols[1], &endp);
+    p = line + cols[1];
+    double ra = strtod(p, &endp);
     if (line + cols[1] == endp) return NULL;
 
-    double dc = strtod(line + cols[2], &endp);
+    p = line + cols[2];
+    double dc = strtod(p, &endp);
     if (line + cols[2] == endp) return NULL;
 
     cats = cat_star_new();
@@ -1166,7 +1206,7 @@ static struct cat_star * parse_cat_line_apass(char *line)
     else if (b > 0)
         cats->mag = b;
     else
-        cats->mag = 20.0;
+        cats->mag = MAG_UNSET;
 
     n = 0;
 
@@ -1190,6 +1230,400 @@ static struct cat_star * parse_cat_line_apass(char *line)
     if (n) {
         cats->cmags = strdup(buf);
     }
+
+    return cats;
+}
+
+
+/* I/355/gaiadr3 format
+   Bytes   Format Units     Label         Explanations
+--------------------------------------------------------------------------------
+    1-  28  A28   ---       DR3Name       Unique source designation (unique across all Data Releases) (designation)
+   30-  44 F15.11 deg       RAdeg         Right ascension (ICRS) at Ep=2016.0 (ra)
+   46-  60 F15.11 deg       DEdeg         Declination (ICRS) at Ep=2016.0 (dec)
+   62-  80  I19   ---       SolID         Solution Identifier (solution_id)
+   82- 100  I19   ---       Source        Unique source identifier (unique within a particular Data Release) (source_id)
+  102- 111  I10   ---       RandomI       Random index for use when selecting subsets (random_index)
+  113- 119  F7.4  mas     e_RAdeg         Standard error of right ascension (ra_error)
+  121- 127  F7.4  mas     e_DEdeg         Standard error of declination (dec_error)
+  129- 137  F9.4  mas       Plx           ? Parallax (parallax)
+  139- 144  F6.4  mas     e_Plx           ? Standard error of parallax (parallax_error)
+
+  146- 155  F10.4 ---       RPlx          ? Parallax divided by its standard error (parallaxovererror)
+  157- 165  F9.3  mas/yr    PM            ? Total proper motion (pm)
+  167- 175  F9.3  mas/yr    pmRA          ? Proper motion in right ascension direction, pmRA*cosDE (pmra)
+  177- 181  F5.3  mas/yr  e_pmRA          ? Standard error of proper motion in right ascension direction (pmra_error)
+  183- 191  F9.3  mas/yr    pmDE          ? Proper motion in declination direction (pmdec)
+  193- 197  F5.3  mas/yr  e_pmDE          ? Standard error of proper motion in declination direction (pmdec_error)
+  199- 205  F7.4  ---       RADEcor       [-1/1] Correlation between right ascension and declination (radeccorr)
+  207- 213  F7.4  ---       RAPlxcor      [-1/1]? Correlation between right ascension and parallax (raparallaxcorr)
+  215- 221  F7.4  ---       RApmRAcor     [-1/1]? Correlation between right ascension and proper motion in right ascension (rapmracorr)
+  223- 229  F7.4  ---       RApmDEcor     [-1/1]? Correlation between right ascension and proper motion in declination (rapmdeccorr)
+
+  231- 237  F7.4  ---       DEPlxcor      [-1/1]? Correlation between declination and parallax (decparallaxcorr)
+  239- 245  F7.4  ---       DEpmRAcor     [-1/1]? Correlation between declination and proper motion in right ascension (decpmracorr)
+  247- 253  F7.4  ---       DEpmDEcor     [-1/1]? Correlation between declination and proper motion in declination (decpmdeccorr)
+  255- 261  F7.4  ---       PlxpmRAcor    [-1/1]? Correlation between parallax and proper motion in right ascension (parallaxpmracorr)
+  263- 269  F7.4  ---       PlxpmDEcor    [-1/1]? Correlation between parallax and proper motion in declination (parallaxpmdeccorr)
+  271- 277  F7.4  ---       pmRApmDEcor   [-1/1]? Correlation between proper motion in right ascension and proper motion in declination (pmrapmdeccorr)
+  279- 282  I4    ---       NAL           Total number of observations in the along-scan (AL) direction (astrometricnobs_al)
+  284- 287  I4    ---       NAC           Total number of observations in the across-scan (AC) direction (astrometricnobs_ac)
+  289- 292  I4    ---       NgAL          Number of good observations in the along-scan (AL) direction (astrometricngoodobsal)
+  294- 296  I3    ---       NbAL          Number of bad observations in the along-scan (AL) direction (astrometricnbadobsal)
+
+  298- 307  F10.4 ---       gofAL         Goodness of fit statistic of model wrt along-scan observations (astrometricgofal)
+  309- 318  E10.4 ---       chi2AL        AL chi-square value (astrometricchi2al)
+  320- 327  F8.3  mas       epsi          Excess noise of the source (astrometricexcessnoise)
+  329- 338  E10.4 ---       sepsi         Significance of excess noise (astrometricexcessnoise_sig)
+  340- 341  I2    ---       Solved        [3/95] Which parameters have been solved for? (astrometricparamssolved) (1)
+       343  I1    ---       APF           [0/1] Primary or secondary (astrometricprimaryflag)
+  345- 350  F6.3  um-1      nueff         ? Effective wavenumber of the source used in the astrometric solution (nueffusedinastrometry)
+  352- 358  F7.4  um-1      pscol         ? Astrometrically estimated pseudocolour of the source (pseudocolour)
+  360- 365  F6.4  um-1    e_pscol         ? Standard error of the pseudocolour of the source (pseudocolour_error)
+  367- 372  F6.3  ---       RApscolCorr   [-1/1]? Correlation between right ascension and pseudocolour (rapseudocolourcorr)
+
+  374- 379  F6.3  ---       DEpscolCorr   [-1/1]? Correlation between declination and pseudocolour (decpseudocolourcorr)
+  381- 386  F6.3  ---       PlxpscolCorr  [-1/1]? Correlation between parallax and pseudocolour (parallaxpseudocolourcorr)
+  388- 393  F6.3  ---       pmRApscolCorr [-1/1]? Correlation between proper motion in right ascension and pseudocolour (pmrapseudocolourcorr)
+  395- 400  F6.3  ---       pmDEpscolCorr [-1/1]? Correlation between proper motion in declination and pseudocolour (pmdecpseudocolourcorr)
+  402- 404  I3    ---       MatchObsA     Matched FOV transits used in the AGIS solution (astrometricmatchedtransits)
+  406- 407  I2    ---       Nper          [1/33] Number of visibility periods used in Astrometric solution (visibilityperiodsused)
+  409- 426  F18.6 mas       amax          The longest semi-major axis of the -2- -7 error ellipsoid (astrometricsigma5dmax)
+  428- 430  I3    ---       MatchObs      The number of transits matched to this source (matched_transits)
+  432- 434  I3    ---       NewMatchObs   The number of transits newly incorporated into an existing source in the current cycle (newmatchedtransits)
+  436- 438  I3    ---       MatchObsrm    The number of transits removed from an existing source in the current cycle (matchedtransitsremoved)
+
+  440- 448  E9.3  ---       IPDgofha      Amplitude of the IPD GoF versus position angle of scan (ipdgofharmonic_amplitude)
+  450- 458  E9.3  deg       IPDgofhp      Phase of the IPD GoF versus position angle of scan (ipdgofharmonic_phase)
+  460- 462  I3    ---       IPDfmp        [0/100] Percent of successful-IPD windows with more than one peak (ipdfracmulti_peak)
+  464- 466  I3    ---       IPDfow        [0/100] Percent of transits with truncated windows or multiple gate (ipdfracodd_win)
+  468- 474  F7.3  ---       RUWE          ? Renormalised unit weight error (ruwe)
+  476- 484  E9.3  ---       SDSk1         ? Degree of concentration of scan directions across the source (scandirectionstrength_k1)
+  486- 494  E9.3  ---       SDSk2         ? Degree of concentration of scan directions across the source (scandirectionstrength_k2)
+  496- 504  E9.3  ---       SDSk3         ? Degree of concentration of scan directions across the source (scandirectionstrength_k3)
+  506- 514  E9.3  ---       SDSk4         ? Degree of concentration of scan directions across the source (scandirectionstrength_k4)
+  516- 523  F8.3  ---       SDMk1         ? Mean position angle of scan directions across the source (scandirectionmean_k1)
+
+  525- 531  F7.3  ---       SDMk2         ? Mean position angle of scan directions across the source (scandirectionmean_k2)
+  533- 539  F7.3  ---       SDMk3         ? Mean position angle of scan directions across the source (scandirectionmean_k3)
+  541- 547  F7.3  deg       SDMk4         ? Mean position angle of scan directions across the source (scandirectionmean_k4)
+       549  I1    ---       Dup           [0/1] Source with multiple source identifiers (duplicated_source)
+  551- 554  I4    ---     o_Gmag          Number of observations contributing to G photometry (photgn_obs)
+  556- 571  F16.5 e-/s      FG            ? G-band mean flux (photgmean_flux)
+  573- 583  E11.5 e-/s    e_FG            ? Error on G-band mean flux (photgmeanfluxerror)
+  585- 595  E11.5 ---       RFG           ? G-band mean flux divided by its error (photgmeanfluxover_error)
+  597- 605  F9.6  mag       Gmag          ? G-band mean magnitude (photgmean_mag)
+  607- 614  F8.6  mag     e_Gmag          ? Error on G-band mean magnitude (added by CDS) (photgmeanmagerror)
+
+  616- 618  I3    ---     o_BPmag         Number of observations contributing to BP photometry (photbpn_obs)
+  620- 630  E11.5 e-/s      FBP           ? Integrated BP mean flux (photbpmean_flux)
+  632- 642  E11.5 e-/s    e_FBP           ? Error on the integrated BP mean flux (photbpmeanfluxerror)
+  644- 654  E11.5 ---       RFBP          ? Integrated BP mean flux divided by its error (photbpmeanfluxover_error)
+  656- 664  F9.6  mag       BPmag         ? Integrated BP mean magnitude (photbpmean_mag)
+  666- 674  F9.6  mag     e_BPmag         ? Error on integrated BP mean magnitude (added by CDS) (photbpmeanmagerror)
+  676- 678  I3    ---     o_RPmag         Number of observations contributing to RP photometry (photrpn_obs)
+  680- 690  E11.5 e-/s      FRP           ? Integrated RP mean flux (photrpmean_flux)
+  692- 702  E11.5 e-/s    e_FRP           ? Error on the integrated RP mean flux (photrpmeanfluxerror)
+  704- 714  E11.5 ---       RFRP          ? Integrated RP mean flux divided by its error (photrpmeanfluxover_error)
+
+  716- 724  F9.6  mag       RPmag         ? Integrated RP mean magnitude (photrpmean_mag)
+  726- 734  F9.6  mag     e_RPmag         ? Error on integrated RP mean magnitude (added by CDS) (photrpmeanmagerror)
+  736- 744  F9.3  mag       E(BP/RP)      ? BP/RP excess factor (photbprpexcessfactor)
+  746- 748  I3    ---       NBPcont       ? Number of BP contaminated transits (photbpncontaminatedtransits)
+  750- 752  I3    ---       NBPblend      ? Number of BP blended transits (photbpnblendedtransits)
+  754- 756  I3    ---       NRPcont       ? Number of RP contaminated transits (photrpncontaminatedtransits)
+  758- 760  I3    ---       NRPblend      ? Number of RP contaminated transits (photrpnblendedtransits)
+       762  I1    ---       Mode          [0/2]? Photometry processing mode (photprocmode)
+  764- 772  F9.6  mag       BP-RP         ? BP-RP colour (bp_rp)
+  774- 782  F9.6  mag       BP-G          ? BP-G colour (bp_g)
+
+  784- 792  F9.6  mag       G-RP          ? G-RP colour (g_rp)
+  794- 800  F7.2  km/s      RV            ? Radial velocity (radial_velocity)
+  802- 806  F5.2  km/s    e_RV            ? Radial velocity error (radialvelocityerror)
+       808  I1    ---     n_RV            [0/2]? Method used to obtain the radial velocity (rvmethodused)
+  810- 812  I3    ---     o_RV            ? Number of transits used to compute the radial velocity (rvnbtransits)
+  814- 816  I3    ---     o_RVd           ? Number of valid transits that have undergone deblending (rvnbdeblended_transits)
+  818- 819  I2    ---       RVNper        [0/33]? Number of visibility periods used to estimate the radial velocity (rvvisibilityperiods_used)
+  821- 830  E10.4 ---       RVS/N         ? Expected signal to noise ratio in the combination of the spectra used to obtain the radial velocity (rvexpectedsigtonoise)
+  832- 842  E11.4 ---       RVgof         ? Radial velocity renormalised goodness of fit (rvrenormalisedgof)
+  844- 851  F8.6  ---       RVchi2        ? P-value for constancy based on a chi-squared criterion (rvchisqpvalue)
+
+  853- 860  F8.3  d         RVTdur        ? Time coverage of the radial velocity time series (rvtimeduration)
+  862- 868  F7.2  km/s      RVamp         ? Total amplitude in the radial velocity time series after outlier removal (rvamplituderobust)
+  870- 876  F7.1  K         RVtempTeff    ? Teff of the template used to compute the radial velocity (rvtemplateteff)
+  878- 881  F4.1  [cm/s2]   RVtemplogg    ? Logg of the template used to compute the radial velocity (rvtemplatelogg)
+  883- 887  F5.2  [-]       RVtemp[Fe/H]  ? [Fe/H] of the template used to compute the radial velocity (rvtemplatefe_h)
+  889- 891  I3    ---       Vatmparam     ? Origin of the atmospheric parameters associated to the template (rvatmparam_origin)
+  893- 900  F8.4  km/s      Vbroad        ? Spectral line broadening parameter (vbroad)
+  902- 909  F8.4  km/s    e_Vbroad        ? Uncertainty on the spectral line broadening (vbroad_error)
+  911- 912  I2    ---     o_Vbroad        ? Number of transits used to compute vbroad (vbroadnbtransits)
+  914- 922  F9.6  mag       GRVSmag       ? Integrated Grvs magnitude (grvs_mag)
+
+  924- 931  F8.6  mag     e_GRVSmag       ? Grvs magnitude uncertainty (grvsmagerror)
+  933- 935  I3    ---     o_GRVSmag       ? Number of transits used to compute Grvs (grvsmagnb_transits)
+  937- 948  E12.6 ---       RVSS/N        ? Signal to noise ratio in the mean RVS spectrum (rvsspecsigtonoise)
+  950- 962  A13   ---       VarFlag       Photometric variability flag (photvariableflag)
+  964- 978 F15.11 deg       GLON          Galactic longitude (l)
+  980- 994 F15.11 deg       GLAT          Galactic latitude (b)
+  996-1010 F15.11 deg       ELON          Ecliptic longitude (ecl_lon)
+ 1012-1026 F15.11 deg       ELAT          Ecliptic latitude (ecl_lat)
+      1028  I1    ---       QSO           [0/1] Flag indicating the availability of additional information in the QSO candidates table (inqsocandidates)
+      1030  I1    ---       Gal           [0/1] Flag indicating the availability of additional information in the galaxy candidates table (ingalaxycandidates)
+
+      1032  I1    ---       NSS           [0/7] Flag indicating the availability of additional information in the various Non-Single Star tables (nonsinglestar)
+      1034  I1    ---       XPcont        [0/1] Flag indicating the availability of mean BP/RP spectrum in continuous representation for this source (hasxpcontinuous)
+      1036  I1    ---       XPsamp        [0/1] Flag indicating the availability of mean BP/RP spectrum in sampled form for this source (hasxpsampled)
+      1038  I1    ---       RVS           [0/1] Flag indicating the availability of mean RVS spectrum for this source (has_rvs)
+      1040  I1    ---       EpochPh       [0/1] Flag indicating the availability of epoch photometry for this source (hasepochphotometry)
+      1042  I1    ---       EpochRV       [0/1] Flag indicating the availability of epoch radial velocity for this source (hasepochrv)
+      1044  I1    ---       MCMCGSP       [0/1] Flag indicating the availability of GSP-Phot MCMC samples for this source (hasmcmcgspphot)
+      1046  I1    ---       MCMCMSC       [0/1] Flag indicating the availability of MSC MCMC samples for this source (hasmcmcmsc)
+      1048  I1    ---       And           [0/1] Flag indicating that the source is present in the Gaia Andromeda Photometric Survey (GAPS) (inandromedasurvey)
+ 1050-1057  F8.6  ---       PQSO          ? Probability from DSC-Combmod of being a quasar (data used: BP/RP spectrum) (classprobdsccombmod_quasar)
+
+ 1059-1066  F8.6  ---       PGal          ? Probability from DSC-Combmod of being a galaxy (data used: BP/RP spectrum) (classprobdsccombmod_galaxy)
+ 1068-1075  F8.6  ---       PSS           ? Probability from DSC-Combmod of being a single star (but not a white dwarf) (data used: BP/RP spectrum) (classprobdsccombmod_star)
+ 1077-1083  F7.1  K         Teff          ? Effective temperature from GSP-Phot Aeneas best library using BP/RP spectra (teff_gspphot)
+ 1085-1091  F7.1  K       b_Teff          ? Lower confidence level (16%) of effective temperature from GSP-Phot Aeneas best library using BP/RP spectra (teffgspphotlower)
+ 1093-1099  F7.1  K       B_Teff          ? Upper confidence level (84%) of effective temperature from GSP-Phot Aeneas best library using BP/RP spectra (teffgspphotupper)
+ 1101-1107  F7.4  [cm/s2]   logg          ? Surface gravity from GSP-Phot Aeneas best library using BP/RP spectra (logg_gspphot)
+ 1109-1115  F7.4  [cm/s2] b_logg          ? Lower confidence level (16%) of surface gravity from GSP-Phot Aeneas best library using BP/RP spectra (logggspphotlower)
+ 1117-1123  F7.4  [cm/s2] B_logg          ? Upper confidence level (84%) of surface gravity from GSP-Phot Aeneas best library using BP/RP spectra (logggspphotupper)
+ 1125-1131  F7.4  [-]       [Fe/H]        ? Iron abundance from GSP-Phot Aeneas best library using BP/RP spectra (mh_gspphot)
+ 1133-1139  F7.4  [-]     b_[Fe/H]        ? Lower confidence level (16%) of iron abundance from GSP-Phot Aeneas best library using BP/RP spectra (mhgspphotlower)
+
+ 1141-1147  F7.4  [-]     B_[Fe/H]        ? Upper confidence level (84%) of iron abundance from GSP-Phot Aeneas best library using BP/RP spectra (mhgspphotupper)
+ 1149-1158  F10.4 pc        Dist          ? Distance from GSP-Phot Aeneas best library using BP/RP spectra (distance_gspphot)
+ 1160-1169  F10.4 pc      b_Dist          ? Lower confidence level (16%) of distance from GSP-Phot Aeneas best library using BP/RP spectra (distancegspphotlower)
+ 1171-1180  F10.4 pc      B_Dist          ? Upper confidence level (84%) of distance from GSP-Phot Aeneas best library using BP/RP spectra (distancegspphotupper)
+ 1182-1188  F7.4  mag       A0            ? Monochromatic extinction A_0 at 547.7nm from GSP-Phot Aeneas best library using BP/RP spectra (azero_gspphot)
+ 1190-1195  F6.4  mag     b_A0            ? Lower confidence level (16%) of monochromatic extinction A_0 at 547.7nm from GSP-Phot Aeneas best library using BP/RP spectra (azerogspphotlower)
+ 1197-1203  F7.4  mag     B_A0            ? Upper confidence level (84%) of monochromatic extinction A_0 at 547.7nm from GSP-Phot Aeneas best library using BP/RP spectra (azerogspphotupper)
+ 1205-1210  F6.4  mag       AG            ? Extinction in G band from GSP-Phot Aeneas best library using BP/RP spectra (ag_gspphot)
+ 1212-1217  F6.4  mag     b_AG            ? Lower confidence level (16%) of extinction in G band from GSP-Phot Aeneas best library using BP/RP spectra (aggspphotlower)
+ 1219-1224  F6.4  mag     B_AG            ? Upper confidence level (84%) of extinction in G band from GSP-Phot Aeneas best library using BP/RP spectra (aggspphotupper)
+
+ 1226-1231  F6.4  mag       E(BP-RP)      ? Reddening E(GBP-GRP) from GSP-Phot Aeneas best library using BP/RP spectra (ebpminrp_gspphot)
+ 1233-1238  F6.4  mag     b_E(BP-RP)      ? Lower confidence level (16%) of reddening E(GBP-GRP) from GSP-Phot Aeneas best library using BP/RP spectra (ebpminrpgspphotlower)
+ 1240-1245  F6.4  mag     B_E(BP-RP)      ? Upper confidence level (84%) of reddening E(GBP-GRP) from GSP-Phot Aeneas best library using BP/RP spectra (ebpminrpgspphotupper)
+ 1247-1253  A7    ---       Lib           Name of library that achieves the highest mean log-posterior in MCMC samples and was used to derive GSP-Phot parameters in this table (libname_gspphot)
+ 1255-1260  I6    ---       HIP           ? HIP cross-id number, van Leeuwen, Cat. I/311 (hiporiginalextsourceid)
+ 1262-1269  F8.6  mas       dHIP          ? Angular distance between the two sources (hipangulardistance)
+      1271  I1    ---       nHIP          [0/3]? Number of neighbours in HIP (hipnumberof_neighbours)
+ 1273-1274  I2    ---     f_HIP           [0/72]? Cross-match algorithm flag (hipxmflag)
+ 1276-1285  I10   ---       PS1coid       ? PS1 cross-id original name (cleanpanstarrs1oid)
+ 1287-1304  I18   ---       PS1           ? PS1 cross-id name, Chambers et al., Cat. II/349 (ps1originalextsourceid)
+
+ 1306-1313  F8.6  mas       dPS1          ? Angular Distance between the two sources (ps1angulardistance)
+      1315  I1    ---       nPS1          [0/76]? Number of neighbours in PS1 (ps1numberof_neighbours)
+ 1317-1318  I2    ---       mPS1          ? Number of mates in Gaia Catalog (ps1numberof_mates)
+ 1320-1321  I2    ---     f_PS1           [0/76]? Cross-match algorithm flag (ps1xmflag)
+ 1323-1331  I9    ---       SDSS13coid    ? SDSS cross-id original name (cleansdssdr13oid)
+ 1333-1351  I19   ---       SDSS13        ? SDSS name, Albareti et al., 2017ApJS..233...25A (sdss13extsource_id)
+ 1353-1360  F8.6  mas       dSDSS13       ? Angular Distance between the two sources (sdss13angulardistance)
+      1362  I1    ---       nSDSS13       [0/6]? Number of neighbours in SDSS13 (sdss13numberof_neighbours)
+      1364  I1    ---       mSDSS13       [0/6]? Number of mates in Gaia Catalog (sdss13numberof_mates)
+ 1366-1367  I2    ---     f_SDSS13        [0/76]? Cross-match algorithm flag (sdss13xmflag)
+
+ 1369-1377  I9    ---       SKYM2         ? SkyMapperDR2 cross-id name, Onken et al., 2019PASA...36...33O (skym2originalextsourceid)
+ 1379-1386  F8.6  mas       dSKYM2        ? Angular Distance between the two sources (skym2angulardistance)
+      1388  I1    ---       nSKYM2        [0/4]? Number of neighbours in SKYM2 (skym2numberof_neighbours)
+ 1390-1391  I2    ---       mSKYM2        ? Number of mates in Gaia Catalog (skym2numberof_mates)
+ 1393-1394  I2    ---     f_SKYM2         [0/72]? Cross-match algorithm flag (skym2xmflag)
+ 1396-1407  A12   ---       TYC2          Tycho-2 cross-id name, Hog et al., Cat. I/259 (tyc2originalextsourceid)
+ 1409-1416  F8.6  mas       dTYC2         ? Angular Distance between the two source (tyc2angulardistance)
+ 1418-1419  I2    ---     f_TYC2          [0/72]? Cross-match algorithm flag (tyc2xmflag)
+ 1421-1427  I7    ---       TYC2moid      ? Tycho-2 cross-id original name (tycho2tdscmergeoid)
+      1429  I1    ---       nTYC2         [0/4]? Number of neighbours in TYC2 (tyc2numberof_neighbours)
+
+ 1431-1445  A15   ---       URAT1         URAT1 name, Zacharias et al., Cat. I/329 (urat1originalextsourceid)
+ 1447-1454  F8.6  mas       dURAT1        ? Angular Distance between the two sources (urat1angulardistance)
+ 1456-1457  I2    ---     f_URAT1         [0/72]? Cross-match algorithm flag (urat1xmflag)
+ 1459-1467  I9    ---       URAT1oid      ? URAT1 cross-id original name (urat1_oid)
+      1469  I1    ---       nURAT1        [0/4]? Number of neighbours in URAT1 (urat1numberof_neighbours)
+      1471  I1    ---       mURAT1        [0/4]? Number of mates in Gaia Catalog (urat1numberof_mates)
+ 1473-1491  A19   ---       AllWISE       ALLWISE cross-id name, Cutri et al., Cat. II/328 (allwiseoriginalextsourceid)
+ 1493-1501  F9.6  mas       dAllWISE      ? Angular Distance between the two sources (allwiseangulardistance)
+ 1503-1504  I2    ---     f_AllWISE       [0/72]? Cross-match algorithm flag (allwisexmflag)
+ 1506-1514  I9    ---       AllWISEoid    ? ALLWISE identification number (allwise_oid)
+
+      1516  I1    ---       nAllWISE      [0/3]? Number of neighbours in ALLWISE catalog (allwisenumberof_neighbours)
+ 1518-1519  I2    ---       mAllWISE      ? Number of mates in Gaia Catalog (allwisenumberof_mates)
+ 1521-1528  I8    ---       APASS9coid    ? APASS9 cross-id original identification number (cleanapassdr9oid)
+ 1530-1537  I8    ---       APASS9        ? APASS9 identification, Henden et al., Cat. II/336 (apass9originalextsourceid)
+ 1539-1547  F9.6  mas       dAPASS9       ? Angular Distance between the two sources (apass9angulardistance)
+ 1549-1550  I2    ---       nAPASS9       ? Number of neighbours in APASS9 (apass9numberof_neighbours)
+ 1552-1553  I2    ---       mAPASS9       ? Number of mates in Gaia Catalog (apass9numberof_mates)
+ 1555-1556  I2    ---     f_APASS9        [0/74]? Cross-match algorithm flag (apass9xmflag)
+ 1558-1567  A10   ---       GSC23         GSC2.3 cross-id name, Lasker et al., Cat. I/305 (gsc23originalextsourceid)
+ 1569-1576  F8.6  mas       dGSC23        ? Angular Distance between the two sources (gsc23angulardistance)
+
+ 1578-1579  I2    ---     f_GSC23         ? Cross-match algorithm flag (gsc23xmflag)
+ 1581-1589  I9    ---       GSC23coid     ? GSC2.3 cross-id original name (cleangsc23oid)
+ 1591-1592  I2    ---       nGSC23        [0/16]? Number of neighbours in GSC23 (gsc23numberof_neighbours)
+ 1594-1595  I2    ---       mGSC23        ? Number of mates in Gaia Catalog (gsc23numberof_mates)
+ 1597-1612  A16   ---       RAVE5         RAVE DR5 cross-id name, Kunder et al., Cat. III/279 (rave5originalextsourceid)
+ 1614-1621  F8.6  mas       dRAVE5        ? Angular Distance between the two sources (rave5angulardistance)
+ 1623-1624  I2    ---     f_RAVE5         [0/72]? Cross-match algorithm flag (rave5xmflag)
+ 1626-1631  I6    ---       RAVE5coid     ? RAVE DR5 cross-id original name (cleanravedr5oid)
+      1633  I1    ---       nRAVE5        [0/3]? Number of neighbours in RAVE5 (rave5numberof_neighbours)
+ 1635-1651  A17   ---       2MASS         2MASS cross-id name, Cutri et al., Cat. II/246 (twomassoriginalextsourceid)
+
+ 1653-1660  F8.6  mas       d2MASS        ? Angular Distance between the two sources (twomassangulardistance)
+ 1662-1663  I2    ---     f_2MASS         [0/73]? Cross-match algorithm flag (twomassxmflag)
+ 1665-1673  I9    ---       2MASScoid     ? 2MASS cross-id original name (cleantmasspscxscoid)
+      1675  I1    ---       n2MASS        [0/4]? Number of neighbours in 2MASS (twomassnumberof_neighbours)
+ 1677-1678  I2    ---       m2MASS        [0/13]? Number of mates in Gaia Catalog (twomassnumberof_mates)
+ 1680-1700  A21   ---       RAVE6         RAVE DR6 cross-id name, Steinmetz et al., Cat. III/283 (rave6originalextsourceid)
+ 1702-1709  F8.6  mas       dRAVE6        ? Angular Distance between the two sources (rave6angulardistance)
+ 1711-1712  I2    ---     f_RAVE6         [0/72]? Cross-match algorithm flag (rave6xmflag)
+ 1714-1719  I6    ---       RAVE6oid      ? RAVE DR6 original name (ravedr6_oid)
+      1721  I1    ---       nRAVE6        [0/3]? Number of neighbours in RAVE6 (rave6numberof_neighbours)
+
+ 1723-1737 F15.11 deg       RAJ2000       Barycentric right ascension (ICRS) at Ep=2000.0 (added by CDS) (ra2000)
+ 1739-1753 F15.11 deg       DEJ2000       Barycentric declination (ICRS) at Ep=2000.0 (added by CDS) (dec2000)
+ 1755-1763  F9.6  mas     e_RAJ2000       Standard error of right ascension (e_RA*cosDE) (added by CDS)(ra2000_error)
+ 1765-1773  F9.6  mas     e_DEJ2000       Standard error of declination (added by CDS) (dec2000_error)
+ 1775-1781  F7.4  ---       RADEcorJ2000  [-1/1] Correlation between right ascension and declination at epoch 2000 (added by CDS) (ra2000de2000corr)
+--------------------------------------------------------------------------------
+Note (1): The seven bits of astrometricparamssolved indicate which parameters
+   have been estimated in AGIS for this source. A set bit means the parameter
+   was updated, an unset bit means the parameter was not updated. The
+   leastsignificant bit corresponds to ra. The table below shows the values of
+   astrometric params solved for relevant combinations of the parameters.
+   The radial proper motion (µr) is formally considered to be one of the
+   astrometric parameters of a source, and the sixth bit is therefore reserved
+   for it. It is also in principle updatable in AGIS, but in practice it will
+   always be computed from a spectroscopic radial velocity and the estimated
+   parallax, in which case the bit is not set.
+   C is the pseudocolour of the source, i.e. the astrometrically estimated
+   effective wavenumber.
+  astrometricparamssolved | ra | dec | parallax | pmra | pmdec | µr | C
+           00000112 = 3     |  X |  X  |          |      |       |         |
+           00001112 = 7     |  X |  X  |  X       |      |       |         |
+           00110112 = 27    |  X |  X  |          |   X  |  X    |         |
+           00111112 = 31    |  X |  X  |  X       |   X  |  X    |         |
+           01111112 = 63    |  X |  X  |  X       |   X  |  X    |  X      |
+           10111112 = 95    |  X |  X  |  X       |   X  |  X    |         | X
+   In practice all the sources in DR3 have only values of 3, 31 or 95 for the
+     astrometric params solved, corresponding to two-parameter (position),
+     five-parameter (position, parallax, and proper motion) and
+     six-parameter (position, parallax, proper motion and astrometrically
+     estimated effective wavenumber) solutions.
+*/
+
+static struct cat_star * parse_cat_line_gaia(char *line)
+{
+//      0         1         2       3     4       5       6       7       8        9    10       11     12
+//    Source, _RAJ2000, _DEJ2000,  Gmag, e_Gmag, BPmag, e_BPmag, RPmag, e_RPmag, BP-RP, VarFlag, pmRA, pmDE
+    struct cat_star * cats;
+    int cols[32];
+    char buf[256];
+
+    char *endp, *p;
+    int n;
+
+    int nc = detabify(line, cols, 13);
+
+    if (nc < 13) return NULL;
+
+    p = line + cols[1];
+    double ra = strtod(p, &endp);
+    if (p == endp) return NULL;
+
+    p = line + cols[2];
+    double dc = strtod(p, &endp);
+    if (p == endp) return NULL;
+
+    cats = cat_star_new();
+    asprintf(&cats->name, "%s", line + cols[0]);
+
+    cats->ra = ra;
+    cats->dec = dc;
+    cats->equinox = 2000.0;
+    cats->type = CATS_TYPE_SREF;
+
+    double gmag = strtod(line + cols[3], &endp);
+    double gmag_e = strtod(line + cols[4], &endp);
+    double bpmag = strtod(line + cols[5], &endp);
+    double bpmag_e = strtod(line + cols[6], &endp);
+    double rpmag = strtod(line + cols[7], &endp);
+    double rpmag_e = strtod(line + cols[8], &endp);
+    double bp_rp = strtod(line + cols[9], &endp);
+
+    char *varflag = line + cols[10];
+    gboolean var = strcmp(varflag, "NOT_AVAILABLE") != 0;
+
+    /* GAIA DR3 transformations to Johnson-Cousins
+                    GBP−GRP  (GBP−GRP)2  (GBP−GRP)3  (GBP−GRP)4  σ
+    G−B   0.01448	-0.6874	 -0.3604	  0.06718	 -0.006061	 0.0633
+    G−R  -0.02275	 0.3961	 -0.1243	 -0.01396	  0.003775	 0.03167
+    G−V  -0.02704	 0.01424 -0.2156	  0.01426		         0.03017
+    G−IC  0.01753	 0.76	 -0.0991			                 0.03765
+    */
+
+    double bp_rp_2 = bp_rp * bp_rp;
+    double bp_rp_3 = bp_rp_2 * bp_rp;
+    double bp_rp_4 = bp_rp_3 * bp_rp;
+
+    double b =  gmag - ( 0.01448 - 0.6874  * bp_rp - 0.3604 * bp_rp_2 + 0.06718 * bp_rp_3 - 0.006061 * bp_rp_4);
+    double v =  gmag - (-0.02704 + 0.01424 * bp_rp - 0.2156 * bp_rp_2 + 0.01426 * bp_rp_3);
+    double r =  gmag - (-0.02275 + 0.3961  * bp_rp - 0.1243 * bp_rp_2 - 0.01396 * bp_rp_3 + 0.003775 * bp_rp_4);
+    double ic = gmag - ( 0.01753 + 0.76    * bp_rp - 0.0991 * bp_rp_2);
+
+    double gmag_e_2 = gmag_e * gmag_e;
+    double b_e = sqrt(gmag_e_2 + 0.063 * 0.063);
+    double v_e = sqrt(gmag_e_2 + 0.030 * 0.030);
+    double r_e = sqrt(gmag_e_2 + 0.032 * 0.032);
+    double ic_e = sqrt(gmag_e_2 + 0.038 * 0.038);
+
+    n = 0;
+
+#define BUF_PRINT_MAG(s, m, me) if ((m) > 0) { \
+    if ((me) > 0) \
+       n += snprintf(buf+n, 255-n, "%s=%.3f/%.3f ", (s), (m), (me)); \
+    else \
+       n += snprintf(buf+n, 255-n, "%s=%.3f ", (s), (m)); \
+}
+
+    BUF_PRINT_MAG("B", b, b_e);
+    BUF_PRINT_MAG("V", v, v_e);
+    BUF_PRINT_MAG("R", r, r_e);
+    BUF_PRINT_MAG("Ic", ic, ic_e);
+
+#undef BUF_PRINT_MAG
+
+    if (n) {
+        cats->cmags = strdup(buf);
+    }
+
+    p = line + cols[11];
+    double pmRA = strtod(p, &endp);
+    if  (p == endp) return cats;
+
+    p = line + cols[12];
+    double pmDE = strtod(p, &endp);
+    if  (p == endp) return cats;
+
+    cats->astro = calloc(1, sizeof(struct cats_astro));
+    g_return_val_if_fail(cats->astro != NULL, cats);
+
+    cats->flags |= CATS_FLAG_ASTROMET;
+
+    cats->astro->epoch = 2000.0;
+    cats->astro->ra_err = BIG_ERR;
+    cats->astro->dec_err = BIG_ERR;
+
+    cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
+    cats->astro->dec_pm = pmDE;
+    cats->astro->flags = ASTRO_HAS_PM;
+
+    if (var) {
+        cats->comments = strdup(varflag);
+        cats->flags = CATS_FLAG_VARIABLE;
+    }
+
+    cats->mag = v;
 
     return cats;
 }
@@ -1220,6 +1654,8 @@ static struct cat_star * parse_cat_line(char *line, int tnum)
         return parse_cat_line_tycho(line);
     case QTABLE_APASS:
         return parse_cat_line_apass(line);
+    case QTABLE_GAIA:
+        return parse_cat_line_gaia(line);
     default:
 		return NULL;
 	}
@@ -1389,27 +1825,38 @@ static GList *query_catalog(unsigned int catalog, double ra, double dec, int (* 
         return NULL;
     }
 
-    char *mag = vizquery_catalog[catalog].search_mag;
     snprintf(cmd, 1023, "%s -mime=tsv <<====\n"
          "-source=%s\n"
          "-c=%.4f %+.4f\n"
          "-c.rm=%.0f\n"
-         "-out=*\n"
+         "-out=%s\n"
          "%s=<%.1f\n"
          "-sort=%s\n"
          "-out.max=%d\n"
          "====\n",
-         P_STR(QUERY_VIZQUERY), vizquery_catalog [catalog].name, ra, dec, P_DBL(QUERY_MAX_RADIUS),
-             mag, P_DBL(QUERY_FAINTEST_MAG), mag, P_INT(QUERY_MAX_STARS));
 
-	if (progress) {
-		snprintf(prp, 255, "Connecting to CDS for %s:\n"
-             "ra=%.4f dec=%.4f radius=%.0f mag<%.1f max_stars=%d\n",
-             vizquery_catalog [catalog].name, ra, dec, P_DBL(QUERY_MAX_RADIUS), P_DBL(QUERY_FAINTEST_MAG), P_INT(QUERY_MAX_STARS));
-		(* progress)(prp, data);
-	}
-//printf("query.query_catalog |%s|\n", cmd);
-	return query_catalog_body(cmd, progress, data);
+         P_STR(QUERY_VIZQUERY),
+         vizquery_catalog [catalog].name,
+         ra, dec,
+         P_DBL(QUERY_MAX_RADIUS),
+         vizquery_catalog [catalog].out_fields,
+         vizquery_catalog[catalog].search_mag, P_DBL(QUERY_FAINTEST_MAG),
+         vizquery_catalog[catalog].search_mag,
+         P_INT(QUERY_MAX_STARS));
+
+//    if (catalog != QUERY_GAIA) {
+        if (progress) {
+            snprintf(prp, 255, "Connecting to CDS for %s:\n"
+                               "ra=%.4f dec=%.4f radius=%.0f mag<%.1f max_stars=%d\n",
+                     vizquery_catalog [catalog].name, ra, dec, P_DBL(QUERY_MAX_RADIUS), P_DBL(QUERY_FAINTEST_MAG), P_INT(QUERY_MAX_STARS));
+            (* progress)(prp, data);
+        }
+
+
+        return query_catalog_body(cmd, progress, data);
+//    }
+//    printf("query.query_catalog |%s|\n", cmd); fflush(NULL);
+//    return NULL;
 }
 
 
@@ -1689,3 +2136,7 @@ void act_stars_add_cds_apass (GtkAction *action, gpointer window)
     cds_query (window, QUERY_APASS);
 }
 
+void act_stars_add_cds_gaia (GtkAction *action, gpointer window)
+{
+    cds_query (window, QUERY_GAIA);
+}

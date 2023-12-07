@@ -559,8 +559,6 @@ double named_spin_get_value(GtkWidget *dialog, char *name)
 /* set the combo_text_with_history named name under dialog to the given value */
 void named_ctwh_set_value(GtkWidget *dialog, char *name, int val)
 {
-    if (val == NAN) return;
-
     g_return_if_fail(dialog != NULL);
 
     GtkWidget *ctwh = g_object_get_data(G_OBJECT(dialog), name);

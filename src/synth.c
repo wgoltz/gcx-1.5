@@ -42,7 +42,7 @@
 #include "symbols.h"
 #include "recipe.h"
 #include "misc.h"
-
+#include "reduce.h"
 
 static double gauss (double mu, double sigma2)
 {
@@ -252,7 +252,8 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 {
     struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
     if (i_ch == NULL) return;
-// start with dark frame
+
+// start with current loaded frame
     struct ccd_frame *dark_fr = i_ch->fr;
     if (dark_fr == NULL) return;
 
@@ -269,6 +270,8 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 //		error_beep();
 //		return;
 //	}
+
+    if (imf_load_frame(dark_fr->imf) < 0) return;
 
     GList *ssl = NULL;
     if (gsl) {
@@ -295,32 +298,36 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 //            dark_noise = sqrt(sqr(dark_fr->stats.csigma) - sqr(dark_fr->exp.rdnoise));
 
 // dark value inferred from dark frame noise
-        double dark_adu = dark_fr->stats.csigma - dark_fr->exp.rdnoise;
+//        double dark_adu = 0.0;
+//        if (dark_fr->stats.csigma > dark_fr->exp.rdnoise)
+//            dark_adu = sqrt(dark_fr->stats.csigma * dark_fr->stats.csigma  - dark_fr->exp.rdnoise * dark_fr->exp.rdnoise);
 
         double sky_adu = P_DBL(SYNTH_SKYLEVEL);
         double flat_noise = P_DBL(SYNTH_FLATNOISE);
         int w = dark_fr->w;
         int h = dark_fr->h;
 
-        struct ccd_frame *star_fr = new_frame_fr(dark_fr, w, h);
-        if (ssl) synth_stars_to_frame(star_fr, wcs, ssl);
+//        struct ccd_frame *star_fr = new_frame_fr(dark_fr, w, h);
+//        if (ssl) synth_stars_to_frame(star_fr, wcs, ssl);
+        if (ssl) synth_stars_to_frame(dark_fr, wcs, ssl);
 
         float *dark = dark_fr->dat;
-        float *star = star_fr->dat;
+//        float *star = star_fr->dat;
 
         int i;
-        for (i = 0; i < w * h; i++, dark++, star++) {
-            double poisson_adu = dark_adu + sky_adu + *star;
+        for (i = 0; i < w * h; i++, dark++ /*, star++*/ ) {
+            double poisson_adu = /* dark_adu  + */ sky_adu + *dark /* *star */;
 
             // add noise to poisson_adu
             poisson_adu = gauss(poisson_adu, sqrt(poisson_adu + sqr(flat_noise * poisson_adu)));
 
             double other_noise_adu = gauss(P_DBL(SYNTH_MEAN), P_DBL(SYNTH_SIGMA));
 
-            *dark = *dark + poisson_adu + other_noise_adu;
+//            *dark = *dark + poisson_adu + other_noise_adu;
+            *dark += poisson_adu + other_noise_adu;
         }
 
-        release_frame(star_fr, "act_stars_add_synthetic");
+//        release_frame(star_fr, "act_stars_add_synthetic");
 
     } else {
         synth_stars_to_frame(dark_fr, wcs, ssl);
@@ -332,5 +339,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 	g_list_free(ssl);
 
     stats_cb(window, 0);
+
+    imf_release_frame(dark_fr->imf, "act_stars_add_synthetic");
 }
 

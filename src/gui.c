@@ -834,6 +834,7 @@ static GtkActionEntry image_actions[] = {
     { "catalogs-add-tycho2",   NULL, "Download tycho2 stars from CDS",        NULL,         NULL, G_CALLBACK (act_stars_add_cds_tycho) },
     { "catalogs-add-hip",      NULL, "Download hip stars from CDS",           NULL,         NULL, G_CALLBACK (act_stars_add_cds_hip) },
     { "catalogs-add-apass",    NULL, "Download APASS9 stars from CDS",        NULL,         NULL, G_CALLBACK (act_stars_add_cds_apass) },
+    { "catalogs-add-gaia",     NULL, "Download GAIA EDR3 stars from CDS",     NULL,         NULL, G_CALLBACK (act_stars_add_cds_gaia) },
 
 	/* Processing */
 	{ "processing-menu",       NULL, "_Processing" },
@@ -985,7 +986,8 @@ static char *image_common_ui =
     "  <menuitem name='catalogs-add-tycho2' action='catalogs-add-tycho2'/>"
     "  <menuitem name='catalogs-add-hip' action='catalogs-add-hip'/>"
     "  <menuitem name='catalogs-add-apass' action='catalogs-add-apass'/>"
-	"</menu>"
+    "  <menuitem name='catalogs-add-gaia' action='catalogs-add-gaia'/>"
+    "</menu>"
 	"<menu name='help' action='help-menu'>"
 	"  <menuitem name='help-bindings' action='help-bindings'/>"
 	"  <menuitem name='help-usage' action='help-usage'/>"

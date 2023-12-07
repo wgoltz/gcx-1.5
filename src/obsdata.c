@@ -409,6 +409,10 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
         if (!scan_for_PC(fr, wcs)) // get xinc, yinc, rot, pc
             ok = FALSE;
 
+    if (ok) wcs->wcsset = WCS_INITIAL;
+
+    wcs->flags |= (WCS_HAVE_POS | WCS_HAVE_SCALE);
+
     return ok ? 0 : 1;
 }
 
