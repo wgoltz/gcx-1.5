@@ -186,13 +186,12 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
                 err_printf("scale derived from (OBS_PIXSZ / OBS_FLEN) differs from (OBS_SECPIX)\n");
         }
 
-        if (have_scale && P_INT(OBS_SECPIX_UNBINNED))
-            scale /= wcs->binning; // unbinned scale
+        if (have_scale && ! P_INT(OBS_SECPIX_UNBINNED))
+            scale *= wcs->binning; // unbinned scale
 
-        if (P_INT(OBS_SECPIX_UNBINNED)) {
-            wcs->xinc = - scale / 3600.0 * wcs->binning; // actual scale
-            wcs->yinc = - scale / 3600.0 * wcs->binning;
-        }
+        wcs->xinc = - scale / 3600.0;
+        wcs->yinc = - scale / 3600.0;
+
         wcs->flags |= WCS_HAVE_SCALE;
 
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
@@ -246,36 +245,37 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
         if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
             fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
-//        else
-//            fr_wcs->flags = 0; // window_wcs more likely better than fr_wcs
-
-        // if unset: copy pos, scale and loc from window_wcs, if they are set there
-        if ((fr_wcs->flags & WCS_HINTED) || ! (fr_wcs->flags & WCS_HAVE_POS)) {
-            if (window_wcs->flags & WCS_HAVE_POS) {
-                fr_wcs->xref = window_wcs->xref;
-                fr_wcs->yref = window_wcs->yref;
-                fr_wcs->flags |= WCS_HAVE_POS;
-            }
-        }
-        if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
-            if (window_wcs->flags & WCS_HAVE_SCALE) {
-                fr_wcs->xinc = window_wcs->xinc;
-                fr_wcs->yinc = window_wcs->yinc;
-                fr_wcs->rot = window_wcs->rot;
-                fr_wcs->flags |= WCS_HAVE_SCALE;
-            }
-        }
-        if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_LOC_VALID)) {
-            if (window_wcs->flags & WCS_LOC_VALID) {
-                fr_wcs->lat = window_wcs->lat;
-                fr_wcs->lng = window_wcs->lng;
-                fr_wcs->flags |= WCS_LOC_VALID;
-            }
-        }
 
         if (WCS_HAVE_INITIAL(fr_wcs)) {
             fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
-//            fr_wcs->flags |= WCS_HINTED; // not yet validated
+
+        } else { // copy pos, scale and loc from window_wcs, if they are set there
+            if ((fr_wcs->flags & WCS_HINTED) || ! (fr_wcs->flags & WCS_HAVE_POS)) {
+                if (window_wcs->flags & WCS_HAVE_POS) {
+                    fr_wcs->xref = window_wcs->xref;
+                    fr_wcs->yref = window_wcs->yref;
+                    fr_wcs->flags |= WCS_HAVE_POS;
+                }
+            }
+            if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
+                if (window_wcs->flags & WCS_HAVE_SCALE) {
+                    fr_wcs->xinc = window_wcs->xinc;
+                    fr_wcs->yinc = window_wcs->yinc;
+                    fr_wcs->rot = window_wcs->rot;
+                    fr_wcs->flags |= WCS_HAVE_SCALE;
+                }
+            }
+            if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_LOC_VALID)) {
+                if (window_wcs->flags & WCS_LOC_VALID) {
+                    fr_wcs->lat = window_wcs->lat;
+                    fr_wcs->lng = window_wcs->lng;
+                    fr_wcs->flags |= WCS_LOC_VALID;
+                }
+            }
+
+            if (WCS_HAVE_INITIAL(fr_wcs)) {
+                fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
+            }
         }
     }
 

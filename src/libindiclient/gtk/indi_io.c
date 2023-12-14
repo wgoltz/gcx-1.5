@@ -47,8 +47,8 @@ int io_indi_sock_write(void *_fh, void *data, int len)
 	GIOStatus status;
 
 	status = g_io_channel_write_chars(fh, (char *)data, len, &actual_len, NULL);
-	//if (status != G_IO_STATUS_NORMAL)
-	//	return -1;
+    if (status != G_IO_STATUS_NORMAL) return -1;
+
 	g_io_channel_flush(fh, NULL);
 	return actual_len;
 }

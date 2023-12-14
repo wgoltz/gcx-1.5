@@ -778,14 +778,14 @@ void wcs_to_fits_header(struct ccd_frame *fr)
     if (line) fits_add_keyword(fr, P_STR(FN_EQUINOX), line), free(line);
 
     char *ras = degrees_to_hms_pr(fr->fim.xref, 2);
-    line = NULL; if (ras) asprintf(&line, "'%s'", ras), free(ras);
+    line = NULL; if (ras) asprintf(&line, "'%s / ra at epoch of observation'", ras), free(ras);
     if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
 
     char *decs = degrees_to_dms_pr(fr->fim.yref, 1);
-    line = NULL; if (decs) asprintf(&line, "'%s'", decs), free(decs);
+    line = NULL; if (decs) asprintf(&line, "'%s / dec at epoch of observation'", decs), free(decs);
     if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
 
-    line = NULL; asprintf(&line, "%20.3f / IMAGE SCALE IN SECONDS PER PIXEL", 3600.0 * fabs(fr->fim.xinc));
+    line = NULL; asprintf(&line, "%20.3f / image scale arcsec/pixel", 3600.0 * fabs(fr->fim.xinc));
     if (line) fits_add_keyword(fr, P_STR(FN_SECPIX), line), free(line);
 
     line = NULL; asprintf(&line, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));

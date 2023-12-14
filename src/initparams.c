@@ -1092,7 +1092,7 @@ void init_ptable(void)
 	add_par_int(TELE_USE_CENTERING, PAR_TELE, FMT_BOOL, "use_centering",
 		       "Use timed centering moves for small slews", 1);
 	add_par_int(TELE_PRECESS_TO_EOD, PAR_TELE, FMT_BOOL, "precess_eod",
-		       "Precess coordinated sent to the scope to the epoch of the day", 1);
+               "Scope coords are precessed to the epoch of the current day", 1);
 	add_par_double(TELE_GEAR_PLAY, PAR_TELE, PREC_2, "gear_play",
 		       "Amount of gear play we take out at the end of slews (degrees)", 0.1);
 	add_par_int(TELE_STABILISATION_DELAY, PAR_TELE, 0, "stabilisation_delay",

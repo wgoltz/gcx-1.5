@@ -73,6 +73,7 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
 }
 
 /* return last read coords from tele structure
+ * coords are eod
  */
 int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
 {
@@ -346,6 +347,7 @@ void tele_abort(struct tele_t *tele)
 		indi_send(tele->abort_prop, elem);
 }
 
+// if equinox is NAN don't precess (a move relative to current position)
 int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox)
 {
     struct indi_elem_t *elem = NULL;
@@ -394,7 +396,7 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
     double pra = ra * 15; // hrs to degrees
     double pdc = dec;
 
-    if (P_INT(TELE_PRECESS_TO_EOD) && ! isnan(equinox)) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
+    if (P_INT(TELE_PRECESS_TO_EOD) && !isnan(equinox)) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
 
     // set entries in indi dialog
     indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours
@@ -439,6 +441,7 @@ struct tele_t *tele_find(void *window)
             tele->window = window;
         }
     }
+
 
 //    return (tele && tele->ready) ? tele : NULL;
     return tele;

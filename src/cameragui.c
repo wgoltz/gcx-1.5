@@ -1356,7 +1356,7 @@ static int scope_auto_cb( GtkWidget *widget, gpointer cam_control_dialog )
     double ra = tele->right_ascension;
     double dec = tele->declination;
 
-    // precess now coords to wcs coords
+    // precess (ra, dec) from eod to wcs equinox (J2000)
     if (P_INT(TELE_PRECESS_TO_EOD))
         precess_hiprec(CURRENT_EPOCH, wcs->equinox, &ra, &dec);
 
