@@ -1,15 +1,19 @@
 #!/usr/bin/env xdg-open
 [Desktop Entry]
+Type=Application
 Categories=Science;Astronomy
 Comment=astronomy image display
-Exec=/home/noname/Downloads/gcx-local/build-gcx-1.5-Desktop_Qt_6_3_1_GCC_64bit-Debug/gcx -i %F
+Exec=gcx -i %F
 GenericName=gcx
-Icon=/home/noname/Downloads/gcx-local/gcx-1.5/gcx.ico
+Icon=gcx
 MimeType=image/fits;image/jpx;image/tiff;application/gzip
 Name=gcx
-#Path=/home/noname/zwo
-#StartupNotify=true
-#StartupWMClass=gcx
+Path=/home/noname/zwo
+StartupNotify=false
+StartupWMClass=Gcx
 Terminal=false
-Type=Application
+Actions=Edit
 
+[Desktop Action Edit]
+Exec=gcx %F
+Name=Edit with gcx

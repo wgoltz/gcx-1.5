@@ -64,9 +64,9 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     // clear hinted flag if there are updates in params
     if (wcs->flags & WCS_HINTED) return;
 
-    double eq = NAN;
-    gboolean have_eq = (fits_get_double(fr, P_STR(FN_EQUINOX), &eq) > 0);
-    if (! have_eq) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
+    double eq = 2000;
+    fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
+    fits_get_double(fr, P_STR(FN_EPOCH), &eq);
 
     int bin_x = 1;
     fits_get_int(fr, P_STR(FN_BIN_X), &bin_x);
@@ -77,14 +77,14 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->binning = sqrt(bin_x * bin_y);
 
     double jd = frame_jdate (fr); // frame center jd
-    if (isnan(jd)) {
+    if (isnan(jd) || jd == 0) {
         jd = JD_NOW;
         err_printf("using JD_NOW for frame jdate !\n");
     }
     wcs->jd = jd;
     wcs->flags |= WCS_JD_VALID;
 
-    wcs->equinox = (!isnan(eq)) ? eq : 2000;
+    wcs->equinox = eq;
 
 // FN_RA, FN_DEC are coords at current epoch (jd), FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
     double ra, dec;
