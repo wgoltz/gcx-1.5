@@ -1480,7 +1480,7 @@ static void toggle_selection(GtkWidget *window, GSList *stars)
 
 }
 
-/* make the given star the only one slected */
+/* make the given star the only one selected */
 static void single_selection_gs(GtkWidget *window, struct gui_star *gs)
 {
 	GSList *selection = NULL;
@@ -1544,6 +1544,31 @@ static void single_selection(GtkWidget *window, GSList *stars)
 
 	draw_gui_star(gs, window);
 	edit_star_hook(gs, window);
+}
+
+/* push first star to edit_star */
+static void edit_star_from_selection(GtkWidget *window, GSList *stars)
+{
+    GSList *sl, *selection = NULL;
+    struct gui_star *gs = NULL;
+
+    if (stars == NULL) return;
+
+    sl = stars;
+    while (sl != NULL) {
+        gs = GUI_STAR(sl->data);
+        sl = g_slist_next(sl);
+//        if (gs->flags & STAR_DELETED) continue;
+
+        if (gs->flags & STAR_SELECTED) break;
+    }
+//    if (sl == NULL) {
+//        gs = GUI_STAR(stars->data);
+//    } else {
+//        gs = GUI_STAR(sl->data);
+//    }
+
+    edit_star_hook(gs, window);
 }
 
 /* detect a star under the given position */
@@ -1712,23 +1737,24 @@ if (sob == NULL) {
     return sob;
 }
 
-/* if the star edit dialog is open, pust the selected star into it */
+/* if the star edit dialog is open, push the selected star into it */
 static void edit_star_hook(struct gui_star *gs, GtkWidget *window)
 {
     if (gs == NULL) return;
 
-    struct cat_star *cats = (gs->type == STAR_TYPE_CAT) ? CAT_STAR(gs->s) : NULL;
+//    struct cat_star *cats = (gs->type == STAR_TYPE_CAT) ? CAT_STAR(gs->s) : NULL;
+    struct cat_star *cats = gs->s;
     if (cats == NULL) return;
 
     GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
     if (dialog == NULL) return;
 
-    if (cats) {
+//    if (cats) {
         if (cats->pos[POS_X] == 0 && cats->pos[POS_Y] == 0) {
             cats->pos[POS_X] = gs->x;
             cats->pos[POS_Y] = gs->y;
         }
-    }
+//    }
     star_edit_star(window, cats);
 }
 
@@ -1766,7 +1792,7 @@ gint sources_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer window)
 	GSList *found, *filt;
 	GtkWidget *star_if;
 
-    if (!((event->button == 1) || (event->button == 3))) return FALSE;
+    if (event->button != 1 && event->button != 3) return FALSE;
 
     found = stars_under_click(GTK_WIDGET(window), event);
 //printf("sources_clicked\n");
@@ -1799,8 +1825,9 @@ gint sources_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer window)
 
             show_star_data(found, window);
 
-            star_if = g_object_get_data(G_OBJECT(window), "star_popup");
-            if (star_if) do_sources_popup(window, star_if, found, event);
+//            star_if = g_object_get_data(G_OBJECT(window), "star_popup");
+ //           if (star_if) do_sources_popup(window, star_if, found, event);
+            edit_star_from_selection (window, found);
         }
 	}
 

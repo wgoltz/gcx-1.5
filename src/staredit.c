@@ -643,24 +643,24 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
     update_star_edit(dialog);
 
     if (! gtk_widget_get_visible(dialog)) {
-        int x, y; // set these on close then restore?
-        gtk_window_get_position(GTK_WINDOW(dialog), &x, &y);
+//        int x, y; // set these on close then restore?
+//        gtk_window_get_position(GTK_WINDOW(dialog), &x, &y);
 
-        gint width, height;
-        gtk_window_get_size(GTK_WINDOW(dialog), &width, &height);
+//        gint width, height;
+//        gtk_window_get_size(GTK_WINDOW(dialog), &width, &height);
 
-        int screen_width = gdk_window_get_width(dialog->window);
-        int screen_height = gdk_window_get_height(dialog->window);
+//        int screen_width = gdk_window_get_width(dialog->window);
+//        int screen_height = gdk_window_get_height(dialog->window);
 
-        int xoffset = (x + width > screen_width) ? - 200 : 200;
-        int yoffset = (y + height > screen_height) ? - 200 : 200;
+//        int xoffset = (x + width > screen_width) ? - 200 : 200;
+//        int yoffset = (y + height > screen_height) ? - 200 : 200;
 
-        gtk_window_move(GTK_WINDOW(dialog), x + xoffset, y + yoffset);
+//        gtk_window_move(GTK_WINDOW(dialog), x + xoffset, y + yoffset);
 
         gtk_widget_set_visible(dialog, TRUE);
-    }
 
-    gdk_window_raise(dialog->window);
+        gdk_window_raise(dialog->window);
+    }
 }
 
 /* do the actual work for star_edit_dialog and star_edit_make_std */

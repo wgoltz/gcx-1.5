@@ -941,10 +941,16 @@ void paint_from_gray_cache(GtkWidget *widget, struct map_cache *cache, GdkRectan
 //		return;
 	}
     dat = cache->dat + area->x - cache->x + (area->y - cache->y) * cache->w;
+    clock_t start, end;
+
+    start = clock();
 
     gdk_draw_gray_image (widget->window, widget->style->fg_gc[GTK_STATE_NORMAL],
 			     area->x, area->y, area->width, area->height,
 			     GDK_RGB_DITHER_MAX, dat, cache->w);
+
+    end = clock();
+//    printf("draw_gray_image time: %f\n", ((double) (end - start)) / CLOCKS_PER_SEC); fflush(NULL);
 }
 
 void paint_from_rgb_cache(GtkWidget *widget, struct map_cache *cache, GdkRectangle *area)
@@ -999,9 +1005,12 @@ d3_printf("image expose, free cache %p\n", cache->dat);
 		cache->cache_valid = 0;
 	}
 	if (!cache->cache_valid) {
+//        window_adjust_center(window, geom, &(event->area));
+
 		update_cache(cache, geom, i_channel, &(event->area));
 	}
 	if (cache->cache_valid) {
+
 //		d3_printf("cache valid, area is %d by %d starting at %d, %d\n",
 //			  cache->w, cache->h, cache->x, cache->y);
 //		d3_printf("expose: from cache\n");
@@ -1009,10 +1018,10 @@ d3_printf("image expose, free cache %p\n", cache->dat);
 			paint_from_gray_cache(widget, cache, &(event->area));
 		else
 			paint_from_rgb_cache(widget, cache, &(event->area));
+
+        draw_sources_hook(widget, window, &(event->area));
 	}
 
-// sources are already drawn. do we need this?
-    draw_sources_hook(widget, window, &(event->area));
 //printf("showimage.image_expose return\n");
 	return TRUE;
 }

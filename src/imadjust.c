@@ -373,17 +373,17 @@ static void view_option_cb(gpointer window, guint action)
 	case VIEW_ZOOM_IN:
 		step_zoom(geom, +1);
 		set_darea_size(window, geom);
-		gtk_widget_queue_draw(window);
+//		gtk_widget_queue_draw(window);
 		break;
 	case VIEW_ZOOM_OUT:
 		step_zoom(geom, -1);
 		set_darea_size(window, geom);
-		gtk_widget_queue_draw(window);
+//		gtk_widget_queue_draw(window);
 		break;
 	case VIEW_PIXELS:
 		geom->zoom = 1.0;
 		set_darea_size(window, geom);
-		gtk_widget_queue_draw(window);
+//		gtk_widget_queue_draw(window);
 		break;
 	case VIEW_PAN_CENTER:
 		set_scrolls(window, 0.5, 0.5);
