@@ -8,7 +8,7 @@ AM_CFLAGS = -Wall
 bin_PROGRAMS = gcx
 
 gcx_SOURCES = \
-	abort.c abort.h cameragui.c cameragui.h catalogs.c catalogs.h \
+        cameragui.c cameragui.h catalogs.c catalogs.h \
 	filegui.c filegui.h gcx.c gcx.h gui.c gui.h imadjust.c \
 	interface.c interface.h obsdata.c obsdata.h obslist.c \
 	obslist.h params.c paramsgui.c params.h photometry.c \
