@@ -75,6 +75,9 @@ void get_screen_center(gpointer im_window, double *xc, double *yc);
 struct ccd_frame *window_get_current_frame(gpointer window);
 void window_get_current_frame_size(gpointer window, int *w, int *h);
 
+int user_abort(void *window); // control-c polling using window flag
+
+
 /* function prototypes */
 /* from showimage.c */
 extern gboolean image_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer data);
@@ -88,10 +91,6 @@ extern void release_map_cache(struct map_cache *cache);
 extern void paint_from_gray_cache(GtkWidget *widget, struct map_cache *cache, GdkRectangle *area);
 extern void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
 			double zoom, int x, int y, int w, int h);
-
-/* from abort.c */
-extern int user_abort(void *window); // control-c polling using window flag
-extern void set_abort_flag();
 
 /* from gui.c */
 extern void error_beep(void);
