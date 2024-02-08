@@ -40,8 +40,6 @@
 #include "reduce.h"
 #include "misc.h"
 #include "query.h"
-#include "abort.h"
-
 
 /* yes/no modal dialog */
 static void yes_no_yes( GtkWidget *widget, gpointer data )
