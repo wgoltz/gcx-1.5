@@ -46,5 +46,7 @@ void trim_first_word(char *buf);
 void trim_blanks(char *buf);
 
 int is_constell(char *cc);
+double secpix_from_pixsize_on_flen(double pixsize_micron, double flen);
+
 
 #endif

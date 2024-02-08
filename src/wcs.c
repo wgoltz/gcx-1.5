@@ -64,17 +64,9 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     // clear hinted flag if there are updates in params
     if (wcs->flags & WCS_HINTED) return;
 
-    double eq = 2000;
-    fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
-    fits_get_double(fr, P_STR(FN_EPOCH), &eq);
-
-    int bin_x = 1;
-    fits_get_int(fr, P_STR(FN_BIN_X), &bin_x);
-
-    int bin_y = 1;
-    fits_get_int(fr, P_STR(FN_BIN_Y), &bin_y);
-
-    wcs->binning = sqrt(bin_x * bin_y);
+    double eq = fits_get_double(fr, P_STR(FN_EQUINOX));
+    if (isnan(eq)) eq = fits_get_double(fr, P_STR(FN_EPOCH));
+    if (isnan(eq)) eq = 2000;
 
     double jd = frame_jdate (fr); // frame center jd
     if (isnan(jd) || jd == 0) {
@@ -87,125 +79,57 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->equinox = eq;
 
 // FN_RA, FN_DEC are coords at current epoch (jd), FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
-    double ra, dec;
-    char **p;
-    gboolean use_object_coords = FALSE; // what equinox are object coords?
+    double ra = NAN, dec = NAN, equinox = NAN;
+    fits_get_pos(fr, &ra, &dec, &equinox);
 
-    gboolean have_ra = FALSE;
-
-    char *ra_coords[] = { P_STR(FN_RA), P_STR(FN_OBJCTRA), NULL };
-
-    for (p = ra_coords; *p != NULL; p++) {
-        have_ra = (fits_get_double(fr, *p, &ra) > 0);
-        if (have_ra) break;
-
-        int d_type = fits_get_dms(fr, *p, &ra);
-        have_ra = (d_type >= 0);
-        if (have_ra && (d_type == DMS_SEXA)) ra *= 15.0; // sexa hh:mm:ss else decimal
-        if (have_ra) break;
-
-        use_object_coords = TRUE;
-    }
-
-    gboolean have_dec = FALSE;
-
-    if (have_ra) {
-        char *p = (use_object_coords) ? P_STR(FN_OBJCTDEC) : P_STR(FN_DEC);
-
-        have_dec = (fits_get_double(fr, p, &dec) > 0);
-        if (! have_dec) {
-            int d_type = fits_get_dms(fr, p, &dec);
-            have_dec = (d_type >= 0);
-        }
-    }
-
-    gboolean have_pos = (have_ra && have_dec);
-
-    if (! have_pos) {
-        char *name = fits_get_string(fr, P_STR(FN_OBJECT));
-        if (name) {
-            struct cat_star *cats = get_object_by_name(name);
-            have_pos = (cats != NULL);
-            if (have_pos) {
-                ra = cats->ra;
-                dec = cats->dec;
-                use_object_coords = TRUE;
-            }
-        }
-    }
-
-    if (have_pos && ! use_object_coords) // precess, unless they are object coords (assumed to have same equinox as wcs)
-        precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
-
-    double lat;
-    gboolean have_lat = (fits_get_double (fr, P_STR(FN_LATITUDE), &lat) > 0);
-    if (! have_lat) {
-        char *lat_str = fits_get_string (fr, P_STR(FN_LATITUDE));
-        if (lat_str) have_lat = (dms_to_degrees (lat_str, &lat) >= 0), free(lat_str);
-        if (! have_lat) lat = P_DBL(OBS_LATITUDE);
-    }
-
-    double lng;
-    gboolean have_lng = (fits_get_double (fr, P_STR(FN_LONGITUDE), &lng) > 0);
-    if (! have_lng) {
-        char *lng_str = fits_get_string(fr, P_STR(FN_LONGITUDE));
-        if (lng_str) have_lng = (dms_to_degrees (lng_str, &lng) >= 0), free(lng_str);
-        if (! have_lng) {
-            lng = P_DBL(OBS_LONGITUDE);
-            if (! P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
-        }
-    }
+    gboolean have_pos = (! isnan(ra) && ! isnan(dec));
 
     if (have_pos) {
+        if (! isnan(equinox) && equinox != wcs->equinox)
+            precess_hiprec(equinox, wcs->equinox, &ra, &dec);
+        else // ? assume they are EOD coords
+            precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
+
         wcs->xref = ra;
         wcs->yref = dec;
         wcs->flags |= WCS_HAVE_POS;
     }
 
-    wcs->lng = lng;
-    wcs->lat = lat;
-    wcs->flags |= WCS_LOC_VALID;
-// probably already done elsewhere
-//    gboolean have_transform = (wcs_transform_from_frame (fr, &fr->fim) == 0);
+    double lat = NAN, lng = NAN;
 
-//    if (have_transform) {
-//        wcs->flags |= WCS_HAVE_SCALE | WCS_HAVE_POS;
-
-//    if ((wcs->flags & WCS_HAVE_SCALE) == 0) {
+    if (fits_get_loc(fr, &lat, &lng)) {
+        // otherwise use obs loc ?
+        wcs->lng = lng;
+        wcs->lat = lat;
+        wcs->flags |= WCS_LOC_VALID;
+    }
 
     wcs->xrefpix = fr->w / 2.0;
     wcs->yrefpix = fr->h / 2.0;
 
-        double scale;
-        gboolean have_scale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
-
-        if (! have_scale) {
-            scale = P_DBL(OBS_SECPIX);
-            double pixsize_on_flen = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
-            if (fabs(scale - pixsize_on_flen) / (scale + pixsize_on_flen) > 0.01)
-                err_printf("scale derived from (OBS_PIXSZ / OBS_FLEN) differs from (OBS_SECPIX)\n");
+    double secpix, xsecpix, ysecpix;
+    if (fits_get_binned_parms(fr, P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX),
+                                                     &secpix, &xsecpix, &ysecpix)) {
+        if (! isnan(secpix)) {
+            wcs->xinc = - secpix / 3600.0;
+            wcs->yinc = - secpix / 3600.0;
+        } else if (! isnan(xsecpix) && ! isnan(ysecpix)) {
+            wcs->xinc = - xsecpix / 3600.0;
+            wcs->yinc = - ysecpix / 3600.0;
         }
-
-        if (have_scale && ! P_INT(OBS_SECPIX_UNBINNED))
-            scale *= wcs->binning; // unbinned scale
-
-        wcs->xinc = - scale / 3600.0;
-        wcs->yinc = - scale / 3600.0;
 
         wcs->flags |= WCS_HAVE_SCALE;
 
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+    }
 
-        double rot;
-        gboolean have_rot = fits_get_double(fr, P_STR(FN_CROTA1), &rot);
+    double rot = fits_get_double(fr, P_STR(FN_CROTA1));
 
-        if (have_rot) wcs->rot = rot;
+    if (! isnan(rot)) wcs->rot = rot;
 
-// use hinted flag to indicate we have called this function already
-// (need to clear flag if there are changes in params)
-        wcs->flags |= WCS_HINTED;
-
-//    }
+    // use hinted flag to indicate we have called this function already
+    // (need to clear flag if there are changes in params)
+    wcs->flags |= WCS_HINTED;
 }
 
 
@@ -303,14 +227,14 @@ struct wcs *wcs_new(void)
     struct wcs *wcs = calloc(1, sizeof(struct wcs));
 
     if (wcs) {
-//        wcs->equinox = INV_DBL;
-//        wcs->rot = INV_DBL;
+//        wcs->equinox = NAN;
+//        wcs->rot = NAN;
         wcs->equinox = 2000;
         wcs->rot = 0;
-        wcs->xref = INV_DBL;
-        wcs->yref = INV_DBL;
-        wcs->xinc = INV_DBL;
-        wcs->yinc = INV_DBL;
+        wcs->xref = NAN;
+        wcs->yref = NAN;
+        wcs->xinc = NAN;
+        wcs->yinc = NAN;
         wcs->wcsset = WCS_INVALID;
         wcs->pc[0][0] = 1;
         wcs->pc[0][1] = 0;
@@ -1486,7 +1410,8 @@ int fastmatch_new(GSList *field_list, GSList *cat_list) // translation only
 
         fl = g_slist_next(fl);
     }
-    if (got_a_fit) ; // fs and cs are a pair
+    if (got_a_fit)
+        ; // fs and cs are a pair
 
     return 0;
 }

@@ -1897,6 +1897,16 @@ GtkWidget* create_yes_no (void)
   return yes_no;
 }
 
+GtkWidget* create_adjust_params (void)
+{
+    GtkWidget *adjust_params = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title (GTK_WINDOW (adjust_params), "Adjust FITS Parameters");
+    gtk_window_set_position (GTK_WINDOW (adjust_params), GTK_WIN_POS_CENTER);
+    gtk_window_set_default_size (GTK_WINDOW (adjust_params), 640, 420);
+
+    return adjust_params;
+}
+
 GtkWidget* create_image_processing (void)
 {
  GtkWidget *vbox19;
@@ -2208,8 +2218,8 @@ GtkWidget* create_image_processing (void)
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
- GtkAdjustment *adjustment = gtk_adjustment_new (1, -10000, 10000, 0.1, 10, 0);
- item = gtk_spin_button_new (adjustment, 1, 6);
+ GtkObject *adjustment = gtk_adjustment_new (1, -10000, 10000, 0.1, 10, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 6);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "mul_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Amount by which the pixel values are multiplied");
@@ -2227,7 +2237,7 @@ GtkWidget* create_image_processing (void)
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
  adjustment = gtk_adjustment_new (0, -100000, 100000, 1, 10, 0);
- item = gtk_spin_button_new (adjustment, 1, 2);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 2);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "add_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Add to pixel values");
@@ -2383,7 +2393,7 @@ GtkWidget* create_image_processing (void)
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
  adjustment = gtk_adjustment_new (0.5, 0, 50, 0.1, 10, 0);
- item = gtk_spin_button_new (adjustment, 1, 1);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 1);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "blur_spin", item, (GDestroyNotify) g_object_unref);
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);
@@ -2429,7 +2439,7 @@ GtkWidget* create_image_processing (void)
  TABLE_ATTACH(stack_table, item, 0, 1, 1, 1);
 
  adjustment = gtk_adjustment_new (10, 0.1, 10, 0.1, 10, 0);
- item = gtk_spin_button_new (adjustment, 1, 1);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 1);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "stack_sigmas_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Acceptance band width for mean-median, kappa-sigma and avsigclip");
@@ -2442,7 +2452,7 @@ GtkWidget* create_image_processing (void)
  TABLE_ATTACH(stack_table, item, 1, 1, 1, 1);
 
  adjustment = gtk_adjustment_new (1, 1, 10, 1, 10, 0);
- item = gtk_spin_button_new (adjustment, 1, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 0);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "stack_iter_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Max number of iterations for kappa-sigma and avgsigclip");
@@ -2530,7 +2540,7 @@ GtkWidget* create_image_processing (void)
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
  adjustment = gtk_adjustment_new (0, 0, 10000, 1, 100, 0);
- item = gtk_spin_button_new (adjustment, 1, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 0);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "left_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Start (Left)");
@@ -2538,7 +2548,7 @@ GtkWidget* create_image_processing (void)
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
  adjustment = gtk_adjustment_new (0, 0, 10000, 1, 100, 0);
- item = gtk_spin_button_new (adjustment, 1, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 0);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "top_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Start (Top)");
@@ -2546,7 +2556,7 @@ GtkWidget* create_image_processing (void)
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
  adjustment = gtk_adjustment_new (1, 1, 10000, 1, 100, 0);
- item = gtk_spin_button_new (adjustment, 1, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 0);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "width_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Width");
@@ -2554,7 +2564,7 @@ GtkWidget* create_image_processing (void)
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
  adjustment = gtk_adjustment_new (1, 1, 10000, 1, 100, 0);
- item = gtk_spin_button_new (adjustment, 1, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 0);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "height_spin", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Height");
@@ -2578,7 +2588,6 @@ GtkWidget* create_image_processing (void)
 
  gtk_notebook_set_tab_label (GTK_NOTEBOOK (reduce_notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (reduce_notebook), 1), label80);
 
-exit:
 //  printf("interface.create_image_processing\n");
  return image_processing;
 }
@@ -3237,7 +3246,7 @@ GtkWidget* create_image_processing (void)
 //                            (GDestroyNotify) g_object_unref);
   gtk_widget_show (hbox20);
 //  gtk_box_pack_start(GTK_BOX (vbox), hbox20, FALSE, FALSE, 0);
-//***********************
+// ***********************
   table26 = gtk_table_new (5, 2, TRUE);
   //  g_object_ref (table26);
   //  g_object_set_data_full (G_OBJECT (image_processing), "table26", table26,
@@ -3311,7 +3320,7 @@ GtkWidget* create_image_processing (void)
                     (GtkAttachOptions) (GTK_FILL),
                     (GtkAttachOptions) (GTK_FILL), 0, 0);
   gtk_misc_set_alignment (GTK_MISC (label82), 0, 1);
-//***************************************************
+// ***************************************************
 
   frame2 = gtk_frame_new ("Bias frame");
 //  g_object_ref (frame2);

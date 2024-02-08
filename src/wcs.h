@@ -3,8 +3,6 @@
 
 #include "sourcesdraw.h"
 
-#define INV_DBL -10000.0
-
 /* a pair to be fitted */
 struct fit_pair {
 	double x;		/* extracted pixel coordinates of star */

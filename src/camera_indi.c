@@ -30,6 +30,7 @@
 #include "libindiclient/indi.h"
 #include "camera_indi.h"
 #include "cameragui.h"
+#include "misc.h"
 
 #include <glib-object.h>
 
@@ -112,6 +113,36 @@ static void camera_capture_cb(struct indi_prop_t *iprop, void *data)
     camera->image_format = ielem->value.blob.fmt;
 
     INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE);
+}
+
+// get pixel scale, without binning
+double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert_cm, double *pixsiz_micron)
+{
+    if (! camera->ready) {
+//        err_printf("camera_get_secpix: Camera isn't ready.  Can't get secpix\n");
+        return 0;
+    }
+
+    struct indi_elem_t *elem;
+
+    if (! camera->lens_prop) {
+        err_printf("camera_get_secpix: Camera doesn't have lens prop, using default flen and aperture\n");
+        *flen_cm = P_DBL(OBS_FLEN);
+        *apert_cm = P_DBL(OBS_APERTURE);
+    } else {
+        if ((elem = indi_find_elem(camera->lens_prop, "FOCAL_LENGTH")))
+            *flen_cm = elem->value.num.value;
+        if ((elem = indi_find_elem(camera->lens_prop, "APERTURE")))
+            *apert_cm = elem->value.num.value;
+    }
+    if (! camera->info_prop) {
+        err_printf("camera_get_secpix: Camera doesn't have info prop, using default pixsiz\n");
+        *pixsiz_micron = P_DBL(OBS_PIXSZ);
+    } else {
+        if ((elem = indi_find_elem(camera->info_prop, "CCD_PIXEL_SIZE")))
+            *pixsiz_micron = elem->value.num.value;
+    }
+    return  secpix_from_pixsize_on_flen(*pixsiz_micron, *flen_cm / 100.0);
 }
 
 void camera_get_binning(struct camera_t *camera, int *x, int *y)
@@ -389,13 +420,21 @@ printf("camera_connect\n"); fflush(NULL);
 //		camera->frame_prop = iprop;
 //	}
     else if (strcmp(iprop->name, "CCD_FRAME") == 0) {
-        d3_printf("Found CCD_FRAME_TYPE for camera %s\n", iprop->idev->name);
+        d3_printf("Found CCD_FRAME for camera %s\n", iprop->idev->name);
         camera->frame_prop = iprop;
     }
     else if (strcmp(iprop->name, "CCD_BINNING") == 0) {
         d3_printf("Found CCD_BINNING for camera %s\n", iprop->idev->name);
 		camera->binning_prop = iprop;
 	}
+    else if (strcmp(iprop->name, "CCD_LENS") == 0) {
+        d3_printf("Found CCD_LENS for camera %s\n", iprop->idev->name);
+        camera->lens_prop = iprop;
+    }
+    else if (strcmp(iprop->name, "CCD_INFO") == 0) {
+        d3_printf("Found CCD_INFO for camera %s\n", iprop->idev->name);
+        camera->info_prop = iprop;
+    }
 	else if (strcmp(iprop->name, "CCD_TEMPERATURE") == 0) {
 printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL);
         camera->temp_prop = iprop;

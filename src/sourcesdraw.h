@@ -79,7 +79,6 @@ struct gui_star_list {
 	int max_size; /* the max size of a complete star (label included)
 		       * in pixels, used to quickly sort out the stars to redraw
 		       * and check closely for selection */
-//    int binning; /* adjust size for binned frames */
 	GSList *sl;	/* the star list. When gui_star_list is deleted, all elements of
 			 * sl are unref's and the list is freed */
 };
@@ -153,11 +152,6 @@ struct star_obs *sob_from_current_frame(gpointer main_window, struct cat_star *c
 
 // from staredit.c
 void update_star_edit(GtkWidget *dialog);
-
-
-// handle binned frames
-void auto_adjust_photometry_rings_for_binning(struct ap_params *ap, struct ccd_frame *fr);
-void get_gsl_binning_from_frame(struct gui_star_list *gsl, struct ccd_frame *fr);
 
 struct cat_star * cats_from_current_frame_sob(gpointer main_window, struct gui_star *gs);
 

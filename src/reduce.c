@@ -1345,8 +1345,8 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 			break;
 		}
 
-        double amv = 0;
-        if (fits_get_double(imf->fr, P_STR(FN_AIRMASS), &amv) > 0) {
+        double amv = fits_get_double(imf->fr, P_STR(FN_AIRMASS));
+        if (! isnan(amv)) {
             am[ami] = amv;
             ami++;
         }
@@ -1359,8 +1359,8 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 //			continue;
 		}
 
-        double expv = 0;
-        if (fits_get_double(imf->fr, P_STR(FN_EXPTIME), &expv) > 0) {
+        double expv = fits_get_double(imf->fr, P_STR(FN_EXPTIME));
+        if (! isnan(expv)) {
             d1_printf("stack time: using exptime = %.5f from %s\n", expv, P_STR(FN_EXPTIME));
             if ((i != 1) && (last_exptime != expv))
                 if (progress)
@@ -1417,7 +1417,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
     //delete any conflicting keywords
     fits_delete_keyword (fr, P_STR(FN_MJD));
     fits_delete_keyword (fr, P_STR(FN_TIME_OBS));
-    fits_delete_keyword (fr, P_STR(FN_OBJCTALT));
+    fits_delete_keyword (fr, P_STR(FN_OBJECTALT));
     fits_delete_keyword (fr, P_STR(FN_DATE_OBS));
 
 	return 0;
@@ -1425,7 +1425,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 
 void print_header(struct ccd_frame *fr) {
     int i;
-    FITS_row *var = fr->var;
+    FITS_str *var = fr->var_str;
     for (i = 0; i < fr->nvar; i++)
         printf("|%.80s|\n", (char *) (var + i));
 }
@@ -1656,7 +1656,11 @@ d3_printf("load alignment stars");
 
         if (ccdr->ops & CCDR_ALIGN_STARS) free_alignment_stars (ccdr);
 
-        ccdr->align_stars = detect_frame_stars (ccdr->alignref->fr);
+        struct ccd_frame *fr = ccdr->alignref->fr;
+
+        fr->window = ccdr->window; // to pass to user_abort for control-c polling
+        ccdr->align_stars = detect_frame_stars (fr);
+
         if (ccdr->align_stars) {
             as = ccdr->align_stars;
             while (as != NULL) {
@@ -1716,6 +1720,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, progress_prin
 
     GSList *fsl = NULL;
 
+    fr->window = ccdr->window; // to pass to user_abort for control-c polling
     fsl = detect_frame_stars(fr);
 
     if ((return_ok = (fsl != NULL))) {
@@ -2100,33 +2105,35 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 
             struct o_frame *ofr = mband_dataset_add_stf (mbds, stf);
             d3_printf ("mbds has %d frames\n", g_list_length (mbds->ofrs)); // should be 1
-            if (ofr) ofr_link_imf(ofr, imf);
+            if (ofr) {
+                ofr_link_imf(ofr, imf);
 
-            mband_dataset_add_sobs_to_ofr(mbds, ofr);
+                mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
-            mband_dataset_set_mag_source(mbds, MAG_SOURCE_CMAGS);
-            mbds->mag_source = MAG_SOURCE_CMAGS;
+                mband_dataset_set_mag_source(mbds, MAG_SOURCE_CMAGS);
+                mbds->mag_source = MAG_SOURCE_CMAGS;
 
-            ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);
-            ofr_transform_stars (ofr, mbds, 0, 0);
+                ofr_fit_zpoint (ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);
+                ofr_transform_stars (ofr, mbds, 0, 0);
 
-            if (3 * ofr->outliers > ofr->vstars)
-                info_printf(
-                "\nWarning: Frame has a large number of outliers (more than 1/3\n"
-                "of the number of standard stars). The output of the robust\n"
-                "fitter is not reliable in this case. This can be caused\n"
-                "by erroneous standard magnitudes, reducing in the wrong band\n"
-                "or very bad noise model parameters. \n");
+                if (3 * ofr->outliers > ofr->vstars)
+                    info_printf(
+                                "\nWarning: Frame has a large number of outliers (more than 1/3\n"
+                                "of the number of standard stars). The output of the robust\n"
+                                "fitter is not reliable in this case. This can be caused\n"
+                                "by erroneous standard magnitudes, reducing in the wrong band\n"
+                                "or very bad noise model parameters. \n");
 
-            d3_printf("mbds has %d frames\n", g_list_length (mbds->ofrs));
+                d3_printf("mbds has %d frames\n", g_list_length (mbds->ofrs));
 
-            char *ret = mbds_short_result (ofr);
-//            log_msg(ret, dialog);
+                char *ret = mbds_short_result (ofr);
+                //            log_msg(ret, dialog);
 
-            if (ret) {
-                printf ("%s\n", ret); fflush(NULL);
-                info_printf_sb2 (window, ret);
-                free (ret);
+                if (ret) {
+                    printf ("%s\n", ret); fflush(NULL);
+                    info_printf_sb2 (window, ret);
+                    free (ret);
+                }
             }
             mband_dataset_release (mbds);
         }

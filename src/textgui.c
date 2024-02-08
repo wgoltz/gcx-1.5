@@ -222,7 +222,7 @@ static void update_fits_header_dialog(GtkWidget *dialog, struct ccd_frame *fr)
     int i;
 	for (i=0; i< fr->nvar; i++) {
         char *line = NULL;
-        asprintf(&line, "%.80s\n", fr->var[i]);
+        asprintf(&line, "%.80s\n", fr->var_str[i]);
         if (line) gtk_text_buffer_insert_at_cursor(buffer, line, -1), free(line);
 	}
 }

@@ -304,42 +304,58 @@ void init_ptable(void)
     add_par_string(FN_CDELT1, PAR_FITS_FIELDS, 0, "cdelt1", "Fits field for degrees/pixel in R.A.", "CDELT1");
     add_par_string(FN_CDELT2, PAR_FITS_FIELDS, 0, "cdelt2", "Fits field for degrees/pixel in dec", "CDELT2");
     add_par_string(FN_CROTA1, PAR_FITS_FIELDS, 0, "crota1", "Fits field for field rotation", "CROTA1");
+
     add_par_string(FN_EQUINOX, PAR_FITS_FIELDS, 0, "equinox", "Fits field for equinox of WCS", "EQUINOX");
-    add_par_string(FN_EPOCH, PAR_FITS_FIELDS, 0, "epoch", "Fits field for equinox of WCS", "EPOCH");
+    add_par_string(FN_EPOCH, PAR_FITS_FIELDS, 0, "epoch", "Fits field for epoch of WCS", "EPOCH");
     add_par_string(FN_OBJECT, PAR_FITS_FIELDS, 0, "object", "Fits field for object name", "OBJECT");
-    add_par_string(FN_OBJCTRA, PAR_FITS_FIELDS, 0, "objctra", "Fits field for object R.A.", "OBJCTRA");
-    add_par_string(FN_OBJCTDEC, PAR_FITS_FIELDS, 0, "objctdec", "Fits field for object dec", "OBJCTDEC");
-    add_par_string(FN_SECPIX, PAR_FITS_FIELDS, 0, "secpix", "Fits field for image scale", "SECPIX");
+    add_par_string(FN_OBJECTRA, PAR_FITS_FIELDS, 0, "objectra", "Fits field for object R.A.", "OBJCTRA");
+    add_par_string(FN_OBJECTDEC, PAR_FITS_FIELDS, 0, "objectdec", "Fits field for object dec", "OBJCTDEC");
+
     add_par_string(FN_RA, PAR_FITS_FIELDS, 0, "ra", "Fits field for field center", "RA");
     add_par_string(FN_DEC, PAR_FITS_FIELDS, 0, "dec", "Fits field for field center", "DEC");
     add_par_string(FN_FILTER, PAR_FITS_FIELDS, 0, "filter", "Fits field for filter name", "FILTER");
     add_par_string(FN_EXPTIME, PAR_FITS_FIELDS, 0, "exptime", "Fits field for exposure time", "EXPTIME");
+
     add_par_string(FN_JDATE, PAR_FITS_FIELDS, 0, "jdate", "Fits field for julian date at center of observation", "JDATE");
     add_par_string(FN_MJD, PAR_FITS_FIELDS, 0, "mjd", "Fits field for modified julian date of observation", "MJD");
     add_par_string(FN_DATE_OBS, PAR_FITS_FIELDS, 0, "dateobs", "Fits field for date/time of observation", "DATE-OBS");
     add_par_string(FN_TIME_OBS, PAR_FITS_FIELDS, 0, "timeobs", "Fits field for time of observation", "TIME-OBS");
     add_par_string(FN_UT, PAR_FITS_FIELDS, 0, "ut", "UT of observation", "UT");
     add_par_string(FN_DATE_TIME, PAR_FITS_FIELDS, 0, "datetime", "date_time of observation", "DATE_TIME");
-    add_par_string(FN_TELESCOP, PAR_FITS_FIELDS, 0, "telescop", "Fits field for telescope name", "TELESCOP");
-    add_par_string(FN_FOCUS, PAR_FITS_FIELDS, 0, "focus", "Fits field for focus designation", "FOCUS");
-    add_par_string(FN_APERTURE, PAR_FITS_FIELDS, 0, "aperture", "Fits field for telescope aperture", "APERT");
-    add_par_string(FN_FLEN, PAR_FITS_FIELDS, 0, "flen", "Fits field for focal length", "FLEN");
-    add_par_string(FN_INSTRUME, PAR_FITS_FIELDS, 0, "instrument", "Fits field for instrument name", "INSTRUME");
+
+    add_par_string(FN_APERTURE, PAR_FITS_FIELDS, 0, "aperture", "Fits field for telescope aperture (cm)", "APERT");
+    add_par_string(FN_FLEN, PAR_FITS_FIELDS, 0, "flen", "Fits field for focal length (cm)", "FLEN");
+    add_par_string(FN_BINNING, PAR_FITS_FIELDS, 0, "binning", "Fits field for pixel binning", "BINNING");
+    add_par_string(FN_XBINNING, PAR_FITS_FIELDS, 0, "bin_x", "Fits field for X binning", "XBINNING");
+    add_par_string(FN_YBINNING, PAR_FITS_FIELDS, 0, "bin_y", "Fits field for Y binning", "YBINNING");
+    add_par_string(FN_PIXSZ, PAR_FITS_FIELDS, 0, "pixsiz", "Fits field for binned pixel size (micron)", "PIXSZ");
+    add_par_string(FN_XPIXSZ, PAR_FITS_FIELDS, 0, "xpixsiz", "Fits field for binned X pixel size", "XPIXSZ");
+    add_par_string(FN_YPIXSZ, PAR_FITS_FIELDS, 0, "ypixsiz", "Fits field for binned Y pixel size", "YPIXSZ");
+    add_par_string(FN_SECPIX, PAR_FITS_FIELDS, 0, "secpix", "Fits field for image scale (arcsec / pixel)", "SECPIX");
+    add_par_string(FN_XSECPIX, PAR_FITS_FIELDS, 0, "xsecpix", "Fits field for binned X image scale", "XPIXSZ");
+    add_par_string(FN_YSECPIX, PAR_FITS_FIELDS, 0, "ysecpix", "Fits field for binned Y image scale", "YPIXSZ");
+
     add_par_string(FN_OBSERVER, PAR_FITS_FIELDS, 0, "observer", "Fits field for observer name", "OBSERVER");
+
+    add_par_string(FN_INSTRUMENT, PAR_FITS_FIELDS, 0, "instrument", "Fits field for instrument name", "INSTRUME");
+    add_par_string(FN_TELESCOPE, PAR_FITS_FIELDS, 0, "telescope", "Fits field for telescope name", "TELESCOP");
+    add_par_string(FN_FOCUS, PAR_FITS_FIELDS, 0, "focus", "Fits field for focus designation", "FOCUS");
     add_par_string(FN_LATITUDE, PAR_FITS_FIELDS, 0, "latitude", "Fits field for latitude of observing site", "LAT-OBS");
     add_par_string(FN_LONGITUDE, PAR_FITS_FIELDS, 0, "longitude", "Fits field for longitude of observing site", "LONG-OBS");
     add_par_string(FN_ALTITUDE, PAR_FITS_FIELDS, 0, "altitude", "Fits field for altitude of observing site", "ALT-OBS");
+
     add_par_string(FN_AIRMASS, PAR_FITS_FIELDS, 0, "airmass", "Fits field for airmas", "AIRMASS");
     add_par_string(FN_ZD, PAR_FITS_FIELDS, 0, "zd", "Fits field for zenith distance", "ZD");
+
     add_par_string(FN_SNSTEMP, PAR_FITS_FIELDS, 0, "snstemp", "Fits field for sensor temperature", "SNS_TEMP");
-    add_par_string(FN_BIN_X, PAR_FITS_FIELDS, 0, "binx", "Fits field for horisontal binning", "CCDBIN1");
-    add_par_string(FN_BIN_Y, PAR_FITS_FIELDS, 0, "biny", "Fits field for vertical binning", "CCDBIN2");
+
     add_par_string(FN_SKIPX, PAR_FITS_FIELDS, 0, "skipx", "Fits field for horisontal window origin", "CCDSKIP1");
     add_par_string(FN_SKIPY, PAR_FITS_FIELDS, 0, "skipy", "Fits field for vertical window origin", "CCDSKIP2");
     add_par_string(FN_ELADU, PAR_FITS_FIELDS, 0, "eladu", "Fits field for electrons per ADU", "ELADU");
-    add_par_string(FN_DCBIAS, PAR_FITS_FIELDS, 0, "dcbias", "Fits field for average bias of frame", "DCBIAS");
     add_par_string(FN_RDNOISE, PAR_FITS_FIELDS, 0, "rdnoise", "Fits field for readout noise in ADU", "RDNOISE");
     add_par_string(FN_FLNOISE, PAR_FITS_FIELDS, 0, "flnoise", "Fits field for multiplicative noise coefficient", "FLNOISE");
+    add_par_string(FN_DCBIAS, PAR_FITS_FIELDS, 0, "dcbias", "Fits field for average bias of frame", "DCBIAS");
+
     add_par_string(FN_CFA_FMT, PAR_FITS_FIELDS, 0, "cfa_fmt", "Fits field for color-field-array layout", "CFA_FMT");
     add_par_string(FN_WHITEBAL, PAR_FITS_FIELDS, 0, "whitebal", "Fits field for white balance calibration", "WHITEBAL");
 
@@ -555,11 +571,11 @@ void init_ptable(void)
     set_par_description(OBS_DEFAULT_RDNOISE,
                 "Default RDNOISE in ADUs if it is missing from frame. ");
 
-    add_par_int(OBS_FORCE_DEFAULT, PAR_OBS_DEFAULTS, FMT_BOOL, "force_default", "use default ELADU and RDNOISE", 0);
-    set_par_description(OBS_FORCE_DEFAULT,
-                "Override the frame specification for ELADU and RDNOISE "
-                "with that set in defaults.");
-
+    add_par_int(OBS_OVERRIDE_FILE_VALUES, PAR_OBS_DEFAULTS, FMT_BOOL, "override_file_values", "replace file values with default vales", 0);
+    set_par_description(OBS_OVERRIDE_FILE_VALUES,
+                "Override the FITS file parameters with those set "
+                "in defaults. This will add FITS params if they are "
+                "not set, or change params if they are set !");
 
     add_par_double(OBS_LATITUDE, PAR_OBS_DEFAULTS, FMT_DEC, "latitude", "Latitude of observing site", 44.430556);
 	set_par_description(OBS_LATITUDE,
@@ -612,10 +628,6 @@ void init_ptable(void)
                 "the frame header. Overrides scale calculated from "
                 "flen and pixel_scale. (arcsec per pixel)" );
 
-    add_par_int(OBS_SECPIX_UNBINNED, PAR_OBS_DEFAULTS, FMT_BOOL, "image_scale_unbinned", "Unbinned secpix", 1);
-    set_par_description(OBS_SECPIX_UNBINNED,
-                "Secpix value is the image scale ignoring binning." );
-
     add_par_int(OBS_FLIPPED, PAR_OBS_DEFAULTS, FMT_BOOL, "flipped", "Flipped field", 0);
 	set_par_description(OBS_FLIPPED,
 			    "Set the inital wcs as flipped (CDELT1 and CDELT2 "
@@ -657,11 +669,14 @@ void init_ptable(void)
 			    "take the filename as an argument, and replace the file "
 			    "with the compressed version." );
 
-    add_par_string(FILE_GNUPLOT, PAR_FILES, 0, "gnuplot", "Gnuplot command", "gnuplot -persist");
+    add_par_string(FILE_GNUPLOT, PAR_FILES, 0, "gnuplot", "Gnuplot command", "/usr/bin/gnuplot");
     set_par_description(FILE_GNUPLOT, "Command used to invoke gnuplot for plotting graphs in a window.");
+    add_par_string(FILE_GNUPLOT_TERM, PAR_FILES, 0, "gnuplot_term", "Gnuplot terminal specification", "qt");
+    set_par_description(FILE_GNUPLOT_TERM, "the terminal specification for gnuplot plot command.");
     add_par_int(FILE_PLOT_TO_FILE, PAR_FILES, FMT_BOOL, "plot_to_file", "Plot to file", 0);
     set_par_description(FILE_PLOT_TO_FILE, "Create a gnuplot file instead of calling gnuplot directly.");
-    add_par_string(MONO_FONT, PAR_FILES, 0, "mono_font", "Monospaced Font", "-misc-fixed-medium-r-*-*-*-120-*-*-*-*-*-*");
+//    add_par_string(MONO_FONT, PAR_FILES, 0, "mono_font", "Monospaced Font", "-misc-fixed-medium-r-*-*-*-120-*-*-*-*-*-*");
+    add_par_string(MONO_FONT, PAR_FILES, 0, "mono_font", "Monospaced Font", "Ubuntu Mono Regular 13");
     set_par_description(MONO_FONT, "The monospaced font used to display FITS headers and help pages.");
     add_par_string(FILE_PHOT_OUT, PAR_FILES, 0, "phot_out_fn", "Phot report file", "phot.out");
     set_par_description(FILE_PHOT_OUT, "Output file for obscript phot commands." );

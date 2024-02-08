@@ -337,6 +337,8 @@ static void find_guide_star_cb( GtkWidget *widget, gpointer window)
             found = 1;
         }
 	} else {
+        fr->window = window; // to pass to user_abort for control-c polling
+
         gs = detect_guide_star(fr, NULL);
 		if (gs) {
 			sl = g_slist_prepend(sl, gs);

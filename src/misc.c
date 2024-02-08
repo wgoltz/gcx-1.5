@@ -954,6 +954,11 @@ int is_constell(char *cc)
     return (found) ? found - constellations : -1;
 }
 
+double secpix_from_pixsize_on_flen(double pixsize_micron, double flen)
+{
+    return pixsize_micron * 1.0e-6 / flen * 180 / PI * 3600;
+}
+
 #ifndef HAVE_BASENAME
 
 

@@ -170,7 +170,8 @@ SOURCES = \
    $$PWD/src/libindiclient/gtk/indi_io.c \
    $$PWD/src/libindiclient/gtk/indi_list.c \
    $$PWD/src/libindiclient/gtk/indigui.c \
-   $$PWD/src/libindiclient/gtk/indisave.c 
+   $$PWD/src/libindiclient/gtk/indisave.c  \
+   $$PWD/src/adjustparams.c
 
 INCLUDEPATH = \
     $$PWD/src \

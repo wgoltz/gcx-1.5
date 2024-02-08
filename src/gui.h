@@ -90,7 +90,7 @@ extern void image_box_to_cache(struct map_cache *cache, struct image_channel *ch
 			double zoom, int x, int y, int w, int h);
 
 /* from abort.c */
-extern int user_abort(void); // control-c polling
+extern int user_abort(void *window); // control-c polling using window flag
 extern void set_abort_flag();
 
 /* from gui.c */
@@ -257,6 +257,9 @@ extern void act_control_wcs (GtkAction *action, gpointer window);
 
 /* recipegui.c */
 extern void act_recipe_create (GtkAction *action, gpointer window);
+
+/* adjustparams.c */
+extern void act_adjust_params (GtkAction *action, gpointer window);
 
 /* reducegui.c */
 extern void act_control_processing (GtkAction *action, gpointer window);

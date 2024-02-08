@@ -547,7 +547,6 @@ int growth_curve(struct ccd_frame *fr, double x, double y, double grc[], int n)
     struct stats stats;
     double sky = get_sky(fr, s.x, s.y, &apdef, NULL, &stats, NULL, NULL);
 
-//    auto_adjust_photometry_rings_for_binning(&apdef, fr);
     double r1 = P_DBL(AP_R1); // get_binned_r1(fr);
     double mflux = 1;
 

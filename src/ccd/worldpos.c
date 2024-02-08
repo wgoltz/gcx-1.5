@@ -770,48 +770,84 @@ int old_dms_to_degrees(char *decs, double *dec)
 }
 
 // transform a string d:m:s coordinate to a float angle (in degrees)
-// if already decimal (assumed) degrees return 0, return 1 otherwise or -1 for error
-int dms_to_degrees(char *decs, double *deg)
-{
-    char *endp;
-    int i;
-    double sign = 1.0;
-
-    for (i=0; decs[i] == ' ' && decs[i] != 0; i++)
+// return 0 (found decimal), return 1 (found sexa-decimal) or -1 for error
+// when finished, end is offset of last char from str start
+int dms_to_degrees_track_end(char *str, double *deg, char **end)
+{    
+    char *p;
+    for (p = str; *p == ' ' && *p != 0; p++) // skip spaces
         ;
-    if (decs[i] == '-') {
-        sign = -1.0;
-        i++;
+
+    int negative = (*p == '-');
+    if (negative) p++;
+
+    char *start = p;
+
+    double dd = NAN;
+    double mm = NAN;
+    double ss = NAN;
+    double frac = NAN;
+
+    char *endp;
+    while (isnan(mm) || isnan(ss) || isnan(dd) || isnan(frac)) {
+
+        if (*p < '0' || *p > '9') { // found non digit
+            unsigned long part = strtoul(start, &endp, 10); // decode sexa part
+            if (start == endp) break;
+
+            if (!isnan(dd) && part > 59) { // check in (0 .. 60)
+                err_printf("sexa-decimal part %d not in range [0..59]\n", part);
+                return -1;
+            }
+
+            if (isnan(dd))
+                dd = part;
+            else if (isnan(mm))
+                mm = part;
+            else if (isnan(ss))
+                ss = part;
+
+            if (*p == '.') {
+                frac = strtod(p, &endp);
+                if (p != endp) {
+                    if (! isnan(ss))
+                        ss += frac;
+                    else if (! isnan(mm))
+                        mm += frac;
+                    else
+                        dd += frac;
+                }
+                break; // finished
+            }
+
+            p = endp;
+            if (*p != ':' && *p != ' ' && *p != '.') break;
+
+            start = p + 1;
+        }
+
+        p++;
     }
 
-    long d = strtol(decs+i, &endp, 10);
-    if (endp == decs+i) {
-        return -1;
-    }
-    if (*endp == '.') { // already decimal (assume it is in degrees)
-        for (i = endp - decs; decs[i] && isdigit(decs[i]); i++);
-        double dlo = strtod(decs+i, &endp);
-        //check it is in [0 to 1) ?
-        *deg = (d + dlo) * sign;
-        return DMS_DECI;
-        // ignore any remainder
+    if (! isnan(dd)) {
+        if (! isnan(mm)) {
+            if (! isnan(ss)) {
+                dd += ss / 3600.0;
+            }
+            dd += mm / 60.0;
+        }
+
+        if (deg) *deg = (negative) ? - dd : dd;
     }
 
-    // check seperator for ':' ' ' (or other) ?
-    for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
-    long m = strtol(decs+i, &endp, 10);
-    if (endp == decs+i) {
-        *deg = d * sign;
-        return DMS_SEXA;
-    }
+    if (end) *end = endp;
 
-    for (i = endp - decs; decs[i] && !isdigit(decs[i]); i++);
-    double s = strtod(decs+i, &endp);
-    if (endp == decs+i) {
-        *deg = (d + m / 60.0) * sign;
-        return DMS_SEXA;
-    }
+    return (isnan(mm)) ? DMS_DECI : DMS_SEXA;
+}
 
-    *deg = (d + m / 60.0 + s / 3600.0) * sign;
-    return DMS_SEXA;
+// transform a string d:m:s coordinate to a float angle (in degrees)
+// return 0 (found decimal), return 1 (found sexa-decimal) or -1 for error
+int dms_to_degrees(char *str, double *deg)
+{
+    return dms_to_degrees_track_end(str, deg, NULL);
 }

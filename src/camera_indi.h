@@ -42,8 +42,10 @@ struct camera_t {
 	struct indi_prop_t *frame_prop;
 	struct indi_prop_t *frame_type_prop;
     struct indi_prop_t *filepath_prop;
-	struct indi_prop_t *binning_prop;
-	struct indi_prop_t *temp_prop;
+    struct indi_prop_t *binning_prop;
+    struct indi_prop_t *lens_prop;
+    struct indi_prop_t *info_prop;
+    struct indi_prop_t *temp_prop;
     struct indi_prop_t *connection_prop;
 };
 
@@ -54,6 +56,7 @@ void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix);
 void camera_abort_exposure(struct camera_t *camera);
 void camera_get_binning(struct camera_t *camera, int *x, int *y);
 void camera_set_binning(struct camera_t *camera, int x, int y);
+double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert_cm, double *pixsiz_micron);
 void camera_get_size(struct camera_t *camera, const char *par, int *value, int *min, int *max);
 void camera_set_size(struct camera_t *camera, int width, int height, int x_offset, int y_offset);
 void camera_get_temperature(struct camera_t *camera, float *value, float *min, float *max);

@@ -150,7 +150,8 @@ static int fit_progress(char *msg, void *data)
 {
     mbds_printf(data, "%s", msg);
 
-    while (gtk_events_pending ()) gtk_main_iteration ();
+//    while (gtk_events_pending ()) gtk_main_iteration ();
+    return user_abort(data);
 
     return 0;
 }
@@ -1619,30 +1620,30 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     g_list_free(ofrs);
 }
 
-void act_mband_fit_zp_cmags (GtkAction *action, gpointer data)
+void act_mband_fit_zp_cmags (GtkAction *action, gpointer mband_dialog)
 {
-    fit_cb (data, FIT_ZPOINTS_CMAGS, NULL);
+    fit_cb (mband_dialog, FIT_ZPOINTS_CMAGS, NULL);
 }
 
-void act_mband_fit_zp_smags (GtkAction *action, gpointer data)
+void act_mband_fit_zp_smags (GtkAction *action, gpointer mband_dialog)
 {
-//    fit_cb (data, FIT_ZP_WTRANS, NULL);
-    fit_cb (data, FIT_ZPOINTS_SMAGS, NULL);
+//    fit_cb (mband_dialog, FIT_ZP_WTRANS, NULL);
+    fit_cb (mband_dialog, FIT_ZPOINTS_SMAGS, NULL);
 }
 
-void act_mband_fit_zp_trans (GtkAction *action, gpointer data)
+void act_mband_fit_zp_trans (GtkAction *action, gpointer mband_dialog)
 {
-	fit_cb (data, FIT_TRANS, NULL);
+    fit_cb (mband_dialog, FIT_TRANS, NULL);
 }
 
-void act_mband_fit_allsky (GtkAction *action, gpointer data)
+void act_mband_fit_allsky (GtkAction *action, gpointer mband_dialog)
 {
-	fit_cb (data, FIT_ALL_SKY, NULL);
+    fit_cb (mband_dialog, FIT_ALL_SKY, NULL);
 }
 
-void act_mband_dataset_avgs_to_smags (GtkAction *action, gpointer data)
+void act_mband_dataset_avgs_to_smags (GtkAction *action, gpointer mband_dialog)
 {
-    fit_cb (data, FIT_SET_AVS, NULL);
+    fit_cb (mband_dialog, FIT_SET_AVS, NULL);
 }
 
 // build mband dialog from stf file
@@ -1733,9 +1734,17 @@ gboolean mband_window_delete(GtkWidget *widget, GdkEvent *event, gpointer data)
 	return TRUE;
 }
 
-void act_mband_close_window (GtkAction *action, gpointer data)
+// does static work?
+static void act_mband_close_window (GtkAction *action, gpointer mband_dialog)
 {
-	mband_window_delete(data, NULL, NULL);
+    mband_window_delete(mband_dialog, NULL, NULL);
+}
+
+// todo: add an abort button to mband_dialog
+static void act_mband_user_abort (GtkAction *action, gpointer mband_dialog)
+{
+    printf("!!! ABORT ABORT ABORT !!!\n"); fflush(NULL);
+    g_object_set_data(G_OBJECT(mband_dialog), "abort", (void *)1); // set abort flag
 }
 
 
@@ -1747,6 +1756,7 @@ static GtkActionEntry mband_menu_actions[] = { // name, stock id, label, accel, 
     { "file-close",   NULL, "_Close Dataset",                   "<control>W", NULL, G_CALLBACK (act_mband_close_dataset) },
     { "report-aavso", NULL, "Report _Targets in AAVSO Format",      NULL,     NULL, G_CALLBACK (act_mband_report) },
     { "close-window", NULL, "Close Window",                     "<control>Q", NULL, G_CALLBACK (act_mband_close_window) },
+    { "user-abort",   NULL, "Abort",                            "<control>C", NULL, G_CALLBACK (act_mband_user_abort) },
 
     /* Display */
     { "display-menu",            NULL, "_Display" },
@@ -1794,8 +1804,9 @@ static GtkWidget *get_main_menu_bar(GtkWidget *window)
 		"    <separator name='separator1'/>"
 		"    <menuitem name='report-aavso' action='report-aavso'/>"
 		"    <separator name='separator2'/>"
-		"    <menuitem name='close-window' action='close-window'/>"
-		"  </menu>"
+        "    <menuitem name='close-window' action='close-window'/>"
+        "    <menuitem name='user-abort' action='user-abort'/>"
+        "  </menu>"
         "  <!-- Display -->"
         "  <menu name='display' action='display-menu'>"
         "    <menuitem name='display-selected-frame' action='display-selected-frame'/>"

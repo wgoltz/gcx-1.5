@@ -115,24 +115,6 @@ void gui_star_list_update_colors(struct gui_star_list *gsl)
 	gsl->shape[STAR_TYPE_ALIGN] = P_INT(SDISP_ALIGN_SHAPE);
 }
 
-void get_gsl_binning_from_frame(struct gui_star_list *gsl, struct ccd_frame *fr)
-{
-//    if (gsl) {
-//        if (fr && (fr->exp.bin_x > 0) && (fr->exp.bin_x == fr->exp.bin_y))
-//            gsl->binning = fr->exp.bin_x;
-//        else
-//            gsl->binning = 1;
-//    }
-}
-
-void auto_adjust_photometry_rings_for_binning(struct ap_params *ap, struct ccd_frame *fr)
-{
-    if ((fr->exp.bin_x > 1) && (fr->exp.bin_y == fr->exp.bin_x)) {
-        ap->r1 /= fr->exp.bin_x;
-        ap->r2 /= fr->exp.bin_x;
-        ap->r3 /= fr->exp.bin_x;
-    }
-}
 
 // sort by gui_star->sort, highest first
 int gs_compare(struct gui_star *a, struct gui_star *b)
@@ -302,7 +284,7 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 {
 
     double ix, iy, isz;
-    double size = gs->size; // / gsl->binning;
+    double size = gs->size;
 
     int type = gs->type;
 
@@ -320,7 +302,7 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
     iy = (gs->y + 0.5) * zoom;
 
 	if (gsl->shape[type] == STAR_SHAPE_APHOT) {
-        isz = 2 * zoom; // / gsl->binning;
+        isz = 2 * zoom;
 	} else if (gsl->shape[type] == STAR_SHAPE_BLOB) {
         isz = size; // gs->size;
 	} else {
@@ -417,8 +399,6 @@ static void draw_gui_star(struct gui_star *gs, GtkWidget *window)
 //    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
 //    if (i_channel == NULL) return;
 
-//    get_gsl_binning_from_frame(gsl, i_channel->fr);
-
     cairo_t *cr = gdk_cairo_create (darea->window);
 
 	draw_star_helper(gs, cr, gsl, geom->zoom);
@@ -442,8 +422,6 @@ static void draw_star_list(GSList *stars, GtkWidget *window)
 
 //    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
 //    if (i_channel == NULL) return;
-
-//    get_gsl_binning_from_frame(gsl, i_channel->fr);
 
     cairo_t *cr = gdk_cairo_create (darea->window);
 
@@ -469,8 +447,6 @@ void draw_sources_hook(GtkWidget *darea, GtkWidget *window, GdkRectangle *area)
 //    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
 //    if (i_channel == NULL) return;
 
-//    get_gsl_binning_from_frame(gsl, i_channel->fr);
-
 	gui_star_list_update_colors(gsl);
 
     cairo_t *cr = gdk_cairo_create(darea->window);
@@ -483,7 +459,7 @@ void draw_sources_hook(GtkWidget *darea, GtkWidget *window, GdkRectangle *area)
 	while (sl != NULL) {
         struct gui_star *gs = GUI_STAR(sl->data);
 		sl = g_slist_next(sl);
-        double size = gs->size; // / gsl->binning;
+        double size = gs->size;
 
 //        if (gs->flags & STAR_DELETED) {
 //            printf("draw_sources_hook star deleted\n"); fflush(NULL);
@@ -629,6 +605,7 @@ void find_stars_cb(gpointer window, guint action)
         /* give the mainloop a chance to redraw under the popup */
 //        while (gtk_events_pending ()) gtk_main_iteration ();
 
+        fr->window = window;
         extract_stars(fr, NULL, 0, P_DBL(SD_SNR), src);
 		remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
 /* now add to the list */

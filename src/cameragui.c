@@ -686,37 +686,51 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
         ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
 
-        struct exp_data *exp = & fr->exp;
+//        struct exp_data *exp = & fr->exp;
 
-        camera_get_binning(camera, & exp->bin_x, & exp->bin_y);
-
-        double eladu = P_DBL(OBS_DEFAULT_ELADU);
-        double rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
+//        double eladu = P_DBL(OBS_DEFAULT_ELADU);
+//        double rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
 
 //        fits_get_double(fr, "FN_ELADU", &eladu); // see if these have been set by camera
 //        fits_get_double(fr, "FN_RDNOISE", &rdnoise);
 
-        // adjust for binning
-        exp->scale = eladu / (exp->bin_x * exp->bin_y);
-        exp->rdnoise = rdnoise / sqrt(exp->bin_x * exp->bin_y);
+//        // adjust for binning
+//        exp->scale = eladu / (exp->bin_x * exp->bin_y);
+//        exp->rdnoise = rdnoise / sqrt(exp->bin_x * exp->bin_y);
 
-        noise_to_fits_header(fr);
+//        noise_to_fits_header(fr);
 
         // read scope position
         struct tele_t *tele = tele_find(main_window);
         double ra, dec;
         if (tele_read_coords(tele, &ra, &dec) == 0) {
-// these are now coords
-            // write coords to fits header
-            char *ras = degrees_to_hms_pr(ra, 2);
-            char *line = NULL;
-            if (ras) asprintf(&line, " '%s'", ras), free(ras);
-            if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
+            double jd = frame_jdate(fr);
+//            char *equinox = NULL;
+//            gboolean free_equinox = TRUE;
 
-            char *decs = degrees_to_dms_pr(dec, 1);
-            line = NULL;
-            if (decs) asprintf(&line, " '%s'", decs), free(decs);
-            if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
+//            if (! isnan(jd)) asprintf(&equinox, "%7.2f", JD_EPOCH(jd));
+            double eq = JD_EPOCH(jd);
+
+            fits_set_pos(fr, 0, ra, dec, eq);
+//            if (equinox == NULL) {
+//                equinox = "EOD";
+//                free_equinox = FALSE;
+//            }
+
+//            char *line = NULL;
+
+//            // write coords to fits header
+//            char *ras = degrees_to_hms_pr(ra, 2);
+
+//            if (ras) asprintf(&line, "'%20s' / TELESCOPE RA (%s)", ras, equinox), free(ras);
+//            if (line) fits_add_keyword(fr, P_STR(FN_RA), line), free(line);
+
+//            char *decs = degrees_to_dms_pr(dec, 1);
+//            line = NULL;
+//            if (decs) asprintf(&line, "'%20s' / TELESCOPE DEC (%s)", decs, equinox), free(decs);
+//            if (line) fits_add_keyword(fr, P_STR(FN_DEC), line), free(line);
+
+//            if (free_equinox) free(equinox);
         }
 // add_image_file_to_list(imfl, fr, name, IMG_IN_MEMORY_ONLY | IMG_LOADED)
 // may need to refine auto-unload

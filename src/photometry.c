@@ -365,7 +365,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 
     stf_append_double (stf, SYM_EQUINOX, wcs->equinox);
 
-    char *telescope = fits_get_string (fr, P_STR(FN_TELESCOP));
+    char *telescope = fits_get_string (fr, P_STR(FN_TELESCOPE));
     if (telescope) {
         trim_blanks (telescope);
         stf_append_string (stf, SYM_TELESCOPE, telescope);
@@ -377,19 +377,17 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 //		stf_append_double(stf, SYM_APERTURE, v);
 //	}
     double jd = frame_jdate (fr); // frame center jd
-    if (jd == 0) jd = wcs->jd;
+    if (isnan(jd)) jd = wcs->jd;
 
     double v;
-    if (fits_get_double (fr, P_STR(FN_EXPTIME), &v) > 0) {
-        d1_printf("using exptime = %.3f from %s\n", v, P_STR(FN_EXPTIME));
-        stf_append_double (stf, SYM_EXPTIME, v);
-    }
+
+    v = fits_get_double (fr, P_STR(FN_EXPTIME));
+    if (! isnan(v)) stf_append_double (stf, SYM_EXPTIME, v);
 
     stf_append_double (stf, SYM_MJD, jd_to_mjd(jd));
 
-    if (fits_get_double (fr, P_STR(FN_SNSTEMP), &v) > 0) {
-        stf_append_double (stf, SYM_SNS_TEMP, v);
-	}
+    v = fits_get_double (fr, P_STR(FN_SNSTEMP));
+    if (! isnan(v)) stf_append_double (stf, SYM_SNS_TEMP, v);
 
 	gboolean got_location = (wcs->flags & WCS_LOC_VALID);
 
@@ -408,24 +406,20 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
     s = degrees_to_dms_pr (lng, 0);
     if (s) stf_append_string (stf, SYM_LONGITUDE, s), free(s);
 
-    if (fits_get_double (fr, P_STR(FN_ALTITUDE), &v) > 0) {
-        stf_append_double (stf, SYM_ALTITUDE, v);
-	}
+    v = fits_get_double (fr, P_STR(FN_ALTITUDE));
+    if (!isnan(v)) stf_append_double (stf, SYM_ALTITUDE, v);
 
-    if (fits_get_double (fr, P_STR(FN_AIRMASS), &v) > 0) {
-        d3_printf("using airmass = %.3f from %s\n", v, P_STR(FN_AIRMASS));
-        stf_append_double (stf, SYM_AIRMASS, v);
-    } else if (fits_get_dms(fr, P_STR(FN_ZD), &v) >= 0) {
-        d3_printf("using zd = %.3f from %s\n", v, P_STR(FN_ZD));
-        v = airmass(90.0 - v);
-        stf_append_double (stf, SYM_AIRMASS, v);
-    } else {
-		if (got_location && jd > 0.0) {
-		/* attempt to calculate airmass from other fields */
-            v = calculate_airmass (wcs->xref, wcs->yref, get_apparent_sidereal_time(jd), lat, lng);
-            if (v > 0.0) stf_append_double (stf, SYM_AIRMASS, v);
-		}
-	}
+    v = fits_get_double (fr, P_STR(FN_AIRMASS));
+
+    if (isnan(v)) {
+        v = fits_get_double(fr, P_STR(FN_ZD));
+        if (! isnan(v)) v = airmass(90.0 - v);
+    }
+    if (isnan(v) && got_location && ! isnan(jd))
+        v = calculate_airmass (wcs->xref, wcs->yref, get_apparent_sidereal_time(jd), lat, lng);
+
+    if (! isnan(v)) stf_append_double (stf, SYM_AIRMASS, v);
+
 
     char *observer = fits_get_string (fr, P_STR(FN_OBSERVER));
     if (observer) {
@@ -567,7 +561,6 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
     // set up photometry params
     struct ap_params apdef;
     ap_params_from_par (&apdef);    
-//    auto_adjust_photometry_rings_for_binning(&apdef, fr);
 
     // create stf: should have same sort order as gui_star_list->sl
     struct stf *stf = build_stf_from_frame (wcs, asl, fr, &apdef);

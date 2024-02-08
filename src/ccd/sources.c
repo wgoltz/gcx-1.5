@@ -36,6 +36,8 @@
 #include <gtk/gtk.h>
 
 #include "ccd.h"
+#include "gui.h" // for user_abort
+
 //#include "abort.h"
 //#include "x11ops.h"
 
@@ -43,16 +45,15 @@
 #define	MAXSR		50		// max star radius
 #define	MINSR		2		// min star radius 
 #define	SKYR		2		// measure sky @ starr
-#define	MINSEP		5 //3		// min star separation
+#define	MINSEP		3		// min star separation
 #define	NWALK		8		// n pixels surrounding a pixel
-#define	NCONN		8 //4		// min connected pixels to qualify
+#define	NCONN		4		// min connected pixels to qualify
 #define	PKP		20.0		// dips must be > this % of peak-med
 #define NSIGMA		3.0		// peak of star must be > NSIGMA * csigma + median to count
 #define BURN		60000		// burnout limit for locate_star
 #define EXCLUDE_EDGE	2		// exclude sources close to edge
 #define RING_MAX 3000
-#define MAX_STAR_CANDIDATES 16384	/* max number of candidates before we find the first star
-					 */
+#define MAX_STAR_CANDIDATES 16384	/* max number of candidates before we find the first star */
 
 // compute ring statistics of pixels in the r1-radius ring that has the center at x, y;
 // values lower than min or larger than max are skipped
@@ -616,9 +617,10 @@ static int compare_flux(const void *p1, const void *p2)
 }
 #endif
 
+
 // find the src->maxn brightest 'stars' in the supplied region;
 // if region is NULL, search the whole frame 
-// returns the actual number of stars found, a neagtive number for errors. 
+// returns the actual number of stars found, a negative number for errors.
 // the star centroided positions, estimated fluxes and sizes are updated in
 // the result table
 int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, double sigmas, struct sources *src)
@@ -658,7 +660,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
             lastprogress = progress;
         }
 
-        while (gtk_events_pending()) gtk_main_iteration();
+        if (user_abort(fr->window)) break; // check for user abort
 
         int x;
         for (x = xs; x < xe; x++) {
@@ -668,20 +670,17 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 
             if (pk <= minpk) continue; // below detection threshold
 
-		
-//			candidates ++;
-//			if (candidates > MAX_STAR_CANDIDATES) {
-//				err_printf("extract_stars: Too many bad candidates, aborting\n");
-//				goto err_exit;
-//			}
-
             // now check if the star is valid
             double fwhm;
 
             int starr = star_radius(fr, x, y, pk, minpk, &fwhm);
             if (starr < 0) continue; // not at a peak
 
-			candidates ++;
+            candidates ++;
+//            if (candidates > MAX_STAR_CANDIDATES) {
+//                err_printf("extract_stars: Too many bad candidates, aborting\n");
+//                break;
+//            }
 
             // estimate sky here
             int rn = SKYR * starr;
@@ -735,7 +734,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, dou
 			if (check_multiple(src, &st)) {
 //d3_printf("candidates so far: %d\n", candidates);
 				candidates = 0;
-                insert_star(src, &st);
+                if (insert_star(src, &st) == 0) break;
             }
 		}
 	}

@@ -64,9 +64,13 @@ static inline double SIGMA(double sum2, double sum, double n)
     return sigma;
 }
 
-#define FITS_HCOLS 80
+#define FITS_HROWS 36 // number of fits header lines in a block
+#define FITS_HCOLS 80 // number of chars per header line
 
-typedef char FITS_row[FITS_HCOLS];
+#define FITS_STRS 81 // FITS_HCOLS + 1 : store and access lines as nul terminated strings
+
+typedef char FITS_row[FITS_HCOLS]; // headers in fits file
+typedef char FITS_str[FITS_STRS];  // headers as strings
 
 struct point {		// a point in a frame or window
 	int x;
@@ -133,7 +137,7 @@ struct im_stats {
     double max;	    // highest pixel
 	double avg; 	// average pixel val
 	double sigma; 	// standard deviation
-	double cavg; 	// avg of center of population
+    double cavg; 	// avg of poulation center (exclude population edges)
 	double csigma;  // robust sigma estimate
 	double median;	// median of frame
     double zero;
@@ -176,7 +180,6 @@ struct wcs{
 	double yrefpix;	/* y reference pixel */
 	double xinc;	/* x coordinate increment (deg) */
 	double yinc;	/* y coordinate increment (deg) */
-    int binning;
 	double rot;	/* rotation (deg)  (from N through E) */
 	double pc[2][2];/* linear matrix transform (used together with xinc, yinc
 			   when the full linear model is enabled.
@@ -305,7 +308,8 @@ struct ccd_frame {
 	int pix_size;	// bytes/pixel
 	int pix_format;	// format pixels are stored in
 	void *dat;	// the data array
-	FITS_row *var;	/* malloced array of all unrecognized header lines */
+//	FITS_row *var;	/* malloced array of all unrecognized header lines */
+    FITS_str *var_str;
 	int nvar;	/* number of var[] */
     char *name;	// name of frame
 	void *rdat;     // rgb image planes
@@ -317,6 +321,7 @@ struct ccd_frame {
     int data_is_flipped; // 0 - data arranged as from file, 1 - data rows flipped top to bottom
     void *ofr; // pointer to o_frame if mband active
     struct image_file *imf; // point back to imf
+    void *window; // used only as argument to user_about() for control-c polling
 };
 
 // magic numbers for ccd frame
@@ -625,19 +630,41 @@ extern int write_fits_frame(struct ccd_frame *fr, char *filename);
 extern int write_gz_fits_frame(struct ccd_frame *fr, char *fn);
 extern int scale_shift_frame(struct ccd_frame *fr, double m, double s);
 extern int madd_frames (struct ccd_frame *fr, struct ccd_frame *fr1, double m);
-//extern int libip_head(struct ccd_frame *fr);
-extern FITS_row *fits_keyword_lookup(struct ccd_frame *fr, char *kwd);
-extern int fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val);
-int fits_delete_keyword(struct ccd_frame *fr, char *kwd);
-extern int fits_add_history(struct ccd_frame *fr, char *val);
+extern int sub_frames (struct ccd_frame *fr, struct ccd_frame *fr1);
 extern int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1);
 extern int crop_frame(struct ccd_frame *fr, int x, int y, int w, int h);
-char *fits_get_string(struct ccd_frame *fr, char *kwd);
-int fits_get_dms(struct ccd_frame *fr, char *kwd, double *v);
-int fits_get_double(struct ccd_frame *fr, char *kwd, double *v);
-int fits_get_int(struct ccd_frame *fr, char *kwd, int *v);
-int sub_frames (struct ccd_frame *fr, struct ccd_frame *fr1);
 
+//extern int libip_head(struct ccd_frame *fr);
+extern FITS_str *fits_keyword_lookup(struct ccd_frame *fr, char *kwd);
+extern FITS_str *fits_str_set_string(struct ccd_frame *fr, FITS_str *str, char *val);
+
+extern FITS_str *fits_add_history(struct ccd_frame *fr, char *val);
+extern FITS_str *fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val);
+extern int fits_delete_keyword(struct ccd_frame *fr, char *kwd);
+
+extern char *fits_str_get_string(FITS_str *str, char **endp);
+extern double fits_str_get_double(FITS_str *str, char **endp);
+extern double fits_str_get_dms(FITS_str *str, char **endp);
+
+extern char *fits_get_string(struct ccd_frame *fr, char *kwd);
+extern double fits_get_double(struct ccd_frame *fr, char *kwd);
+extern double fits_get_dms(struct ccd_frame *fr, char *kwd);
+
+// choose comment from fits_pos_comment
+extern void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double equinox);
+extern int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox);
+
+extern void fits_set_loc(struct ccd_frame *fr, double lat, double lng);
+extern int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng);
+
+extern int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *yname,
+                                 double *parm, double *xparm, double *yparm);
+
+extern void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *comment,
+                                  char *name, char *xname, char *yname);
+
+extern int fits_get_secpix(struct ccd_frame *fr, double *secpix, double *xsecpix, double *ysecpix);
+extern void fits_set_secpix(struct ccd_frame *fr, double secpix, int xbinning, int ybinning);
 
 struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned, char *default_cfa);
 
@@ -692,7 +719,9 @@ extern int locate_star(struct ccd_frame *fr, double x, double y, double r, doubl
 		       struct star *s);
 extern int get_star_near(struct ccd_frame *fr, int x, int y, double min_flux, struct star *s);
 extern int follow_star(struct ccd_frame *fr, double r, struct star *old_star, struct star *s);
+
 extern int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, double sigmas, struct sources *src);
+
 extern void release_sources(struct sources *src);
 extern void ref_sources(struct sources *src);
 extern struct sources *new_sources(int n);
@@ -718,7 +747,8 @@ enum {
     DMS_SEXA
 };
 
-extern int dms_to_degrees(char *decs, double *deg);
+extern int dms_to_degrees(char *str, double *deg);
+extern int dms_to_degrees_track_end(char *str, double *deg, char **end);
 
 extern char *degrees_to_dms_pr(double deg, int prec);
 extern char *degrees_to_hms_pr(double deg, int prec);

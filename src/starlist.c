@@ -450,28 +450,20 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 		return 0;
 	}
 
-    double ra;
-    int d_type = fits_get_dms(fr, P_STR(FN_OBJCTRA), &ra);
-    if (d_type < 0) {
-		err_printf("no '%s' field in fits header\n", P_STR(FN_OBJCTRA));
-		return 0;
-	}
-    if (d_type == DMS_SEXA)	ra *= 15.0;
+// use fits_get_pos
+    double ra = fits_get_dms(fr, P_STR(FN_OBJECTRA)); if (isnan(ra)) return -1;
+    // look for equinox in endp
 
-    double dec;
-    if (fits_get_dms(fr, P_STR(FN_OBJCTDEC), &dec) <= 0) {
-		err_printf("no '%s' field in fits header\n", P_STR(FN_OBJCTDEC));
-		return 0;
-	}
+    ra *= 15;
 
-    double equinox;
-    if (fits_get_double(fr, P_STR(FN_EQUINOX), &equinox) <= 0) {
-		equinox = wcs->equinox;
-	}
+    double dec = fits_get_dms(fr, P_STR(FN_OBJECTDEC)); if (isnan(dec)) return -1;
+
+    double equinox = fits_get_double(fr, P_STR(FN_EQUINOX)); if (isnan(equinox)) return -1;
+
     d3_printf("name %s ra %.4f dec %.4f, equ: %.1f\n", object, ra, dec, equinox);
 
     struct cat_star *cats = cat_star_new();
-	cats->ra = ra;
+    cats->ra = ra;
 	cats->dec = dec;
 	cats->equinox = equinox;
 	cats->mag = 0.0;
@@ -813,7 +805,7 @@ int remove_off_frame_stars(gpointer window)
 		return 0;
 	}
 
-    double extra = P_DBL(AP_R3); // / gsl->binning;
+    double extra = P_DBL(AP_R3);
 
     GSList *osl = NULL;
     int i = 0;

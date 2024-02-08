@@ -432,40 +432,51 @@ static int mb_reduce(char *mband, char *outf)
     return 0;
 }
 
+// spp is unbinned pixel scale
 static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
 {   
     struct cat_star *cats = get_object_by_name(name);
     if (cats == NULL) return -1;
 
-    gboolean havescale = (spp != 0);
+    double xbinning = fits_get_double(fr, P_STR(FN_XBINNING));
+    if (isnan(xbinning)) xbinning = 1;
 
-    if (! havescale)
-        havescale = (fits_get_double(fr, P_STR(FN_SECPIX), &spp) > 0);
-    if (! havescale)
-        havescale = ((spp = P_DBL(OBS_SECPIX)) != 0);
-    if (! havescale) {
-        havescale = (P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0);
-        if (havescale)
-            spp = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
+    double ybinning = fits_get_double(fr, P_STR(FN_YBINNING));
+    if (isnan(ybinning)) ybinning = 1;
+
+    // todo: check pixsz
+    double xsecpix = fits_get_double(fr, P_STR(FN_XSECPIX));
+    double ysecpix = fits_get_double(fr, P_STR(FN_YSECPIX));
+
+    if (isnan(xsecpix) && isnan(ysecpix)) {
+        if (isnan(spp)) spp = fits_get_double(fr, P_STR(FN_SECPIX));
+        if (isnan(spp)) spp = P_DBL(OBS_SECPIX); // default (unbinned)
+    } else
+        if (isnan(xsecpix) ^ isnan(ysecpix)) spp = isnan(xsecpix) ? ysecpix: xsecpix;
+
+//    double check_spp = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
+
+    printf("set_wcs_from_object wcsset = WCS_INITIAL\n"); fflush(NULL);
+
+    fr->fim.wcsset = WCS_INITIAL;
+    fr->fim.xref = cats->ra;
+    fr->fim.yref = cats->dec;
+    fr->fim.xrefpix = fr->w / 2;
+    fr->fim.yrefpix = fr->h / 2;
+
+    fr->fim.equinox = cats->equinox;
+    fr->fim.rot = 0.0;
+
+    if (! isnan(xsecpix) && ! isnan(ysecpix)) {
+        fr->fim.xinc = - xsecpix / 3600.0;
+        fr->fim.yinc = - ysecpix / 3600.0;
+    } else {
+        fr->fim.xinc = - spp * xbinning / 3600.0;
+        fr->fim.yinc = - spp * ybinning / 3600.0;
     }
-    if (havescale) {
 
-        printf("set_wcs_from_object wcsset = WCS_INITIAL\n"); fflush(NULL);
+    if (P_INT(OBS_FLIPPED))	fr->fim.yinc = -fr->fim.yinc;
 
-        fr->fim.wcsset = WCS_INITIAL;
-        fr->fim.xref = cats->ra;
-        fr->fim.yref = cats->dec;
-        fr->fim.xrefpix = fr->w / 2;
-        fr->fim.yrefpix = fr->h / 2;
-
-        fr->fim.equinox = cats->equinox;
-        fr->fim.rot = 0.0;
-
-        fr->fim.xinc = - spp / 3600.0;
-        fr->fim.yinc = - spp / 3600.0;
-
-        if (P_INT(OBS_FLIPPED))	fr->fim.yinc = -fr->fim.yinc;
-    }
     cat_star_release(cats, "set_wcs_from_object");
 
 	return 0;
@@ -1032,7 +1043,7 @@ printf("home_path: %s\n", cwd); fflush(NULL);
 
             if (fr) {
                 get_frame(fr, "main");
-                if (obj && obj[0]) set_wcs_from_object(fr, obj, 0);
+                if (obj && obj[0]) set_wcs_from_object(fr, obj, NAN);
 
                 //printf("gcx.main 2\n");
 

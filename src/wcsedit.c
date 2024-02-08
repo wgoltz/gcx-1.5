@@ -180,27 +180,27 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
 		break;
 	}
 
-    if (wcs->xref != INV_DBL) {
+    if (! isnan(wcs->xref)) {
         char *ras = degrees_to_hms_pr(wcs->xref, 2);
         if (ras) named_entry_set(dialog, "wcs_ra_entry", ras), free(ras);
     }
 
-    if (wcs->yref != INV_DBL) {
+    if (! isnan(wcs->yref)) {
         char *decs = degrees_to_dms_pr(wcs->yref, 1);
         if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
     }
 
-//    if (wcs->equinox != INV_DBL) {
+//    if (! isnan(wcs->equinox)) {
         buf = NULL; asprintf(&buf, "%.2f", wcs->equinox);
         if (buf) named_entry_set(dialog, "wcs_equinox_entry", buf), free(buf);
 //    }
 
-//    if (wcs->rot != INV_DBL) {
+//    if (! isnan(wcs->rot)) {
         buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
         if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
 //    }
 
-    if ((wcs->xinc != INV_DBL && wcs->yinc != INV_DBL)) {
+    if ((! isnan(wcs->xinc) && ! isnan(wcs->yinc))) {
         buf = NULL; asprintf(&buf, "%.4f", (fabs(wcs->xinc) + fabs(wcs->yinc)) * 1800);
         if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
     }

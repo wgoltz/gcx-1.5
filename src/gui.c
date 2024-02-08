@@ -316,11 +316,28 @@ void act_user_quit(GtkAction *action, gpointer window)
 	gtk_widget_destroy(GTK_WIDGET(window));
 }
 
-//void act_user_abort(GtkAction *action, gpointer window)
-//{
-//	d3_printf("user abort\n");
-//	set_abort_flag(); // check with user_abort()
-//}
+// need to add this to mband dialog for fit_progress
+void act_user_abort(GtkAction *action, gpointer window)
+{
+    printf("!!! ABORT ABORT ABORT !!!\n"); fflush(NULL);
+    g_object_set_data(G_OBJECT(window), "abort", (void *)1); // set abort flag
+}
+
+int user_abort(void *window)
+{
+    while (gtk_events_pending()) gtk_main_iteration();
+    if (window == NULL) return 0;
+
+    gpointer abort = g_object_get_data(G_OBJECT(window), "abort"); // check abort flag
+    if (abort == (void *) 1) {
+        g_object_set_data(G_OBJECT(window), "abort", (void *)0); // clear abort flag
+        return 1;
+    }
+    return 0;
+}
+
+// add abort button to main window
+// check for abort button pressed in places likely to hang (find stars)
 
 void act_frame_new (GtkAction *action, gpointer window)
 {
@@ -510,7 +527,7 @@ void window_resize_cb(GtkWidget *window)
 
     center_scw(scw);
 
- //   gtk_widget_queue_draw(window);
+    gtk_widget_queue_draw(window);
 }
 
 void set_darea_size(GtkWidget *window, struct map_geometry *geom)
@@ -755,12 +772,13 @@ static GtkActionEntry image_actions[] = {
 	{ "recipe-create",        NULL, "_Create Recipe",          NULL,         NULL, G_CALLBACK (act_recipe_create) },
 	{ "show-fits-header",     NULL, "Show Fits _Header...",    "<shift>H",   NULL, G_CALLBACK (act_show_fits_headers) },
 
-	{ "edit-options",         NULL, "Edit O_ptions",           "O",          NULL, G_CALLBACK (act_control_options) },
+    { "edit-options",         NULL, "Edit O_ptions...",           "O",          NULL, G_CALLBACK (act_control_options) },
+    { "adjust-params",        NULL, "_Adjust FITS params...",  "U",          NULL, G_CALLBACK (act_adjust_params) },
     { "camera-scope-control", NULL, "Camera and Telescope...", "<shift>C",   NULL, G_CALLBACK (act_control_camera) },
 	{ "guide-control",        NULL, "Guiding...",              "<shift>T",   NULL, G_CALLBACK (act_control_guider) },
     { "indi-settings",        NULL, "Indi...",                 "<shift>I",   NULL, G_CALLBACK (act_indi_settings) },
 	{ "user-quit",            NULL, "_Quit",                   "<control>Q", NULL, G_CALLBACK (act_user_quit) },
-//	{ "user-abort",           NULL, "Abort",                   "<control>C", NULL, G_CALLBACK (act_user_abort) },
+    { "user-abort",           NULL, "Abort",                   "<control>C", NULL, G_CALLBACK (act_user_abort) },
 	/* Image */
 	{ "image-menu", NULL, "_Image" },
 	{ "image-set-contrast", NULL, "Set _Contrast" },
@@ -852,8 +870,8 @@ static GtkActionEntry image_actions[] = {
 	{ "phot-to-file",          NULL, "Photometry to _File",        NULL,         NULL, G_CALLBACK (act_phot_to_file) },
 	{ "phot-to-aavso-file",    NULL, "Photometry to _AAVSO File",  NULL,         NULL, G_CALLBACK (act_phot_to_aavso) },
     { "phot-to-stdout",        NULL, "Photometry to _stdout",      "P",         NULL, G_CALLBACK (act_phot_to_stdout) },
-	{ "ccd-reduction",         NULL, "_CCD Reduction...",         "L",           NULL, G_CALLBACK (act_control_processing) },
-	{ "multi-frame-reduction", NULL, "_Multi-frame Reduction...", "<control>M",  NULL, G_CALLBACK (act_control_mband) },
+    { "ccd-reduction",         NULL, "_CCD Reduction...",         "L",           NULL, G_CALLBACK (act_control_processing) },
+    { "multi-frame-reduction", NULL, "_Multi-frame Reduction...", "<control>M",  NULL, G_CALLBACK (act_control_mband) },
 
 
 	/* Help */
@@ -881,12 +899,13 @@ static char *image_common_ui =
 	"  <separator name='separator2'/>"
 	"  <menuitem name='Show FITS Header' action='show-fits-header'/>"
 	"  <menuitem name='Edit Options' action='edit-options'/>"
+    "  <menuitem name='Adjust FITS Params' action='adjust-params'/>"
 	"  <menuitem name='Camera/Scope' action='camera-scope-control'/>"
 	"  <menuitem name='Guiding'      action='guide-control'/>"
     "  <menuitem name='Indi'         action='indi-settings'/>"
 	"  <separator name='separator3'/>"
 	"  <menuitem name='Quit'         action='user-quit'/>"
-//	"  <menuitem name='Abort'        action='user-abort'/>"
+    "  <menuitem name='Abort'        action='user-abort'/>"
 	"</menu>"
 	"<menu name='image' action='image-menu'>"
 	"  <menuitem name='image-curves' action='image-curves'/>"

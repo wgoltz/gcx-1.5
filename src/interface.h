@@ -29,3 +29,4 @@ GtkWidget* create_entry_prompt (void);
 GtkWidget* create_query_log_window (void);
 GtkWidget* create_camera_control (void);
 GtkWidget* create_guide_window (void);
+GtkWidget* create_adjust_params (void);

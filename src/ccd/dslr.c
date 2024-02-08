@@ -1077,7 +1077,7 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 				 endian_to_host_16(byteorder, mrw->prd->img_size_x)) / 2;
 
 		snprintf(strbuf, 64, "%d", frame->x_skip);
-		fits_add_keyword(frame, "CCDSKIP1", strbuf);
+        fits_add_keyword(frame, "CCDSKIP1", strbuf);
 	}
 
 	if (endian_to_host_16(byteorder, mrw->prd->ccd_size_y) >
@@ -1087,18 +1087,18 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 				 endian_to_host_16(byteorder, mrw->prd->img_size_y)) / 2;
 
 		snprintf(strbuf, 64, "%d", frame->y_skip);
-		fits_add_keyword(frame, "CCDSKIP2", strbuf);
+        fits_add_keyword(frame, "CCDSKIP2", strbuf);
 	}
 
 	if (raw->date_obs)
-		fits_add_keyword(frame, "DATE-OBS", raw->date_obs);
+        fits_add_keyword(frame, "DATE-OBS", raw->date_obs);
 
 	if (raw->time_obs)
-		fits_add_keyword(frame, "TIME-OBS", raw->time_obs);
+        fits_add_keyword(frame, "TIME-OBS", raw->time_obs);
 
 	if (raw->exptime != 0.0) {
         snprintf(strbuf, 64, "%11.5f", raw->exptime);
-		fits_add_keyword(frame, "EXPTIME", strbuf);
+        fits_add_keyword(frame, "EXPTIME", strbuf);
 	}
 
 	return frame;
@@ -1514,14 +1514,14 @@ static struct ccd_frame *read_cr2_file(struct raw_file *raw)
 #endif
 
 	if (raw->date_obs)
-		fits_add_keyword(frame, "DATE-OBS", raw->date_obs);
+        fits_add_keyword(frame, "DATE-OBS", raw->date_obs);
 
 	if (raw->time_obs)
-		fits_add_keyword(frame, "TIME-OBS", raw->time_obs);
+        fits_add_keyword(frame, "TIME-OBS", raw->time_obs);
 
 	if (raw->exptime != 0.0) {
         snprintf(strbuf, 64, "%11.5f", raw->exptime);
-		fits_add_keyword(frame, "EXPTIME", strbuf);
+        fits_add_keyword(frame, "EXPTIME", strbuf);
 	}
 
 	free_cr2(cr2);

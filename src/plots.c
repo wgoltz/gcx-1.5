@@ -116,12 +116,12 @@ int close_plot(FILE *fp, int pop)
     return 0;
 }
 
-/* commands prepended at the beginning of each plot */
+/* commands prepended to each plot */
 void plot_preamble(FILE *dfp)
 {
 	g_return_if_fail(dfp != NULL);
 	fprintf(dfp, "set key below\n");
-    fprintf(dfp, "set term qt size 800,500\n");
+    fprintf(dfp, "set term %s size 800,500\n", P_STR(FILE_GNUPLOT_TERM));
     fprintf(dfp, "set mouse\n");
     fprintf(dfp, "set clip two\n");
 

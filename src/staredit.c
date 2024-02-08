@@ -808,9 +808,13 @@ printf("add_star_from_catalog wcsset = WCS_INITIAL\n"); fflush(NULL);
     wcs->equinox = cats->equinox;
     wcs->rot = 0.0;
 
-    if (! keep_scale) {
-        wcs->xinc = wcs->yinc = P_DBL(OBS_SECPIX) / 3600.0;
-        if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+// todo ..
+    if (! keep_scale) { // perhaps use wcs values instead?
+//        xsecpix = secpix_from_pixsize_on_flen(xpixsz, flen);
+//        ysecpix = secpix_from_pixsize_on_flen(ypixsz, flen);
+//        wcs->xinc = - xsecpix / 3600.0 ;
+//        wcs->xinc = - ysecpix / 3600.0 ;
+//        if (P_INT(OBS_FLIPPED))	wcs->yinc = - wcs->yinc;
     }
 
     if (newframe) {

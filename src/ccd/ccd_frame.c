@@ -57,7 +57,6 @@
 #include "obsdata.h"
 
 #define MAX_FLAT_GAIN 1.5	// max gain accepted when flatfielding
-#define FITS_HROWS 36	// number of fits header lines in a block
 
 
 // new frame creates a frame of the specified size
@@ -102,13 +101,13 @@ static int frame_count = 0;
 
 struct im_stats *alloc_stats(struct im_stats *st)
 {
-//    if (st) return st; // need to alloc hdat if it has not been done
-
-    struct im_stats *new_st = (st == NULL) ? calloc(1, sizeof(struct im_stats)) : NULL;
-
-    if (new_st) {
-        new_st->free_stats = 1;
-        st = new_st;
+    struct im_stats *new_st = NULL;
+    if (st == NULL) {
+        new_st = calloc(1, sizeof(struct im_stats));
+        if (new_st) {
+            new_st->free_stats = 1;
+            st = new_st;
+        }
     }
     if (st) {
         st->hist.hsize = H_SIZE;
@@ -128,11 +127,12 @@ void free_stats(struct im_stats *st)
 {
     if (st == NULL) return;
 
-    if (st->hist.hdat) free (st->hist.hdat);
-    if (st->free_stats == 1) {
-        printf("freeing stats\n"); fflush(NULL);
-        free(st); // clangd says st offset by 80 bytes from alloc
+    if (st->hist.hdat) {
+        free (st->hist.hdat);
+        st->hist.hdat = NULL;
     }
+
+    if (st->free_stats == 1) free(st);
 }
 
 
@@ -202,15 +202,15 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
 
     void *var = NULL;
 	if (hd->nvar) { //we need to alloc space for variables
-        var = malloc(hd->nvar * sizeof(FITS_row));
+        var = malloc(hd->nvar * sizeof(FITS_str));
 		if (var == NULL) {
             free(hd);
 			return NULL;
 		}
-		memcpy(var, hd->var, hd->nvar * sizeof(FITS_row));
-		hd->var = var;
+        memcpy(var, hd->var_str, hd->nvar * sizeof(FITS_str));
+        hd->var_str = var;
     } else {
-        hd->var = NULL;
+        hd->var_str = NULL;
         hd->nvar = 0;
     }
 
@@ -231,20 +231,24 @@ struct ccd_frame *new_frame_head_fr(struct ccd_frame* fr, unsigned size_x, unsig
 //        hd->rmeta.color_matrix = 0;
     }
 
-    hd->fim.xinc = INV_DBL;
-    hd->fim.yinc = INV_DBL;
-    hd->fim.xref = INV_DBL;
-    hd->fim.yref = INV_DBL;
+    hd->fim.xinc =
+    hd->fim.yinc =
+    hd->fim.xref =
+    hd->fim.yref =
+    hd->fim.jd =
+    hd->fim.lat =
+    hd->fim.lng = NAN;
+
 
     if (fr && fr->fim.wcsset) { // clone wcs from fr
         wcs_clone(& hd->fim, & fr->fim);
     }
 
 	if (fr == NULL) {
-		hd->exp.scale = 1.0;
-		hd->exp.bias = 0.0;
-		hd->exp.rdnoise = 1.0;
-		hd->exp.flat_noise = 0.0;
+        hd->exp.scale = NAN;
+        hd->exp.bias = NAN;
+        hd->exp.rdnoise = NAN;
+        hd->exp.flat_noise = NAN;
 	}
 	hd->ref_count = 1;
 	hd->pix_format = PIX_FLOAT;
@@ -265,17 +269,20 @@ void free_frame(struct ccd_frame *fr)
 	if (fr) {
         frame_count--;
 // printf("free_frame %p frame_count %d %s\n", fr, frame_count, (fr->name) ? fr->name : ""); fflush(NULL);
-        if (fr->var) free(fr->var);
+
+        if (fr->var_str) free(fr->var_str);
         if (fr->dat) free(fr->dat);
         if (fr->rdat) free(fr->rdat);
         if (fr->gdat) free(fr->gdat);
         if (fr->bdat) free(fr->bdat);
         if (fr->name) free(fr->name);
 
-        free_stats(&fr->stats); // just free hist.hdat
+//        free_stats(&fr->stats);
+        // just free hist.hdat or clang analyser complains
+        if (fr->stats.hist.hdat) free(fr->stats.hist.hdat);
 
 //        if (fr->alignment_mask) free_alignment_mask(fr);
-        free(fr); // clangd says attempt to free released memory (something in free_stats)
+        free(fr);
 	}
 }
 
@@ -389,7 +396,7 @@ int region_stats(struct ccd_frame *fr, int rx, int ry, int rw, int rh, struct im
     for (hix = 0; hix < hsize; hix++) st->hist.hdat[hix] = 0;
 
     double hmin = H_MIN;
-    double hstep = (H_MAX - H_MIN) / hsize; // clangd says division by 0
+    double hstep = (H_MAX - H_MIN) / hsize;
     unsigned binmax = 0;
 
     double sum = 0.0;
@@ -644,8 +651,7 @@ struct read_fn read_mem = {
 #define MAX_FILENAME 1024
 
 // look for 'keyword' then '=' in source. return pointer to next char after '='
-// source is guaranteed nul terminated at pos 81
-char *str_find_fits_key(char *str, char *key)
+static char *str_get_value(char *str, char *key)
 {
     gboolean equal = FALSE;
     while (*key == *str) {
@@ -669,17 +675,351 @@ char *str_find_fits_key(char *str, char *key)
     return NULL;
 }
 
-gboolean str_get_fits_key_double(char *str, char *key, double *d)
+static gboolean str_get_double(char *str, char *key, double *d)
 {
-    char *rem = str_find_fits_key(str, key);
-    if (rem == NULL) return FALSE;
+    double d_local = NAN;
 
-    char *endp;
-    *d = strtod(rem, &endp);
-    if (endp == str) return FALSE;
-    if (*d == 0) { printf ("error reading double: %s\n", endp); fflush(NULL); }
-    return (*d == 0) ? FALSE : TRUE;
+    char *val = str_get_value(str, key);
+    if (val != NULL) {
+        char *endp;
+        d_local = strtod(val, &endp);
+
+        if (endp == val) d_local = NAN;
+    }
+    if (d) *d = d_local;
+
+    return (isnan(d_local)) ? FALSE : TRUE;
 }
+
+/* get a double (degrees) from a string field containing a
+ * DMS representation return dms_to_degrees */
+double fits_get_dms(struct ccd_frame *fr, char *kwd)
+{
+    FITS_str * str = fits_keyword_lookup(fr, kwd);
+    if (str == NULL) return NAN;
+
+    return fits_str_get_dms(str, NULL);
+}
+
+/* get a double (degrees) from a string field containing a
+ * DMS representation return dms_to_degrees
+ * track endp to help scanning comments */
+static double fits_get_dms_track_end(struct ccd_frame *fr, char *kwd, char **endp)
+{
+    FITS_str * str = fits_keyword_lookup(fr, kwd);
+    if (str == NULL) return NAN;
+
+    if (endp) *endp = (char *)str;
+    return fits_str_get_dms(str, endp);
+}
+
+char *fits_pos_type[] = { "telescope", "object", "center" };
+
+// set fits fields with comment from fits_pos_comments, from ra, dec
+// add equinox and comment selected from fits_pos_type strings
+void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double equinox)
+{
+    char *equinox_str;
+    char *line;
+
+    gboolean equinox_is_2000 = (equinox == 2000);
+    if (equinox_is_2000) {
+        equinox_str = "2000.0";
+    } else {
+        equinox_str = NULL; asprintf(&equinox_str, "%7.2f", equinox);
+    }
+
+    if (equinox_str) {
+        char *fn_ra = P_STR(FN_RA);
+        char *fn_dec = P_STR(FN_DEC);
+
+        if (type == 1) {
+            fn_ra = P_STR(FN_OBJECTRA);
+            fn_dec = P_STR(FN_OBJECTDEC);
+        }
+
+        char *ras = degrees_to_hms_pr(ra, 2);
+        line = NULL; if (ras) asprintf(&line, "'%20s' / %s RA (%s)", ras, fits_pos_type[type], equinox_str), free(ras);
+        if (line) fits_add_keyword(fr, fn_ra, line), free(line);
+
+        char *decs = degrees_to_hms_pr(dec, 1);
+        line = NULL; if (decs) asprintf(&line, "'%20s' / %s DEC (%s)", decs, fits_pos_type[type], equinox_str), free(decs);
+        if (line) fits_add_keyword(fr, fn_dec, line), free(line);
+
+        if (! equinox_is_2000) free(equinox_str);
+    }
+}
+
+// get fits coords looking in FN_RA/FN_DEC or FN_OBJECTRA/FN_OBJECTDEC fields
+// set ra, dec, equinox (if found), return type
+int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
+{
+    double ra_local = NAN;
+    double dec_local = NAN;
+    double eq = NAN;
+    char *endp;
+
+    int i = 3;
+
+    // try FN_RA, FN_DEC coords
+    ra_local = fits_get_dms_track_end(fr, P_STR(FN_RA), &endp);
+
+    printf("1 endp %s\n", endp); fflush(NULL);
+
+    if (! isnan(ra_local)) ra_local *= 15;
+
+    dec_local = fits_get_dms_track_end(fr, P_STR(FN_DEC), &endp);
+
+    printf("2 endp %s\n", endp); fflush(NULL);
+
+    if (*endp == '\'') endp++; // clang says undefined pointer
+
+    if (! isnan(ra_local) && ! isnan(dec_local)) {
+        if (strstr(endp, fits_pos_type[0])) { // found telescope coords
+            i = 0;
+        } else if (strstr(endp, fits_pos_type[2])) { // found wcs validated centre coord
+            i = 2;
+        }
+
+    } else { // try FN_OBJECTRA, FN_OBJECTDEC coords
+
+        ra_local = fits_get_dms_track_end(fr, P_STR(FN_OBJECTRA), &endp);
+        if (! isnan(ra_local)) ra_local *= 15;
+
+        dec_local = fits_get_dms_track_end(fr, P_STR(FN_OBJECTDEC), &endp);
+
+        i = 1;
+    }
+
+    // look for equinox as '(double)'
+    char *p = endp;
+    for ( ; *p && *p != '('; p++)
+        ;
+    if (*p == '(') {
+        p++;
+        eq = strtod(p, &endp);
+    }
+    if (*endp == ')' && ! isnan(eq)) *equinox = eq;
+
+    if (ra) *ra = ra_local;
+    if (dec) *dec = dec_local;
+
+    return i;
+}
+
+void fits_set_loc(struct ccd_frame *fr, double lat, double lng)
+{
+    char *line;
+//    if (isnan(lng)) lng = P_DBL(OBS_LONGITUDE);
+
+    gboolean west = P_INT(FILE_WESTERN_LONGITUDES);
+    if (lng < 0) {
+        lng = -lng;
+        west = ! west;
+    }
+    char *east_west_str = (west) ? "WEST" : "EAST";
+
+    char *lng_str = degrees_to_dms_pr(lng, 1);
+
+    line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
+    if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
+
+//    if (isnan(lat)) lat = P_DBL(OBS_LATITUDE);
+
+    char *lat_str = degrees_to_dms_pr(lat, 1);
+    line = NULL; if (lat_str) asprintf(&line, "'%20s' / observing site latitude", lat_str), free(lat_str);
+    if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
+}
+
+int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng)
+{
+    char *endp = NULL;
+    double lng_local = fits_get_dms_track_end(fr, P_STR(FN_LONGITUDE), &endp);
+
+    int west = -1;
+
+    if (! isnan(lng_local) && endp) { // look for east/west in endp
+        char *p;
+        for (p = endp; *p && *p != '('; p++)
+            ;
+
+        if (*p == '(') {
+            west = (strncasecmp(p, "(WEST)", 6) == 0) ? 1 : -1;
+
+            if (west == 1 && lng_local < 0) {
+                lng_local = - lng_local;
+                west = 0;
+            } else if (strncasecmp(p, "(EAST)", 6) == 0) {
+                west = 0;
+            }
+        }
+    }
+
+    if (isnan(lng_local)) {
+        lng_local = P_DBL(OBS_LONGITUDE); // use default
+    }
+
+    if (west == -1) {
+        west = P_INT(FILE_WESTERN_LONGITUDES);
+
+        if (west && lng_local < 0) { // overide western if it makes lng negative
+            lng_local = - lng_local;
+            west = 0;
+        }
+    }
+
+    char *east_west_str = (west) ? "WEST" : "EAST";
+
+    double lat_local = fits_get_dms(fr, P_STR(FN_LATITUDE));
+    if (isnan(lat_local)) lat_local = P_DBL(OBS_LATITUDE); // use default
+
+    char *line;
+
+    char *lng_str = degrees_to_dms_pr(lng_local, 1);
+    char *lat_str = degrees_to_dms_pr(lat_local, 1);
+
+    line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
+    if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
+
+    line = NULL; if (lat_str) asprintf(&line, "'%20s' / observing site latitude", lat_str), free(lat_str);
+    if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
+
+    if (lat) *lat = lat_local;
+    if (lng) *lng = lng_local; // is it east or west ?
+
+    return (! isnan(lat_local) && ! isnan(lng_local));
+}
+
+/* set FITS binning */
+
+void fits_set_binning(struct ccd_frame *fr)
+{
+    double v;
+    int fits_binning = 0;
+    int fits_xbinning = 0;
+    int fits_ybinning = 0;
+
+    int xbinning = 0;
+    int ybinning = 0;
+    int binning = 1;
+
+    v = fits_get_double(fr, P_STR(FN_BINNING)); if (! isnan(v)) fits_binning = v;
+
+    if (fits_binning == 0) {
+        v = fits_get_double(fr, P_STR(FN_XBINNING)); if (! isnan(v)) fits_binning = v;
+        v = fits_get_double(fr, P_STR(FN_YBINNING)); if (! isnan(v)) fits_binning = v;
+    }
+
+    char *line;
+    if ((fits_binning == fits_xbinning == fits_ybinning == 0) || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+        if (binning != 0) {
+            fr->exp.bin_x = binning;
+            fr->exp.bin_y = binning;
+
+            line = NULL; asprintf(&line, "%20f / %s", (double)binning, "image binning");
+            if (line) fits_add_keyword(fr, P_STR(FN_BINNING), line), free(line);
+
+        } else if (xbinning != 0 && ybinning != 0) {
+            fr->exp.bin_x = xbinning;
+            fr->exp.bin_y = ybinning;
+
+            line = NULL; asprintf(&line, "%20f / %s", (double)xbinning, "image xbinning");
+            if (line) fits_add_keyword(fr, P_STR(FN_YBINNING), line), free(line);
+
+            line = NULL; asprintf(&line, "%20f / %s", (double)ybinning, "image ybinning");
+            if (line) fits_add_keyword(fr, P_STR(FN_XBINNING), line), free(line);
+        }
+    }
+}
+
+int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *yname, double *parm, double *xparm, double *yparm)
+{
+    double parm_local = NAN;
+    double xparm_local = NAN;
+    double yparm_local = NAN;
+
+    if (!(fr->exp.bin_x == fr->exp.bin_y == 0)) {
+        if (fr->exp.bin_x == fr->exp.bin_y) {
+            parm_local = fits_get_double(fr, name);
+        } else {
+            xparm_local = fits_get_double(fr, xname);
+            yparm_local = fits_get_double(fr, yname);
+        }
+    }
+
+    if (parm) *parm = parm_local;
+    if (xparm) *xparm = xparm_local;
+    if (yparm) *yparm = yparm_local;
+
+    return ! isnan(parm_local) || (! isnan(xparm_local) && ! isnan(yparm_local));
+}
+
+void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *comment, char *name, char *xname, char *yname)
+{
+    if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+
+        char *line;
+
+        if (fr->exp.bin_x == fr->exp.bin_y != 0) {
+            double parm = parm_unbinned * fr->exp.bin_x;
+
+            line = NULL; asprintf(&line, "%20f / %s", parm, comment);
+            if (line) fits_add_keyword(fr, name, line), free(line);
+
+            fits_delete_keyword(fr, xname);
+            fits_delete_keyword(fr, yname);
+
+        } else {
+            double xparm = parm_unbinned * fr->exp.bin_x;
+
+            line = NULL; asprintf(&line, "%20f / X %s", xparm, comment);
+            if (line) fits_add_keyword(fr, xname, line), free(line);
+
+            double yparm = parm_unbinned * fr->exp.bin_y;
+
+            line = NULL; asprintf(&line, "%20f / Y %s", yparm, comment);
+            if (line) fits_add_keyword(fr, yname, line), free(line);
+
+            fits_delete_keyword(fr, name);
+        }
+    }
+}
+
+static void adjust_some_fits_parms(struct ccd_frame *fr)
+{
+    char *line;
+
+    double apert = fits_get_double(fr, P_STR(FN_APERTURE));
+    if (isnan(apert)) {
+        double aptdia = fits_get_double(fr, "APTDIA");
+        if (! isnan(aptdia)) apert = aptdia / 10.0; // mm to cm
+        // delete APTDIA
+
+        if (isnan(apert)) apert = P_DBL(OBS_APERTURE); // default
+
+        line = NULL; asprintf(&line, "%20.1f / telescope aperture (cm)", apert);
+        if (line) fits_add_keyword(fr, P_STR(FN_APERTURE), line), free(line);
+    }
+
+    double flen = fits_get_double(fr, P_STR(FN_FLEN));
+    if (isnan(flen)) {
+        double focallen = fits_get_double(fr, "FOCALLEN");
+        if (! isnan(focallen)) flen = focallen / 10.0; // mm to cm
+        // delete FOCALLEN
+
+        if (isnan(flen)) flen = P_DBL(OBS_FLEN); // default
+
+        line = NULL; asprintf(&line, "%20.1f / telescope focal length (cm)", flen);
+        if (line) fits_add_keyword(fr, P_STR(FN_FLEN), line), free(line);
+    }
+
+    fits_set_binned_parms(fr, P_DBL(OBS_PIXSZ), "binned pixel size (micron)",
+                         P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
+
+    fits_set_binned_parms(fr, P_DBL(OBS_SECPIX), "binned image scale (arcsec / pixel)",
+                         P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
+}
+
 
 // read_fits_file reads a fits file from disk/memory and creates a new frame
 // holding the data from the file.
@@ -687,7 +1027,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 {
     struct ccd_frame *hd = NULL;
 
-    FITS_row *var = NULL;
+    FITS_str *var = NULL;
     int nvar = 0;
 
     gboolean is_simple = FALSE;
@@ -707,15 +1047,15 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
         int cd;
         for (cd = 0; cd < FITS_HROWS; cd++) {	// 36 cards per block
 
-            char lb[FITS_HCOLS + 1];
+            char lb[FITS_STRS];
 
             int k;
             for (k = 0; k < FITS_HCOLS; k++)	// chars per card
 				lb[k] = rd->fngetc(fp);
 
-            if (ef) continue; // END found - keep reeding to end of block
-
             lb[k] = 0;
+
+            if (ef) continue; // END found - keep reeding to end of block
 
             // now parse the fits header lines
             if (strncmp(lb, "END", 3) == 0) {
@@ -724,29 +1064,29 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
             }
 
             double d; // maybe use flag to control search
-            if (naxis == 0 && str_get_fits_key_double(lb, "NAXIS", &d))
+            if (naxis == 0 && str_get_double(lb, "NAXIS", &d))
                 naxis = d;
-            else if (width == -1 && str_get_fits_key_double(lb, "NAXIS1", &d))
+            else if (width == -1 && str_get_double(lb, "NAXIS1", &d))
                 width = d;
-            else if (height == -1 && str_get_fits_key_double(lb, "NAXIS2", &d))
+            else if (height == -1 && str_get_double(lb, "NAXIS2", &d))
                 height = d;
-            else if (naxis3 == 0 && str_get_fits_key_double(lb, "NAXIS3", &d))
+            else if (naxis3 == 0 && str_get_double(lb, "NAXIS3", &d))
                 naxis3 = d;
-            else if (bitpix == 0 && str_get_fits_key_double(lb, "BITPIX", &d))
+            else if (bitpix == 0 && str_get_double(lb, "BITPIX", &d))
                 bitpix = d;
-            else if (isnan(bscale) && str_get_fits_key_double(lb, "BSCALE", &d))
+            else if (isnan(bscale) && str_get_double(lb, "BSCALE", &d))
 				bscale = d;
-            else if (isnan(bzero) && str_get_fits_key_double(lb, "BZERO", &d))
+            else if (isnan(bzero) && str_get_double(lb, "BZERO", &d))
 				bzero = d;
             else if (!is_simple && !strncmp(lb, "SIMPLE", 6) )
                 is_simple = TRUE;
             else { //add the line to the unprocessed list
-                FITS_row *cp = realloc(var, (nvar + 1) * FITS_HCOLS);
+                FITS_str *cp = realloc(var, (nvar + 1) * FITS_STRS);
                 if (cp == NULL) {
                     err_printf("cannot alloc space for fits header line, skipping\n");
                 } else {
                     var = cp;
-                    memcpy(cp + nvar, lb, FITS_HCOLS);
+                    memcpy(cp + nvar, lb, FITS_STRS);
                     //					d3_printf("adding generic line:\n%80s\n", lb);
                     nvar ++;
                 }
@@ -801,7 +1141,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     }
 
     // initialize hd
-    hd->var = var;
+    hd->var_str = var;
     hd->nvar = nvar;
 
     hd->w = width;
@@ -992,28 +1332,46 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
         free(hd->dat);
 		hd->dat = NULL;
 	}
-// if frame is flipped, flip frame and update wcs
 
 	hd->pix_size = sizeof (float);
 	hd->data_valid = 1;
 
 	frame_stats(hd);
 
-//	info_printf("min=%.2f max=%.2f avg=%.2f sigma=%.2f\n",
-//		    hd->stats.min, hd->stats.max, hd->stats.avg, hd->stats.sigma);
-
-// fn could include some filetype extension
-// TODO check remove extension when saving
     hd->name = strdup(fn);
 
-//	parse_fits_wcs(hd, &hd->fim);
-//	parse_fits_exp(hd, &hd->exp);
+    double ccdskip1 = fits_get_double(hd, "CCDSKIP1");
+    hd->x_skip = (isnan(ccdskip1)) ? 0 : ccdskip1;
 
+    double ccdskip2 = fits_get_double(hd, "CCDSKIP2");
+    hd->y_skip = (isnan(ccdskip2)) ? 0 : ccdskip2;
 
-	if (fits_get_int(hd, "CCDSKIP1", &hd->x_skip) <= 0)
-		hd->x_skip = 0;
-	if (fits_get_int(hd, "CCDSKIP2", &hd->y_skip) <= 0)
-		hd->y_skip = 0;
+    fits_set_binning(hd);
+
+    adjust_some_fits_parms(hd);
+
+    // adjust noise params for binning
+    struct exp_data *exp = & hd->exp;
+
+    int xbinning = exp->bin_x;
+    int ybinning = exp->bin_y;
+
+    double eladu = fits_get_double(hd, P_STR(FN_ELADU));
+    if (isnan(eladu)) eladu = P_DBL(OBS_DEFAULT_ELADU) / (xbinning * ybinning); // average binning CMOS (sum binning CCD?)
+
+    double rdnoise = fits_get_double(hd, P_STR(FN_RDNOISE));
+    if (isnan(rdnoise)) rdnoise = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(xbinning * ybinning);
+
+    exp->scale = eladu;
+    exp->rdnoise = rdnoise;
+    // check these
+    exp->bias = 0;
+    exp->flat_noise = 0;
+
+    noise_to_fits_header(hd);
+
+    hd->fim.jd = frame_jdate(hd);
+
 // try this
     rescan_fits_exp(hd, &(hd->exp));
 //    wcs_transform_from_frame (hd, &hd->fim);
@@ -1205,11 +1563,16 @@ int write_fits_frame_unzipped(struct ccd_frame *fr, char *filename)
 
 // finally, print the rest of the header lines
 
-	for (j=0; j < fr->nvar; j++) {
-		for (k=0; k<FITS_HCOLS; k++)
-			fputc(fr->var[j][k], fp);
-		i++;
-	}
+//	for (j=0; j < fr->nvar; j++) {
+//		for (k=0; k<FITS_HCOLS; k++)
+//			fputc(fr->var[j][k], fp);
+//		i++;
+//	}
+    for (j = 0; j < fr->nvar; j++) {
+        for (k = 0; k < FITS_HCOLS; k++)
+            fputc(fr->var_str[j][k], fp);
+        i++;
+    }
 
 	i++; fprintf(fp, "%-8s  %20s   %-40s       ", "END", "", "");
 
@@ -1333,8 +1696,8 @@ int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1)
 		return -1;
 	}
 
-    if (!fr1->stats.statsok)
-		frame_stats(fr1);
+    if (! fr1->stats.statsok) frame_stats(fr1);
+
     mu = fr1->stats.cavg;
 	if (mu <= 0.0) {
 		err_printf("flat frame has negative avg: %.2f aborting\n", mu);
@@ -1633,121 +1996,7 @@ s = 0;
 	return 0;
 }
 
-// lookup a keyword in the frame's vars. Return a pointer to it's
-// line, or NULL if not found
-FITS_row *fits_keyword_lookup(struct ccd_frame *fr, char *kwd)
-{
-    if (kwd == NULL) return NULL;
-    if (fr == NULL)	return NULL;
 
-    FITS_row *var = fr->var;
-    int i;
-    for (i=0; i < fr->nvar; i++, var++) {
-        if (strncmp((char *)var, kwd, strlen(kwd)) == 0) {
-            return var;
-		}
-	}
-	return NULL;
-}
-
-// add a string keyword to the fits header
-// quotes are _not_ added to the string
-// if the keyword exists, it is replaced
-// return 0 if ok
-int fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val)
-{
-    char *lb = NULL;
-
-    if (kwd == NULL) return 0;
-    if (fr == NULL)	return -1;
-    if (val == NULL) return 0;
-
-    asprintf(&lb, "%-8s= %-70s", kwd, val);
-    if (!lb) return -1;
-
-    FITS_row *v1 = fits_keyword_lookup(fr, kwd);
-
-    if (v1 == NULL) { // alloc space for a new var
-        if (fr->var == NULL) {
-            v1 = calloc(FITS_HCOLS, 1);
-        } else {
-            v1 = realloc(fr->var, (fr->nvar + 1) * FITS_HCOLS);
-        }
-        if (v1 == NULL) {
-            err_printf("cannot alloc mem for keyword %s\n", kwd);
-            return ERR_ALLOC;
-        }
-
-        fr->var = v1;
-        v1 = fr->var + fr->nvar; // point to the new space
-		fr->nvar ++;
-	}
-
-    memcpy(v1, lb, FITS_HCOLS);
-
-    return 0;
-}
-
-
-/* delete the first match of a fits keyword */
-int fits_delete_keyword(struct ccd_frame *fr, char *kwd)
-{
-    FITS_row *v1;
-
-    if (kwd == NULL) return 0;
-    if (fr == NULL)	return -1;
-
-	v1 = fits_keyword_lookup(fr, kwd);
-    if (v1 == NULL) return 0;
-
-    fr->nvar --;
-
-    // replace current value
-    if (fr->nvar > v1 - fr->var)
-        memmove(v1, v1 + 1, (fr->nvar + 1 - (v1 - fr->var)) * FITS_HCOLS);
-
-    v1 = realloc(fr->var, fr->nvar * FITS_HCOLS);
-    if (v1 == NULL) {
-        err_printf("cannot shrink fits header allocation\n");
-        return ERR_ALLOC;
-    }
-
-    fr->var = v1;
-
-    return 0;
-}
-
-
-// append a HISTORY keyword to the fits header
-// quotes are _not_ added to the string
-// return 0 if ok
-int fits_add_history(struct ccd_frame *fr, char *val)
-{
-    char *lb = NULL;
-	FITS_row *v1;
-
-	if (val == NULL)
-		return 0;
-	if (fr == NULL)
-		return -1;
-
-    asprintf(&lb, "HISTORY = %-70s", val);
-    if (lb == NULL) return -1;
-
-	// alloc space for a new one
-    v1 = realloc(fr->var, (fr->nvar + 1) * FITS_HCOLS);
-	if (v1 == NULL) {
-		err_printf("cannot alloc mem for history \n");
-		return ERR_ALLOC;
-	}
-	fr->var = v1;
-    v1 = fr->var + fr->nvar;
-    fr->nvar ++;
-
-    memcpy(v1, lb, FITS_HCOLS);
-
-	return 0;
-}
 
 // crop_frame reduces the size of a frame; the upper-left corner of the frame will
 // added to the current skip. The data area is realloced. Returns non-zero in case of an error.
@@ -1862,90 +2111,237 @@ printf("ccd_frame.frame_to_float: format is %d\n", fr->pix_format); fflush(NULL)
 
 }
 
-/* get a double field
- * return 1 if parsed ok, 0 if the field was not found,
- * or -1 for an error */
-int fits_get_double(struct ccd_frame *fr, char *kwd, double *v)
+/* delete str
+ * return new fr->nvar or -1 */
+
+static int fits_delete_str(struct ccd_frame *fr, FITS_str *str)
 {
-    FITS_row *row = fits_keyword_lookup(fr, kwd);
-    if (row == NULL) return 0;
+    fr->nvar --;
 
-    char *vs = NULL;
-    asprintf(&vs, "%80s", (char *)row); //  memcpy(vs, row, FITS_HCOLS); vs[FITS_HCOLS] = 0;
-    if (vs) {
-        char *p = strstr(vs, "=");
-        if (p) {
-            p++;
+    // replace current value
+    if (fr->nvar > str - fr->var_str)
+        memmove(str, str + 1, (fr->nvar + 1 - (str - fr->var_str)) * FITS_STRS);
 
-            char *end = p; double vv = strtod(p, &end); int ok = (end != p);
-            if (ok) {
-                *v = vv;
-                free(vs);
-                return 1;
-            }
-        }
-        free(vs);
+    str = realloc(fr->var_str, fr->nvar * FITS_STRS);
+    if (str == NULL) {
+        err_printf("cannot shrink fits header allocation\n");
+        return -1;
     }
-    return -1;
+
+    fr->var_str = str;
+    return fr->nvar;
 }
 
-/* get a int field (or the integer part of a double field)
- * return 1 if parsed ok, 0 if the field was not found,
- * or -1 for an error */
-int fits_get_int(struct ccd_frame *fr, char *kwd, int *v)
+/* add str
+ * return new fr->nvar or -1 */
+
+static int fits_add_str(struct ccd_frame *fr, FITS_str *str)
 {
-	double vv;
-    int ret = fits_get_double(fr, kwd, &vv);
-    if (ret > 0) *v = vv;
-	return ret;
+    FITS_str *new_vars = realloc(fr->var_str, (fr->nvar + 1) * FITS_STRS);
+    if (new_vars == NULL) {
+        err_printf("cannot alloc mem for history \n");
+        return -1;
+    }
+    fr->var_str = new_vars;
+
+    FITS_str *new_str = fr->var_str + fr->nvar;
+    fr->nvar ++;
+
+    memcpy(new_str, str, FITS_STRS);
+    return fr->nvar;
 }
 
 
-/* get a string field
- * return mallocd string */
-char *fits_get_string(struct ccd_frame *fr, char *kwd)
-{
-    char *row = (char *)fits_keyword_lookup(fr, kwd);
-    if (row == NULL) return NULL;
+/* lookup a keyword in the frame's vars. Return a pointer to it's
+ * line, or NULL if not found */
 
+FITS_str *fits_keyword_lookup(struct ccd_frame *fr, char *kwd)
+{
+    if (fr == NULL)	return NULL;
+    if (kwd == NULL || *kwd == 0) return NULL;
+
+    int len = strlen(kwd);
+
+    FITS_str *strv = fr->var_str;
+    int i;
+    for (i = 0; i < fr->nvar; i++, strv++)
+        if (strncmp((char *)strv, kwd, len) == 0) return strv;
+
+    return NULL;
+}
+
+/* add a string keyword/value pair to the fits header
+ * quotes are _not_ added to the string
+ * if a str exists for keyword, it is replaced (old deleted and new appended) */
+
+FITS_str *fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val)
+{
+    if (fr == NULL)	return NULL;
+
+    if (kwd == NULL || *kwd == 0) return NULL;
+    if (val == NULL || *val == 0) return NULL;
+
+    FITS_str *str = fits_keyword_lookup(fr, kwd);
+
+    char *new_str = NULL;
+
+    asprintf((char **)&new_str, "%-8s= %-70s", kwd, val);
+    if (new_str == NULL) return NULL;
+
+    if (str) fits_delete_str(fr, str);
+
+    gboolean add_str = (fits_add_str(fr, (FITS_str *) new_str) != -1);
+
+    free(new_str);
+
+    return (add_str) ? fr->var_str + fr->nvar * FITS_STRS : NULL;
+}
+
+
+
+/* delete the first match of a fits keyword/value var
+ * returns 0 ok, -1 not found */
+
+int fits_delete_keyword(struct ccd_frame *fr, char *kwd)
+{
+    if (fr == NULL)	return -1;
+    if (kwd == NULL || *kwd == 0) return -1;
+
+    FITS_str *str = fits_keyword_lookup(fr, kwd);
+    if (str == NULL) return -1;
+
+    fits_delete_str(fr, str);
+
+    return 0;
+}
+
+
+/* append a HISTORY keyword to the fits header
+ * quotes are _not_ added to the string
+ * return str or NULL */
+
+FITS_str *fits_add_history(struct ccd_frame *fr, char *val)
+{
+    if (val == NULL) return NULL;
+    if (fr == NULL)	return NULL;
+
+    char *str = NULL;
+
+    asprintf((char **)&str, "HISTORY = %-70s", val);
+    if (str == NULL) return NULL;
+
+    int n = fits_add_str(fr, (FITS_str *)str);
+
+    free(str);
+
+    if (n == -1) return NULL;
+
+    return fr->var_str + n * FITS_STRS;
+}
+
+/* get a string field from FITS_str, denoted by matching quote symbols
+ * on success, endp points to char (in FITS_str) after trailing quote
+ * if no trailing quote found, endp points to first non blank char (in FITS_str) after leading quote  */
+char *fits_str_get_string(FITS_str *str, char **endp)
+{
     char *v = calloc(sizeof(char), FITS_HCOLS + 1);
     if (v == NULL) return NULL;
 
-    int i;
-    for (i = 0; i < FITS_HCOLS; i++) {
-        if (row[i] == '"' || row[i] == '\'') { i++; break; }
+    char *p = (char *)str;
+    for ( ; *p; p++) { // look for start quote
+        if (*p == '"' || *p == '\'') break;
     }
 
-    char *p;
-    for (p = v; i < FITS_HCOLS; i++) {
-        if (row[i] == '"' || row[i] == '\'') break;
-        if ((p == v) && (row[i] == ' ')) continue;
-        *p++ = row[i];
-	}
+    if (*p == 0) { free(v); return NULL; }
 
-    if (i == FITS_HCOLS) {
-        free(v);
-        return NULL;
+    char quote_char = *p;
+    p++;
+
+    char *start = p;
+    char *q = v;
+    for ( ; *p; p++) {
+        if (*p == quote_char) break; // to end quote
+        if (*p == ' ' && q == v) { start++; continue; } // skip leading spaces only
+        *q++ = *p; // copy
     }
-    *p = 0;
+    if (*p == 0) {
+        err_printf("fits_str_get_string no trailing quote\n");
+        if (endp) *endp = start;
+    }
+
+    if (endp) *endp = p; // end quote
+
+    *q = 0; // nul terminate return string
+    return v;
+}
+
+/* get a double field from str
+ * converts str to string and use string functions
+ * error return NAN, endp points to next location in FITS_str */
+double fits_str_get_double(FITS_str *str, char **endp)
+{
+    double v = NAN;
+
+    if (endp) *endp = (char *)str;
+
+    char *p = strstr((char *) str, "=");
+    if (p != NULL) {
+        p++;
+
+        char *end;
+        double vv = strtod(p, &end);
+        if (end != p) v = vv;
+
+        if (endp) *endp = end;
+    }
+
     return v;
 }
 
 /* get a double (degrees) from a string field containing a
  * DMS representation
- * return value from dms_to_degrees if successful, or -1 if field is not found or a
- * parsing error */
-
-int fits_get_dms(struct ccd_frame *fr, char *kwd, double *v)
+ * return dms_to_degrees */
+double fits_str_get_dms(FITS_str *str, char **endp)
 {
-    char *str = fits_get_string(fr, kwd);
-    if (str == NULL) return -1;
+    char *end1;
+    char *strv = fits_str_get_string(str, &end1);
 
-    int res = dms_to_degrees(str, v);
-    free(str);
+    if (endp) *endp = end1;
 
-    return res;
+    if (strv == NULL) return NAN;
+
+    double v = NAN;
+
+    char *end2;
+    dms_to_degrees_track_end(strv, &v, &end2);
+
+    free(strv);
+
+    if (endp) *endp = end1; // trailing quote
+
+    return v;
 }
+
+/* get a string field
+ * return mallocd string or NULL */
+char *fits_get_string(struct ccd_frame *fr, char *kwd)
+{
+    FITS_str *str = fits_keyword_lookup(fr, kwd);
+    if (str == NULL) return NULL;
+
+    return fits_str_get_string(str, NULL);
+}
+
+/* get a double field
+ * error return NAN */
+double fits_get_double(struct ccd_frame *fr, char *kwd)
+{
+    FITS_str *str = fits_keyword_lookup(fr, kwd);
+    if (str == NULL) return NAN;
+
+    return fits_str_get_double(str, NULL);
+}
+
 
 float * get_color_plane(struct ccd_frame *fr, int plane_iter) {
 	switch(plane_iter) {
