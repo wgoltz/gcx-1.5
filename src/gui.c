@@ -506,26 +506,16 @@ void set_scrolls(GtkWidget *window, double xc, double yc)
     gtk_widget_queue_draw(window);
 }
 
-void window_resize_cb(GtkWidget *window)
+int configure_event_cb(GtkWidget *window, GdkEvent *event, gpointer scw)
 {
-    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(window), "scrolled_window");
+//    printf("in configure event type %d\n", event->type); fflush(NULL);
+//    return FALSE;
 
-//    struct mouse_motion *mm = get_mouse_motion (scw);
-
-//    GtkWidget *darea = g_object_get_data(G_OBJECT(window), "darea");
-
-//    double zw = gdk_window_get_width (darea->window);
-//    double zh = gdk_window_get_height (darea->window);
-
-//    GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment (scw);
-//    GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment (scw);
-
-//    set_adjustment(hadj, mm->xc, zw);
-//    set_adjustment(vadj, mm->yc, zh);
+//    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(window), "scrolled_window");
 
     center_scw(scw);
 
-    gtk_widget_queue_draw(window);
+    return 0;
 }
 
 void set_darea_size(GtkWidget *window, struct map_geometry *geom)
@@ -1098,20 +1088,17 @@ static GtkWidget *get_main_menu_bar(GtkWidget *window)
 GtkWidget * create_image_window()
 {
     GtkWidget *window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-//    g_object_ref_sink(window);
     gtk_window_set_title (GTK_WINDOW (window), "gcx");
     gtk_container_set_border_width (GTK_CONTAINER (window), 0);
     g_signal_connect (G_OBJECT (window), "destroy", G_CALLBACK (destroy_cb), window);
 
     GtkWidget *menubar = get_main_menu_bar(window);
     //gtk_menu_bar_set_shadow_type(GTK_MENU_BAR(menubar), GTK_SHADOW_NONE);
-//    gtk_widget_show (menubar);
 
     GtkWidget *zoom_and_cuts = gtk_label_new ("");
     g_object_ref (zoom_and_cuts);
     g_object_set_data_full (G_OBJECT (window), "zoom_and_cuts", zoom_and_cuts, (GDestroyNotify) g_object_unref);
     gtk_misc_set_padding (GTK_MISC (zoom_and_cuts), 6, 0);
-//    gtk_widget_show (zoom_and_cuts);
 
     GtkWidget *hbox = gtk_hbox_new(0, 0);
     gtk_box_pack_start(GTK_BOX(hbox), menubar, TRUE, TRUE, 0);
@@ -1121,27 +1108,27 @@ GtkWidget * create_image_window()
     gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scw), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
 
     GtkWidget *alignment = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
-//    gtk_widget_show (alignment);
     gtk_scrolled_window_add_with_viewport (GTK_SCROLLED_WINDOW(scw), alignment);
 
     GtkWidget *darea = gtk_drawing_area_new();
     gtk_container_add (GTK_CONTAINER(alignment), darea);
-//    gtk_widget_show (darea);
 
     GtkWidget *main_window_status_label = gtk_label_new ("Welcome to GCX.");
     g_object_ref (main_window_status_label);
     g_object_set_data_full (G_OBJECT (window), "main_window_status_label", main_window_status_label, (GDestroyNotify) g_object_unref);
     gtk_misc_set_padding (GTK_MISC (main_window_status_label), 3, 3);
     gtk_misc_set_alignment (GTK_MISC (main_window_status_label), 0, 0.5);
-//    gtk_widget_show (main_window_status_label);
 
     GtkWidget *vbox = gtk_vbox_new(0, 0);
     gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), scw, TRUE, TRUE, 0);
-//    gtk_box_pack_start(GTK_BOX(vbox), layout, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), main_window_status_label, 0, 0, 0);
 
     gtk_container_add(GTK_CONTAINER(window), vbox);
+
+    g_object_set_data(G_OBJECT(window), "scrolled_window", scw);
+    g_object_set_data(G_OBJECT(window), "darea", darea);
+    g_object_set_data(G_OBJECT(scw), "alignment", alignment);
 
     g_signal_connect(G_OBJECT(darea), "button_release_event", G_CALLBACK(button_press_cb), scw);
     g_signal_connect(G_OBJECT(darea), "button_press_event", G_CALLBACK(button_press_cb), scw);
@@ -1151,32 +1138,25 @@ GtkWidget * create_image_window()
     g_signal_connect(G_OBJECT(darea), "button_press_event", G_CALLBACK(image_clicked_cb), window);
     g_signal_connect(G_OBJECT(darea), "expose_event", G_CALLBACK(image_expose_cb), window);
 
-    g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(window_resize_cb), window);
-// only happens when first created or whole window moved - currently does nothing
-
+    g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(configure_event_cb), scw);
 
     gtk_widget_set_events(darea,  GDK_BUTTON_PRESS_MASK
 			      | GDK_POINTER_MOTION_MASK
 			      | GDK_POINTER_MOTION_HINT_MASK
-                  | GDK_BUTTON_RELEASE_MASK
-                  | GDK_CONFIGURE);
-
-    g_object_set_data(G_OBJECT(window), "scrolled_window", scw);
-    g_object_set_data(G_OBJECT(window), "darea", darea);
-    g_object_set_data(G_OBJECT(scw), "alignment", alignment);
+                  | GDK_BUTTON_RELEASE_MASK);
 
   	gtk_window_set_default_size(GTK_WINDOW(window), 700, 500);
-//    gtk_widget_show (vbox);
+
+//    gtk_widget_add_events(window, GDK_CONFIGURE);
+//    gtk_widget_add_events(window, GDK_STRUCTURE_MASK);
 
     GtkWidget *image_popup = get_image_popup_menu(window);
-//    gtk_widget_show(image_popup);
     g_object_set_data_full(G_OBJECT(window), "image_popup", image_popup, (GDestroyNotify) g_object_unref);
 
     GtkWidget *star_popup = get_star_popup_menu(window);
-//    gtk_widget_show(star_popup);
     g_object_set_data_full(G_OBJECT(window), "star_popup", star_popup, (GDestroyNotify) g_object_unref);
 
-//    gtk_widget_show_all(window);
+    gtk_widget_show_all(window);
 	return window;
 }
 

@@ -1017,7 +1017,6 @@ int fake_main(int ac, char **av)
         main_ret = 1;
 
         GtkWidget *window = create_image_window();
-        gtk_widget_show_all(window);
 
         if (window) {
             if (rcname)

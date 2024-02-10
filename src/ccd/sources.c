@@ -38,7 +38,6 @@
 #include "ccd.h"
 #include "gui.h" // for user_abort
 
-//#include "abort.h"
 //#include "x11ops.h"
 
 // parameters for source extraction
