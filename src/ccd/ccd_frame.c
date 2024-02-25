@@ -710,7 +710,9 @@ static double fits_get_dms_track_end(struct ccd_frame *fr, char *kwd, char **end
     if (str == NULL) return NAN;
 
     if (endp) *endp = (char *)str;
-    return fits_str_get_dms(str, endp);
+    double result = fits_str_get_dms(str, endp);
+
+    return result;
 }
 
 char *fits_pos_type[] = { "telescope", "object", "center" };

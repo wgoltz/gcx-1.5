@@ -15,5 +15,5 @@ Terminal=false
 Actions=Edit
 
 [Desktop Action Edit]
-Exec=gcx %F
+Exec=gcx -i %F
 Name=Edit with gcx
