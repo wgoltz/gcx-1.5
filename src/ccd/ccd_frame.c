@@ -764,19 +764,16 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
     int i = 3;
 
     // try FN_RA, FN_DEC coords
+    endp = NULL;
     ra_local = fits_get_dms_track_end(fr, P_STR(FN_RA), &endp);
 
-    printf("1 endp %s\n", endp); fflush(NULL);
+    if (endp) { printf("1 endp %s\n", endp); fflush(NULL); }
 
     if (! isnan(ra_local)) ra_local *= 15;
 
-    dec_local = fits_get_dms_track_end(fr, P_STR(FN_DEC), &endp);
+    dec_local = fits_get_dms(fr, P_STR(FN_DEC));
 
-    printf("2 endp %s\n", endp); fflush(NULL);
-
-    if (*endp == '\'') endp++; // clang says undefined pointer
-
-    if (! isnan(ra_local) && ! isnan(dec_local)) {
+    if (! isnan(ra_local) && ! isnan(dec_local) && endp) {
         if (strstr(endp, fits_pos_type[0])) { // found telescope coords
             i = 0;
         } else if (strstr(endp, fits_pos_type[2])) { // found wcs validated centre coord
@@ -784,27 +781,29 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
         }
 
     } else { // try FN_OBJECTRA, FN_OBJECTDEC coords
-
+        endp = NULL;
         ra_local = fits_get_dms_track_end(fr, P_STR(FN_OBJECTRA), &endp);
         if (! isnan(ra_local)) ra_local *= 15;
 
-        dec_local = fits_get_dms_track_end(fr, P_STR(FN_OBJECTDEC), &endp);
+        dec_local = fits_get_dms(fr, P_STR(FN_OBJECTDEC));
 
         i = 1;
     }
 
-    // look for equinox as '(double)'
-    char *p = endp;
-    for ( ; *p && *p != '('; p++)
-        ;
-    if (*p == '(') {
-        p++;
-        eq = strtod(p, &endp);
-    }
-    if (*endp == ')' && ! isnan(eq)) *equinox = eq;
+    // look for equinox enclosed in (..) in comments
+    if (endp) {
+        char *p = endp;
+        for ( ; *p && *p != '('; p++)
+            ;
+        if (*p == '(') {
+            p++;
+            eq = strtod(p, &endp);
+        }
+        if (*endp == ')' && ! isnan(eq)) *equinox = eq;
 
-    if (ra) *ra = ra_local;
-    if (dec) *dec = dec_local;
+        if (ra) *ra = ra_local;
+        if (dec) *dec = dec_local;
+    }
 
     return i;
 }
@@ -2319,7 +2318,7 @@ double fits_str_get_dms(FITS_str *str, char **endp)
 
     free(strv);
 
-    if (endp) *endp = end1; // trailing quote
+//    if (endp) *endp = end1; // trailing quote
 
     return v;
 }
