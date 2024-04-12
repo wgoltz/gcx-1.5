@@ -642,20 +642,21 @@ extern FITS_str *fits_add_history(struct ccd_frame *fr, char *val);
 extern FITS_str *fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val);
 extern int fits_delete_keyword(struct ccd_frame *fr, char *kwd);
 
-extern char *fits_str_get_string(FITS_str *str, char **endp);
-extern double fits_str_get_double(FITS_str *str, char **endp);
-extern double fits_str_get_dms(FITS_str *str, char **endp);
+extern char *fits_str_get_string(FITS_str *str, char **strv);
+extern char *fits_str_get_double(FITS_str *str, double *d);
+extern char *fits_str_get_dms(FITS_str *str, double *d);
 
-extern char *fits_get_string(struct ccd_frame *fr, char *kwd);
-extern double fits_get_double(struct ccd_frame *fr, char *kwd);
-extern double fits_get_dms(struct ccd_frame *fr, char *kwd);
+extern char *fits_get_string(struct ccd_frame *fr, char *kwd, char **strv);
+extern char *fits_get_double(struct ccd_frame *fr, char *kwd, double *d);
+extern char *fits_get_dms(struct ccd_frame *fr, char *kwd, double *d);
 
 // choose comment from fits_pos_comment
+enum { pos_telescope, pos_object, pos_wcs };
 extern void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double equinox);
 extern int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox);
 
-extern void fits_set_loc(struct ccd_frame *fr, double lat, double lng);
-extern int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng);
+extern void fits_set_loc(struct ccd_frame *fr, double lat, double lng, double alt);
+extern int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng, double *alt);
 
 extern int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *yname,
                                  double *parm, double *xparm, double *yparm);

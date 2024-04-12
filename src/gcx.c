@@ -438,18 +438,18 @@ static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
     struct cat_star *cats = get_object_by_name(name);
     if (cats == NULL) return -1;
 
-    double xbinning = fits_get_double(fr, P_STR(FN_XBINNING));
+    double xbinning; fits_get_double(fr, P_STR(FN_XBINNING), &xbinning);
     if (isnan(xbinning)) xbinning = 1;
 
-    double ybinning = fits_get_double(fr, P_STR(FN_YBINNING));
+    double ybinning; fits_get_double(fr, P_STR(FN_YBINNING), &ybinning);
     if (isnan(ybinning)) ybinning = 1;
 
     // todo: check pixsz
-    double xsecpix = fits_get_double(fr, P_STR(FN_XSECPIX));
-    double ysecpix = fits_get_double(fr, P_STR(FN_YSECPIX));
+    double xsecpix; fits_get_double(fr, P_STR(FN_XSECPIX), &xsecpix);
+    double ysecpix; fits_get_double(fr, P_STR(FN_YSECPIX), &ysecpix);
 
     if (isnan(xsecpix) && isnan(ysecpix)) {
-        if (isnan(spp)) spp = fits_get_double(fr, P_STR(FN_SECPIX));
+        if (isnan(spp)) fits_get_double(fr, P_STR(FN_SECPIX), &spp);
         if (isnan(spp)) spp = P_DBL(OBS_SECPIX); // default (unbinned)
     } else
         if (isnan(xsecpix) ^ isnan(ysecpix)) spp = isnan(xsecpix) ? ysecpix: xsecpix;

@@ -64,12 +64,12 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     // clear hinted flag if there are updates in params
     if (wcs->flags & WCS_HINTED) return;
 
-    double eq = fits_get_double(fr, P_STR(FN_EQUINOX));
-    if (isnan(eq)) eq = fits_get_double(fr, P_STR(FN_EPOCH));
+    double eq; fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
+    if (isnan(eq)) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
     if (isnan(eq)) eq = 2000;
 
     double jd = frame_jdate (fr); // frame center jd
-    if (isnan(jd) || jd == 0) {
+    if (jd == 0) {
         jd = JD_NOW;
         err_printf("using JD_NOW for frame jdate !\n");
     }
@@ -79,7 +79,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->equinox = eq;
 
 // FN_RA, FN_DEC are coords at current epoch (jd), FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
-    double ra = NAN, dec = NAN, equinox = NAN;
+    double ra, dec, equinox;
     fits_get_pos(fr, &ra, &dec, &equinox);
 
     gboolean have_pos = (! isnan(ra) && ! isnan(dec));
@@ -95,9 +95,9 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         wcs->flags |= WCS_HAVE_POS;
     }
 
-    double lat = NAN, lng = NAN;
+    double lat, lng, alt;
 
-    if (fits_get_loc(fr, &lat, &lng)) {
+    if (fits_get_loc(fr, &lat, &lng, &alt)) {
         // otherwise use obs loc ?
         wcs->lng = lng;
         wcs->lat = lat;
@@ -123,7 +123,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
     }
 
-    double rot = fits_get_double(fr, P_STR(FN_CROTA1));
+    double rot; fits_get_double(fr, P_STR(FN_CROTA1), &rot);
 
     if (! isnan(rot)) wcs->rot = rot;
 

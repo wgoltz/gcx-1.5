@@ -1345,7 +1345,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 			break;
 		}
 
-        double amv = fits_get_double(imf->fr, P_STR(FN_AIRMASS));
+        double amv; fits_get_double(imf->fr, P_STR(FN_AIRMASS), &amv);
         if (! isnan(amv)) {
             am[ami] = amv;
             ami++;
@@ -1359,7 +1359,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 //			continue;
 		}
 
-        double expv = fits_get_double(imf->fr, P_STR(FN_EXPTIME));
+        double expv; fits_get_double(imf->fr, P_STR(FN_EXPTIME), &expv);
         if (! isnan(expv)) {
             d1_printf("stack time: using exptime = %.5f from %s\n", expv, P_STR(FN_EXPTIME));
             if ((i != 1) && (last_exptime != expv))

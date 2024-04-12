@@ -607,8 +607,8 @@ void init_ptable(void)
     add_par_string(OBS_OBSERVER_CODE, PAR_OBS_DEFAULTS, 0, "obscode", "Observer code", "CXR");
     set_par_description(OBS_OBSERVER_CODE, "Used to annotate AAVSO format reports. ");
 
-    add_par_string(OBS_TELESCOP, PAR_OBS_DEFAULTS, PREC_1, "telescope", "Telescope name", "SCT");
-    set_par_description(OBS_TELESCOP, "Used to annotate frames' fits header. ");
+    add_par_string(OBS_TELESCOPE, PAR_OBS_DEFAULTS, PREC_1, "telescope", "Telescope name", "SCT");
+    set_par_description(OBS_TELESCOPE, "Used to annotate frames' fits header. ");
 
     add_par_double(OBS_FLEN, PAR_OBS_DEFAULTS, PREC_1, "flen", "Telescope focal length", 200);
 	set_par_description(OBS_FLEN,

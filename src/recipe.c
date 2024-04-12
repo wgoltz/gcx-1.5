@@ -1569,11 +1569,11 @@ struct stf *make_tyc_stf(char *obj, double box, double mag_limit)
 	}
 	d3_printf("tycho2 opened\n");
 
-	n = (* cat->cat_search)(csl, cat, cats->ra, cats->dec, box, 
-				MAX_STARS_CONV);
+    n = (* cat->cat_search)(csl, cat, cats->ra, cats->dec, box,	MAX_STARS_CONV);
 
 	d3_printf ("got %d from cat_search\n", n); 
 	for (i = 0; i < n; i++) {
+// get mag from cmags and compare to limit
         csl[i]->type = CATS_TYPE_APSTD;
 		tsl = g_list_append(tsl, csl[i]);
 	}

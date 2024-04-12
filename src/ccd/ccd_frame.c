@@ -691,47 +691,37 @@ static gboolean str_get_double(char *str, char *key, double *d)
     return (isnan(d_local)) ? FALSE : TRUE;
 }
 
-/* get a double (degrees) from a string field containing a
- * DMS representation return dms_to_degrees */
-double fits_get_dms(struct ccd_frame *fr, char *kwd)
+/* get a double from a string field containing a DMS representation
+ * d (degrees) is result of dms_to_degrees on DMS
+ * return NULL if kwd not found or pointer to remainder of fits string
+ */
+char *fits_get_dms(struct ccd_frame *fr, char *kwd, double *d)
 {
-    FITS_str * str = fits_keyword_lookup(fr, kwd);
-    if (str == NULL) return NAN;
+    FITS_str *str = fits_keyword_lookup(fr, kwd); if (str == NULL) return NULL;
 
-    return fits_str_get_dms(str, NULL);
-}
-
-/* get a double (degrees) from a string field containing a
- * DMS representation return dms_to_degrees
- * track endp to help scanning comments */
-static double fits_get_dms_track_end(struct ccd_frame *fr, char *kwd, char **endp)
-{
-    FITS_str * str = fits_keyword_lookup(fr, kwd);
-    if (str == NULL) return NAN;
-
-    if (endp) *endp = (char *)str;
-    double result = fits_str_get_dms(str, endp);
-
-    return result;
+    return fits_str_get_dms(str, d);
 }
 
 char *fits_pos_type[] = { "telescope", "object", "center" };
 
-// set fits fields with comment from fits_pos_comments, from ra, dec
-// add equinox and comment selected from fits_pos_type strings
+/* set fits position fields formatted according to type (as above)
+ */
 void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double equinox)
 {
     char *equinox_str;
     char *line;
+
+    char *ras = degrees_to_hms_pr(ra, 2);
+    char *decs = degrees_to_dms_pr(dec, 1);
 
     gboolean equinox_is_2000 = (equinox == 2000);
     if (equinox_is_2000) {
         equinox_str = "2000.0";
     } else {
         equinox_str = NULL; asprintf(&equinox_str, "%7.2f", equinox);
-    }
+    }  
 
-    if (equinox_str) {
+    if (equinox_str && ras && decs) {
         char *fn_ra = P_STR(FN_RA);
         char *fn_dec = P_STR(FN_DEC);
 
@@ -740,66 +730,61 @@ void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double 
             fn_dec = P_STR(FN_OBJECTDEC);
         }
 
-        char *ras = degrees_to_hms_pr(ra, 2);
-        line = NULL; if (ras) asprintf(&line, "'%20s' / %s RA (%s)", ras, fits_pos_type[type], equinox_str), free(ras);
+        line = NULL; asprintf(&line, "'%20s' / %s RA (%s)", ras, fits_pos_type[type], equinox_str);
         if (line) fits_add_keyword(fr, fn_ra, line), free(line);
 
-        char *decs = degrees_to_hms_pr(dec, 1);
-        line = NULL; if (decs) asprintf(&line, "'%20s' / %s DEC (%s)", decs, fits_pos_type[type], equinox_str), free(decs);
+        line = NULL; asprintf(&line, "'%20s' / %s DEC (%s)", decs, fits_pos_type[type], equinox_str);
         if (line) fits_add_keyword(fr, fn_dec, line), free(line);
 
         if (! equinox_is_2000) free(equinox_str);
     }
+    if (ras) free(ras);
+    if (decs) free(decs);
 }
 
-// get fits coords looking in FN_RA/FN_DEC or FN_OBJECTRA/FN_OBJECTDEC fields
-// set ra, dec, equinox (if found), return type
+/* get fits coords looking in FN_RA/FN_DEC or FN_OBJECTRA/FN_OBJECTDEC fields
+ * set ra, dec, equinox (if found), return type
+ */
 int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
 {
     double ra_local = NAN;
     double dec_local = NAN;
     double eq = NAN;
-    char *endp;
 
-    int i = 3;
+    int i = pos_wcs;
 
     // try FN_RA, FN_DEC coords
-    endp = NULL;
-    ra_local = fits_get_dms_track_end(fr, P_STR(FN_RA), &endp);
-
-    if (endp) { printf("1 endp %s\n", endp); fflush(NULL); }
-
+    char *endp = fits_get_dms(fr, P_STR(FN_RA), &ra_local);
     if (! isnan(ra_local)) ra_local *= 15;
 
-    dec_local = fits_get_dms(fr, P_STR(FN_DEC));
+    fits_get_dms(fr, P_STR(FN_DEC), &dec_local);
 
     if (! isnan(ra_local) && ! isnan(dec_local) && endp) {
-        if (strstr(endp, fits_pos_type[0])) { // found telescope coords
-            i = 0;
-        } else if (strstr(endp, fits_pos_type[2])) { // found wcs validated centre coord
-            i = 2;
+        if (strstr(endp, fits_pos_type[pos_telescope])) { // found telescope coords
+            i = pos_telescope;
+        } else if (strstr(endp, fits_pos_type[pos_wcs])) { // found wcs validated centre coord
+            i = pos_wcs;
         }
 
     } else { // try FN_OBJECTRA, FN_OBJECTDEC coords
-        endp = NULL;
-        ra_local = fits_get_dms_track_end(fr, P_STR(FN_OBJECTRA), &endp);
+        endp = fits_get_dms(fr, P_STR(FN_OBJECTRA), &ra_local);
         if (! isnan(ra_local)) ra_local *= 15;
 
-        dec_local = fits_get_dms(fr, P_STR(FN_OBJECTDEC));
+        fits_get_dms(fr, P_STR(FN_OBJECTDEC), &dec_local);
 
-        i = 1;
+        i = pos_object;
     }
 
-    // look for equinox enclosed in (..) in comments
+    // look for equinox enclosed in (..) or [..] in comments
     if (endp) {
         char *p = endp;
-        for ( ; *p && *p != '('; p++)
+        for ( ; *p && *p != '(' && *p != '['; p++)
             ;
-        if (*p == '(') {
+        if (*p == '(' || *p == '[') {
             p++;
             eq = strtod(p, &endp);
         }
-        if (*endp == ')' && ! isnan(eq)) *equinox = eq;
+        if ((*endp == ')' || *endp == ']') && ! isnan(eq)) if (equinox) *equinox = eq;
 
         if (ra) *ra = ra_local;
         if (dec) *dec = dec_local;
@@ -808,87 +793,99 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
     return i;
 }
 
-void fits_set_loc(struct ccd_frame *fr, double lat, double lng)
-{
-    char *line;
-//    if (isnan(lng)) lng = P_DBL(OBS_LONGITUDE);
+/* set fits parms FN_LONGITUDE, FN_LATITUDE, FN_ALTITUDE (lat, lng, alt non-NAN)
+ * force lng to be positive with appropriate FN_LONGITUDE EAST/WEST comment
+ */
+void fits_set_loc(struct ccd_frame *fr, double lat, double lng, double alt)
+{   
+    if (! isnan(lng)) {
+        int west = P_INT(FILE_WESTERN_LONGITUDES);
+        if (west) lng = -lng;
+        if (lng < 0) {
+            lng = -lng;
+            west = ! west;
+        }
 
-    gboolean west = P_INT(FILE_WESTERN_LONGITUDES);
-    if (lng < 0) {
-        lng = -lng;
-        west = ! west;
+        char *east_west_str = (west) ? "WEST" : "EAST";
+
+        char *lng_str = degrees_to_dms_pr(lng, 1);
+
+        char *line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
+        if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
     }
-    char *east_west_str = (west) ? "WEST" : "EAST";
 
-    char *lng_str = degrees_to_dms_pr(lng, 1);
+    if (! isnan(lat)) {
+        char *lat_str = degrees_to_dms_pr(lat, 1);
 
-    line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
-    if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
+        char *line = NULL; if (lat_str) asprintf(&line, "'%20s' / observing site latitude", lat_str), free(lat_str);
+        if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
+    }
 
-//    if (isnan(lat)) lat = P_DBL(OBS_LATITUDE);
-
-    char *lat_str = degrees_to_dms_pr(lat, 1);
-    line = NULL; if (lat_str) asprintf(&line, "'%20s' / observing site latitude", lat_str), free(lat_str);
-    if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
+    if (! isnan(alt)) {
+        char *line = NULL; asprintf(&line, "%20.1f / observing site altitude", alt);
+        if (line) fits_add_keyword(fr, P_STR(FN_ALTITUDE), line), free(line);
+    }
 }
 
-int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng)
+/* get lng, lat, alt from fits params
+ * modify fits param FN_LONGITUDE to be positive by setting/changing EAST/WEST in comment
+ * return lng sign to match FILE_WESTERN_LONGITUDES setting
+ */
+int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng, double *alt)
 {
-    char *endp = NULL;
-    double lng_local = fits_get_dms_track_end(fr, P_STR(FN_LONGITUDE), &endp);
-
-    int west = -1;
+    double lng_local = NAN;
+    char *endp = fits_get_dms(fr, P_STR(FN_LONGITUDE), &lng_local);
 
     if (! isnan(lng_local) && endp) { // look for east/west in endp
         char *p;
-        for (p = endp; *p && *p != '('; p++)
+        for (p = endp; *p && *p != '(' && *p != '['; p++)
             ;
 
-        if (*p == '(') {
-            west = (strncasecmp(p, "(WEST)", 6) == 0) ? 1 : -1;
+        int west = -1;
+
+        if (*p == '(' || *p == '[') {
+            p++;
+            west = (strncasecmp(p, "WEST", 4) == 0) ? 1 : -1;
 
             if (west == 1 && lng_local < 0) {
                 lng_local = - lng_local;
                 west = 0;
-            } else if (strncasecmp(p, "(EAST)", 6) == 0) {
+            } else if (strncasecmp(p, "EAST", 4) == 0) {
                 west = 0;
             }
         }
+
+        if (P_INT(FILE_WESTERN_LONGITUDES))
+            lng_local = -lng_local;
+
+//        if (west == -1) { // no EAST/WEST found
+//            west = P_INT(FILE_WESTERN_LONGITUDES);
+
+//            if (west && lng_local < 0) { // overide western if it makes lng negative
+//                lng_local = - lng_local;
+//                west = 0;
+//            }
+//        }
+
+//        char *east_west_str = (west) ? "WEST" : "EAST";
+
+//        char *lng_str = degrees_to_dms_pr(lng_local, 1);
+// also add lat and alt so they are all grouped together ?
+//        char *line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
+//        if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
     }
 
-    if (isnan(lng_local)) {
-        lng_local = P_DBL(OBS_LONGITUDE); // use default
-    }
+    double lat_local = NAN;
+    fits_get_dms(fr, P_STR(FN_LATITUDE), &lat_local);
 
-    if (west == -1) {
-        west = P_INT(FILE_WESTERN_LONGITUDES);
+    double alt_local = NAN;
+    fits_get_double(fr, P_STR(FN_ALTITUDE), &alt_local);
 
-        if (west && lng_local < 0) { // overide western if it makes lng negative
-            lng_local = - lng_local;
-            west = 0;
-        }
-    }
-
-    char *east_west_str = (west) ? "WEST" : "EAST";
-
-    double lat_local = fits_get_dms(fr, P_STR(FN_LATITUDE));
-    if (isnan(lat_local)) lat_local = P_DBL(OBS_LATITUDE); // use default
-
-    char *line;
-
-    char *lng_str = degrees_to_dms_pr(lng_local, 1);
-    char *lat_str = degrees_to_dms_pr(lat_local, 1);
-
-    line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
-    if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
-
-    line = NULL; if (lat_str) asprintf(&line, "'%20s' / observing site latitude", lat_str), free(lat_str);
-    if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
-
+    if (lng) *lng = lng_local;
     if (lat) *lat = lat_local;
-    if (lng) *lng = lng_local; // is it east or west ?
+    if (lat) *alt = lat_local;
 
-    return (! isnan(lat_local) && ! isnan(lng_local));
+    return (! isnan(lng_local) && ! isnan(lat_local) && ! isnan(alt_local));
 }
 
 /* set FITS binning */
@@ -904,11 +901,11 @@ void fits_set_binning(struct ccd_frame *fr)
     int ybinning = 0;
     int binning = 1;
 
-    v = fits_get_double(fr, P_STR(FN_BINNING)); if (! isnan(v)) fits_binning = v;
+    fits_get_double(fr, P_STR(FN_BINNING), &v); if (! isnan(v)) fits_binning = v;
 
     if (fits_binning == 0) {
-        v = fits_get_double(fr, P_STR(FN_XBINNING)); if (! isnan(v)) fits_binning = v;
-        v = fits_get_double(fr, P_STR(FN_YBINNING)); if (! isnan(v)) fits_binning = v;
+        fits_get_double(fr, P_STR(FN_XBINNING), &v); if (! isnan(v)) fits_binning = v;
+        fits_get_double(fr, P_STR(FN_YBINNING), &v); if (! isnan(v)) fits_binning = v;
     }
 
     char *line;
@@ -933,6 +930,7 @@ void fits_set_binning(struct ccd_frame *fr)
     }
 }
 
+/* generic method to get 1 or 2 fits binning params */
 int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *yname, double *parm, double *xparm, double *yparm)
 {
     double parm_local = NAN;
@@ -941,10 +939,10 @@ int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *y
 
     if (!(fr->exp.bin_x == fr->exp.bin_y == 0)) {
         if (fr->exp.bin_x == fr->exp.bin_y) {
-            parm_local = fits_get_double(fr, name);
+            fits_get_double(fr, name, &parm_local);
         } else {
-            xparm_local = fits_get_double(fr, xname);
-            yparm_local = fits_get_double(fr, yname);
+            fits_get_double(fr, xname, &xparm_local);
+            fits_get_double(fr, yname, &yparm_local);
         }
     }
 
@@ -955,6 +953,7 @@ int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *y
     return ! isnan(parm_local) || (! isnan(xparm_local) && ! isnan(yparm_local));
 }
 
+/* generic method to set 1 or 2 fits binning params */
 void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *comment, char *name, char *xname, char *yname)
 {
     if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
@@ -990,9 +989,9 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
 {
     char *line;
 
-    double apert = fits_get_double(fr, P_STR(FN_APERTURE));
+    double apert; fits_get_double(fr, P_STR(FN_APERTURE), &apert);
     if (isnan(apert)) {
-        double aptdia = fits_get_double(fr, "APTDIA");
+        double aptdia; fits_get_double(fr, "APTDIA", &aptdia);
         if (! isnan(aptdia)) apert = aptdia / 10.0; // mm to cm
         // delete APTDIA
 
@@ -1002,9 +1001,9 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
         if (line) fits_add_keyword(fr, P_STR(FN_APERTURE), line), free(line);
     }
 
-    double flen = fits_get_double(fr, P_STR(FN_FLEN));
+    double flen; fits_get_double(fr, P_STR(FN_FLEN), &flen);
     if (isnan(flen)) {
-        double focallen = fits_get_double(fr, "FOCALLEN");
+        double focallen; fits_get_double(fr, "FOCALLEN", &focallen);
         if (! isnan(focallen)) flen = focallen / 10.0; // mm to cm
         // delete FOCALLEN
 
@@ -1341,15 +1340,16 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 
     hd->name = strdup(fn);
 
-    double ccdskip1 = fits_get_double(hd, "CCDSKIP1");
+    double ccdskip1; fits_get_double(hd, "CCDSKIP1", &ccdskip1);
     hd->x_skip = (isnan(ccdskip1)) ? 0 : ccdskip1;
 
-    double ccdskip2 = fits_get_double(hd, "CCDSKIP2");
+    double ccdskip2; fits_get_double(hd, "CCDSKIP2", &ccdskip2);
     hd->y_skip = (isnan(ccdskip2)) ? 0 : ccdskip2;
 
     fits_set_binning(hd);
 
-    adjust_some_fits_parms(hd);
+// move to expose_cb ..
+/*    adjust_some_fits_parms(hd);
 
     // adjust noise params for binning
     struct exp_data *exp = & hd->exp;
@@ -1357,10 +1357,10 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     int xbinning = exp->bin_x;
     int ybinning = exp->bin_y;
 
-    double eladu = fits_get_double(hd, P_STR(FN_ELADU));
+    double eladu; fits_get_double(hd, P_STR(FN_ELADU), &eladu);
     if (isnan(eladu)) eladu = P_DBL(OBS_DEFAULT_ELADU) / (xbinning * ybinning); // average binning CMOS (sum binning CCD?)
 
-    double rdnoise = fits_get_double(hd, P_STR(FN_RDNOISE));
+    double rdnoise; fits_get_double(hd, P_STR(FN_RDNOISE), &rdnoise);
     if (isnan(rdnoise)) rdnoise = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(xbinning * ybinning);
 
     exp->scale = eladu;
@@ -1370,6 +1370,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     exp->flat_noise = 0;
 
     noise_to_fits_header(hd);
+// .. to here ? */
 
     hd->fim.jd = frame_jdate(hd);
 
@@ -2240,23 +2241,33 @@ FITS_str *fits_add_history(struct ccd_frame *fr, char *val)
     return fr->var_str + n * FITS_STRS;
 }
 
-/* get a string field from FITS_str, denoted by matching quote symbols
- * on success, endp points to char (in FITS_str) after trailing quote
- * if no trailing quote found, endp points to first non blank char (in FITS_str) after leading quote  */
-char *fits_str_get_string(FITS_str *str, char **endp)
+/* get copy string field from FITS_str, denoted by matching quote symbols
+ * if matched quotes found, return pointer to char after trailing quote (in FITS_str)
+ * if only start quote found, return pointer to char after start quote (in FITS_str)
+ * fail return NULL */
+char *fits_str_get_string(FITS_str *str, char **strv)
 {
     char *v = calloc(sizeof(char), FITS_HCOLS + 1);
-    if (v == NULL) return NULL;
+    if (v == NULL) {
+        if (strv) *strv = NULL;
+        return NULL;
+    }
 
     char *p = (char *)str;
     for ( ; *p; p++) { // look for start quote
         if (*p == '"' || *p == '\'') break;
     }
 
-    if (*p == 0) { free(v); return NULL; }
+    if (*p == 0) {
+        free(v);
+        if (strv) *strv = NULL;
+        return NULL;
+    }
 
     char quote_char = *p;
     p++;
+
+    if (strv) *strv = v;
 
     char *start = p;
     char *q = v;
@@ -2265,82 +2276,77 @@ char *fits_str_get_string(FITS_str *str, char **endp)
         if (*p == ' ' && q == v) { start++; continue; } // skip leading spaces only
         *q++ = *p; // copy
     }
-    if (*p == 0) {
-        err_printf("fits_str_get_string no trailing quote\n");
-        if (endp) *endp = start;
-    }
-
-    if (endp) *endp = p; // end quote
 
     *q = 0; // nul terminate return string
-    return v;
+
+    if (*p == 0) {
+        err_printf("fits_str_get_string no trailing quote\n");
+        return start;
+    }
+
+    return p++; // end quote + 1
 }
 
 /* get a double field from str
- * converts str to string and use string functions
- * error return NAN, endp points to next location in FITS_str */
-double fits_str_get_double(FITS_str *str, char **endp)
+ * extract a double after '=' symbol in FITS_str
+ * return next location in FITS_str after parsed double or NULL on error */
+char *fits_str_get_double(FITS_str *str, double *d)
 {
-    double v = NAN;
-
-    if (endp) *endp = (char *)str;
+    if (d) *d = NAN;
+    char *end = NULL;
 
     char *p = strstr((char *) str, "=");
     if (p != NULL) {
         p++;
 
-        char *end;
-        double vv = strtod(p, &end);
-        if (end != p) v = vv;
-
-        if (endp) *endp = end;
+        char *endp = p;
+        double vv = strtod(p, &endp);
+        if (endp != p) {
+            end = endp;
+            if (d) *d = vv;
+        }
     }
 
-    return v;
+    return end;
 }
 
 /* get a double (degrees) from a string field containing a
  * DMS representation
  * return dms_to_degrees */
-double fits_str_get_dms(FITS_str *str, char **endp)
+char *fits_str_get_dms(FITS_str *str, double *d)
 {
-    char *end1;
-    char *strv = fits_str_get_string(str, &end1);
+    char *strv;
+    char *last = fits_str_get_string(str, &strv);
+    if (strv) {
+        dms_to_degrees(strv, d);
+        free(strv);
+    }
 
-    if (endp) *endp = end1;
-
-    if (strv == NULL) return NAN;
-
-    double v = NAN;
-
-    char *end2;
-    dms_to_degrees_track_end(strv, &v, &end2);
-
-    free(strv);
-
-//    if (endp) *endp = end1; // trailing quote
-
-    return v;
+    return last;
 }
 
-/* get a string field
- * return mallocd string or NULL */
-char *fits_get_string(struct ccd_frame *fr, char *kwd)
+/* get a copy of a quoted string field to strv
+ * return position in FITS_str after extracting quoted string or NULL */
+char *fits_get_string(struct ccd_frame *fr, char *kwd, char **strv)
 {
+    if (strv) *strv = NULL;
+
     FITS_str *str = fits_keyword_lookup(fr, kwd);
     if (str == NULL) return NULL;
 
-    return fits_str_get_string(str, NULL);
+    return fits_str_get_string(str, strv);
 }
 
 /* get a double field
- * error return NAN */
-double fits_get_double(struct ccd_frame *fr, char *kwd)
+ * return pointer to FITS_str after parsed double or NULL on error */
+char *fits_get_double(struct ccd_frame *fr, char *kwd, double *d)
 {
-    FITS_str *str = fits_keyword_lookup(fr, kwd);
-    if (str == NULL) return NAN;
+    if (d) *d = NAN;
 
-    return fits_str_get_double(str, NULL);
+    FITS_str *str = fits_keyword_lookup(fr, kwd);
+    if (str == NULL) return NULL;
+
+    return fits_str_get_double(str, d);
 }
 
 

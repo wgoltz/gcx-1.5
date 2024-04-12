@@ -1611,7 +1611,7 @@ int parse_color_field(struct ccd_frame *fr, char *default_cfa)
 		return 0;
 	}
 
-    char *cfa_fmt = fits_get_string(fr, "CFA_FMT");
+    char *cfa_fmt; fits_get_string(fr, "CFA_FMT", &cfa_fmt);
     if (cfa_fmt == NULL) {
         if(! default_cfa || strncmp(default_cfa, "none", 5) == 0) return -1;
 
@@ -1628,7 +1628,7 @@ int parse_color_field(struct ccd_frame *fr, char *default_cfa)
     }
     free(cfa_fmt);
 
-    char *whitebal = (fits_get_string(fr, "WHITEBAL"));
+    char *whitebal; (fits_get_string(fr, "WHITEBAL", &whitebal));
     if (whitebal) {
         float r, g, gp, b;
 

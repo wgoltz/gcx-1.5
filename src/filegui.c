@@ -314,88 +314,116 @@ static void stf_free_all_(struct stf *stf)
     stf_free_all(stf, "freeing window recipe");
 }
 
-/* load stars from a rcp file into the given windows's gsl */
+/* load stars from a rcp file into the given windows's gsl
+ *
+ * if name is a recipe file just read it
+ *
+ * when name is _AUTO_, _TYCHO_, _OBJECT_
+ *    object_name from object or fits header
+ *    look up <object_name>.rcp
+ *    generate a rcp file if no existing rcp file found
+ */
 int load_rcp_to_window(gpointer window, char *name, char *object)
 {
-    if (name == NULL) return -1;
-//printf("file_gui.load_recipe_to_window looking for '%s'\n", name);
+    enum {
+        NAME_TYPE_null = -1,
+        NAME_TYPE_name,
+        NAME_TYPE_auto,
+        NAME_TYPE_tycho,
+        NAME_TYPE_object
+    };
+
+    int name_type = NAME_TYPE_name;
+
+    if (name == NULL || name[0] == 0)
+        name_type = NAME_TYPE_null;
+    else if (strcmp(name, "_OBJECT_") == 0)
+        name_type = NAME_TYPE_object;
+    else if (strcmp(name, "_AUTO_") == 0)
+        name_type = NAME_TYPE_auto;
+    else if (strcmp(name, "_TYCHO_") == 0)
+        name_type = NAME_TYPE_tycho;
+
 
     struct ccd_frame *fr = window_get_current_frame(window);
 
-    char *obj = NULL;
-    if (object) {
-        if (object[0])
-            obj = strdup(object);
-    } else {
-        obj = fits_get_string(fr, P_STR(FN_OBJECT));
-    }
+    char *obj_name = NULL;
+    char *file_name = NULL;
 
-//    if (obj == NULL) err_printf("no object - cannot load/create dynamic recipe\n");
+    if (object && object[0])
+        obj_name = strdup(object);
+    else
+        fits_get_string(fr, P_STR(FN_OBJECT), &obj_name);
 
-    char *name_copy = NULL;
-
-    gboolean have_OBJECT = (strcmp(name, "_OBJECT_") == 0); // look for obj.rcp
-    gboolean have_AUTO = (strcmp(name, "_AUTO_") == 0); // look for obj.rcp, if not found create TYCHO recipe for obj
-    gboolean have_TYCHO = (strcmp(name, "_TYCHO_") == 0); // create TYCHO recipe for obj
-
-    char *file = NULL;
-
-    if (have_OBJECT || have_AUTO || have_TYCHO) {
-        char *rcp_filename = NULL;
-
-        asprintf(&rcp_filename, "%s.rcp", obj);
-        if (rcp_filename) {
-            file = find_file_in_path(rcp_filename, P_STR(FILE_RCP_PATH)); // does it look for zipped file? (obj.rcp)(.zippish)
-            if (file == NULL) { // obj.rcp not found
-                if (have_AUTO) {
-                    d1_printf("cannot find %s in rcp path, creating tycho recipe\n", rcp_filename);
-                    name_copy = strdup("_TYCHO_"); // create TYCHO recipe
-                } else {
-                    err_printf("cannot find %s in rcp path\n", rcp_filename);
-                    free(rcp_filename);
-                    return -1;
-                }
-            } else {
-                name_copy = file; // read obj.rcp(.zippish)
-                d1_printf("recipe file from object name: %s\n", name);
+    if (obj_name) {
+        if (name_type == NAME_TYPE_name) {
+            file_name = find_file_in_path(name, P_STR(FILE_RCP_PATH));
+            if (file_name == NULL) {
+                d1_printf("cannot find %s in rcp path, defaulting to tycho recipe\n", name);
+                name_type = NAME_TYPE_tycho;
             }
-            free(rcp_filename);
+
+        } else {
+            char *obj_name_rcp = NULL; asprintf(&obj_name_rcp, "%s.rcp", obj_name); // <obj_name>.rcp
+            if (obj_name_rcp) { // try to find <obj_name>.rcp
+                file_name = find_file_in_path(obj_name_rcp, P_STR(FILE_RCP_PATH));
+                if (file_name == NULL) { // obj_name.rcp not found
+                    if (name_type == NAME_TYPE_auto) {
+                        d1_printf("cannot find %s in rcp path, defaulting to tycho recipe\n", obj_name_rcp);
+                        name_type = NAME_TYPE_tycho;
+                    } else {
+                        err_printf("cannot find %s in rcp path\n", obj_name_rcp);
+                    }
+                }
+                free(obj_name_rcp);
+            }
         }
     }
 
-    if (name_copy) name = name_copy; // full path?
+    if (obj_name == NULL && file_name == NULL) return -1;
+    // if (obj_name && name_type == NAME_TYPE_name)
+
+    // file_name is existing rcp file generated from object or NULL
 
     struct stf *stf = NULL;
 
-    if (strcmp(name, "_TYCHO_") == 0) { // figure out field size
+    if (name_type == NAME_TYPE_tycho) { // figure out field size and mag limit
+        // use obj_name to create tycho recipe
+        if (obj_name && obj_name[0]) {
 //        if (window_wcs->flags & WCS_HINTED) {
 //			stf = make_tyc_stf(obj, fabs(100.0 * fr->w / 1800), 20);
 //		} else {
 //            stf = make_tyc_stf(obj, fabs(100.0 * fr->w * window_wcs->xinc), 20);
 //		}
-    } else {
+        }
+        if (obj_name) free(obj_name);
+        if (file_name) free(file_name);
+
+    } else if (file_name) {
 		/* just load the specified file */
-        gboolean zipped = (is_zip_name(name) > 0);
+
+        gboolean zipped = (is_zip_name(file_name) > 0);
 
         FILE *rfn = NULL;
 
         if (zipped) {
             char *cmd;
-            cmd = NULL; asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), name);
+            cmd = NULL; asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), file_name);
             if (cmd) rfn = popen(cmd, "r"),	free(cmd);
 
             if (rfn == NULL) { // try bzcat
-                cmd = NULL; asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), name);
+                cmd = NULL; asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), file_name);
                 if (cmd) rfn = popen(cmd, "r"), free(cmd);
             }
 
 		} else {
-			rfn = fopen(name, "r");
+            rfn = fopen(file_name, "r");
 		}
 
         if (rfn == NULL) {
-            err_printf("read_rcp: cannot open file %s\n", name);
-            if (name_copy) free(name_copy);
+            err_printf("read_rcp: cannot open file %s\n", file_name);
+            if (obj_name) free(obj_name);
+            free(file_name);
             return -1;
         }
 
@@ -406,8 +434,9 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 		} else {
 			fclose(rfn);
 		}
+        if (obj_name) free(obj_name);
+        free(file_name);
 	}
-    if (name_copy) free(name_copy);
 
     if (stf == NULL) return -1;
 
@@ -418,96 +447,46 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
 
 //    struct wcs *frame_wcs = & fr->fim;
 
-    // update window_wcs from recipe file (just ra and dec?)
+    // update window_wcs from recipe file (just ra and dec)
     if (window_wcs && window_wcs->wcsset < WCS_VALID) {
-//        if ((window_wcs->wcsset < WCS_VALID) || (window_wcs->flags & WCS_HINTED)) {
-//            //printf("filegui.load_rcp_to_window try wcs from rcp\n");
-//            window_wcs->xrefpix = fr->w / 2;
-//            window_wcs->yrefpix = fr->h / 2;
+        double v;
 
-//            window_wcs->equinox = 2000.0;
-            double v;
-
-//            if ( stf_find_double (stf, &v, 1, SYM_RECIPE, SYM_EQUINOX) != 0 )
-//                window_wcs->equinox = v;
-
-            gboolean havera = FALSE;
-            char *text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA);
-            if (text) {
-                int d_type = dms_to_degrees (text, &v);
-                havera = (d_type >= 0);
-                if (havera) {
-                    if (d_type == DMS_SEXA)	v *= 15;
-                    window_wcs->xref = v;
-                }
+        gboolean havera = FALSE;
+        char *text = stf_find_string (stf, 1, SYM_RECIPE, SYM_RA);
+        if (text) {
+            int d_type = dms_to_degrees (text, &v);
+            havera = (d_type >= 0);
+            if (havera) {
+                if (d_type == DMS_SEXA)	v *= 15;
+                window_wcs->xref = v;
             }
+        }
 
-            gboolean havedec = FALSE;
-            text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC);
-            if (text) {
-                havedec = (dms_to_degrees(text, &v) >= 0);
-                if (havedec)
-                    window_wcs->yref = v;
-            }
+        gboolean havedec = FALSE;
+        text = stf_find_string(stf, 1, SYM_RECIPE, SYM_DEC);
+        if (text) {
+            havedec = (dms_to_degrees(text, &v) >= 0);
+            if (havedec)
+                window_wcs->yref = v;
+        }
 
-//            gboolean havescale = FALSE;
-//            if (window_wcs->wcsset < WCS_INITIAL) {
-//                double scale;
+        if (havera && havedec) {
+            window_wcs->flags |= WCS_HAVE_POS;
+        }
+        if (WCS_HAVE_INITIAL(window_wcs)) {
+            wcs_set_validation(window, WCS_INITIAL);
 
-//                havescale = (fits_get_double(fr, P_STR(FN_SECPIX), &scale) > 0);
-//                if (! havescale)
-//                    havescale = ((scale = P_DBL(OBS_SECPIX)) != 0);
-//                if (! havescale) {
-//                    havescale = ((P_DBL(OBS_FLEN) != 0) && (P_DBL(OBS_PIXSZ) != 0));
-//                    if (havescale)
-//                        scale = P_DBL(OBS_PIXSZ) / P_DBL(OBS_FLEN) * 180 / PI * 3600 * 1.0e-4;
-//                }
-
-//                if (havescale) {
-//                    if ((fr->exp.bin_x > 1) && (fr->exp.bin_y == fr->exp.bin_x))
-//                        scale *= fr->exp.bin_x;
-
-//                    window_wcs->xinc = - scale / 3600.0;
-//                    window_wcs->yinc = - scale / 3600.0;
-
-//                    if (P_INT(OBS_FLIPPED))	window_wcs->yinc = -window_wcs->yinc;
-//                }
-
-//                window_wcs->rot = 0;
-//            }
-            if (havera && havedec) { // && havescale) {
-//                printf("load_recipe_to_window wcsset = WCS_INITIAL\n"); fflush(NULL);
-//                window_wcs->wcsset = WCS_INITIAL;
-                window_wcs->flags |= WCS_HAVE_POS;
-            }
-            if (WCS_HAVE_INITIAL(window_wcs)) {
-                wcs_set_validation(window, WCS_INITIAL);
-            //    cat_change_wcs(rsl, window_wcs); requires gui_star_list
-
-                wcs_clone(& fr->fim, window_wcs);
-            }
-//        }
-	}
+            wcs_clone(& fr->fim, window_wcs);
+        }
+    }
 
     wcsedit_refresh(window);
 
     GList *rsl = stf_find_glist(stf, 0, SYM_STARS);
     if (rsl == NULL) return -1;
 
-// check what happens when replacing old recipe
+    g_object_set_data(G_OBJECT(window), "recipe", stf);
 
-//    gpointer old_recipe = g_object_get_data(G_OBJECT(window), "recipe");
-//    if (old_recipe) { // need to ref cat_stars in recipe as frames are phot'd so they don't get deleted
-
-//        gpointer *mbd = g_object_get_data(G_OBJECT(window), "mband_window");
-
-//        g_object_set_data(G_OBJECT(mbd), "mbds", NULL);
-//        g_object_set_data(G_OBJECT(window), "gui_star_list", NULL);
-//    } else
-
-//    g_object_set_data_full(G_OBJECT(window), "recipe", stf, (GDestroyNotify)stf_free_all_);
-    g_object_set_data(G_OBJECT(window), "recipe", stf); // don't call stf_free_all when reloading the same recipe
-                                                        // perhaps use ref/unref
     merge_cat_star_list_to_window(window, rsl);
     // wcsset == initial
 
@@ -950,7 +929,7 @@ void act_recipe_open (GtkAction *action, gpointer window)
 
 
 
-/* return the first filename matching pattern that is found in path,
+/* return malloced first filename matching pattern that is found in path,
    or null if it couldn't be found */
 char *find_file_in_path(char *pattern, char *path)
 {

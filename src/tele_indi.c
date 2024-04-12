@@ -55,21 +55,19 @@ static void tele_check_state(struct tele_t *tele)
  * */
 int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
 {
-    if (! tele->coord_prop) return -1;
+    if (! tele->ready) return -1;
 
-    gboolean ok = TRUE;
+    if (! tele->coord_prop) return -1;
 
     if (ra) {
         *ra = indi_prop_get_number(tele->coord_prop, "RA"); // these appear to be equinox 2000
-        ok = (! isnan(*ra));
-        if (ok) *ra *= 15; // hours to degrees
+        *ra *= 15; // hours to degrees
     }
     if (dec) {
         *dec = indi_prop_get_number(tele->coord_prop, "DEC");
-        ok = ok && (! isnan(*dec));
     }
 
-    return ok ? 0 : -1;
+    return 0;
 }
 
 /* return last read coords from tele structure
@@ -84,6 +82,7 @@ int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
 
     *ra = tele->right_ascension;
     *dec = tele->declination;
+
     return tele->coord_prop->state;
 }
 

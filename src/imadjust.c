@@ -435,7 +435,7 @@ void stats_cb(gpointer window, guint action)
 
     if (! fr->stats.statsok) frame_stats(fr);
 
-    double exptime = fits_get_double (fr, P_STR(FN_EXPTIME));
+    double exptime; fits_get_double (fr, P_STR(FN_EXPTIME), &exptime);
 
     info_printf_sb2(window, "JDcenter %.6f Exp: %.3g Size: %d x %d cavg:%.1f csigma:%.1f min:%.1f max:%.1f",
         frame_jdate(fr), exptime, fr->w, fr->h,	fr->stats.cavg, fr->stats.csigma, fr->stats.min, fr->stats.max );

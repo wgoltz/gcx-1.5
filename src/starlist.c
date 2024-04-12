@@ -37,7 +37,7 @@
 
 #include <gtk/gtk.h>
 
-#include "gcx.h"
+#include "ccd/ccd.h"
 #include "catalogs.h"
 #include "gui.h"
 #include "sourcesdraw.h"
@@ -444,21 +444,24 @@ int merge_cat_star_list_to_window(gpointer window, GList *addsl)
 int add_star_from_frame_header(struct ccd_frame *fr,
 			       struct gui_star_list *gsl, struct wcs *wcs)
 {
-    char *object = fits_get_string(fr, P_STR(FN_OBJECT));
+    char *object; fits_get_string(fr, P_STR(FN_OBJECT), &object);
     if (object == NULL) {
         err_printf("no '%s' field in fits header\n", P_STR(FN_OBJECT));
 		return 0;
 	}
 
 // use fits_get_pos
-    double ra = fits_get_dms(fr, P_STR(FN_OBJECTRA)); if (isnan(ra)) return -1;
-    // look for equinox in endp
+    char *endp;
+
+    double ra; endp = fits_get_dms(fr, P_STR(FN_OBJECTRA), &ra); if (isnan(ra)) return -1;
 
     ra *= 15;
 
-    double dec = fits_get_dms(fr, P_STR(FN_OBJECTDEC)); if (isnan(dec)) return -1;
+    // look for equinox in endp
 
-    double equinox = fits_get_double(fr, P_STR(FN_EQUINOX)); if (isnan(equinox)) return -1;
+    double dec; fits_get_dms(fr, P_STR(FN_OBJECTDEC), &dec); if (isnan(dec)) return -1;
+
+    double equinox; fits_get_double(fr, P_STR(FN_EQUINOX), &equinox); if (isnan(equinox)) return -1;
 
     d3_printf("name %s ra %.4f dec %.4f, equ: %.1f\n", object, ra, dec, equinox);
 

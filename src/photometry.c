@@ -343,14 +343,14 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 
     char *s;
 
-    char *band = fits_get_string (fr, P_STR(FN_FILTER));
+    char *band; fits_get_string (fr, P_STR(FN_FILTER), &band);
     if (P_INT(AP_FORCE_IBAND) || (band == NULL))
         stf = stf_append_string (NULL, SYM_FILTER, P_STR(AP_IBAND_NAME));
     else {
         stf = stf_append_string (NULL, SYM_FILTER, band);
 	}
 
-    char *object = fits_get_string (fr, P_STR(FN_OBJECT));
+    char *object; fits_get_string (fr, P_STR(FN_OBJECT), &object);
     if (object) {
         trim_blanks (object);
         stf_append_string (stf, SYM_OBJECT, object);
@@ -365,7 +365,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 
     stf_append_double (stf, SYM_EQUINOX, wcs->equinox);
 
-    char *telescope = fits_get_string (fr, P_STR(FN_TELESCOPE));
+    char *telescope; fits_get_string (fr, P_STR(FN_TELESCOPE), &telescope);
     if (telescope) {
         trim_blanks (telescope);
         stf_append_string (stf, SYM_TELESCOPE, telescope);
@@ -377,16 +377,16 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 //		stf_append_double(stf, SYM_APERTURE, v);
 //	}
     double jd = frame_jdate (fr); // frame center jd
-    if (isnan(jd)) jd = wcs->jd;
+    if (jd == 0) jd = wcs->jd;
 
     double v;
 
-    v = fits_get_double (fr, P_STR(FN_EXPTIME));
+    fits_get_double (fr, P_STR(FN_EXPTIME), &v);
     if (! isnan(v)) stf_append_double (stf, SYM_EXPTIME, v);
 
     stf_append_double (stf, SYM_MJD, jd_to_mjd(jd));
 
-    v = fits_get_double (fr, P_STR(FN_SNSTEMP));
+    fits_get_double (fr, P_STR(FN_SNSTEMP), &v);
     if (! isnan(v)) stf_append_double (stf, SYM_SNS_TEMP, v);
 
 	gboolean got_location = (wcs->flags & WCS_LOC_VALID);
@@ -398,6 +398,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 	} else {
 		lat = P_DBL(OBS_LATITUDE);
 		lng = P_DBL(OBS_LONGITUDE);
+        if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
 	}
 
     s = degrees_to_dms_pr (lat, 0);
@@ -406,13 +407,13 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
     s = degrees_to_dms_pr (lng, 0);
     if (s) stf_append_string (stf, SYM_LONGITUDE, s), free(s);
 
-    v = fits_get_double (fr, P_STR(FN_ALTITUDE));
+    fits_get_double (fr, P_STR(FN_ALTITUDE), &v);
     if (!isnan(v)) stf_append_double (stf, SYM_ALTITUDE, v);
 
-    v = fits_get_double (fr, P_STR(FN_AIRMASS));
+    fits_get_double (fr, P_STR(FN_AIRMASS), &v);
 
     if (isnan(v)) {
-        v = fits_get_double(fr, P_STR(FN_ZD));
+        fits_get_double(fr, P_STR(FN_ZD), &v);
         if (! isnan(v)) v = airmass(90.0 - v);
     }
     if (isnan(v) && got_location && ! isnan(jd))
@@ -421,7 +422,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
     if (! isnan(v)) stf_append_double (stf, SYM_AIRMASS, v);
 
 
-    char *observer = fits_get_string (fr, P_STR(FN_OBSERVER));
+    char *observer; fits_get_string (fr, P_STR(FN_OBSERVER), &observer);
     if (observer) {
         trim_blanks (observer);
         stf_append_string (stf, SYM_OBSERVER, observer);

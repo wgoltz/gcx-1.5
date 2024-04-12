@@ -171,7 +171,7 @@ double indi_prop_get_number(struct indi_prop_t *iprop, const char *elemname) {
 
     if(! ielem) return 0;
 
-	return ielem->value.num.value;
+    return ielem->value.num.value;
 }
 
 struct indi_elem_t *indi_prop_set_number(struct indi_prop_t *iprop, const char *elemname, double value) {
