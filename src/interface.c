@@ -729,22 +729,20 @@ GtkWidget* create_camera_control (void)
   item = gtk_combo_box_entry_new_text ();
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "obs_list_fname_combo", item, (GDestroyNotify) g_object_unref);
+  TABLE_ATTACH(table, item, 1, 0, 1, 1); // here
+
   item = GTK_WIDGET (GTK_BIN (item)->child);
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "obs_list_fname", item, (GDestroyNotify) g_object_unref);
-
-  TABLE_ATTACH(table, item, 1, 0, 1, 1);
 
   item = gtk_button_new_with_label (" ... ");
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "obs_list_file_button", item, (GDestroyNotify) g_object_unref);
   gtk_widget_set_tooltip_text (item, "Browse for observation list filename");
-
   TABLE_ATTACH(table, item, 1, 1, 1, 1);
 
   hbox = gtk_hbox_new (FALSE, 0);
-  gtk_table_attach (GTK_TABLE (table), hbox, 0, 2, 0, 1,
-                    (GtkAttachOptions) (GTK_FILL), (GtkAttachOptions) (GTK_EXPAND | GTK_FILL), 0, 0);
+  TABLE_ATTACH (table, hbox, 0, 0, 1, 2);
 
   label = gtk_label_new ("Obslist file");
   gtk_misc_set_alignment (GTK_MISC (label), 0, 1);

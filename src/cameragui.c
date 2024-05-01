@@ -92,6 +92,10 @@ static void toggle_button_no_cb(GtkWidget *window, GtkWidget *button, const char
 }
 #endif
 
+/* TODO :
+ * buttons to select camera_device and telescope_device so dont have to restart when these change
+ */
+
 // update iprop's entry widget to match the param's value
 void iprop_param_update_entry(gpointer iprop, const char *param) {
     struct indi_elem_t *elem = indi_find_elem(iprop, param);
@@ -153,14 +157,24 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
         int state = tele_get_coords(tele, &ra, &dec); // set ra and dec to last read by tele
         char *msg = NULL;
 
+        char *ras = degrees_to_hms(ra);
+        char *decs = degrees_to_dms(dec);
+
         if (state == INDI_STATE_BUSY) { // use obs_object_entry as destination
-            str_join_varg(&msg, "Slewing ra %f dec %f", ra, dec);
-            if (obs) str_join_varg(&msg, " to %s", obs->objname);
+            str_join_varg(&msg, "Slewing to %s, %s", ras, decs);
+            if (obs) str_join_varg(&msg, " ( %s )", obs->objname);
             str_join_str(&msg, "%s", "\n");
         }
 
-        if (msg == NULL && tele->change_state)
-            asprintf (&msg, "Tracking : ra %f dec %f %s\n", ra, dec, obs ? obs->objname : "");
+// todo: remember and restore last object
+        if (msg == NULL && tele->change_state) {
+            str_join_varg(&msg, "Tracking  %s, %s", ras, decs);
+            if (obs) str_join_varg(&msg, " ( %s )", obs->objname);
+            str_join_str(&msg, "%s", "\n");
+        }
+
+        if (ras) free(ras);
+        if (decs) free(decs);
 
         if (msg) {
             status_message(cam_control_dialog, msg);
@@ -627,6 +641,41 @@ gint delete_event( GtkWidget *widget, GdkEvent  *event, gpointer data )
 	return TRUE;
 }
 
+// change aptdia, focallen (mm) to aperture, flen (cm)
+static void adjust_some_fits_parms(struct ccd_frame *fr)
+{
+    char *line;
+
+    double apert; fits_get_double(fr, P_STR(FN_APERTURE), &apert);
+    if (isnan(apert)) {
+        double aptdia; fits_get_double(fr, "APTDIA", &aptdia);
+        if (! isnan(aptdia)) apert = aptdia / 10.0; // mm to cm
+        // delete APTDIA
+
+        if (isnan(apert)) apert = P_DBL(OBS_APERTURE); // default
+
+        line = NULL; asprintf(&line, "%20.1f / telescope aperture (cm)", apert);
+        if (line) fits_add_keyword(fr, P_STR(FN_APERTURE), line), free(line);
+    }
+
+    double flen; fits_get_double(fr, P_STR(FN_FLEN), &flen);
+    if (isnan(flen)) {
+        double focallen; fits_get_double(fr, "FOCALLEN", &focallen);
+        if (! isnan(focallen)) flen = focallen / 10.0; // mm to cm
+        // delete FOCALLEN
+
+        if (isnan(flen)) flen = P_DBL(OBS_FLEN); // default
+
+        line = NULL; asprintf(&line, "%20.1f / telescope focal length (cm)", flen);
+        if (line) fits_add_keyword(fr, P_STR(FN_FLEN), line), free(line);
+    }
+
+    fits_set_binned_parms(fr, P_DBL(OBS_PIXSZ), "binned pixel size (micron)",
+                         P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
+
+    fits_set_binned_parms(fr, P_DBL(OBS_SECPIX), "binned image scale (arcsec/pixel)",
+                         P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
+}
 
 // called when a new image is ready for processing (not streaming)
 static int expose_indi_cb(gpointer cam_control_dialog)
@@ -673,33 +722,34 @@ static int expose_indi_cb(gpointer cam_control_dialog)
             return FALSE;
         }
 
-        // set fits keywords from settings
-
-        // indi records exposure to only 2 decimals
-        // update FN_EXPTIME from exp_spin to capture more decimals
-
         double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
 
         char *lb = NULL; asprintf(&lb, "%20.5f / EXPTIME", exptime);
         if (lb) fits_add_keyword(fr, P_STR(FN_EXPTIME), lb), free(lb);
 
+        // add observer info
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
         ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
 
+        adjust_some_fits_parms(fr);
+
+        // adjust noise params for binning
         struct exp_data *exp = & fr->exp;
 
-        double eladu;
-        double rdnoise;
+        int xbinning = exp->bin_x;
+        int ybinning = exp->bin_y;
 
-        fits_get_double(fr, "FN_ELADU", &eladu); // see if these have been set by camera
-        fits_get_double(fr, "FN_RDNOISE", &rdnoise);
+        double eladu; fits_get_double(fr, P_STR(FN_ELADU), &eladu);
+        if (isnan(eladu)) eladu = P_DBL(OBS_DEFAULT_ELADU) / (xbinning * ybinning); // average binning CMOS (sum binning CCD?)
 
-        if (isnan(eladu)) eladu = P_DBL(OBS_DEFAULT_ELADU);
-        if (isnan(rdnoise)) rdnoise = P_DBL(OBS_DEFAULT_RDNOISE);
+        double rdnoise; fits_get_double(fr, P_STR(FN_RDNOISE), &rdnoise);
+        if (isnan(rdnoise)) rdnoise = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(xbinning * ybinning);
 
-        // adjust for binning
-        exp->scale = eladu / (exp->bin_x * exp->bin_y);
-        exp->rdnoise = rdnoise / sqrt(exp->bin_x * exp->bin_y);
+        exp->scale = eladu;
+        exp->rdnoise = rdnoise;
+        // check these
+        exp->bias = 0;
+        exp->flat_noise = 0;
 
         noise_to_fits_header(fr);
 
@@ -707,11 +757,9 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         struct tele_t *tele = tele_find(main_window);
         double ra, dec;
 
+        // ra and dec in degrees
         if (tele_read_coords(tele, &ra, &dec) == 0) fits_set_pos(fr, pos_telescope, ra, dec, CURRENT_EPOCH);
 
-// add_image_file_to_list(imfl, fr, name, IMG_IN_MEMORY_ONLY | IMG_LOADED)
-// may need to refine auto-unload
-// process frame
         frame_stats(fr);
 
         update_fits_header_display(main_window);
@@ -719,8 +767,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         frame_to_channel(fr, main_window, "i_channel");
 
         // update wcs
-//        fits_frame_params_to_fim(fr);
-//        refresh_wcs(main_window);
+        fits_frame_params_to_fim(fr);
+        refresh_wcs(main_window);
 
         if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) == GET_OPTION_SAVE) {
 // field matching
@@ -942,10 +990,14 @@ static void update_obs_entries( gpointer cam_control_dialog, struct obs_data *ob
         named_combo_text_entry_set(cam_control_dialog, "obs_filter_combo", obs->filter);
 
     double ha = obs_current_hour_angle(obs);
-    double airm = obs_current_airmass(obs);
+    double airm = obs_current_airmass(obs); // handle below horizon
 
-    buf = NULL; asprintf(&buf, "HA: %.3f, Airmass: %.2f", ha, airm);
-    if (buf) named_label_set(cam_control_dialog, "obj_comment_label", buf), free(buf);
+    char *has = degrees_to_hms(ha * 15 /* ha to degrees */);
+    if (has) {
+        buf = NULL; asprintf(&buf, "HA: %s, Airmass: %.2f", has, airm);
+        if (buf) named_label_set(cam_control_dialog, "obj_comment_label", buf), free(buf);
+        free(has);
+    }
 }
 
 

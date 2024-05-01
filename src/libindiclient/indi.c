@@ -660,18 +660,17 @@ void indi_device_add_cb(struct indi_t *indi, const char *devname,
                      void (* cb_func)(void *iprop, void *cb_data),
                      void *cb_data, char *msg)
 {
-	struct indi_device_t *idev;
-	struct indi_prop_t *iprop;
-	indi_list *isl;
+    struct indi_device_t *idev = indi_find_device(indi, devname);
 
-	idev = indi_find_device(indi, devname);
 	if (idev) {
 printf("indi_device_add_cb: found device \"%s\". add \"%s\" to indi_device new_prop_cb list. exec callbacks ..\n", devname, msg);
 		idev->new_prop_cb = il_append(idev->new_prop_cb, indi_create_cb(cb_func, cb_data));
 
 		// Execute the callback for all existing properties
+        indi_list *isl;
+
 		for (isl = il_iter(idev->props); ! il_is_last(isl); isl = il_next(isl)) {
-			iprop = (struct indi_prop_t *)il_item(isl);
+            struct indi_prop_t *iprop = (struct indi_prop_t *)il_item(isl);
 			cb_func(iprop, cb_data);
 		}
 	} else {

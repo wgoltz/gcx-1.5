@@ -61,7 +61,7 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
 
     if (ra) {
         *ra = indi_prop_get_number(tele->coord_prop, "RA"); // these appear to be equinox 2000
-        *ra *= 15; // hours to degrees
+        *ra *= 15; // hms to degrees
     }
     if (dec) {
         *dec = indi_prop_get_number(tele->coord_prop, "DEC");
@@ -426,22 +426,28 @@ void tele_set_ready_callback(void * window, void *func, void *data, char *msg)
 struct tele_t *tele_find(void *window)
 {
     struct indi_t *indi	= INDI_get_indi(window);
-    if (!indi)
-        return NULL;
+    if (!indi) return NULL;
 
-    struct tele_t *tele = (struct tele_t *)g_object_get_data(G_OBJECT(window), "telescope");
+    char *device_name = P_STR(INDI_SCOPE_NAME);
+    char *name = "telescope";
+
+    struct tele_t *tele = (struct tele_t *)g_object_get_data(G_OBJECT(window), name);
+
     if (tele == NULL) {
         tele = g_new0(struct tele_t, 1);
 
         if (tele) {
-            INDI_common_init(INDI_COMMON (tele), "telescope", tele_check_state, TELE_CALLBACK_MAX);
-            indi_device_add_cb(indi, P_STR(INDI_SCOPE_NAME), (IndiDevCB)tele_connect, tele, "tele_connect");
-            g_object_set_data(G_OBJECT(window), "telescope", tele);
+            INDI_common_init(INDI_COMMON (tele), name, tele_check_state, TELE_CALLBACK_MAX);
+            indi_device_add_cb(indi, device_name, (IndiDevCB)tele_connect, tele, "tele_connect");
+
+            g_object_set_data(G_OBJECT(window), name, tele);
             tele->window = window;
         }
     }
 
 
 //    return (tele && tele->ready) ? tele : NULL;
+    if (tele == NULL) printf("Can not setup \"%s\" with device \"%s\"\n", name, device_name); fflush(NULL);
+
     return tele;
 }

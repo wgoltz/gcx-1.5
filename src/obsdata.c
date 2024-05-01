@@ -246,8 +246,7 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
     if (isnan(lat)) lat = P_DBL(OBS_LATITUDE); // use default
     if (isnan(alt)) alt = P_DBL(OBS_ALTITUDE); // use default
     if (isnan(lng)) { // use default
-        lng = P_DBL(OBS_LONGITUDE);
-        if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
+        lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
     }
 
     fits_set_loc(fr, lat, lng, alt);
@@ -256,74 +255,107 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
 /* look for CD_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
 static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
 {
+    /*
+     * CD1_1 =  CDELT1 * cos (CROTA2)
+     * CD2_1 =  CDELT1 * sin (CROTA2)
+     * CD1_2 = -CDELT2 * sin (CROTA2)
+     * CD2_2 =  CDELT2 * cos (CROTA2)
+     */
 	double cd[2][2];
 
     double v;
-    fits_get_double(fr, "CD1_1", &v); cd[0][0] = (! isnan(v)) ? v : 1;
-    fits_get_double(fr, "CD1_2", &v); cd[0][1] = (! isnan(v)) ? v : 0;
-    fits_get_double(fr, "CD2_1", &v); cd[1][0] = (! isnan(v)) ? v : 0;
-    fits_get_double(fr, "CD2_2", &v); cd[1][1] = (! isnan(v)) ? v : 1;
 
-    double det = cd[0][0] * cd[1][1] - cd[1][0] * cd[0][1];
-    d4_printf("CD det=%8g\n", det);
-    if (fabs(det) < 1e-30) {
-		err_printf("CD matrix is singular!\n");
-		return 0;
-	}
+    int ret = 0;
+    fits_get_double(fr, "CD1_1", &v); ret = ret || isnan(v); cd[0][0] = v;
+    fits_get_double(fr, "CD2_1", &v); ret = ret || isnan(v); cd[1][0] = v;
 
-    double ra, rb, r;
+    fits_get_double(fr, "CD1_2", &v); ret = ret || isnan(v); cd[0][1] = v;
+    fits_get_double(fr, "CD2_2", &v); ret = ret || isnan(v); cd[1][1] = v;
 
-    // atan2(cd[1][0]*cd[0][1])
-    // k * |1 0| | c    s|  -> kc    ks
-    //     |0 f| | -s   c|    -kfs   kfc
-	if (cd[1][0] > 0) {
-		ra = atan2(cd[1][0], cd[0][0]);
-	} else if (cd[1][0] < 0) {
-		ra = atan2(-cd[1][0], -cd[0][0]);
-	} else {
-		ra = 0;
-	}
+    if (ret == 0) {
 
-	if (cd[0][1] > 0) {
-		rb = atan2(cd[0][1], -cd[1][1]);
-	} else if (cd[0][1] < 0) {
-		rb = atan2(-cd[0][1], cd[1][1]);
-	} else {
-		rb = 0;
-	}
+        double det = cd[0][0] * cd[1][1] - cd[1][0] * cd[0][1];
+        d4_printf("CD det=%8g\n", det);
+        if (fabs(det) < 1e-30) {
+            err_printf("CD matrix is singular!\n");
+            ret = 1;
 
-	r = (ra + rb) / 2;
+        } else {
 
-	d4_printf("ra=%.8g, rb=%.8g, r=%.8g\n", raddeg(ra), raddeg(rb), raddeg(r));
+            // atan2(cd[1][0]*cd[0][1])
+            // k * |1 0| | c    s|  -> kc    ks
+            //     |0 f| | -s   c|    -kfs   kfc
 
-    if (fabs(cos(r)) < 1e-30) { // what is this?
-        err_printf("90.000000 degrees rotation!\n");
-		return 0;
-	}
+            double ra = 0;
+            if (cd[1][0] > 0) {
+                ra = atan2(cd[1][0], cd[0][0]);
+            } else if (cd[1][0] < 0) {
+                ra = atan2(-cd[1][0], -cd[0][0]);
+            }
 
-    double norm = sqrt((sqr(cd[0][0]) + sqr(cd[1][1])) / 2);
+            double rb = 0;
+            if (cd[0][1] > 0) {
+                rb = atan2(cd[0][1], -cd[1][1]);
+            } else if (cd[0][1] < 0) {
+                rb = atan2(-cd[0][1], cd[1][1]);
+            }
 
-// xinc and yinc need to be multiplied by scale (if set)
-    fim->xinc = cd[0][0] > 0 ? norm / cos(r) : -norm / cos(r);
-    fim->yinc = cd[1][1] > 0 ? norm / cos(r) : -norm / cos(r);
-    fim->rot = raddeg(r);
+            double r = (ra + rb) / 2;
 
-	fim->pc[0][0] = cd[0][0] / fim->xinc;
-	fim->pc[1][0] = cd[1][0] / fim->yinc;
-	fim->pc[0][1] = cd[0][1] / fim->xinc;
-	fim->pc[1][1] = cd[1][1] / fim->yinc;    
+            d4_printf("ra=%.8g, rb=%.8g, r=%.8g\n", raddeg(ra), raddeg(rb), raddeg(r));
 
-	d4_printf("pc   %.8g %.8g\n", fim->pc[0][0], fim->pc[0][1]);
-	d4_printf("pc   %.8g %.8g\n", fim->pc[1][0], fim->pc[1][1]);
+            double cr = cos(r);
+            if (fabs(cr) < 1e-30) {
+//                err_printf("90.000000 degrees rotation!\n");
+//                ret = 1;
+                fim->xinc = cd[1][0];
+                fim->yinc = -cd[0][1];
+                fim->rot = raddeg(r);
 
-//    fim->flags |= WCS_USE_LIN;
+                fim->pc[0][0] = 0;
+                fim->pc[0][1] = -fim->yinc / fim->xinc; // sign ?
 
-    return 1; // valid (xinc, yinc, rot)
+                fim->pc[1][0] = fim->xinc / fim->yinc; // sign ?
+                fim->pc[1][1] = 0;
+
+            } else {
+                double norm = sqrt((sqr(cd[0][0]) + sqr(cd[1][1])) / 2); // cr * sqrt((cd1^2 + cd2^2) / 2)
+                // cd1^2 = cd2_1^2 + cd1_1^2
+                // cd2^2 = cd2_2^2 + cd1_2^2
+
+                // xinc and yinc need to be multiplied by scale (if set)
+                fim->xinc = cd[0][0] > 0 ? norm / cr : -norm / cr;
+                fim->yinc = cd[1][1] > 0 ? norm / cr : -norm / cr;
+                fim->rot = raddeg(r);
+
+                fim->pc[0][0] = cd[0][0] / fim->xinc;
+                fim->pc[0][1] = cd[0][1] / fim->xinc;
+
+                fim->pc[1][0] = cd[1][0] / fim->yinc;
+                fim->pc[1][1] = cd[1][1] / fim->yinc;
+
+                d4_printf("pc   %.8g %.8g\n", fim->pc[0][0], fim->pc[0][1]);
+                d4_printf("pc   %.8g %.8g\n", fim->pc[1][0], fim->pc[1][1]);
+
+                //    fim->flags |= WCS_USE_LIN;
+            }
+        }
+    }
+
+    return ret ? 0 : 1; // valid (xinc, yinc, rot)
 }
 
 /* look for PC_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
 static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
 {
+
+    /*
+     * PC1_1 = cos(rota)
+     * PC2_1 = -sin(rota)
+     * PC1_2 = sin(rota)
+     * PC2_2 = cos(rota)
+     */
+
     double d;
 
 //	d3_printf("scan_for_pc\n");
@@ -332,40 +364,48 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
     fits_get_double(fr, P_STR(FN_CDELT2), &d); gboolean have_yinc = ! isnan(d); if (have_yinc) fim->yinc = d;
 
     double pc[2][2];
-    int have_PC = 0;
 
-    fits_get_double(fr, "PC1_1", &d); if (! isnan(d)) have_PC += 1; pc[0][0] = (isnan(d)) ? 1 : d;
-    fits_get_double(fr, "PC1_2", &d); if (! isnan(d)) have_PC += 2; pc[0][1] = (isnan(d)) ? 0 : d;
-    fits_get_double(fr, "PC2_1", &d); if (! isnan(d)) have_PC += 4; pc[1][0] = (isnan(d)) ? 0 : d;
-    fits_get_double(fr, "PC2_2", &d); if (! isnan(d)) have_PC += 8; pc[1][1] = (isnan(d)) ? 1 : d;
+    int ret = 0;
+    fits_get_double(fr, "PC1_1", &d); ret = ret || isnan(d); pc[0][0] = d;
+    fits_get_double(fr, "PC1_2", &d); ret = ret || isnan(d); pc[0][1] = d;
 
-    double det = pc[0][0] * pc[1][1] - pc[1][0] * pc[0][1];
-//	d4_printf("PC det=%8g\n",det);
-    if (fabs(det) < 1e-30) {
-        err_printf("PC matrix is singular!\n");
-		return 0;
-	}
+    fits_get_double(fr, "PC2_1", &d); ret = ret || isnan(d); pc[1][0] = d;
+    fits_get_double(fr, "PC2_2", &d); ret = ret || isnan(d); pc[1][1] = d;
 
-//    fim->flags |= WCS_USE_LIN;
+    if (ret == 0) { // have all pcs
+        double det = pc[0][0] * pc[1][1] - pc[1][0] * pc[0][1];
+        //	d4_printf("PC det=%8g\n",det);
+        if (fabs(det) < 1e-30) {
+            err_printf("PC matrix is singular!\n");
+            ret = 1;
 
-	fim->pc[0][0] = pc[0][0];
-	fim->pc[1][0] = pc[1][0];
-	fim->pc[0][1] = pc[0][1];
-	fim->pc[1][1] = pc[1][1];
+        } else {
 
-// TODO:
-    if (have_PC == 15) // get xinc, yinc, rot from pc
-        fim->rot = raddeg(atan2(pc[0][1], pc[0][0]));
+            //    fim->flags |= WCS_USE_LIN;
 
-// if (have_xinc && have_yinc && have_rot) get pc from xinc, yinc, rot
-// if (have_PC == 15) && (have_xinc && have_yinc && have_rot) find an average ?
+            fim->pc[0][0] = pc[0][0];
+            fim->pc[1][0] = pc[1][0];
+            fim->pc[0][1] = pc[0][1];
+            fim->pc[1][1] = pc[1][1];
 
-    if (! (have_xinc && have_yinc)) {
-        fim->xinc = NAN;
-        fim->yinc = NAN;
+            fim->rot = raddeg(atan2(pc[0][1], pc[0][0]));
+        }
+
+    } else if (have_rot) {
+        // set pc from rot
+        double sr, cr;
+
+        sincos(fim->rot, &sr, &cr);
+
+        fim->pc[0][0] = cr;
+        fim->pc[0][1] = sr;
+        fim->pc[1][0] = -sr;
+        fim->pc[1][1] = cr;
+
+        ret = 0;
     }
 
-    return (have_PC == 15) || (have_xinc && have_yinc) ? 1 : 0;
+    return ret ? 0 : 1;
 }
 
 
@@ -386,8 +426,8 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
     fits_get_double(fr, P_STR(FN_CRVAL2), &d); if (! isnan(d)) wcs->yref = d; // else ok = FALSE;
     fits_get_double(fr, P_STR(FN_EQUINOX), &d); wcs->equinox = (isnan(d)) ? 2000 : d;
 
-    if (!scan_for_CD(fr, wcs)) // get xinc, yinc, rot, pc from cd
-        if (!scan_for_PC(fr, wcs)) // get xinc, yinc, rot, pc
+    if (! scan_for_CD(fr, wcs)) // get xinc, yinc, rot, pc from cd
+        if (! scan_for_PC(fr, wcs)) // get xinc, yinc, rot, pc
             ok = FALSE;
 
     if (ok) wcs->wcsset = WCS_INITIAL;
@@ -405,18 +445,16 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 	g_return_if_fail(fr != NULL);
 	g_return_if_fail(exp != NULL);
 
-    double v;
-// use binning keyword instead of bin_x and bin_y which are assumed to be the same
-    double binning; fits_get_double(fr, P_STR(FN_BINNING), &binning);
-    if (isnan(binning)) {
-        printf("cant find binning in fits keywords\n"); fflush(NULL);
+//    double binning = NAN;
+//    double xbinning = NAN;
+//    double ybinning = NAN;
 
-        fits_get_double(fr, P_STR(FN_XBINNING), &v); exp->bin_x = (isnan(v)) ? 1 : v;
-        fits_get_double(fr, P_STR(FN_YBINNING), &v); exp->bin_y = (isnan(v)) ? 1 : v;
-    } else {
-        exp->bin_x = binning;
-        exp->bin_y = binning;
-    }
+//    fits_get_binned_parms(fr, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
+//    if (! isnan(binning)) {
+//        exp->bin_x = exp->bin_y = binning;
+//    }
+
+    double v;
 
     fits_get_double(fr, P_STR(FN_ELADU), &v); exp->scale = (isnan(v)) ? P_DBL(OBS_DEFAULT_ELADU) : v;
     exp->scale /= exp->bin_x * exp->bin_y;
@@ -690,7 +728,7 @@ double obs_current_hour_angle(struct obs_data *obs)
 
     double lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
 
-    ha = get_apparent_sidereal_time(jd) - (lng + obs->ra) / 15.0;
+    ha = get_apparent_sidereal_time(jd) + (lng - obs->ra) / 15.0;
     if (ha > 12)
         ha -= 24;
     else if (ha < -12)
@@ -711,8 +749,7 @@ double obs_current_airmass(struct obs_data *obs)
 	gettimeofday(&tv, NULL);
 	jd = timeval_to_jdate(&tv);
 
-    double lng = P_DBL(OBS_LONGITUDE);
-    if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
+    double lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
 
     double lat = P_DBL(OBS_LATITUDE);
 
@@ -729,7 +766,7 @@ void wcs_to_fits_header(struct ccd_frame *fr)
 {
     char *line;
 
-//    if (! fr->fim) {
+//    if (! fr->fim) {p
 //        printf ("obsdata.wcs_to_fits_header NULL fr->fim\n");
 //        return;
 //    }
@@ -762,7 +799,13 @@ void wcs_to_fits_header(struct ccd_frame *fr)
 
     fits_set_pos(fr, pos_wcs, fr->fim.xref, fr->fim.yref, fr->fim.equinox);
 
-    fits_set_binned_parms(fr, P_DBL(OBS_SECPIX), "binned image scale", P_STR(FN_SECPIX), NULL, NULL);
+    double xsecpix = fabs(fr->fim.xinc * 3600);
+    double ysecpix = fabs(fr->fim.yinc * 3600);
+    double secpix = (xsecpix == ysecpix) ? secpix = xsecpix : NAN;
+
+    if (! isnan(secpix)) {
+        fits_set_binned_parms(fr, secpix, "binned image scale", P_STR(FN_SECPIX), NULL, NULL);
+    }
 
 // do this elsewhere (ccd_frame ?) ..
 //    char *ras = degrees_to_hms_pr(fr->fim.xref, 2);

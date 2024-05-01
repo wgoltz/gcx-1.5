@@ -778,8 +778,11 @@ int dms_to_degrees_track_end(char *str, double *deg, char **end)
     for (p = str; *p == ' ' && *p != 0; p++) // skip spaces
         ;
 
-    int negative = (*p == '-');
-    if (negative) p++;
+    int negative = 0;
+    if (*p == '-' || *p == '+') {
+        negative = (*p == '-');
+        p++;
+    }
 
     char *start = p;
 

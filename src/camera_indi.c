@@ -475,32 +475,31 @@ void camera_delete(struct camera_t *camera)
 struct camera_t *camera_find(void *window, int type)
 {    
     struct indi_t *indi = INDI_get_indi(window);
-    if (! indi)
-        return NULL;
+    if (! indi) return NULL;
 
     char *widget_name = (type == CAMERA_MAIN) ? "camera-main" : "camera-guide";
+
+    char *name;
+    char *device_name;
+    char *port_name;
+    if (type == CAMERA_MAIN) {
+        name = "main camera";
+        device_name = P_STR(INDI_MAIN_CAMERA_NAME);
+        port_name = P_STR(INDI_MAIN_CAMERA_PORT);
+    } else {
+        name =  "guide camera";
+        device_name = P_STR(INDI_GUIDE_CAMERA_NAME);
+        port_name = P_STR(INDI_GUIDE_CAMERA_PORT);
+    }
 
     struct camera_t *camera = (struct camera_t *)g_object_get_data(G_OBJECT(window), widget_name);
 
     if (camera == NULL) {
-
         camera = g_new0(struct camera_t, 1);
         if (camera) {
-            char *name;
-            char *device_name;
-            char *port_name;
-            if (type == CAMERA_MAIN) {
-                name = "main camera";
-                device_name = P_STR(INDI_MAIN_CAMERA_NAME);
-                port_name = P_STR(INDI_MAIN_CAMERA_PORT);
-            } else {
-                name =  "guide camera";
-                device_name = P_STR(INDI_GUIDE_CAMERA_NAME);
-                port_name = P_STR(INDI_GUIDE_CAMERA_PORT);
-            }
-
             INDI_common_init(INDI_COMMON (camera), name, camera_check_state, CAMERA_CALLBACK_MAX);
             camera->portname = port_name;
+
             indi_device_add_cb(indi, device_name, (IndiDevCB)camera_connect, camera, "camera_connect");
             g_object_set_data_full(G_OBJECT(window), widget_name, camera, (GDestroyNotify)camera_delete);
             camera->window = window;
@@ -508,5 +507,7 @@ struct camera_t *camera_find(void *window, int type)
     }
 
 //    return (camera && camera->ready) ? camera : NULL;
+    if (camera == NULL) printf("Can not setup \"%s\" with device \"%s\"\n", name, device_name); fflush(NULL);
+
     return camera;
 }

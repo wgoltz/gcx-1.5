@@ -754,10 +754,15 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
     int i = pos_wcs;
 
     // try FN_RA, FN_DEC coords
-    char *endp = fits_get_dms(fr, P_STR(FN_RA), &ra_local);
-    if (! isnan(ra_local)) ra_local *= 15;
+    char *endp = fits_get_dms(fr, P_STR(FN_RA), &ra_local); // try h:m:s
 
-    fits_get_dms(fr, P_STR(FN_DEC), &dec_local);
+    if (! isnan(ra_local))
+        ra_local *= 15;
+    else
+        endp = fits_get_double(fr, P_STR(FN_RA), &ra_local); // try degrees
+
+    fits_get_dms(fr, P_STR(FN_DEC), &dec_local); // try d:m:s
+    if (isnan(dec_local)) fits_get_double(fr, P_STR(FN_DEC), &dec_local); // try degrees
 
     if (! isnan(ra_local) && ! isnan(dec_local) && endp) {
         if (strstr(endp, fits_pos_type[pos_telescope])) { // found telescope coords
@@ -767,10 +772,14 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
         }
 
     } else { // try FN_OBJECTRA, FN_OBJECTDEC coords
-        endp = fits_get_dms(fr, P_STR(FN_OBJECTRA), &ra_local);
-        if (! isnan(ra_local)) ra_local *= 15;
+        endp = fits_get_dms(fr, P_STR(FN_OBJECTRA), &ra_local); // try h:m:s
+        if (! isnan(ra_local))
+            ra_local *= 15;
+        else
+            fits_get_double(fr, P_STR(FN_DEC), &ra_local); // try degrees
 
-        fits_get_dms(fr, P_STR(FN_OBJECTDEC), &dec_local);
+        fits_get_dms(fr, P_STR(FN_OBJECTDEC), &dec_local); // try d:m:s
+        if (isnan(dec_local)) fits_get_double(fr, P_STR(FN_DEC), &dec_local); // try degrees
 
         i = pos_object;
     }
@@ -783,12 +792,14 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
         if (*p == '(' || *p == '[') {
             p++;
             eq = strtod(p, &endp);
+            if (p == endp) eq = NAN;
         }
-        if ((*endp == ')' || *endp == ']') && ! isnan(eq)) if (equinox) *equinox = eq;
+//        if ((*endp == ')' || *endp == ']') && ! isnan(eq)) if (equinox) *equinox = eq;
+    }    
 
-        if (ra) *ra = ra_local;
-        if (dec) *dec = dec_local;
-    }
+    if (ra) *ra = ra_local;
+    if (dec) *dec = dec_local;
+    if (equinox) *equinox = eq;
 
     return i;
 }
@@ -888,75 +899,34 @@ int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng, double *alt)
     return (! isnan(lng_local) && ! isnan(lat_local) && ! isnan(alt_local));
 }
 
-/* set FITS binning */
-
-void fits_set_binning(struct ccd_frame *fr)
-{
-    double v;
-    int fits_binning = 0;
-    int fits_xbinning = 0;
-    int fits_ybinning = 0;
-
-    int xbinning = 0;
-    int ybinning = 0;
-    int binning = 1;
-
-    fits_get_double(fr, P_STR(FN_BINNING), &v); if (! isnan(v)) fits_binning = v;
-
-    if (fits_binning == 0) {
-        fits_get_double(fr, P_STR(FN_XBINNING), &v); if (! isnan(v)) fits_binning = v;
-        fits_get_double(fr, P_STR(FN_YBINNING), &v); if (! isnan(v)) fits_binning = v;
-    }
-
-    char *line;
-    if ((fits_binning == fits_xbinning == fits_ybinning == 0) || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-        if (binning != 0) {
-            fr->exp.bin_x = binning;
-            fr->exp.bin_y = binning;
-
-            line = NULL; asprintf(&line, "%20f / %s", (double)binning, "image binning");
-            if (line) fits_add_keyword(fr, P_STR(FN_BINNING), line), free(line);
-
-        } else if (xbinning != 0 && ybinning != 0) {
-            fr->exp.bin_x = xbinning;
-            fr->exp.bin_y = ybinning;
-
-            line = NULL; asprintf(&line, "%20f / %s", (double)xbinning, "image xbinning");
-            if (line) fits_add_keyword(fr, P_STR(FN_YBINNING), line), free(line);
-
-            line = NULL; asprintf(&line, "%20f / %s", (double)ybinning, "image ybinning");
-            if (line) fits_add_keyword(fr, P_STR(FN_XBINNING), line), free(line);
-        }
-    }
-}
-
 /* generic method to get 1 or 2 fits binning params */
 int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *yname, double *parm, double *xparm, double *yparm)
 {
     double parm_local = NAN;
     double xparm_local = NAN;
     double yparm_local = NAN;
+    int ret = 0;
 
-    if (!(fr->exp.bin_x == fr->exp.bin_y == 0)) {
-        if (fr->exp.bin_x == fr->exp.bin_y) {
-            fits_get_double(fr, name, &parm_local);
-        } else {
-            fits_get_double(fr, xname, &xparm_local);
-            fits_get_double(fr, yname, &yparm_local);
-        }
+    fits_get_double(fr, xname, &xparm_local);
+    fits_get_double(fr, yname, &yparm_local);
+    fits_get_double(fr, name, &parm_local);
+
+    if (! isnan(xparm_local) && ! isnan(yparm_local)) {
+        if (xparm) *xparm = xparm_local;
+        if (yparm) *yparm = yparm_local;
+        ret = 1;
+    } else if (! isnan(parm_local)) {
+        if (parm) *parm = parm_local;
+        ret = 1;
     }
 
-    if (parm) *parm = parm_local;
-    if (xparm) *xparm = xparm_local;
-    if (yparm) *yparm = yparm_local;
-
-    return ! isnan(parm_local) || (! isnan(xparm_local) && ! isnan(yparm_local));
+    return ret;
 }
 
 /* generic method to set 1 or 2 fits binning params */
 void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *comment, char *name, char *xname, char *yname)
 {
-    if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+//    if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
 
         char *line;
 
@@ -982,44 +952,8 @@ void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *com
 
             fits_delete_keyword(fr, name);
         }
-    }
+//    }
 }
-
-static void adjust_some_fits_parms(struct ccd_frame *fr)
-{
-    char *line;
-
-    double apert; fits_get_double(fr, P_STR(FN_APERTURE), &apert);
-    if (isnan(apert)) {
-        double aptdia; fits_get_double(fr, "APTDIA", &aptdia);
-        if (! isnan(aptdia)) apert = aptdia / 10.0; // mm to cm
-        // delete APTDIA
-
-        if (isnan(apert)) apert = P_DBL(OBS_APERTURE); // default
-
-        line = NULL; asprintf(&line, "%20.1f / telescope aperture (cm)", apert);
-        if (line) fits_add_keyword(fr, P_STR(FN_APERTURE), line), free(line);
-    }
-
-    double flen; fits_get_double(fr, P_STR(FN_FLEN), &flen);
-    if (isnan(flen)) {
-        double focallen; fits_get_double(fr, "FOCALLEN", &focallen);
-        if (! isnan(focallen)) flen = focallen / 10.0; // mm to cm
-        // delete FOCALLEN
-
-        if (isnan(flen)) flen = P_DBL(OBS_FLEN); // default
-
-        line = NULL; asprintf(&line, "%20.1f / telescope focal length (cm)", flen);
-        if (line) fits_add_keyword(fr, P_STR(FN_FLEN), line), free(line);
-    }
-
-    fits_set_binned_parms(fr, P_DBL(OBS_PIXSZ), "binned pixel size (micron)",
-                         P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
-
-    fits_set_binned_parms(fr, P_DBL(OBS_SECPIX), "binned image scale (arcsec / pixel)",
-                         P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
-}
-
 
 // read_fits_file reads a fits file from disk/memory and creates a new frame
 // holding the data from the file.
@@ -1346,37 +1280,28 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     double ccdskip2; fits_get_double(hd, "CCDSKIP2", &ccdskip2);
     hd->y_skip = (isnan(ccdskip2)) ? 0 : ccdskip2;
 
-    fits_set_binning(hd);
+    double binning = NAN;
+    double xbinning = NAN;
+    double ybinning = NAN;
 
-// move to expose_cb ..
-/*    adjust_some_fits_parms(hd);
+    fits_get_binned_parms(hd, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
 
-    // adjust noise params for binning
-    struct exp_data *exp = & hd->exp;
+    if (! isnan(binning)) {
+        hd->exp.bin_x = hd->exp.bin_y = binning;
+    } else if (! isnan(xbinning) && ! isnan(ybinning)) {
+        hd->exp.bin_x = xbinning;
+        hd->exp.bin_y = ybinning;
+    } else { // default
+        hd->exp.bin_x = hd->exp.bin_y = P_INT(OBS_BINNING);
 
-    int xbinning = exp->bin_x;
-    int ybinning = exp->bin_y;
-
-    double eladu; fits_get_double(hd, P_STR(FN_ELADU), &eladu);
-    if (isnan(eladu)) eladu = P_DBL(OBS_DEFAULT_ELADU) / (xbinning * ybinning); // average binning CMOS (sum binning CCD?)
-
-    double rdnoise; fits_get_double(hd, P_STR(FN_RDNOISE), &rdnoise);
-    if (isnan(rdnoise)) rdnoise = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(xbinning * ybinning);
-
-    exp->scale = eladu;
-    exp->rdnoise = rdnoise;
-    // check these
-    exp->bias = 0;
-    exp->flat_noise = 0;
-
-    noise_to_fits_header(hd);
-// .. to here ? */
+        fits_set_binned_parms(hd, P_INT(OBS_BINNING), "default ", P_STR(FN_BINNING), NULL, NULL);
+    }
 
     hd->fim.jd = frame_jdate(hd);
 
 // try this
     rescan_fits_exp(hd, &(hd->exp));
-//    wcs_transform_from_frame (hd, &hd->fim);
+    wcs_transform_from_frame (hd, &hd->fim);
 
 err_exit:
 	rd->fnclose(fp);

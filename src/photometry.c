@@ -397,8 +397,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
 		lng = wcs->lng;
 	} else {
 		lat = P_DBL(OBS_LATITUDE);
-		lng = P_DBL(OBS_LONGITUDE);
-        if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
+        lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
 	}
 
     s = degrees_to_dms_pr (lat, 0);

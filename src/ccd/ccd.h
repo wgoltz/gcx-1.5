@@ -167,7 +167,7 @@ struct im_stats {
 #define WCS_EDITED 0x80 // updated values in wcsedit
 
 #define WCS_HAVE_INITIAL(wcs) \
-    (((wcs)->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID)) == (WCS_HAVE_SCALE | WCS_HAVE_POS | WCS_LOC_VALID))
+    (((wcs)->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS)) == (WCS_HAVE_SCALE | WCS_HAVE_POS))
 
 
 struct wcs{

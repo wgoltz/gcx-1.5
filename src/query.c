@@ -1623,6 +1623,9 @@ static struct cat_star * parse_cat_line_gaia(char *line)
         cats->flags = CATS_FLAG_VARIABLE;
     }
 
+    if (fabs(v) < 0.1) {
+        printf("gaia : bad v mag %f\n", v); fflush(NULL);
+    }
     cats->mag = v;
 
     return cats;

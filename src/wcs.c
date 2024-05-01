@@ -55,7 +55,8 @@ struct wcs *window_get_wcs(gpointer window)
     return window_wcs;
 }
 
-/* try to get an inital (frame) wcs from frame data and local params */
+/* try to get an inital (frame) wcs from frame data and local params
+ * TODO: add read pc */
 void fits_frame_params_to_fim(struct ccd_frame *fr)
 {
     struct wcs *wcs = & fr->fim;
@@ -84,7 +85,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
     gboolean have_pos = (! isnan(ra) && ! isnan(dec));
 
-    if (have_pos) {
+    if (have_pos) { // set wcs ra, dec precessed to eq
         if (! isnan(equinox) && equinox != wcs->equinox)
             precess_hiprec(equinox, wcs->equinox, &ra, &dec);
         else // ? assume they are EOD coords
@@ -107,9 +108,10 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->xrefpix = fr->w / 2.0;
     wcs->yrefpix = fr->h / 2.0;
 
-    double secpix, xsecpix, ysecpix;
-    if (fits_get_binned_parms(fr, P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX),
-                                                     &secpix, &xsecpix, &ysecpix)) {
+    double secpix = NAN;
+    double xsecpix = NAN;
+    double ysecpix = NAN;
+    if (fits_get_binned_parms(fr, P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX), &secpix, &xsecpix, &ysecpix)) {
         if (! isnan(secpix)) {
             wcs->xinc = - secpix / 3600.0;
             wcs->yinc = - secpix / 3600.0;
@@ -121,6 +123,8 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         wcs->flags |= WCS_HAVE_SCALE;
 
         if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+    } else {
+        // secpix from focal length and pixel size
     }
 
     double rot; fits_get_double(fr, P_STR(FN_CROTA1), &rot);
@@ -128,7 +132,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     if (! isnan(rot)) wcs->rot = rot;
 
     // use hinted flag to indicate we have called this function already
-    // (need to clear flag if there are changes in params)
+    // TODO need to clear flag if there are changes to relevant params
     wcs->flags |= WCS_HINTED;
 }
 
@@ -167,7 +171,8 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 //            fr_wcs->flags |= WCS_JD_VALID;
 //        }
 
-        if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
+//        if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
+        if (fr_wcs->wcsset == WCS_INVALID)
             fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
 
         if (WCS_HAVE_INITIAL(fr_wcs)) {

@@ -123,7 +123,8 @@ void get_hrz_from_equ_sidereal_time (double objra, double objdec,
 
 	/* calculate hour angle of object at observers position */
 	ra = degrad (objra);
-	H = sidereal - degrad (lng) - ra;
+//    H = sidereal - degrad (lng) - ra;
+    H = sidereal + degrad (lng) - ra; // eastern lng
 
 	/* hence formula 12.5 and 12.6 give */
 	/* convert to radians - hour angle, observers latitude, object declination */

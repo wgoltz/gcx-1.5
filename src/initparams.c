@@ -328,12 +328,12 @@ void init_ptable(void)
     add_par_string(FN_BINNING, PAR_FITS_FIELDS, 0, "binning", "Fits field for pixel binning", "BINNING");
     add_par_string(FN_XBINNING, PAR_FITS_FIELDS, 0, "bin_x", "Fits field for X binning", "XBINNING");
     add_par_string(FN_YBINNING, PAR_FITS_FIELDS, 0, "bin_y", "Fits field for Y binning", "YBINNING");
-    add_par_string(FN_PIXSZ, PAR_FITS_FIELDS, 0, "pixsiz", "Fits field for binned pixel size (micron)", "PIXSZ");
-    add_par_string(FN_XPIXSZ, PAR_FITS_FIELDS, 0, "xpixsiz", "Fits field for binned X pixel size", "XPIXSZ");
-    add_par_string(FN_YPIXSZ, PAR_FITS_FIELDS, 0, "ypixsiz", "Fits field for binned Y pixel size", "YPIXSZ");
+    add_par_string(FN_PIXSZ, PAR_FITS_FIELDS, 0, "pixsz", "Fits field for binned pixel size (micron)", "PIXSZ");
+    add_par_string(FN_XPIXSZ, PAR_FITS_FIELDS, 0, "xpixsz", "Fits field for binned X pixel size", "XPIXSZ");
+    add_par_string(FN_YPIXSZ, PAR_FITS_FIELDS, 0, "ypixsz", "Fits field for binned Y pixel size", "YPIXSZ");
     add_par_string(FN_SECPIX, PAR_FITS_FIELDS, 0, "secpix", "Fits field for image scale (arcsec / pixel)", "SECPIX");
-    add_par_string(FN_XSECPIX, PAR_FITS_FIELDS, 0, "xsecpix", "Fits field for binned X image scale", "XPIXSZ");
-    add_par_string(FN_YSECPIX, PAR_FITS_FIELDS, 0, "ysecpix", "Fits field for binned Y image scale", "YPIXSZ");
+    add_par_string(FN_XSECPIX, PAR_FITS_FIELDS, 0, "xsecpix", "Fits field for binned X image scale", "XSECPIX");
+    add_par_string(FN_YSECPIX, PAR_FITS_FIELDS, 0, "ysecpix", "Fits field for binned Y image scale", "YSECPIX");
 
     add_par_string(FN_OBSERVER, PAR_FITS_FIELDS, 0, "observer", "Fits field for observer name", "OBSERVER");
 
@@ -627,6 +627,10 @@ void init_ptable(void)
                 "WCS when this information is not available from "
                 "the frame header. Overrides scale calculated from "
                 "flen and pixel_scale. (arcsec per pixel)" );
+
+    add_par_int(OBS_BINNING, PAR_OBS_DEFAULTS, 0, "image_binning", "Default binning", 1);
+    set_par_description(OBS_BINNING,
+                "Default binning" );
 
     add_par_int(OBS_FLIPPED, PAR_OBS_DEFAULTS, FMT_BOOL, "flipped", "Flipped field", 0);
 	set_par_description(OBS_FLIPPED,

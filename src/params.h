@@ -224,6 +224,7 @@ typedef enum {
     OBS_XPIXSZ ,
     OBS_YPIXSZ ,
     OBS_PIX_XY_RATIO ,
+    OBS_BINNING ,
 	OBS_APERTURE ,
 	OBS_FOCUS ,
     OBS_TELESCOPE ,
