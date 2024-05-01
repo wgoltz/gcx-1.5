@@ -403,6 +403,12 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
         fim->pc[1][1] = cr;
 
         ret = 0;
+
+    } else {
+        fim->pc[0][0] = 1;
+        fim->pc[0][1] = 0;
+        fim->pc[1][0] = 0;
+        fim->pc[1][1] = 1;
     }
 
     return ret ? 0 : 1;
@@ -430,9 +436,7 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
         if (! scan_for_PC(fr, wcs)) // get xinc, yinc, rot, pc
             ok = FALSE;
 
-    if (ok) wcs->wcsset = WCS_INITIAL;
-
-    wcs->flags |= (WCS_HAVE_POS | WCS_HAVE_SCALE);
+    if (ok) wcs->flags |= (WCS_HAVE_POS | WCS_HAVE_SCALE);
 
     return ok ? 0 : 1;
 }
@@ -445,14 +449,20 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 	g_return_if_fail(fr != NULL);
 	g_return_if_fail(exp != NULL);
 
-//    double binning = NAN;
-//    double xbinning = NAN;
-//    double ybinning = NAN;
+    double binning = NAN;
+    double xbinning = NAN;
+    double ybinning = NAN;
 
-//    fits_get_binned_parms(fr, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
-//    if (! isnan(binning)) {
-//        exp->bin_x = exp->bin_y = binning;
-//    }
+    fits_get_binned_parms(fr, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
+
+    if (! isnan(binning)) {
+        exp->bin_x = exp->bin_y = binning;
+    } else if (! isnan(xbinning) && ! isnan(ybinning)) {
+        exp->bin_x = xbinning;
+        exp->bin_y = ybinning;
+    } else { // default
+        exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
+    }
 
     double v;
 
@@ -803,7 +813,7 @@ void wcs_to_fits_header(struct ccd_frame *fr)
     double ysecpix = fabs(fr->fim.yinc * 3600);
     double secpix = (xsecpix == ysecpix) ? secpix = xsecpix : NAN;
 
-    if (! isnan(secpix)) {
+    if (isnan(xsecpix) && isnan(ysecpix) && ! isnan(secpix)) {
         fits_set_binned_parms(fr, secpix, "binned image scale", P_STR(FN_SECPIX), NULL, NULL);
     }
 

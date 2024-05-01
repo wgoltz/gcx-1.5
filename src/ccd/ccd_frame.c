@@ -1280,23 +1280,6 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
     double ccdskip2; fits_get_double(hd, "CCDSKIP2", &ccdskip2);
     hd->y_skip = (isnan(ccdskip2)) ? 0 : ccdskip2;
 
-    double binning = NAN;
-    double xbinning = NAN;
-    double ybinning = NAN;
-
-    fits_get_binned_parms(hd, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
-
-    if (! isnan(binning)) {
-        hd->exp.bin_x = hd->exp.bin_y = binning;
-    } else if (! isnan(xbinning) && ! isnan(ybinning)) {
-        hd->exp.bin_x = xbinning;
-        hd->exp.bin_y = ybinning;
-    } else { // default
-        hd->exp.bin_x = hd->exp.bin_y = P_INT(OBS_BINNING);
-
-        fits_set_binned_parms(hd, P_INT(OBS_BINNING), "default ", P_STR(FN_BINNING), NULL, NULL);
-    }
-
     hd->fim.jd = frame_jdate(hd);
 
 // try this

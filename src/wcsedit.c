@@ -499,12 +499,12 @@ static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
 
    struct wcs *frame_wcs = & fr->fim;
 
-   struct wcs *window_wcs =window_get_wcs(window);
-// xrefpix, yrefpix  unset for new frame
+   struct wcs *window_wcs = window_get_wcs(window);
+
     if (WCS_HAVE_INITIAL(window_wcs))
         wcs_set_validation(window, WCS_INITIAL);
 
-//    wcs_clone(frame_wcs, window_wcs);
+    wcs_clone(frame_wcs, window_wcs);
 
     wcsedit_refresh_parent(dialog);
 }
