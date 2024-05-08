@@ -135,7 +135,12 @@ void update_star_edit(GtkWidget *dialog)
 
     star_edit_update_entry(dialog, "pstar_name_entry", cats->name);
 
-    buf = NULL; asprintf(&buf, "%.2f", cats->mag);
+    buf = NULL;
+    if (isnan(cats->mag)) {
+        asprintf(&buf, "-");
+    } else {
+        asprintf(&buf, "%.2f", cats->mag);
+    }
     if (buf) star_edit_update_entry(dialog, "pstar_mag_entry", buf), free(buf);
 
     star_edit_update_entry(dialog, "pstar_comments_entry", cats->comments);
@@ -173,7 +178,13 @@ void update_star_edit(GtkWidget *dialog)
         if (cats->astro->catalog)
             str_join_varg(&buf, "\nCat: %s", cats->astro->catalog);
 	}
-    if (buf) named_label_set(dialog, "pstar_star_details_label", buf), free(buf);
+
+    if (buf) {
+        named_label_set(dialog, "pstar_star_details_label", buf);
+        free(buf);
+    } else
+        named_label_set(dialog, "pstar_star_details_label", "");
+
 }
 
 /* place a copy of src into dest; if desc is non-null, free it first

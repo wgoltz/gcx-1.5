@@ -447,7 +447,7 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 {
 //    int update = FALSE;
 	g_return_if_fail(fr != NULL);
-	g_return_if_fail(exp != NULL);
+    g_return_if_fail(exp != NULL);
 
     double binning = NAN;
     double xbinning = NAN;
@@ -455,22 +455,42 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 
     fits_get_binned_parms(fr, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
 
-    if (! isnan(binning)) {
-        exp->bin_x = exp->bin_y = binning;
-    } else if (! isnan(xbinning) && ! isnan(ybinning)) {
-        exp->bin_x = xbinning;
-        exp->bin_y = ybinning;
-    } else { // default
-        exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
+    if (! P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+        if (! isnan(binning)) {
+            exp->bin_x = exp->bin_y = binning;
+        } else if (! isnan(xbinning) && ! isnan(ybinning)) {
+            exp->bin_x = xbinning;
+            exp->bin_y = ybinning;
+        } else { // default
+            exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
+            fits_set_binned_parms(fr, binning, "default", NULL, P_STR(FN_XBINNING), P_STR(FN_YBINNING));
+        }
+
+    } else {
+        printf("setting BINNING to default %d", P_INT(OBS_BINNING)); fflush(NULL);
+        binning = exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
+        fits_set_binned_parms(fr, binning, "default", NULL, P_STR(FN_XBINNING), P_STR(FN_YBINNING));
     }
 
     double v;
 
-    fits_get_double(fr, P_STR(FN_ELADU), &v); exp->scale = (isnan(v)) ? P_DBL(OBS_DEFAULT_ELADU) : v;
-    exp->scale /= exp->bin_x * exp->bin_y;
+    int set_fits_eladu; // read eladu from fits header, if not found set it from default
+    fits_get_double(fr, P_STR(FN_ELADU), &v);
 
-    fits_get_double(fr, P_STR(FN_RDNOISE), &v); exp->rdnoise = (isnan(v)) ? P_DBL(OBS_DEFAULT_RDNOISE) : v;
-    exp->rdnoise /= sqrt(exp->bin_x * exp->bin_y);
+    if ((set_fits_eladu = isnan(v)) || P_INT(OBS_OVERRIDE_FILE_VALUES)) v = P_DBL(OBS_DEFAULT_ELADU);
+
+    exp->scale = v / exp->bin_x * exp->bin_y;
+
+    if (set_fits_eladu) fits_set_binned_parms(fr, exp->scale, "default", P_STR(FN_ELADU), NULL, NULL);
+
+    int set_fits_rdnoise; // read rdnoise from fits header, if not found set it from default
+    fits_get_double(fr, P_STR(FN_RDNOISE), &v);
+
+    if ((set_fits_rdnoise = isnan(v)) || P_INT(OBS_OVERRIDE_FILE_VALUES)) v = P_DBL(OBS_DEFAULT_RDNOISE);
+
+    exp->rdnoise = v / sqrt(exp->bin_x * exp->bin_y);
+
+    if (set_fits_rdnoise) fits_set_binned_parms(fr, exp->rdnoise, "default", P_STR(FN_RDNOISE), NULL, NULL);
 
     fits_get_double(fr, P_STR(FN_FLNOISE), &v); exp->flat_noise = (isnan(v)) ? 0 : v;
     fits_get_double(fr, P_STR(FN_DCBIAS), &v); exp->bias = (isnan(v)) ? 0 : v;

@@ -352,12 +352,12 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 
     int chg = 0;
 
-    if (have_ra && (fabs(ra - wcs->xref) > 1.5 / 36000)) {
+    if (have_ra && (isnan(wcs->xref) || (fabs(ra - wcs->xref) > 1.5 / 36000))) {
         chg |= 1;
         wcs->xref = ra;
     }
 
-    if (have_dec && (fabs(dec - wcs->yref) > 1.0 / 36000)) {
+    if (have_dec && (isnan(wcs->yref) || (fabs(dec - wcs->yref) > 1.0 / 36000))) {
         chg |= 2;
         wcs->yref = dec;
     }
@@ -365,7 +365,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     if (have_ra && have_dec)
         wcs->flags |= WCS_HAVE_POS;
 
-    if (fabs(rot - wcs->rot) > 1.0 / 9900) {
+    if (isnan(wcs->rot) || fabs(rot - wcs->rot) > 1.0 / 9900) {
         chg |= 4;
         wcs->rot = rot;
 	}
@@ -504,7 +504,7 @@ static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
     if (WCS_HAVE_INITIAL(window_wcs))
         wcs_set_validation(window, WCS_INITIAL);
 
-    wcs_clone(frame_wcs, window_wcs);
+    wcs_clone(frame_wcs, window_wcs); // here
 
     wcsedit_refresh_parent(dialog);
 }

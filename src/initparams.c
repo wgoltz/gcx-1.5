@@ -571,7 +571,7 @@ void init_ptable(void)
     set_par_description(OBS_DEFAULT_RDNOISE,
                 "Default RDNOISE in ADUs if it is missing from frame. ");
 
-    add_par_int(OBS_OVERRIDE_FILE_VALUES, PAR_OBS_DEFAULTS, FMT_BOOL, "override_file_values", "replace file values with default vales", 0);
+    add_par_int(OBS_OVERRIDE_FILE_VALUES, PAR_OBS_DEFAULTS, FMT_BOOL, "override_file_values", "Override file values with defaults", 0);
     set_par_description(OBS_OVERRIDE_FILE_VALUES,
                 "Override the FITS file parameters with those set "
                 "in defaults. This will add FITS params if they are "

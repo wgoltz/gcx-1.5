@@ -439,10 +439,10 @@ static int set_wcs_from_object (struct ccd_frame *fr, char *name, double spp)
     if (cats == NULL) return -1;
 
     double xbinning; fits_get_double(fr, P_STR(FN_XBINNING), &xbinning);
-    if (isnan(xbinning)) xbinning = 1;
+    if (isnan(xbinning)) xbinning = P_INT(OBS_BINNING);
 
     double ybinning; fits_get_double(fr, P_STR(FN_YBINNING), &ybinning);
-    if (isnan(ybinning)) ybinning = 1;
+    if (isnan(ybinning)) ybinning = P_INT(OBS_BINNING);
 
     // todo: check pixsz
     double xsecpix; fits_get_double(fr, P_STR(FN_XSECPIX), &xsecpix);
