@@ -669,12 +669,6 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
         line = NULL; asprintf(&line, "%20.1f / telescope focal length (cm)", flen);
         if (line) fits_add_keyword(fr, P_STR(FN_FLEN), line), free(line);
     }
-
-    fits_set_binned_parms(fr, P_DBL(OBS_PIXSZ), "binned pixel size (micron)",
-                         P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
-
-    fits_set_binned_parms(fr, P_DBL(OBS_SECPIX), "binned image scale (arcsec/pixel)",
-                         P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
 }
 
 // called when a new image is ready for processing (not streaming)
@@ -733,25 +727,19 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 
         adjust_some_fits_parms(fr);
 
-        // adjust noise params for binning
-        struct exp_data *exp = & fr->exp;
+        // get pixel size
+        struct camera_t *cam = camera_find(main_window, CAMERA_MAIN);
+        double flen, apert, pixsz;
 
-        int xbinning = exp->bin_x;
-        int ybinning = exp->bin_y;
+        double secpix = camera_get_secpix(cam, &flen, &apert, &pixsz); // unbinned secpix
 
-        double eladu; fits_get_double(fr, P_STR(FN_ELADU), &eladu);
-        if (isnan(eladu)) eladu = P_DBL(OBS_DEFAULT_ELADU) / (xbinning * ybinning); // average binning CMOS (sum binning CCD?)
+        if (isnan(pixsz) || P_INT(OBS_OVERRIDE_FILE_VALUES)) pixsz = P_DBL(OBS_PIXSZ);
+        fits_set_binned_parms(fr, pixsz, "binned pixel size (micron)",
+                              P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
 
-        double rdnoise; fits_get_double(fr, P_STR(FN_RDNOISE), &rdnoise);
-        if (isnan(rdnoise)) rdnoise = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(xbinning * ybinning);
-
-        exp->scale = eladu;
-        exp->rdnoise = rdnoise;
-        // check these
-        exp->bias = 0;
-        exp->flat_noise = 0;
-
-        noise_to_fits_header(fr);
+        if (isnan(secpix) || P_INT(OBS_OVERRIDE_FILE_VALUES)) pixsz = P_DBL(OBS_SECPIX);
+        fits_set_binned_parms(fr, secpix, "binned image scale (arcsec/pixel)",
+                              P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
 
         // read scope position
         struct tele_t *tele = tele_find(main_window);
@@ -759,6 +747,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 
         // ra and dec in degrees
         if (tele_read_coords(tele, &ra, &dec) == 0) fits_set_pos(fr, pos_telescope, ra, dec, CURRENT_EPOCH);
+
+        noise_to_fits_header(fr);
 
         frame_stats(fr);
 

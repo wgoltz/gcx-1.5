@@ -355,12 +355,13 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
     else
         fits_get_string(fr, P_STR(FN_OBJECT), &obj_name);
 
-    if (obj_name) {
+    if (! obj_name) {
         if (name_type == NAME_TYPE_name) {
             file_name = find_file_in_path(name, P_STR(FILE_RCP_PATH));
             if (file_name == NULL) {
-                d1_printf("cannot find %s in rcp path, defaulting to tycho recipe\n", name);
-                name_type = NAME_TYPE_tycho;
+//                d1_printf("cannot find %s in rcp path, defaulting to tycho recipe\n", name);
+//                name_type = NAME_TYPE_tycho;
+                file_name = strdup(name);
             }
 
         } else {

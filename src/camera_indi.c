@@ -125,32 +125,40 @@ double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert
 
     struct indi_elem_t *elem;
 
-    if (! camera->lens_prop) {
+    double flen, apert, pixsiz, secpix;
+    flen = apert = pixsiz = secpix = NAN;
+
+    if (! camera->lens_prop || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
         err_printf("camera_get_secpix: Camera doesn't have lens prop, using default flen and aperture\n");
-        *flen_cm = P_DBL(OBS_FLEN);
-        *apert_cm = P_DBL(OBS_APERTURE);
+        flen = P_DBL(OBS_FLEN);
+        apert = P_DBL(OBS_APERTURE);
     } else {
-        if ((elem = indi_find_elem(camera->lens_prop, "FOCAL_LENGTH")))
-            *flen_cm = elem->value.num.value;
-        if ((elem = indi_find_elem(camera->lens_prop, "APERTURE")))
-            *apert_cm = elem->value.num.value;
+        if ((elem = indi_find_elem(camera->lens_prop, "FOCAL_LENGTH"))) flen = elem->value.num.value;
+        if ((elem = indi_find_elem(camera->lens_prop, "APERTURE"))) apert = elem->value.num.value;
     }
-    if (! camera->info_prop) {
+
+    if (! camera->info_prop || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
         err_printf("camera_get_secpix: Camera doesn't have info prop, using default pixsiz\n");
-        *pixsiz_micron = P_DBL(OBS_PIXSZ);
+        pixsiz = P_DBL(OBS_PIXSZ);
     } else {
-        if ((elem = indi_find_elem(camera->info_prop, "CCD_PIXEL_SIZE")))
-            *pixsiz_micron = elem->value.num.value;
+        if ((elem = indi_find_elem(camera->info_prop, "CCD_PIXEL_SIZE"))) pixsiz = elem->value.num.value;
     }
-    return  secpix_from_pixsize_on_flen(*pixsiz_micron, *flen_cm / 100.0);
+
+    if (! isnan(pixsiz) && ! isnan(flen)) secpix = secpix_from_pixsize_on_flen(pixsiz, flen / 100.0);
+
+    if (flen_cm) *flen_cm = flen;
+    if (apert_cm) *apert_cm = apert;
+    if (pixsiz_micron) *pixsiz_micron = pixsiz;
+
+    return secpix;
 }
 
 void camera_get_binning(struct camera_t *camera, int *x, int *y)
 {
 	struct indi_elem_t *elem;
 
-	*x = 1;
-	*y = 1;
+    if (x) *x = P_INT(OBS_BINNING);
+    if (y) *y = P_INT(OBS_BINNING);
     if (! camera->ready) {
 //        err_printf("camera_get_binning: Camera isn't ready.  Can't get binning\n");
 		return;
@@ -159,10 +167,8 @@ void camera_get_binning(struct camera_t *camera, int *x, int *y)
         err_printf("camera_get_binning: Camera doesn't support binning\n");
 		return;
 	}
-	if ((elem = indi_find_elem(camera->binning_prop, "HOR_BIN")))
-		*x = elem->value.num.value;
-	if ((elem = indi_find_elem(camera->binning_prop, "VER_BIN")))
-		*y = elem->value.num.value;
+    if ((elem = indi_find_elem(camera->binning_prop, "HOR_BIN"))) if (x) *x = elem->value.num.value;
+    if ((elem = indi_find_elem(camera->binning_prop, "VER_BIN"))) if (y) *y = elem->value.num.value;
 }
 
 void camera_set_binning(struct camera_t *camera, int x, int y)

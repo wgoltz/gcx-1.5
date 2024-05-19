@@ -479,7 +479,7 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 
     if ((set_fits_eladu = isnan(v)) || P_INT(OBS_OVERRIDE_FILE_VALUES)) v = P_DBL(OBS_DEFAULT_ELADU);
 
-    exp->scale = v / exp->bin_x * exp->bin_y;
+    exp->scale = v / (exp->bin_x * exp->bin_y);
 
     if (set_fits_eladu) fits_set_binned_parms(fr, exp->scale, "default", P_STR(FN_ELADU), NULL, NULL);
 
