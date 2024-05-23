@@ -88,6 +88,7 @@ printf("ic_prop_def: setting cfg->connected 1 for %s\n", iprop->idev->name); ffl
 			struct indi_prop_t *prop = (struct indi_prop_t *)il_item(isl);
 			ic_send_elems(cfg, prop);
 		}
+printf("finish ic_prop_def\n"); fflush(NULL);
 	}
 }
 
