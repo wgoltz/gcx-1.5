@@ -61,8 +61,9 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
 
     cb = (void(*)(void *fh, void *opaque))g_object_get_data(G_OBJECT (obj), "callback");
     opaque = g_object_get_data(G_OBJECT (obj), "data");
+printf("cb %p source %p opaque %p in io_indi_cb\n", cb, source, opaque); fflush(NULL);
     cb(source, opaque);
-printf("cd returned in io_indi_cb\n"); fflush(NULL);
+printf("cb returned in io_indi_cb\n"); fflush(NULL);
     return TRUE;
 }
 
