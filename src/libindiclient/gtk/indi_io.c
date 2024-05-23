@@ -36,7 +36,8 @@ int io_indi_sock_read(void *_fh, void *data, int len)
 	size_t actual_len;
 	GIOStatus status;
 	status = g_io_channel_read_chars(fh, (char *)data, len, &actual_len, NULL);
-	//if (status != G_IO_STATUS_NORMAL)
+printf("io_indi_sock_read %d\n", status); fflush(NULL);
+    //if (status != G_IO_STATUS_NORMAL)
 	//	return -1;
 	return actual_len;
 }
