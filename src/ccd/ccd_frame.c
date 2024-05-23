@@ -1282,8 +1282,9 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 
     hd->fim.jd = frame_jdate(hd);
 
-// try this
-    rescan_fits_exp(hd, &(hd->exp));
+// noise values (only for frames loaded from indi?)
+//    rescan_fits_exp(hd, &(hd->exp));
+
     wcs_transform_from_frame (hd, &hd->fim);
 
 err_exit:
@@ -1373,6 +1374,9 @@ struct ccd_frame *read_image_file(char *filename, char *ungz, int force_unsigned
 	return read_gz_fits_file(filename, ungz, force_unsigned, default_cfa);
 }
 
+
+// this is called only by expose_indi_cb (in cameragui) and expose_cb (in guidegui)
+// then need to set fits parms derived from indi ccd parms immediately after
 struct ccd_frame *read_file_from_mem(mem_file type, const unsigned char *data, unsigned long len, char *fn,
                                      int force_unsigned, char *default_cfa)
 {
