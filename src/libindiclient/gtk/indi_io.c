@@ -28,6 +28,7 @@
 #include "../indi_io.h"
 #include <glib.h>
 #include <glib-object.h>
+#include <stdio.h>
 
 int io_indi_sock_read(void *_fh, void *data, int len)
 {
@@ -61,6 +62,7 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
     cb = (void(*)(void *fh, void *opaque))g_object_get_data(G_OBJECT (obj), "callback");
     opaque = g_object_get_data(G_OBJECT (obj), "data");
     cb(source, opaque);
+printf("cd returned in io_indi_cb\n"); fflush(NULL);
     return TRUE;
 }
 
