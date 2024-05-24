@@ -1282,8 +1282,8 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 
     hd->fim.jd = frame_jdate(hd);
 
-// noise values (only for frames loaded from indi?)
-//    rescan_fits_exp(hd, &(hd->exp));
+// noise values
+    rescan_fits_exp(hd, &(hd->exp));
 
     wcs_transform_from_frame (hd, &hd->fim);
 

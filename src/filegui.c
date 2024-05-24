@@ -344,6 +344,8 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
     else if (strcmp(name, "_TYCHO_") == 0)
         name_type = NAME_TYPE_tycho;
 
+// check this
+    if (name_type == NAME_TYPE_null) return -1;
 
     struct ccd_frame *fr = window_get_current_frame(window);
 
