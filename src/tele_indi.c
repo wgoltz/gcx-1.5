@@ -54,12 +54,14 @@ printf("finish tele_check_state\n"); fflush(NULL);
 
 static void tele_check_state_for_tele_find(struct tele_t *tele)
 {
-printf("start tele_check_state_for_tele_find\n"); fflush(NULL);
+printf("start tele_check_state_for_tele_find %p\n", tele); fflush(NULL);
 
     if (tele->is_connected &&
         ((tele->move_ns_prop && tele->move_ew_prop) ||
         (tele->timed_guide_ns_prop && tele->timed_guide_ew_prop)))
     {
+        printf("1"); fflush(NULL);
+
         tele->ready = 1;
         d4_printf("Telescope is ready\n");
         INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_READY);
