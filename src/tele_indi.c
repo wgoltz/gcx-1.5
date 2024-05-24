@@ -52,6 +52,23 @@ printf("finish tele_check_state\n"); fflush(NULL);
 	}
 }
 
+static void tele_check_state_for_tele_find(struct tele_t *tele)
+{
+printf("start tele_check_state_for_tele_find\n"); fflush(NULL);
+
+    if (tele->is_connected &&
+        ((tele->move_ns_prop && tele->move_ew_prop) ||
+        (tele->timed_guide_ns_prop && tele->timed_guide_ew_prop)))
+    {
+        tele->ready = 1;
+        d4_printf("Telescope is ready\n");
+        INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_READY);
+
+    }
+printf("finish tele_check_state_for_tele_find\n"); fflush(NULL);
+
+}
+
 /* read coords, save to ra and dec, return 0
  * return -1 if don't have tele->coord_prop or
  * ra and/or dec args provided but have bad values when read
@@ -458,7 +475,7 @@ printf("start tele_find\n"); fflush(NULL);
         tele = g_new0(struct tele_t, 1);
 
         if (tele) {
-            INDI_common_init(INDI_COMMON (tele), name, tele_check_state, TELE_CALLBACK_MAX);
+            INDI_common_init(INDI_COMMON (tele), name, tele_check_state_for_tele_find, TELE_CALLBACK_MAX);
             indi_device_add_cb(indi, device_name, (IndiDevCB)tele_connect, tele, "tele_connect");
 
             g_object_set_data(G_OBJECT(window), name, tele);
