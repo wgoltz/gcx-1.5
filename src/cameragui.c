@@ -1453,17 +1453,20 @@ static gboolean tele_ready_indi_cb(gpointer data)
 {
 	GtkWidget *window = data;
 	struct tele_t *tele;
+printf("start tele_ready_indi_cb\n"); fflush(NULL);
 
     gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 	tele = tele_find(window);
     if (tele) {
-        printf ("before indi_set_callback in tele_redy_indi\n"); fflush(NULL);
+        printf ("before indi_set_callback in tele_ready_indi_cb\n"); fflush(NULL);
         INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_COORDS, tele_coords_indi_cb, cam_control_dialog, "tele_coords_indi_cb");
-        printf ("after indi_set_callback in tele_redy_indi\n"); fflush(NULL);
+        printf ("after indi_set_callback in tele_ready_indi_cb\n"); fflush(NULL);
 
         if (tele->ready)
             enable_telescope_widgets(cam_control_dialog, TRUE);
 	}
+printf("finish tele_ready_indi_cb\n"); fflush(NULL);
+
 	//Return FALSE to remove the callback event
 	return FALSE;
 }
