@@ -54,9 +54,7 @@ void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *fu
     GSList *gsl;
 	for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
         struct INDI_callback_t *cb = (struct INDI_callback_t *)gsl->data;
-//         if (cb->type == type && cb->func == func && cb->active) {
         if (cb->type == type && cb->func == func) {
-printf("not adding callback function as it already exists %p\n", func); fflush(NULL);
             // Any func can only exist once per type
 			return;
 		}
@@ -156,6 +154,7 @@ static int INDI_callback(struct INDI_callback_t *cb)
 //            if (cb->msg)
 //                free(cb->msg);
 //            g_free(cb);
+            printf("setting cb->active to FALSE for cb->func %p\n", cb->func); fflush(NULL);
             cb->active = FALSE;
         }
     }
