@@ -183,7 +183,9 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
             g_idle_add((GSourceFunc)INDI_callback, cb);
         }
 	}
+
     // free inactive callbacks
+    // this seems to have problems
     for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
         cb = gsl->data;
         if (cb->type == type && ! cb->active) {
@@ -192,7 +194,9 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
                 printf("freeing cb %p %s\n", cb->func, cb->msg); fflush(NULL);
                 free(cb->msg);
             }
+
             g_free(cb);
+            printf("cb freed\n"); fflush(NULL);
         }
     }
 }
