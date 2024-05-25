@@ -170,6 +170,9 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
 	for(gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
 		cb = gsl->data;
 
+        if (type == 1 /* TELE_CALLBACK_READY */) {
+            printf("tele_callback_ready 2\n"); fflush(NULL);
+        }
         if (cb->type == type && cb->active) {
             g_idle_add((GSourceFunc)INDI_callback, cb);
         }
