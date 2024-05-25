@@ -1453,7 +1453,6 @@ static gboolean tele_ready_indi_cb(gpointer data)
 {
 	GtkWidget *window = data;
 	struct tele_t *tele;
-printf("start tele_ready_indi_cb\n"); fflush(NULL);
 
     gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 	tele = tele_find(window);
@@ -1465,7 +1464,6 @@ printf("start tele_ready_indi_cb\n"); fflush(NULL);
         if (tele->ready)
             enable_telescope_widgets(cam_control_dialog, TRUE);
 	}
-printf("finish tele_ready_indi_cb\n"); fflush(NULL);
 
 	//Return FALSE to remove the callback event
 	return FALSE;

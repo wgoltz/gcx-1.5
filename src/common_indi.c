@@ -148,8 +148,8 @@ static int INDI_callback(struct INDI_callback_t *cb)
 
     if (cb->func && cb->device && cb->active) {
         int result = func(cb->data);
-// try unconditional
-//        if (result == FALSE) {
+
+        if (result == FALSE) {
 // If function returns false, remove callback (but not here!)
 //            cb->device->callbacks = g_slist_remove(cb->device->callbacks, cb);
 //            if (cb->msg)
@@ -157,7 +157,7 @@ static int INDI_callback(struct INDI_callback_t *cb)
 //            g_free(cb);
             printf("setting cb->active to FALSE for cb->func %p\n", cb->func); fflush(NULL);
             cb->active = FALSE;
-//        }
+        }
     }
 	return FALSE;
 }

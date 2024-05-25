@@ -43,32 +43,28 @@ static void tele_check_state(struct tele_t *tele)
 		((tele->move_ns_prop && tele->move_ew_prop) ||
 		(tele->timed_guide_ns_prop && tele->timed_guide_ew_prop)))
 	{
-printf("start tele_check_state\n"); fflush(NULL);
 		tele->ready = 1;
 		d4_printf("Telescope is ready\n");
 		INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_READY);
-printf("finish tele_check_state\n"); fflush(NULL);
 
 	}
 }
 
 static void tele_check_state_for_tele_find(struct tele_t *tele)
 {
-printf("start tele_check_state_for_tele_find %p\n", tele); fflush(NULL);
 
     if (tele->is_connected &&
         ((tele->move_ns_prop && tele->move_ew_prop) ||
         (tele->timed_guide_ns_prop && tele->timed_guide_ew_prop)))
     {
-        printf("1"); fflush(NULL);
+        printf("tele_check_state 1\n"); fflush(NULL);
 
         tele->ready = 1;
         d4_printf("Telescope is ready\n");
         INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_READY);
 
+        printf("tele_check_state 2\n"); fflush(NULL);
     }
-printf("finish tele_check_state_for_tele_find\n"); fflush(NULL);
-
 }
 
 /* read coords, save to ra and dec, return 0
@@ -80,7 +76,6 @@ int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
     if (! tele->ready) return -1;
 
     if (! tele->coord_prop) return -1;
-printf("start tele_read_coords\n"); fflush(NULL);
 
     if (ra) {
         *ra = indi_prop_get_number(tele->coord_prop, "RA"); // these appear to be equinox 2000
@@ -89,7 +84,6 @@ printf("start tele_read_coords\n"); fflush(NULL);
     if (dec) {
         *dec = indi_prop_get_number(tele->coord_prop, "DEC");
     }
-printf("finish tele_read_coords\n"); fflush(NULL);
 
     return 0;
 }
@@ -103,13 +97,11 @@ int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
         err_printf("tele_get_tracking: Tele isn't ready.  Can't get tracking\n");
         return -1;
     }
-printf("start tele_get_coords\n"); fflush(NULL);
 
     *ra = tele->right_ascension;
     *dec = tele->declination;
 
     int state = tele->coord_prop->state;
-printf("finish tele_get_coords\n"); fflush(NULL);
 
     return tele->coord_prop->state;
 }
@@ -119,7 +111,6 @@ printf("finish tele_get_coords\n"); fflush(NULL);
 static void tele_get_coords_cb(struct indi_prop_t *iprop, void *data)
 {
 	struct tele_t *tele = data;
-printf("start tele_get_coords_cb\n"); fflush(NULL);
 
     if (!tele->ready) return;
 
@@ -138,8 +129,6 @@ printf("start tele_get_coords_cb\n"); fflush(NULL);
     tele->state = iprop->state;
 
     INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_COORDS);
-printf("finish tele_get_coords_cb\n"); fflush(NULL);
-
 }
 
 static void tele_track_state_cb(struct indi_prop_t *iprop, void *data)
@@ -205,7 +194,6 @@ static void tele_cancel_movement_ew(struct tele_t *tele)
 static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 {
 	struct tele_t *tele = (struct tele_t *)callback_data;
-printf("start tele_connect\n"); fflush(NULL);
 
 //    if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD_REQUEST") == 0) { // no
 //		tele->coord_set_prop = iprop;
@@ -249,8 +237,6 @@ printf("start tele_connect\n"); fflush(NULL);
 		INDI_try_dev_connect(iprop, INDI_COMMON (tele), P_STR(INDI_SCOPE_PORT));
 
 	tele_check_state(tele);
-printf("finish tele_connect\n"); fflush(NULL);
-
 }
 
 void tele_set_speed(struct tele_t *tele, int type)
@@ -384,7 +370,6 @@ void tele_abort(struct tele_t *tele)
 int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox)
 {
     struct indi_elem_t *elem = NULL;
-printf("start tele_set_coords\n"); fflush(NULL);
 
 	if (! tele) {
 		err_printf("No telescope found\n");
@@ -442,7 +427,6 @@ printf("start tele_set_coords\n"); fflush(NULL);
     indi_send(tele->coord_set_prop, NULL);
 
     tele->slewing = 1; // will this work if already there?
-printf("finish tele_set_coords\n"); fflush(NULL);
 
 	return 0;
 }
@@ -466,7 +450,6 @@ struct tele_t *tele_find(void *window)
 {
     struct indi_t *indi	= INDI_get_indi(window);
     if (!indi) return NULL;
-printf("start tele_find\n"); fflush(NULL);
 
     char *device_name = P_STR(INDI_SCOPE_NAME);
     char *name = "telescope";
@@ -484,11 +467,8 @@ printf("start tele_find\n"); fflush(NULL);
             tele->window = window;
         }
     }
-
-
 //    return (tele && tele->ready) ? tele : NULL;
     if (tele == NULL) printf("Can not setup \"%s\" with device \"%s\"\n", name, device_name); fflush(NULL);
-printf("finish tele_find\n"); fflush(NULL);
 
     return tele;
 }

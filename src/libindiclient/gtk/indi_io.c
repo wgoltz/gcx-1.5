@@ -62,7 +62,6 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
 
     cb = (void(*)(void *fh, void *opaque))g_object_get_data(G_OBJECT (obj), "callback");
     opaque = g_object_get_data(G_OBJECT (obj), "data");
-printf("cb %p source %p opaque %p in io_indi_cb\n", cb, source, opaque); fflush(NULL);
     cb(source, opaque);
 printf("cb returned in io_indi_cb\n"); fflush(NULL);
     return TRUE;
@@ -76,33 +75,27 @@ void *io_indi_open_server(const char *host, int port, void (*cb)(void *fd, void 
 
 	/* lookup host address */
 	hp = gethostbyname (host);
-	if (!hp) {
-		return NULL;
-	}
+    if (!hp) return NULL;
 
 	/* create a socket to the INDI server */
     struct sockaddr_in serv_addr = { 0 };
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr =
-			    ((struct in_addr *)(hp->h_addr_list[0]))->s_addr;
+    serv_addr.sin_addr.s_addr = ((struct in_addr *)(hp->h_addr_list[0]))->s_addr;
     serv_addr.sin_port = htons(port);
-	if ((sockfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
-		return NULL;
-	}
+
+    if ((sockfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) return NULL;
 
 	/* connect */
-	if (connect (sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr))<0){
-		return NULL;
-	}
+    if (connect (sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) return NULL;
 
 	/* prepare for line-oriented i/o with client */
 	fh = g_io_channel_unix_new(sockfd);
 	g_io_channel_set_flags (fh, G_IO_FLAG_NONBLOCK, NULL);
 	if (cb) {
 		GObject *obj = (GObject *)g_object_new(G_TYPE_OBJECT, NULL);
-	        g_object_set_data(obj, "callback", (void *)cb);
-	        g_object_set_data(obj, "data", opaque);
+        g_object_set_data(obj, "callback", (void *)cb);
+        g_object_set_data(obj, "data", opaque);
 		g_io_add_watch(fh, G_IO_IN, (GIOFunc) io_indi_cb, obj);
 	}
 	return fh;
