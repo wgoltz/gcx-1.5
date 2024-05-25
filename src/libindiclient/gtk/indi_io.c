@@ -36,7 +36,6 @@ int io_indi_sock_read(void *_fh, void *data, int len)
 	size_t actual_len;
 	GIOStatus status;
 	status = g_io_channel_read_chars(fh, (char *)data, len, &actual_len, NULL);
-printf("io_indi_sock_read %d\n", status); fflush(NULL);
     //if (status != G_IO_STATUS_NORMAL)
 	//	return -1;
 	return actual_len;
@@ -63,7 +62,7 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
     cb = (void(*)(void *fh, void *opaque))g_object_get_data(G_OBJECT (obj), "callback");
     opaque = g_object_get_data(G_OBJECT (obj), "data");
     cb(source, opaque);
-printf("cb returned in io_indi_cb\n"); fflush(NULL);
+// printf("cb returned in io_indi_cb\n"); fflush(NULL);
     return TRUE;
 }
 
