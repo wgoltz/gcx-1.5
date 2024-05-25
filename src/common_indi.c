@@ -85,15 +85,15 @@ void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void 
 		err_printf("unknown callback type %d\n", type);
 		return;
 	}
-	for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
+    for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) { // need a lock on device->callbacks
 		cb = gsl->data;
         if (cb->type == type && cb->func == func) {
-			device->callbacks = g_slist_remove(device->callbacks, cb);
+//			device->callbacks = g_slist_remove(device->callbacks, cb);
             if (cb->msg) {
                 printf("removing callback: %s", cb->msg); fflush(NULL);
-                free(cb->msg);
+//                free(cb->msg);
             }
-			g_free(cb);
+//			g_free(cb);
 			return;
 		}
 	}
@@ -162,7 +162,7 @@ static int INDI_callback(struct INDI_callback_t *cb)
 //                free(cb->msg);
 //            g_free(cb);
             printf("setting cb->active to FALSE for cb->func %p\n", cb->func); fflush(NULL);
-            cb->active = FALSE;
+            cb->active = FALSE; // disable callback
         }
     }
 	return FALSE;
@@ -179,13 +179,11 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
             printf("%s %p %s\n", cb->msg, cb->func, cb->active ? "active" : "not active");
             fflush(NULL);
         }
-        if (cb->type == type && cb->active) {
-            g_idle_add((GSourceFunc)INDI_callback, cb);
-        }
+
+        if (cb->type == type && cb->active) g_idle_add((GSourceFunc)INDI_callback, cb);
 	}
 
-    // free inactive callbacks
-    // this seems to have problems
+/* free inactive callbacks
     for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
         cb = gsl->data;
         if (cb->type == type && ! cb->active) {
@@ -199,5 +197,6 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
             printf("cb freed\n"); fflush(NULL);
         }
     }
+*/
 }
 
