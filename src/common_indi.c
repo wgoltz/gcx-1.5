@@ -175,11 +175,11 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
 
 	for(gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
 		cb = gsl->data;
-
+        if (type == 1 /* TELE_CALLBACK_READY */) {
+            printf("%s %p %s\n", cb->msg, cb->func, cb->active ? "active" : "not active");
+            fflush(NULL);
+        }
         if (cb->type == type && cb->active) {
-            if (type == 1 /* TELE_CALLBACK_READY */) {
-                printf("g_idle_add tele_ready_indi_cb for TELE_CALLBACK_READY\n"); fflush(NULL);
-            }
             g_idle_add((GSourceFunc)INDI_callback, cb);
         }
 	}
@@ -188,8 +188,10 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
         cb = gsl->data;
         if (cb->type == type && ! cb->active) {
             device->callbacks = g_slist_remove(device->callbacks, cb);
-            if (cb->msg)
+            if (cb->msg) {
+                printf("freeing cb %p %s\n", cb->func, cb->msg); fflush(NULL);
                 free(cb->msg);
+            }
             g_free(cb);
         }
     }
