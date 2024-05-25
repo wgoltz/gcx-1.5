@@ -1419,13 +1419,10 @@ static void enable_camera_widgets(gpointer cam_control_dialog, int state)
 
 static void enable_telescope_widgets(gpointer cam_control_dialog, int state)
 {
-    printf("begin enable_telescope_widgets\n"); fflush(NULL);
     gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_goto_button")), state);
     gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_abort_button")), state);
     gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_auto_button")), state);
     gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "scope_sync_button")), state);
-    printf("end enable_telescope_widgets\n"); fflush(NULL);
-
 }
 
 static gboolean cam_ready_indi_cb(gpointer data)
@@ -1457,9 +1454,7 @@ static gboolean tele_ready_indi_cb(gpointer data)
     gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 	tele = tele_find(window);
     if (tele) {
-        printf ("before indi_set_callback in tele_ready_indi_cb\n"); fflush(NULL);
         INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_COORDS, tele_coords_indi_cb, cam_control_dialog, "tele_coords_indi_cb");
-        printf ("after indi_set_callback in tele_ready_indi_cb\n"); fflush(NULL);
 
         if (tele->ready)
             enable_telescope_widgets(cam_control_dialog, TRUE);
