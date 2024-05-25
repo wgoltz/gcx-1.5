@@ -54,8 +54,12 @@ void INDI_set_callback(struct INDI_common_t *device, unsigned int type, void *fu
     GSList *gsl;
 	for (gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
         struct INDI_callback_t *cb = (struct INDI_callback_t *)gsl->data;
+
         if (cb->type == type && cb->func == func) {
             // Any func can only exist once per type
+            if (type == 2 /* TELE_CALLBACK_COORDS */) {
+                printf("INDI_set_callback: TELE_CALLBACK_COORDS already set\n"); fflush(NULL);
+            }
 			return;
 		}
 	}
@@ -85,8 +89,10 @@ void INDI_remove_callback(struct INDI_common_t *device, unsigned int type, void 
 		cb = gsl->data;
         if (cb->type == type && cb->func == func) {
 			device->callbacks = g_slist_remove(device->callbacks, cb);
-            if (cb->msg)
+            if (cb->msg) {
+                printf("removing callback: %s", cb->msg); fflush(NULL);
                 free(cb->msg);
+            }
 			g_free(cb);
 			return;
 		}
@@ -170,10 +176,10 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
 	for(gsl = device->callbacks; gsl; gsl = g_slist_next(gsl)) {
 		cb = gsl->data;
 
-        if (type == 1 /* TELE_CALLBACK_READY */) {
-            printf("tele_callback_ready 2\n"); fflush(NULL);
-        }
         if (cb->type == type && cb->active) {
+            if (type == 1 /* TELE_CALLBACK_READY */) {
+                printf("g_idle_add tele_ready_indi_cb for TELE_CALLBACK_READY\n"); fflush(NULL);
+            }
             g_idle_add((GSourceFunc)INDI_callback, cb);
         }
 	}
