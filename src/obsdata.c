@@ -200,16 +200,16 @@ void obs_data_release(struct obs_data *obs)
 
 void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
 {
-    char *line = NULL;
+//    char *line = NULL;
 
  //   if (obs == NULL) return;
 
     if (obs) {
 
-        if (! isnan(obs->ra) || ! isnan(obs->rot) || ! isnan(obs->dec)) {
+        if (! (isnan(obs->ra) && isnan(obs->dec))) {
             fr->fim.xref = obs->ra;
             fr->fim.yref = obs->dec;
-            fr->fim.rot = obs->rot;
+            fr->fim.rot = isnan(obs->rot) ? 0 : obs->rot;
 
             fr->fim.wcsset = WCS_INITIAL;
         }
@@ -217,36 +217,32 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
         fr->fim.equinox = obs->equinox;
 
         if (obs->filter) {
-            line = NULL; asprintf(&line, "'%20s' / filter name", obs->filter);
-            if (line) fits_add_keyword(fr, P_STR(FN_FILTER), line), free(line);
+            fits_keyword_add(fr, P_STR(FN_FILTER), "'%20s' / filter name", obs->filter);
         }
         if (obs->objname) {
-            line = NULL; asprintf(&line, "'%20s' / object name", obs->objname);
-            if (line) fits_add_keyword(fr, P_STR(FN_OBJECT), line), free(line);
+            fits_keyword_add(fr, P_STR(FN_OBJECT), "'%20s' / object name", obs->objname);
         }
 
         fits_set_pos(fr, pos_object, obs->ra, obs->dec, obs->equinox);
     }
 
-    line = NULL; asprintf(&line, "'%20s' / TELESCOPE NAME", P_STR(OBS_TELESCOPE));
-    if (line) fits_add_keyword(fr, P_STR(FN_TELESCOPE), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_TELESCOPE), "'%20s' / TELESCOPE NAME", P_STR(OBS_TELESCOPE));
 
-    line = NULL; asprintf(&line, "'%20s' / FOCUS NAME", P_STR(OBS_FOCUS));
-    if (line) fits_add_keyword(fr, P_STR(FN_FOCUS), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_FOCUS), "'%20s' / FOCUS NAME", P_STR(OBS_FOCUS));
 
     char *observer; fits_get_string(fr, P_STR(FN_OBSERVER), &observer);
-    if (observer == NULL) {
-        line = NULL; asprintf(&line, "'%20s' / OBSERVER", P_STR(OBS_OBSERVER));
-        if (line) fits_add_keyword(fr, P_STR(FN_OBSERVER), line), free(line);
+    if (observer == NULL || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+        fits_keyword_add(fr, P_STR(FN_OBSERVER), "'%20s' / OBSERVER", P_STR(OBS_OBSERVER));
     }
 
     double lat, lng, alt;
     fits_get_loc(fr, &lat, &lng, &alt);
 
-    if (isnan(lat)) lat = P_DBL(OBS_LATITUDE); // use default
-    if (isnan(alt)) alt = P_DBL(OBS_ALTITUDE); // use default
-    if (isnan(lng)) { // use default
-        lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
+    if (isnan(lat) || P_INT(OBS_OVERRIDE_FILE_VALUES)) lat = P_DBL(OBS_LATITUDE); // use default
+    if (isnan(alt) || P_INT(OBS_OVERRIDE_FILE_VALUES)) alt = P_DBL(OBS_ALTITUDE); // use default
+    if (isnan(lng) || P_INT(OBS_OVERRIDE_FILE_VALUES)) { // use default
+        lng = P_DBL(OBS_LONGITUDE);
+        if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
     }
 
     fits_set_loc(fr, lat, lng, alt);
@@ -477,18 +473,16 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
     fits_get_double(fr, P_STR(FN_ELADU), &v);
 
     if (isnan(v) || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-        v = P_DBL(OBS_DEFAULT_ELADU);
-        exp->scale = v / (exp->bin_x * exp->bin_y);
-        fits_set_binned_parms(fr, v, "default scale (binned)", P_STR(FN_ELADU), NULL, NULL);
+        v = P_DBL(OBS_DEFAULT_ELADU) / (exp->bin_x * exp->bin_y);
+//        fits_keyword_add(fr, P_STR(FN_ELADU), "%20.2f / default scale (binned)", v);
     }
     exp->scale = v;
 
     fits_get_double(fr, P_STR(FN_RDNOISE), &v);
 
     if (isnan(v) || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-        v = P_DBL(OBS_DEFAULT_RDNOISE);
-        exp->rdnoise = v / sqrt(exp->bin_x * exp->bin_y);
-        fits_set_binned_parms(fr, v, "default rdnoise (binned)", P_STR(FN_RDNOISE), NULL, NULL);
+        v = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(exp->bin_x * exp->bin_y);
+//        fits_keyword_add(fr, P_STR(FN_RDNOISE), "%20.2f / default rdnoise (binned)", v);
     }
     exp->rdnoise = v;
 
@@ -509,8 +503,8 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 //    exp->airmass = 0;
 //    fits_get_double(fr, P_STR(FN_AIRMASS), &exp->airmass);
 
-    fits_get_double(fr, P_STR(FN_SKIPX), &v); fr->x_skip = isnan(v) ? 0 : v;
-    fits_get_double(fr, P_STR(FN_SKIPY), &v); fr->y_skip = isnan(v) ? 0 : v;
+//    fits_get_double(fr, P_STR(FN_SKIPX), &v); fr->x_skip = isnan(v) ? 0 : v;
+//    fits_get_double(fr, P_STR(FN_SKIPY), &v); fr->y_skip = isnan(v) ? 0 : v;
 
 //    if (update) {
 //        info_printf("Warning: using default values for noise model\n");
@@ -521,20 +515,14 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 /* push the noise data from exp into the header fields of fr */
 void noise_to_fits_header(struct ccd_frame *fr) // exp to fits
 {
-    char *line;
     struct exp_data *exp = &fr->exp;
+    fits_keyword_add(fr, P_STR(FN_ELADU), "%20.3f / sensor gain (electron / adu)", exp->scale);
 
-    line = NULL; asprintf(&line, "%20.3f / sensor gain (electron / adu)", exp->scale); // scale and rdnoise are binned
-    if (line) fits_add_keyword(fr, P_STR(FN_ELADU), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_RDNOISE), "%20.3f / sensor read noise (adu)", exp->rdnoise);
 
-    line = NULL; asprintf(&line, "%20.3f / sensor read noise (adu)", exp->rdnoise);
-    if (line) fits_add_keyword(fr, P_STR(FN_RDNOISE), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_FLNOISE), "%20.3f / multiplicative noise coeff", exp->flat_noise);
 
-    line = NULL; asprintf(&line, "%20.3f / multiplicative noise coeff", exp->flat_noise);
-    if (line) fits_add_keyword(fr, P_STR(FN_FLNOISE), line), free(line);
-
-    line = NULL; asprintf(&line, "%20.3f / bias (adu)", exp->bias);
-    if (line) fits_add_keyword(fr, P_STR(FN_DCBIAS), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_DCBIAS), "%20.3f / bias (adu)", exp->bias);
 }
 
 
@@ -794,7 +782,7 @@ double obs_current_airmass(struct obs_data *obs)
 
 void wcs_to_fits_header(struct ccd_frame *fr)
 {
-    char *line;
+//    char *line;
 
 //    if (! fr->fim) {p
 //        printf ("obsdata.wcs_to_fits_header NULL fr->fim\n");
@@ -806,26 +794,19 @@ void wcs_to_fits_header(struct ccd_frame *fr)
     fits_add_keyword(fr, "CTYPE1", "'RA---TAN'");
     fits_add_keyword(fr, "CTYPE2", "'DEC--TAN'");
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.xref);
-    if (line) fits_add_keyword(fr, P_STR(FN_CRVAL1), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CRVAL1), "%20.8f / ", fr->fim.xref);
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.yref);
-    if (line) fits_add_keyword(fr, P_STR(FN_CRVAL2), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CRVAL2), "%20.8f / ", fr->fim.yref);
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.xinc);
-    if (line) fits_add_keyword(fr, P_STR(FN_CDELT1), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CDELT1), "%20.8f / ", fr->fim.xinc);
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.yinc);
-    if (line) fits_add_keyword(fr, P_STR(FN_CDELT2), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CDELT2), "%20.8f / ", fr->fim.yinc);
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.xrefpix);
-    if (line) fits_add_keyword(fr, P_STR(FN_CRPIX1), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CRPIX1), "%20.8f / ", fr->fim.xrefpix);
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.yrefpix);
-    if (line) fits_add_keyword(fr, P_STR(FN_CRPIX2), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CRPIX2), "%20.8f / ", fr->fim.yrefpix);
 
-    line = NULL; asprintf(&line, "%20.8f / ", fr->fim.rot);
-    if (line) fits_add_keyword(fr, P_STR(FN_CROTA1), line), free(line);
+    fits_keyword_add(fr, P_STR(FN_CROTA1), "%20.8f / ", fr->fim.rot);
 
     fits_set_pos(fr, pos_wcs, fr->fim.xref, fr->fim.yref, fr->fim.equinox);
 
@@ -864,7 +845,9 @@ void wcs_to_fits_header(struct ccd_frame *fr)
 //    line = NULL; asprintf(&line, "%20.3f / binned image scale (arcsec/pixel)", secpix);
 //    if (line) fits_add_keyword(fr, "SECPIX", line), free(line);
 
-    line = NULL; asprintf(&line, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
-    if (line) fits_add_keyword(fr, P_STR(FN_AIRMASS), line), free(line);
+//    line = NULL; asprintf(&line, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
+//    if (line) fits_add_keyword(fr, P_STR(FN_AIRMASS), line), free(line);
+
+    fits_keyword_add(fr,  P_STR(FN_AIRMASS), "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
 // .. to here
 }

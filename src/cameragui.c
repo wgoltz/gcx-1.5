@@ -644,8 +644,6 @@ gint delete_event( GtkWidget *widget, GdkEvent  *event, gpointer data )
 // change aptdia, focallen (mm) to aperture, flen (cm)
 static void adjust_some_fits_parms(struct ccd_frame *fr)
 {
-    char *line;
-
     double apert; fits_get_double(fr, P_STR(FN_APERTURE), &apert);
     if (isnan(apert)) {
         double aptdia; fits_get_double(fr, "APTDIA", &aptdia);
@@ -654,8 +652,7 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
 
         if (isnan(apert)) apert = P_DBL(OBS_APERTURE); // default
 
-        line = NULL; asprintf(&line, "%20.1f / telescope aperture (cm)", apert);
-        if (line) fits_add_keyword(fr, P_STR(FN_APERTURE), line), free(line);
+        fits_keyword_add(fr, P_STR(FN_APERTURE), "%20.1f / telescope aperture (cm)", apert);
     }
 
     double flen; fits_get_double(fr, P_STR(FN_FLEN), &flen);
@@ -666,8 +663,7 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
 
         if (isnan(flen)) flen = P_DBL(OBS_FLEN); // default
 
-        line = NULL; asprintf(&line, "%20.1f / telescope focal length (cm)", flen);
-        if (line) fits_add_keyword(fr, P_STR(FN_FLEN), line), free(line);
+        fits_keyword_add(fr, P_STR(FN_FLEN), "%20.1f / telescope focal length (cm)", flen);
     }
 }
 
@@ -720,8 +716,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 // here ..
         double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
 
-        char *lb = NULL; asprintf(&lb, "%20.5f / EXPTIME", exptime);
-        if (lb) fits_add_keyword(fr, P_STR(FN_EXPTIME), lb), free(lb);
+        fits_keyword_add(fr, P_STR(FN_EXPTIME), "%20.5f / EXPTIME", exptime);
 
         // add observer info
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
@@ -1450,7 +1445,7 @@ static gboolean tele_ready_indi_cb(gpointer data)
 {
 	GtkWidget *window = data;
 	struct tele_t *tele;
-printf("start tele_ready_indi_cb\n"); fflush(NULL);
+
     gpointer cam_control_dialog = g_object_get_data(G_OBJECT(window), "cam_control_dialog");
 	tele = tele_find(window);
     if (tele && cam_control_dialog) {
@@ -1459,7 +1454,6 @@ printf("start tele_ready_indi_cb\n"); fflush(NULL);
         if (tele->ready)
             enable_telescope_widgets(cam_control_dialog, TRUE);
 	}
-printf("finish tele_ready_indi_cb\n"); fflush(NULL);
 
 	//Return FALSE to remove the callback event
 	return FALSE;

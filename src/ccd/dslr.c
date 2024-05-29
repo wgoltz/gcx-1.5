@@ -837,7 +837,7 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 	size_t image_bytes, file_image_bytes;
 	unsigned all;
 	float *data;
-	static char strbuf[64];
+//	static char strbuf[64];
 	int failed = 0;
 	struct mrw *mrw;
 
@@ -1076,8 +1076,7 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 		frame->x_skip = (endian_to_host_16(byteorder, mrw->prd->ccd_size_x) -
 				 endian_to_host_16(byteorder, mrw->prd->img_size_x)) / 2;
 
-		snprintf(strbuf, 64, "%d", frame->x_skip);
-        fits_add_keyword(frame, "CCDSKIP1", strbuf);
+        fits_keyword_add(frame, "CCDSKIP1", "%d", frame->x_skip);
 	}
 
 	if (endian_to_host_16(byteorder, mrw->prd->ccd_size_y) >
@@ -1086,8 +1085,7 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 		frame->y_skip = (endian_to_host_16(byteorder, mrw->prd->ccd_size_y) -
 				 endian_to_host_16(byteorder, mrw->prd->img_size_y)) / 2;
 
-		snprintf(strbuf, 64, "%d", frame->y_skip);
-        fits_add_keyword(frame, "CCDSKIP2", strbuf);
+        fits_keyword_add(frame, "CCDSKIP2", "%d", frame->y_skip);
 	}
 
 	if (raw->date_obs)
@@ -1096,9 +1094,8 @@ static struct ccd_frame *read_mrw_file(struct raw_file *raw)
 	if (raw->time_obs)
         fits_add_keyword(frame, "TIME-OBS", raw->time_obs);
 
-	if (raw->exptime != 0.0) {
-        snprintf(strbuf, 64, "%11.5f", raw->exptime);
-        fits_add_keyword(frame, "EXPTIME", strbuf);
+    if (raw->exptime != 0.0) {
+        fits_keyword_add(frame, "EXPTIME", "%11.5f / EXPTIME", raw->exptime);
 	}
 
 	return frame;
@@ -1336,7 +1333,7 @@ static struct ccd_frame *read_cr2_file(struct raw_file *raw)
 	uint32_t dummy;
 	int ifd, failed = 0;
 	void *callback;
-	static char strbuf[64];
+//	static char strbuf[64];
 
 	bzero(&raw->raw.cr2, sizeof(struct cr2));
 	cr2 = &raw->raw.cr2;
@@ -1519,9 +1516,8 @@ static struct ccd_frame *read_cr2_file(struct raw_file *raw)
 	if (raw->time_obs)
         fits_add_keyword(frame, "TIME-OBS", raw->time_obs);
 
-	if (raw->exptime != 0.0) {
-        snprintf(strbuf, 64, "%11.5f", raw->exptime);
-        fits_add_keyword(frame, "EXPTIME", strbuf);
+    if (raw->exptime != 0.0) {
+        fits_keyword_add(frame, "EXPTIME", "%11.5f / EXPTIME", raw->exptime);
 	}
 
 	free_cr2(cr2);
@@ -1664,31 +1660,30 @@ int parse_color_field(struct ccd_frame *fr, char *default_cfa)
 
 int set_color_field(struct ccd_frame *fr)
 {
-    char *str;
+    char *str = NULL;
 	switch (fr->rmeta.color_matrix) {
 	case FRAME_CFA_RGGB:
-        str = strdup("\"RGGB\"");
-		break;
+        str = "\"RGGB\"";
+        break;
     case FRAME_CFA_BGGR:
-        str = strdup("\"BGGR\"");
+        str = "\"BGGR\"";
         break;
     case FRAME_CFA_GRBG:
-        str = strdup("\"GRBG\"");
+        str = "\"GRBG\"";
         break;
     case FRAME_CFA_GBRG:
-        str = strdup("\"GBRG\"");
+        str = "\"GBRG\"";
         break;
 	default:
 		return -1;
 	}
-	fits_add_keyword(fr, "CFA_FMT", str);
-	if (fr->rmeta.wbr > 0.0 && fr->rmeta.wbg > 0.0 &&
-            fr->rmeta.wbgp > 0.0 && fr->rmeta.wbb > 0.0) {
-		sprintf(str, "\"%6.4f,%6.4f,%6.4f,%6.4f\"",
-			fr->rmeta.wbr,  fr->rmeta.wbg,
-			fr->rmeta.wbgp, fr->rmeta.wbb);
-		fits_add_keyword(fr, "WHITEBAL", str);
-	}
+    if (str) fits_add_keyword(fr, "CFA_FMT", str);
+
+    if (fr->rmeta.wbr > 0.0 && fr->rmeta.wbg > 0.0 && fr->rmeta.wbgp > 0.0 && fr->rmeta.wbb > 0.0) {
+        fits_keyword_add(fr, "WHITEBAL", "\"%6.4f,%6.4f,%6.4f,%6.4f\"",
+                         fr->rmeta.wbr,  fr->rmeta.wbg,
+                         fr->rmeta.wbgp, fr->rmeta.wbb);
+    }
 
 	return 0;
 }

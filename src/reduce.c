@@ -1380,20 +1380,22 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 	}
 //    if (expsum == 0) return 0;
 
-    char *lb;
+//    char *lb;
 	if (progress) {
-        lb = NULL; asprintf (&lb, "%d exposures: total exposure %.5fs, center at jd:%.7f\n", i, expsum, exptime / expsum);
+        char *lb = NULL; asprintf (&lb, "%d exposures: total exposure %.5fs, center at jd:%.7f\n", i, expsum, exptime / expsum);
         if (lb) (*progress)(lb, processing_dialog), free(lb);
 	}
     
-    lb = NULL; asprintf (&lb, "%20.5f / TOTAL EXPOSURE TIME IN SECONDS", expsum);
-    if (lb) fits_add_keyword (fr, P_STR(FN_EXPTIME), lb), free(lb);
+//    lb = NULL; asprintf (&lb, "%20.5f / TOTAL EXPOSURE TIME IN SECONDS", expsum);
+//    if (lb) fits_add_keyword (fr, P_STR(FN_EXPTIME), lb), free(lb);
+    fits_keyword_add(fr, P_STR(FN_EXPTIME), "%20.5f / TOTAL EXPOSURE TIME IN SECONDS", expsum);
 
 //    sprintf (lb, "%20.8f / JULIAN DATE OF EXPOSURE START", exptime / expsum - expsum / 2 / 24 / 3600);
 //    fits_add_keyword (fr, P_STR(FN_JDATE), lb);
 
-    lb = NULL; asprintf (&lb, "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
-    if (lb) fits_add_keyword (fr, P_STR(FN_JDATE), lb), free(lb);
+//    lb = NULL; asprintf (&lb, "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
+//    if (lb) fits_add_keyword (fr, P_STR(FN_JDATE), lb), free(lb);
+    fits_keyword_add(fr, P_STR(FN_JDATE), "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
 
 //    double tz = P_DBL(OBS_TIME_ZONE);
 //    if (tz) exptime = exptime + tz / 24 * expsum;
@@ -1408,8 +1410,9 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 //    }
 
     if (ami) {
-        lb = NULL; asprintf (&lb, "%20.3f / MEDIAN OF STACKED FRAMES", fmedian(am, ami));
-        if (lb) fits_add_keyword (fr, P_STR(FN_AIRMASS), lb), free(lb);
+//        lb = NULL; asprintf (&lb, "%20.3f / MEDIAN OF STACKED FRAMES", fmedian(am, ami));
+//        if (lb) fits_add_keyword (fr, P_STR(FN_AIRMASS), lb), free(lb);
+        fits_keyword_add(fr, P_STR(FN_AIRMASS), "%20.3f / MEDIAN OF STACKED FRAMES", fmedian(am, ami));
     }
 
 //printf("done stack time\n");

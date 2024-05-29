@@ -640,6 +640,7 @@ extern FITS_str *fits_str_set_string(struct ccd_frame *fr, FITS_str *str, char *
 
 extern FITS_str *fits_add_history(struct ccd_frame *fr, char *val);
 extern FITS_str *fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val);
+extern FITS_str *fits_keyword_add(struct ccd_frame *fr, char *kwd, char *format, ...);
 extern int fits_delete_keyword(struct ccd_frame *fr, char *kwd);
 
 extern char *fits_str_get_string(FITS_str *str, char **strv);

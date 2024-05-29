@@ -189,13 +189,9 @@ int dcraw_set_time(struct ccd_frame *frame, char *month, int day, int year, char
 
     int mon = (ix - mon_map) / 4 + 1;
 
-    char *date = NULL;
-    asprintf(&date, "\"%04d/%02d/%02d\"", year, mon, day);
-    if (date) fits_add_keyword(frame, "DATE-OBS", date), free(date);
+    fits_keyword_add(frame, "DATE-OBS", "\"%04d/%02d/%02d\"", year, mon, day);
 
-    char *timestr1 = NULL;
-    asprintf(&timestr1, "\"%s\"", timestr);
-    if (timestr1) fits_add_keyword(frame, "TIME-OBS", timestr1), free(timestr1);
+    fits_keyword_add(frame, "TIME-OBS", "\"%s\"", timestr);
 
 	return 0;
 }

@@ -466,6 +466,7 @@ static int indi_blob_decode(void *data)
 		//FIXME: This should really only happen when all blobs are done decoding
 		delXMLEle((XMLEle *)ielem->iprop->root);
 		ielem->value.blob.orig_data = NULL;
+
 		return FALSE;
 	}
 	ielem->value.blob.orig_data += count;
@@ -484,6 +485,7 @@ static int indi_blob_decode(void *data)
 			ielem->value.blob.orig_size = 0;
 			//FIXME: This should really only happen when all blobs are done decoding
 			delXMLEle((XMLEle *)ielem->iprop->root);
+
 			return FALSE;
 		}
 		ielem->value.blob.ptr = ielem->value.blob.data + (ielem->value.blob.size - strm->avail_out);
@@ -498,10 +500,11 @@ static int indi_blob_decode(void *data)
 		}
 		delXMLEle((XMLEle *)ielem->iprop->root);
         indi_exec_cb(ielem->iprop->prop_update_cb, ielem->iprop, "indi_blob_decode blob(prop_update_cb)");
+
 		return FALSE;
 	}
-	return TRUE;
-		
+
+	return TRUE;		
 }
 
 static int indi_convert_data(struct indi_elem_t *ielem, int type, const char *data, unsigned int data_size)

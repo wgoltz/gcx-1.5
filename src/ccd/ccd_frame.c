@@ -730,11 +730,9 @@ void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double 
             fn_dec = P_STR(FN_OBJECTDEC);
         }
 
-        line = NULL; asprintf(&line, "'%20s' / %s RA (%s)", ras, fits_pos_type[type], equinox_str);
-        if (line) fits_add_keyword(fr, fn_ra, line), free(line);
+        fits_keyword_add(fr, fn_ra, "'%20s' / %s RA (%s)", ras, fits_pos_type[type], equinox_str);
 
-        line = NULL; asprintf(&line, "'%20s' / %s DEC (%s)", decs, fits_pos_type[type], equinox_str);
-        if (line) fits_add_keyword(fr, fn_dec, line), free(line);
+        fits_keyword_add(fr, fn_dec, "'%20s' / %s DEC (%s)", decs, fits_pos_type[type], equinox_str);
 
         if (! equinox_is_2000) free(equinox_str);
     }
@@ -821,20 +819,22 @@ void fits_set_loc(struct ccd_frame *fr, double lat, double lng, double alt)
 
         char *lng_str = degrees_to_dms_pr(lng, 1);
 
-        char *line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
-        if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
+        if (lng_str) {
+            fits_keyword_add(fr, P_STR(FN_LONGITUDE), "'%20s' / observing site longitude (%s)", lng_str, east_west_str);
+            free(lng_str);
+        }
     }
 
     if (! isnan(lat)) {
         char *lat_str = degrees_to_dms_pr(lat, 1);
-
-        char *line = NULL; if (lat_str) asprintf(&line, "'%20s' / observing site latitude", lat_str), free(lat_str);
-        if (line) fits_add_keyword(fr, P_STR(FN_LATITUDE), line), free(line);
+        if (lat_str) {
+            fits_keyword_add(fr, P_STR(FN_LATITUDE), "'%20s' / observing site latitude", lat_str);
+            free(lat_str);
+        }
     }
 
     if (! isnan(alt)) {
-        char *line = NULL; asprintf(&line, "%20.1f / observing site altitude", alt);
-        if (line) fits_add_keyword(fr, P_STR(FN_ALTITUDE), line), free(line);
+        fits_keyword_add(fr, P_STR(FN_ALTITUDE), "%20.1f / observing site altitude (m)", alt);
     }
 }
 
@@ -923,32 +923,25 @@ int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *y
     return ret;
 }
 
-/* generic method to set 1 or 2 fits binning params */
+/* generic method to set 1 or 2 fits binned params */
 void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *comment, char *name, char *xname, char *yname)
 {
 //    if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
 
-        char *line;
-
-        if (fr->exp.bin_x == fr->exp.bin_y != 0) {
+        if (fr->exp.bin_x && fr->exp.bin_x == fr->exp.bin_y) {
             double parm = parm_unbinned * fr->exp.bin_x;
 
-            line = NULL; asprintf(&line, "%20f / %s", parm, comment);
-            if (line) fits_add_keyword(fr, name, line), free(line);
+            fits_keyword_add(fr, name, "%20f / %s", parm, comment);
 
             fits_delete_keyword(fr, xname);
             fits_delete_keyword(fr, yname);
 
         } else {
             double xparm = parm_unbinned * fr->exp.bin_x;
-
-            line = NULL; asprintf(&line, "%20f / X %s", xparm, comment);
-            if (line) fits_add_keyword(fr, xname, line), free(line);
+            fits_keyword_add(fr, name, "%20f / X %s", xparm, comment);
 
             double yparm = parm_unbinned * fr->exp.bin_y;
-
-            line = NULL; asprintf(&line, "%20f / Y %s", yparm, comment);
-            if (line) fits_add_keyword(fr, yname, line), free(line);
+            fits_keyword_add(fr, name, "%20f / Y %s", yparm, comment);
 
             fits_delete_keyword(fr, name);
         }
@@ -1270,22 +1263,22 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 	hd->pix_size = sizeof (float);
 	hd->data_valid = 1;
 
-	frame_stats(hd);
-
-    hd->name = strdup(fn);
-
     double ccdskip1; fits_get_double(hd, "CCDSKIP1", &ccdskip1);
     hd->x_skip = (isnan(ccdskip1)) ? 0 : ccdskip1;
 
     double ccdskip2; fits_get_double(hd, "CCDSKIP2", &ccdskip2);
     hd->y_skip = (isnan(ccdskip2)) ? 0 : ccdskip2;
 
+	frame_stats(hd);
+
+    hd->name = strdup(fn);
+
     hd->fim.jd = frame_jdate(hd);
 
-// noise values
-    rescan_fits_exp(hd, &(hd->exp));
-
     wcs_transform_from_frame (hd, &hd->fim);
+
+    // noise values
+    rescan_fits_exp(hd, &hd->exp);
 
 err_exit:
 	rd->fnclose(fp);
@@ -2084,6 +2077,51 @@ FITS_str *fits_keyword_lookup(struct ccd_frame *fr, char *kwd)
     return NULL;
 }
 
+/* add a keyword/value/comment fits header
+ * using asprintf to format the arg
+ * quotes are _not_ added to the string
+ * if a str exists for keyword, it is replaced (old deleted and new appended) */
+
+FITS_str *fits_keyword_add(struct ccd_frame *fr, char *kwd, char *fmt, ...)
+{
+    va_list ap, ap2;
+
+#ifdef __va_copy
+    __va_copy(ap2, ap);
+#else
+    ap2 = ap;
+#endif
+    va_start(ap, fmt);
+    va_start(ap2, fmt);
+
+    if (fr == NULL)	return NULL;
+
+    if (kwd == NULL || *kwd == 0) return NULL;
+    if (fmt == NULL || *fmt == 0) return NULL;
+
+    char *args = NULL;
+    char *new_str = NULL;
+
+    vasprintf(&args, fmt, ap2);
+
+    if (args) asprintf(&new_str, "%-8s= %s", kwd, args);
+
+    va_end(ap);    
+
+    if (new_str == NULL) return NULL;
+
+    FITS_str *str = fits_keyword_lookup(fr, kwd);
+    if (str) fits_delete_str(fr, str);
+
+    gboolean add_str = FALSE;
+    if (new_str) {
+        add_str = (fits_add_str(fr, (FITS_str *) new_str) != -1);
+        free(new_str);
+    }
+
+    return (add_str) ? fr->var_str + fr->nvar * FITS_STRS : NULL;
+}
+
 /* add a string keyword/value pair to the fits header
  * quotes are _not_ added to the string
  * if a str exists for keyword, it is replaced (old deleted and new appended) */
@@ -2096,6 +2134,7 @@ FITS_str *fits_add_keyword(struct ccd_frame *fr, char *kwd, char *val)
     if (val == NULL || *val == 0) return NULL;
 
     FITS_str *str = fits_keyword_lookup(fr, kwd);
+    char *lb;
 
     char *new_str = NULL;
 

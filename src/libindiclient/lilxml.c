@@ -159,13 +159,18 @@ delXMLEle (XMLEle *ep)
     if (!ep)
         return;
 
+    if (ep->at == NULL) return; // already freed
+
     /* delete all parts of ep */
     freeString (&ep->tag);
     freeString (&ep->pcdata);
     if (ep->at) {
-        for (i = 0; i < ep->nat; i++)
+        for (i = 0; i < ep->nat; i++) {
             freeAtt (ep->at[i]);
+            ep->at[i] = NULL;
+        }
         (*myfree) (ep->at);
+        ep->at = NULL;
     }
     if (ep->el) {
         for (i = 0; i < ep->nel; i++) {
@@ -175,6 +180,7 @@ delXMLEle (XMLEle *ep)
             delXMLEle (ep->el[i]);
         }
         (*myfree) (ep->el);
+        ep->el = NULL;
     }
 
     /* remove from parent's list if known */
@@ -982,9 +988,9 @@ growString (String *sp, int c)
 
     if (l > sp->sm) {
         if (!sp->s)
-        newString (sp);
+            newString (sp);
         else
-        sp->s = (char *) moremem (sp->s, sp->sm *= 2);
+            sp->s = (char *) moremem (sp->s, sp->sm *= 2);
     }
 
     sp->s[--l] = '\0';
@@ -1001,9 +1007,9 @@ appendString (String *sp, const char *str)
 
     if (l > sp->sm) {
         if (!sp->s)
-        newString (sp);
+            newString (sp);
         if (l > sp->sm)
-        sp->s = (char *) moremem (sp->s, (sp->sm = l));
+            sp->s = (char *) moremem (sp->s, (sp->sm = l));
     }
 
     strcpy (&sp->s[sp->sl], str);
@@ -1024,6 +1030,8 @@ newString(String *sp)
 static void
 freeString (String *sp)
 {
+    if (sp->sm == 0) return;
+
     if (sp->s) (*myfree) (sp->s);
     sp->s = NULL;
     sp->sl = 0;
