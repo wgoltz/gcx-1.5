@@ -7,6 +7,9 @@
 TARGET = gcx
 TEMPLATE = app
 
+target.path = /tmp/gcx
+INSTALLS += target
+
 #qtHaveModule(opengl) {
 #        DEFINES += QT_OPENGL_SUPPORT
 #        QT += opengl

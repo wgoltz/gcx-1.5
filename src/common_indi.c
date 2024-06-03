@@ -191,7 +191,7 @@ void INDI_exec_callbacks(struct INDI_common_t *device, unsigned int type)
                 device->callbacks = g_slist_remove(device->callbacks, cb);
 
                 printf("removed cb %p %s\n", func, msg); fflush(NULL);
-                free(msg);
+//                free(msg);
 
             } else {
                 printf("not removed: cb still active %p %s\n", func, msg); fflush(NULL);

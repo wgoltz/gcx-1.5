@@ -734,7 +734,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         fits_set_binned_parms(fr, pixsz, "binned pixel size (micron)",
                               P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
 
-        if (isnan(secpix) || P_INT(OBS_OVERRIDE_FILE_VALUES)) pixsz = P_DBL(OBS_SECPIX);
+        if (isnan(secpix) || P_INT(OBS_OVERRIDE_FILE_VALUES)) secpix = P_DBL(OBS_SECPIX);
         fits_set_binned_parms(fr, secpix, "binned image scale (arcsec/pixel)",
                               P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
 
