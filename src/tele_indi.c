@@ -439,10 +439,10 @@ void tele_set_ready_callback(void * window, void *func, void *data, char *msg)
 		err_printf("Telescope wasn't found\n");
 		return;
 	}
-printf("start tele_set_ready_callback\n"); fflush(NULL);
+//printf("start tele_set_ready_callback\n"); fflush(NULL);
 
     INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_READY, func, data, msg);
-printf("finish tele_set_ready_callback\n"); fflush(NULL);
+//printf("finish tele_set_ready_callback\n"); fflush(NULL);
 
 }
 

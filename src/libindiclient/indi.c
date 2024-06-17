@@ -406,7 +406,7 @@ void indi_send(struct indi_prop_t *iprop, struct indi_elem_t *ielem )
     MSG_APPEND("</new%sVector>\n", type);
 
     if (msg) {
-printf("indi_send: %s\n", msg); fflush(NULL);
+// printf("indi_send: %s\n", msg); fflush(NULL);
         iprop->state = INDI_STATE_BUSY;
         indigui_update_widget(iprop); // what does it do, was commented out
         io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
@@ -546,7 +546,7 @@ static int indi_convert_data(struct indi_elem_t *ielem, int type, const char *da
         ielem->value.blob.ptr = ielem->value.blob.data;
         ielem->value.blob.orig_data = data;
         ielem->value.blob.orig_size = data_size;
-        printf("Found blob type: %s size: %lu\n", ielem->value.blob.fmt, (unsigned long)ielem->value.blob.size);
+//        printf("Found blob type: %s size: %lu\n", ielem->value.blob.fmt, (unsigned long)ielem->value.blob.size);
 
         ielem->value.blob.compressed = (ielem->value.blob.fmt[strlen(ielem->value.blob.fmt)-2] == '.'
                 && ielem->value.blob.fmt[strlen(ielem->value.blob.fmt)-1] == 'z')

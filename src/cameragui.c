@@ -670,6 +670,7 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
 // called when a new image is ready for processing (not streaming)
 static int expose_indi_cb(gpointer cam_control_dialog)
 {
+// todo: stop crash in lilxml - dont't allow new exposure start before last blob decode is finished
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 

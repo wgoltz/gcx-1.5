@@ -40,7 +40,7 @@ static void camera_check_state(struct camera_t *camera)
         camera->ready = 1;
 		INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_READY);
     }
-printf("camera_check_state: Camera is %sready\n", (camera->ready == 0) ? "not " : ""); fflush(NULL);
+//printf("camera_check_state: Camera is %sready\n", (camera->ready == 0) ? "not " : ""); fflush(NULL);
 
 }
 
@@ -382,7 +382,7 @@ void camera_stream(struct camera_t *camera, double time, int number)
 // this only gets called once when created. should it be added to connection message
 static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
 {
-printf("camera_connect\n"); fflush(NULL);
+//printf("camera_connect\n"); fflush(NULL);
     struct camera_t *camera = (struct camera_t *)callback_data;
 // try this:
 //    camera_check_state(camera);

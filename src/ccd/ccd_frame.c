@@ -324,7 +324,7 @@ struct ccd_frame *release_frame(struct ccd_frame *fr, char *msg)
 
         } else {
             fr->ref_count --;
-            printf("release_frame %d %s\n", fr->ref_count, msg); fflush(NULL);
+//            printf("release_frame %d %s\n", fr->ref_count, msg); fflush(NULL);
 
             if (fr->ref_count < 1) {
                 if (fr->imf) fr->imf->fr = NULL; // unlink frame from imf
