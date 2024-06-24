@@ -32,7 +32,8 @@ struct camera_t {
 
 	const unsigned char *image;
 	int image_size;
-	const char *image_format;
+    const char *image_format;
+    int exposure_in_progress; // 0: no
 
 	struct indi_prop_t *expose_prop;
     struct indi_prop_t *streaming_prop;

@@ -345,6 +345,8 @@ void camera_abort_exposure(struct camera_t *camera)
 
     indi_prop_set_switch(camera->abort_prop, "ABORT", 1);
     indi_send(camera->abort_prop, NULL);
+
+    camera->exposure_in_progress = 0;
 }
 
 // ccd_file_path

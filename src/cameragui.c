@@ -696,9 +696,12 @@ static int expose_indi_cb(gpointer cam_control_dialog)
             if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
         }
     }
+// try this
+    camera->exposure_in_progress = 0;
 
-    if (get_named_checkb_val(cam_control_dialog, "exp_run_button")) // start next capture
+    if (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0) // start next capture
         capture_image(cam_control_dialog);
+
 // handle other file types, preview, raw
     if (strncmp(camera->image_format, ".fits", 5) == 0) { // show and save current frame
         // The image has already been unzipped if we get here
@@ -933,12 +936,17 @@ int capture_image(gpointer cam_control_dialog)
 //        INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM); // start streaming
 
     } else {
-        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog,  "expose_indi_cb");
-        camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
-        indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
+        if (! camera->exposure_in_progress) {
+            INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog,  "expose_indi_cb");
+            camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
 
-        indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(cam_control_dialog, "exp_spin"));
-        indi_send(camera->expose_prop, NULL);
+            indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
+
+            indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+            indi_send(camera->expose_prop, NULL);
+
+            camera->exposure_in_progress = 1;
+        }
 //    camera_expose(camera, exptime);
     }
 

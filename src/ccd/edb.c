@@ -232,7 +232,7 @@ CATALOG_ENTRY locate_in_edb(char *name, char *catname, char *edbdir)
     }
     while (!feof(caf)) {
         char ln[300];
-        if (! fgets(ln, 200, caf))
+        if (! fgets(ln, 256, caf)) // no guarantee this is long enough to read entire line
             continue;
         lines ++;
         char *start = strcasestr(ln, name); // include alternate names as well

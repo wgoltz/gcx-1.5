@@ -309,7 +309,8 @@ void indi_dev_enable_blob(struct indi_device_t *idev, int state)
 {
 	if (idev) {
         char *msg;
-        asprintf(&msg, "<enableBLOB device=\"%s\">%s</enableBLOB>\n", idev->name, state ? "Also" : "Never");
+//        asprintf(&msg, "<enableBLOB device=\"%s\">%s</enableBLOB>\n", idev->name, state ? "Also" : "Never");
+        asprintf(&msg, "<enableBLOB device=\"%s\">%s</enableBLOB>\n", idev->name, state ? "Only" : "Never");
         if (msg) {
 //        dbg_printf("sending (%lu):\n%s", (unsigned long)strlen(msg), msg); fflush(NULL);
             io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
