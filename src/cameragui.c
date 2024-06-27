@@ -226,7 +226,7 @@ void cam_to_img(gpointer cam_control_dialog)
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
 	camera = camera_find(main_window, CAMERA_MAIN);
-    if (! camera  || ! camera->ready) return;
+    if (! (camera && camera->ready)) return;
 
     g_object_set_data(G_OBJECT (cam_control_dialog), "disable_signals", (void *)1);
 
@@ -392,7 +392,7 @@ static void img_changed_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);    
-    if(camera == NULL || ! camera->ready) {
+    if (! (camera && camera->ready)) {
         err_printf("no camera connected\n");
         return;
     }
@@ -674,33 +674,46 @@ static int expose_indi_cb(gpointer cam_control_dialog)
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
+    int running = (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0);
+
     GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
-
     if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) != GET_OPTION_PREVIEW) {
-        int seq = -1;
-        char *text = named_entry_text(cam_control_dialog, "exp_frame_entry");
-        if (text) {
-            seq = strtol(text, NULL, 10);
-            free(text);
-        }
 
-        d4_printf("Sequence %d\n", seq);
-        if (seq == 0) { // revert to get mode_combo
-             gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), GET_OPTION_PREVIEW);
-        }
-        if (seq > 0) {
-            seq --;
+        if (running) {
+            int seq = -1;
+            char *text = named_entry_text(cam_control_dialog, "exp_frame_entry");
+            if (text) {
+                seq = strtol(text, NULL, 10);
+                free(text);
+            }
 
-            char *mb = NULL;
-            asprintf(&mb, "%d", seq);
-            if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
+            d4_printf("Sequence %d\n", seq);
+
+            if (seq == 0) { // revert to preview
+                gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), GET_OPTION_PREVIEW);
+
+                int count = named_spin_get_value(cam_control_dialog, "exp_number_spin");
+
+                char *mb = NULL; asprintf(&mb, "%d", count);
+                if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
+
+            } else if (seq > 0) {
+                seq --;
+
+                char *mb = NULL; asprintf(&mb, "%d", seq);
+                if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
+            }
         }
+    } else {
+        double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
+
+        char *mb = NULL; asprintf(&mb, "Preview %f", exptime);
+        if (mb) status_message(cam_control_dialog, mb), free(mb);
     }
-// try this
+
     camera->exposure_in_progress = 0;
 
-    if (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0) // start next capture
-        capture_image(cam_control_dialog);
+    if (running) capture_image(cam_control_dialog); // start next capture
 
 // handle other file types, preview, raw
     if (strncmp(camera->image_format, ".fits", 5) == 0) { // show and save current frame
@@ -843,7 +856,7 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
     } else {
         // construct path
     }
-    printf("setup_streaming %s %s", dirpath, filename); fflush(NULL);
+    printf("setup_streaming %s %s\n", dirpath, filename); fflush(NULL);
     camera_upload_settings(camera, dirpath, filename);
 
     if (dirpath) free(dirpath);
@@ -857,8 +870,8 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
     }
 
     int count = named_spin_get_value(cam_control_dialog, "exp_number_spin");
-    char *buf;
-    buf = NULL; asprintf(&buf, "%d", count);
+
+    char *buf = NULL; asprintf(&buf, "%d", count);
     if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
 
     indi_dev_enable_blob(camera->streaming_prop->idev, FALSE);
@@ -872,46 +885,34 @@ static int stream_indi_cb(gpointer cam_control_dialog)
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
-    // update countdown
-    int seq = -1;
-    char *text = named_entry_text(cam_control_dialog, "exp_frame_entry");
-    if (text) {
-        seq = strtol(text, NULL, 10);
-        free(text);
+    int stream_count = indi_prop_get_number(camera->streaming_prop, "COUNT");
+
+    if (stream_count >= 0) { // echo file name
+        struct indi_elem_t *elem = indi_find_elem(camera->filepath_prop, "FILE_PATH");
+
+        char *mb = NULL; asprintf(&mb, "Streamed: %s", elem->value.str);
+        if (mb) status_message(cam_control_dialog, mb), free(mb);
     }
 
-    char *mb;
-    if (seq >= 0) {
-        int count = named_spin_get_value(cam_control_dialog, "exp_number_spin");
-        int c_count = indi_prop_get_number(camera->streaming_prop, "COUNT");
+    int running = get_named_checkb_val(cam_control_dialog, "exp_run_button");
 
-        if (c_count != count) {
-            // echo file name
-            struct indi_elem_t *elem = indi_find_elem(camera->filepath_prop, "FILE_PATH");
-
-            mb = NULL; asprintf(&mb, "Streamed: %s", elem->value.str);
-            if (mb) status_message(cam_control_dialog, mb), free(mb);
-        }
-    }
-
-    if (get_named_checkb_val(cam_control_dialog, "exp_run_button")) {
-        if (seq == 0) { // revert to preview
+    if (running) {
+        if (stream_count == 0) { // revert to preview
             GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
             gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), GET_OPTION_PREVIEW);
 
+            camera->exposure_in_progress = 0;
+
             capture_image(cam_control_dialog);
-
-            return FALSE;
         }
-
-        seq--;
-
-        mb = NULL; asprintf(&mb, "%d", seq);
-        if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
     }
+
+    char *mb = NULL; asprintf(&mb, "%d", stream_count);
+    if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
+
 //    indi_send(camera->streaming_prop, NULL);
 
-    return get_named_checkb_val(cam_control_dialog, "exp_run_button"); // remain active
+    return running; // remain active
 }
 
 int capture_image(gpointer cam_control_dialog)
@@ -921,7 +922,8 @@ int capture_image(gpointer cam_control_dialog)
 
     if (! (camera && camera->ready)) {
         err_printf("Camera isn't ready.  Aborting exposure\n");
-        return 0; // ?
+        if (camera) camera->exposure_in_progress = 0;
+        return TRUE;
     }
 
     GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
@@ -929,25 +931,22 @@ int capture_image(gpointer cam_control_dialog)
         setup_streaming(camera, cam_control_dialog);
 
         INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM, stream_indi_cb, cam_control_dialog,  "stream_indi_cb");
+
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_LOCAL);
         indi_dev_enable_blob(camera->expose_prop->idev, FALSE);
+        camera->exposure_in_progress = 0;
+
         indi_send(camera->streaming_prop, NULL);
 
-//        INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM); // start streaming
+    } else if (! camera->exposure_in_progress) {
+        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog,  "expose_indi_cb");
 
-    } else {
-        if (! camera->exposure_in_progress) {
-            INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog,  "expose_indi_cb");
-            camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
+        camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
+        indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
+        indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+        camera->exposure_in_progress = 1;
 
-            indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
-
-            indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(cam_control_dialog, "exp_spin"));
-            indi_send(camera->expose_prop, NULL);
-
-            camera->exposure_in_progress = 1;
-        }
-//    camera_expose(camera, exptime);
+        indi_send(camera->expose_prop, NULL);
     }
 
     return FALSE; // no error
@@ -1248,20 +1247,11 @@ static void img_mode_changed_cb( GtkWidget *widget, gpointer cam_control_dialog 
 
 static void img_run_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-    int nf = named_spin_get_value(cam_control_dialog, "exp_number_spin");
+    int running = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget));
+    gtk_label_set_text(GTK_LABEL(GTK_BIN(widget)->child), running ? "Stop" : "Run");
 
-    char *buf = NULL; asprintf(&buf, "%d", nf);
-    if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
-
-    if (! gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget)) ) {
-        gtk_label_set_text(GTK_LABEL(GTK_BIN(widget)->child), "Run");
-
-    } else {
-        gtk_label_set_text(GTK_LABEL(GTK_BIN(widget)->child), "Stop");
-
-        GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
-        img_mode_changed_cb(mode_combo, cam_control_dialog);
-    }
+    GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
+    img_mode_changed_cb(mode_combo, cam_control_dialog);
 }
 
 static void img_file_browse_cb( GtkWidget *widget, gpointer cam_control_dialog )
@@ -1441,10 +1431,14 @@ static gboolean cam_ready_indi_cb(gpointer data)
 
         INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE, temperature_indi_cb, cam_control_dialog, "temperature_indi_cb");
 
-        if (camera->ready) {
-            enable_camera_widgets(cam_control_dialog, TRUE);
-            cam_to_img(cam_control_dialog);
-        }
+//        if (camera->ready) {
+//            enable_camera_widgets(cam_control_dialog, TRUE);
+//            cam_to_img(cam_control_dialog);
+//        }
+
+        enable_camera_widgets(cam_control_dialog, camera->ready);
+        cam_to_img(cam_control_dialog);
+
 	}
 
     return FALSE;

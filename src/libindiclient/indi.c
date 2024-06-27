@@ -409,7 +409,7 @@ void indi_send(struct indi_prop_t *iprop, struct indi_elem_t *ielem )
     if (msg) {
 // printf("indi_send: %s\n", msg); fflush(NULL);
         iprop->state = INDI_STATE_BUSY;
-        indigui_update_widget(iprop); // what does it do, was commented out
+        indigui_update_widget(iprop); // what does it do
         io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
         free(msg);
     }
@@ -499,6 +499,7 @@ static int indi_blob_decode(void *data)
 		if (ielem->value.blob.compressed) {
 			inflateEnd((z_stream *)ielem->value.blob.zstrm);
 		}
+printf("indi_blob_decode running delXMLEle(%p)\n", ielem->iprop->root); fflush(NULL);
 		delXMLEle((XMLEle *)ielem->iprop->root);
         indi_exec_cb(ielem->iprop->prop_update_cb, ielem->iprop, "indi_blob_decode blob(prop_update_cb)");
 
@@ -787,7 +788,7 @@ void indi_read_cb (void *fd, void *opaque)
 		for(i = 0; i < len; i++) {
             root = readXMLEle(lillp, buf[i], &errmsg);
             if (errmsg) {
-                printf("%s\n", errmsg);
+printf("indi_read_cb errmesg: %s\n", errmsg); fflush(NULL);
                 free(errmsg);
                 // do something
             }
@@ -796,6 +797,7 @@ void indi_read_cb (void *fd, void *opaque)
                 if (! dev) {
                     const char *proptype = tagXMLEle(root);
                     if (strncmp(proptype, "message", 7) == 0) {
+printf("indi_read_cb message: %s\n", (char *)findXMLAttValu(root, "message")); fflush(NULL);
                         indigui_show_message(indi, (char *)findXMLAttValu(root, "message"));
                     }
                     continue;

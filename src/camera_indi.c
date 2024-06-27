@@ -36,7 +36,7 @@
 
 static void camera_check_state(struct camera_t *camera)
 {
-    if(camera->has_blob && camera->is_connected && camera->expose_prop) {
+    if (camera->has_blob && camera->is_connected && camera->expose_prop) {
         camera->ready = 1;
 		INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_READY);
     }
