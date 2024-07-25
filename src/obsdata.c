@@ -696,13 +696,16 @@ double calculate_airmass(double ra, double dec, double ast, double lat, double l
  * return 0.0 if airmass couldn't be calculated */
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) 
 {
-    double v; fits_get_double(fr, P_STR(FN_AIRMASS), &v);
+    double v = NAN;
+    fits_get_double(fr, P_STR(FN_AIRMASS), &v);
     if (! isnan(v)) return v;
 
-    double zd; fits_get_dms(fr, P_STR(FN_ZD), &zd);
+    double zd = NAN;
+    fits_get_dms(fr, P_STR(FN_ZD), &zd);
     if (! isnan(zd)) return airmass(90.0 - zd);
 
-    double lat, lng, alt; fits_get_loc(fr, &lat, &lng, &alt);
+    double lat = NAN, lng = NAN, alt = NAN;
+    fits_get_loc(fr, &lat, &lng, &alt);
 
 //    if (isnan(lat)) lat = P_DBL(OBS_LATITUDE); // use default
 //    if (isnan(lng)) {
