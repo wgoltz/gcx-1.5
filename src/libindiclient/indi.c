@@ -409,7 +409,7 @@ void indi_send(struct indi_prop_t *iprop, struct indi_elem_t *ielem )
     if (msg) {
 // printf("indi_send: %s\n", msg); fflush(NULL);
         iprop->state = INDI_STATE_BUSY;
-        indigui_update_widget(iprop); // what does it do
+        indigui_update_widget(iprop);
         io_indi_sock_write(idev->indi->fh, msg, strlen(msg));
         free(msg);
     }
@@ -499,7 +499,7 @@ static int indi_blob_decode(void *data)
 		if (ielem->value.blob.compressed) {
 			inflateEnd((z_stream *)ielem->value.blob.zstrm);
 		}
-printf("indi_blob_decode running delXMLEle(%p)\n", ielem->iprop->root); fflush(NULL);
+// printf("indi_blob_decode running delXMLEle(%p)\n", ielem->iprop->root); fflush(NULL);
 		delXMLEle((XMLEle *)ielem->iprop->root);
         indi_exec_cb(ielem->iprop->prop_update_cb, ielem->iprop, "indi_blob_decode blob(prop_update_cb)");
 
@@ -722,6 +722,11 @@ static void indi_handle_message(struct indi_device_t *idev, XMLEle *root)
 	const char *propname = findXMLAttValu(root, "name");
 	const char default_group[] = "Main";
 	const char *groupname;
+
+//    printf("indi_handle_message %s:\n", propname);
+//    prXMLEle (stdout, root, 0);
+//    printf("\n");
+//    fflush(NULL);
 
     if (strncmp(proptype, "set", 3) == 0) {
 		// Update values

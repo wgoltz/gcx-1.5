@@ -632,7 +632,7 @@ entityXML (char *s)
     }
 
     /* return s if no entities, else malloc cleaned-up copy */
-    if (ns == s) { /* using s, so free any malloced memory from last time */
+    if (ns == s && nmalbuf) { /* using s, so free any malloced memory from last time */
         if (malbuf) free (malbuf);
 
         return s;

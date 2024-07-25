@@ -19,6 +19,7 @@ enum CAMERA_CALLBACKS {
     CAMERA_CALLBACK_TEMPERATURE,
     CAMERA_CALLBACK_FILEPATH,
     CAMERA_CALLBACK_EXPOSURE_CHANGE,
+    CAMERA_CALLBACK_ALERT,
 	CAMERA_CALLBACK_MAX
 };
 
@@ -68,4 +69,6 @@ void camera_stream(struct camera_t *camera, double time, int number);
 void camera_set_ready_callback(void *window, int type, void *func, void *data, char *msg);
 struct camera_t *camera_find(void *window, int type);
 void camera_delete(struct camera_t *camera);
+void camera_reconnect(struct camera_t *camera);
+
 #endif

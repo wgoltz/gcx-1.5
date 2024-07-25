@@ -141,6 +141,13 @@ static int temperature_indi_cb(gpointer cam_control_dialog)
 	return TRUE;
 }
 
+static int tele_alert_cb(gpointer cam_control_dialog)
+{
+    printf("tele_alert_cb\n"); fflush(NULL);
+    return TRUE;
+}
+
+
 /* Monitor telescope tracking */
 static int tele_coords_indi_cb(gpointer cam_control_dialog)
 {
@@ -153,6 +160,9 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
 //    if (msg) status_message(cam_control_dialog, msg), free(msg);
 
     if (tele) {
+
+// if (iprop->state == INDI_STATE_ALERT) do something here (telescope parked?)
+
         double ra, dec;
         int state = tele_get_coords(tele, &ra, &dec); // set ra and dec to last read by tele
         char *msg = NULL;
@@ -667,6 +677,17 @@ static void adjust_some_fits_parms(struct ccd_frame *fr)
     }
 }
 
+static int exposure_failed_cb(gpointer cam_control_dialog)
+{
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
+    struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
+    printf("exposure_failed_cb\n"); fflush(NULL);
+
+    camera_reconnect(camera);
+
+    return TRUE; // keep it active or maybe restart it on reconnection
+}
+
 // called when a new image is ready for processing (not streaming)
 static int expose_indi_cb(gpointer cam_control_dialog)
 {
@@ -675,6 +696,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     int running = (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0);
+// if (iprop->state == INDI_STATE_ALERT) do something here (exposure fail)
 
     GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
     if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) != GET_OPTION_PREVIEW) {
@@ -704,11 +726,6 @@ static int expose_indi_cb(gpointer cam_control_dialog)
                 if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
             }
         }
-    } else {
-        double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
-
-        char *mb = NULL; asprintf(&mb, "Preview %f", exptime);
-        if (mb) status_message(cam_control_dialog, mb), free(mb);
     }
 
     camera->exposure_in_progress = 0;
@@ -721,17 +738,20 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         // FILE *fh = fopen("guide.fit", "w+");
         // fwrite(camera->image, camera->image_size, 1, fh);
         // fclose(fh);
+        double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
 
-        struct ccd_frame *fr = read_file_from_mem(mem_file_fits, camera->image, camera->image_size, "exposure.fit", 0, NULL);
+        struct ccd_frame *fr = NULL;
 
-        if (!fr) {
+        char *mb = NULL; asprintf(&mb, "exposure %f", exptime);
+        if (mb) fr = read_file_from_mem(mem_file_fits, camera->image, camera->image_size, mb, 0, NULL), free(mb);
+
+        if (fr == NULL) {
             err_printf("Received an unreadable FITS from camera.");
             return FALSE;
         }
 
 // add fits parms from indi params using camera_indi and tele_indi functions
 // here ..
-        double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
 
         fits_keyword_add(fr, P_STR(FN_EXPTIME), "%20.5f / EXPTIME", exptime);
 
@@ -1241,8 +1261,16 @@ static void img_mode_changed_cb( GtkWidget *widget, gpointer cam_control_dialog 
     char *buf = NULL; asprintf(&buf, "%d", nf);
     if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
 
-    if (get_named_checkb_val(cam_control_dialog, "exp_run_button"))
-        capture_image(cam_control_dialog);
+    int running = get_named_checkb_val(cam_control_dialog, "exp_run_button");
+
+    if (gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) == GET_OPTION_STREAM && ! running) {
+        GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
+        struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
+
+        camera->exposure_in_progress = 0;
+    }
+
+    if (running) capture_image(cam_control_dialog);
 }
 
 static void img_run_cb( GtkWidget *widget, gpointer cam_control_dialog )

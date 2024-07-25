@@ -402,43 +402,47 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         if (obj_name) free(obj_name);
         if (file_name) free(file_name);
 
-    } else if (file_name) {
-		/* just load the specified file */
+    } else {
+        if (name && *name && ! file_name) file_name = strdup(name);
 
-        gboolean zipped = (is_zip_name(file_name) > 0);
+        if (file_name) {
+            /* just load the specified file */
 
-        FILE *rfn = NULL;
+            gboolean zipped = (is_zip_name(file_name) > 0);
 
-        if (zipped) {
-            char *cmd;
-            cmd = NULL; asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), file_name);
-            if (cmd) rfn = popen(cmd, "r"),	free(cmd);
+            FILE *rfn = NULL;
 
-            if (rfn == NULL) { // try bzcat
-                cmd = NULL; asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), file_name);
-                if (cmd) rfn = popen(cmd, "r"), free(cmd);
+            if (zipped) {
+                char *cmd;
+                cmd = NULL; asprintf(&cmd, "%s '%s' ", P_STR(FILE_UNCOMPRESS), file_name);
+                if (cmd) rfn = popen(cmd, "r"),	free(cmd);
+
+                if (rfn == NULL) { // try bzcat
+                    cmd = NULL; asprintf(&cmd, "b%s '%s' ", P_STR(FILE_UNCOMPRESS), file_name);
+                    if (cmd) rfn = popen(cmd, "r"), free(cmd);
+                }
+
+            } else {
+                rfn = fopen(file_name, "r");
             }
 
-		} else {
-            rfn = fopen(file_name, "r");
-		}
+            if (rfn == NULL) {
+                err_printf("read_rcp: cannot open file %s\n", file_name);
+                if (obj_name) free(obj_name);
+                free(file_name);
+                return -1;
+            }
 
-        if (rfn == NULL) {
-            err_printf("read_rcp: cannot open file %s\n", file_name);
+            stf = stf_read_frame(rfn);
+
+            if (zipped) {
+                pclose(rfn);
+            } else {
+                fclose(rfn);
+            }
             if (obj_name) free(obj_name);
             free(file_name);
-            return -1;
         }
-
-		stf = stf_read_frame(rfn);
-
-        if (zipped) {
-			pclose(rfn);
-		} else {
-			fclose(rfn);
-		}
-        if (obj_name) free(obj_name);
-        free(file_name);
 	}
 
     if (stf == NULL) return -1;

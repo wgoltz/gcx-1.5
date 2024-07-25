@@ -392,7 +392,7 @@ void indigui_update_widget(struct indi_prop_t *iprop)
 
 	//Display any message
     if (iprop->message && *(iprop->message)) {
-printf("indigui_update_widget iprop->message: %s\n", iprop->message); fflush(NULL);
+printf("indigui_update_widget iprop->message: %s %d %s\n", iprop->name, iprop->state, iprop->message); fflush(NULL);
         indigui_show_message(iprop->idev->indi, iprop->message);
         iprop->message[0] = 0;
     }

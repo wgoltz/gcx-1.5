@@ -56,13 +56,12 @@ void ic_prop_set(void *c, struct indi_prop_t *iprop)
 {
 	struct indi_config_t *cfg = (struct indi_config_t *)c;
 
-	if (strcmp(iprop->name, "CONNECTION") != 0)
-		return;
+    if (strcmp(iprop->name, "CONNECTION") != 0)	return;
+
 	if (! indi_prop_get_switch(iprop, "CONNECT")) {
 printf("ic_prop_set: setting cfg->connected 0 for %s\n", iprop->idev->name); fflush(NULL);
-		if (cfg)
-			cfg->connected = 0;
-		return;
+        if (cfg) cfg->connected = 0;
+        return;
 	}
 	ic_prop_def(c, iprop);
 }
@@ -70,12 +69,10 @@ printf("ic_prop_set: setting cfg->connected 0 for %s\n", iprop->idev->name); ffl
 void ic_prop_def(void *c, struct indi_prop_t *iprop)
 {
 	struct indi_config_t *cfg = (struct indi_config_t *)c;
-	indi_list *isl;
 
-	if (! c)
-		return;
-	if (iprop->state == INDI_RO)
-		return;
+    if (! c) return;
+    if (iprop->state == INDI_RO) return;
+
 	if (cfg->connected) {
 		ic_send_elems(cfg, iprop);
 	} else {
@@ -84,6 +81,8 @@ void ic_prop_def(void *c, struct indi_prop_t *iprop)
 		}
 printf("ic_prop_def: setting cfg->connected 1 for %s\n", iprop->idev->name); fflush(NULL);
 		cfg->connected = 1;
+
+        indi_list *isl;
 		for (isl = il_iter(iprop->idev->props); ! il_is_last(isl); isl = il_next(isl)) {
 			struct indi_prop_t *prop = (struct indi_prop_t *)il_item(isl);
 			ic_send_elems(cfg, prop);
@@ -93,24 +92,24 @@ printf("ic_prop_def: setting cfg->connected 1 for %s\n", iprop->idev->name); ffl
 
 void ic_update_props(void *c)
 {
-	indi_list *isl_d, *isl_p, *isl_e;
-	char *group;
+    if (! c) return;
+
 	struct indi_config_t *cfg = (struct indi_config_t *)c;
-	char num[20];
-	GIOChannel *fh;
 
-	if (! c) 
-		return;
-
+    indi_list *isl_d;
 	for (isl_d = il_iter(cfg->indi->devices); ! il_is_last(isl_d); isl_d = il_next(isl_d)) {
-		struct indi_device_t *dev = (struct indi_device_t *)il_item(isl_d);
-		for (isl_p = il_iter(dev->props); ! il_is_last(isl_p); isl_p = il_next(isl_p)) {
+        struct indi_device_t *idev = (struct indi_device_t *)il_item(isl_d);
+
+        indi_list *isl_p;
+        for (isl_p = il_iter(idev->props); ! il_is_last(isl_p); isl_p = il_next(isl_p)) {
 			struct indi_prop_t *iprop = (struct indi_prop_t *)il_item(isl_p);
-			if (asprintf(&group, "%s/%s", dev->name, iprop->name) == -1)
-				continue;
+
+            char *group; if (asprintf(&group, "%s/%s", idev->name, iprop->name) == -1) continue;
+
 			g_key_file_remove_group(cfg->keyfile, group, NULL);
-			if (! iprop->save)
-				continue;
+            if (! iprop->save) continue;
+
+            indi_list *isl_e;
 			for (isl_e = il_iter(iprop->elems); ! il_is_last(isl_e); isl_e = il_next(isl_e)) {
 				struct indi_elem_t *ielem = (struct indi_elem_t *)il_item(isl_e);
 
@@ -118,9 +117,12 @@ void ic_update_props(void *c)
 				case INDI_PROP_TEXT:
 					g_key_file_set_string(cfg->keyfile, group, ielem->name, ielem->value.str);
 					break;
-				case INDI_PROP_NUMBER:
-					sprintf(num, "%f", ielem->value.num.value);
-					g_key_file_set_string(cfg->keyfile, group, ielem->name, num);
+                case INDI_PROP_NUMBER:
+                {
+                    char *num = NULL;
+                    asprintf(&num, "%f", ielem->value.num.value);
+                    if (num) g_key_file_set_string(cfg->keyfile, group, ielem->name, num), free(num);
+                }
 					break;
 				case INDI_PROP_SWITCH:
 					if(ielem->value.set)
@@ -131,7 +133,8 @@ void ic_update_props(void *c)
 			g_free(group);
 		}
 	}
-	fh = g_io_channel_new_file(cfg->filename, "w+", NULL);
+
+    GIOChannel *fh = g_io_channel_new_file(cfg->filename, "w+", NULL);
 	if (fh) {
         gsize length;
 		char *io = g_key_file_to_data (cfg->keyfile, &length, NULL);
@@ -142,15 +145,13 @@ void ic_update_props(void *c)
 }
 			
 static void ic_send_elems(struct indi_config_t *cfg, struct indi_prop_t *iprop)
-{
-	indi_list *isl;
-	char *group, *value;
-	
-	if (asprintf(&group, "%s/%s", iprop->idev->name, iprop->name) == -1)
-		return;
+{	
+    char *group; if (asprintf(&group, "%s/%s", iprop->idev->name, iprop->name) == -1) return;
+
+    indi_list *isl;
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *ielem = (struct indi_elem_t *)il_item(isl);
-		value = g_key_file_get_string(cfg->keyfile, group, ielem->name, NULL);
+        char *value = g_key_file_get_string(cfg->keyfile, group, ielem->name, NULL);
 		if (value) {
 			// Found a match...
 			switch(iprop->type) {

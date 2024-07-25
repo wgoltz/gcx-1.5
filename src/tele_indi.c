@@ -120,7 +120,10 @@ static void tele_get_coords_cb(struct indi_prop_t *iprop, void *data)
     tele->change_state = (tele->state != iprop->state);
 
     if (tele->change_state) {
-        if (tele->slewing && iprop->state != INDI_STATE_BUSY) {
+        if (iprop->state == INDI_STATE_ALERT)
+            INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_ALERT);
+
+        else if (tele->slewing && iprop->state != INDI_STATE_BUSY) {
             tele->slewing = 0;
             INDI_exec_callbacks(INDI_COMMON (tele), TELE_CALLBACK_STOP);
         }

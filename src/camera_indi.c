@@ -38,7 +38,10 @@ static void camera_check_state(struct camera_t *camera)
 {
     if (camera->has_blob && camera->is_connected && camera->expose_prop) {
         camera->ready = 1;
-		INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_READY);
+// try this:
+        camera->exposure_in_progress = 0;
+
+        INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_READY); // calls cam_ready_indi_cb in cameragui
     }
 //printf("camera_check_state: Camera is %sready\n", (camera->ready == 0) ? "not " : ""); fflush(NULL);
 
@@ -52,7 +55,7 @@ static void camera_temp_change_cb(struct indi_prop_t *iprop, void *data)
         return;
     }
 // temperature_cb is not in camera->callbacks (deleted or never set?)
-    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE);
+    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_TEMPERATURE); // calls temperature_indi_cb in cameragui
 }
 
 static void camera_filepath_cb(struct indi_prop_t *iprop, void *data)
@@ -82,14 +85,42 @@ static void camera_stream_cb(struct indi_prop_t *iprop, void *data)
 //        err_printf("Camera isn't ready.  Can't stream images\n");
         return;
     }
+    if (iprop->state == INDI_STATE_ALERT) {
 
-    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM);
+    }
+    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM); // calls stream_indi_cb in cameragui
+}
+
+void camera_reconnect(struct camera_t *camera)
+{
+    if (! camera->ready) return;
+
+    indi_prop_set_switch(camera->abort_prop, "CONNECTION", 0);
+    indi_send(camera->connection_prop, NULL);
+
+    indi_prop_set_switch(camera->abort_prop, "CONNECTION", 1);
+    indi_send(camera->connection_prop, NULL);
+
+    camera->exposure_in_progress = 0;
+    // restart exposure
+}
+
+// exposure failed callback
+static void camera_alert_cb(struct indi_prop_t *iprop, void *data)
+{
+    struct camera_t *camera = data;
+
+    printf("camera_indi:camera_alert_cb\n"); fflush(NULL);
+    camera_reconnect(camera);
+//    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_ALERT);
 }
 
 static void camera_capture_cb(struct indi_prop_t *iprop, void *data)
 {
     struct camera_t *camera = data;
-
+    if (iprop->state == INDI_STATE_ALERT) {
+printf("camera_capture_cb ALERT\n"); fflush(NULL);
+    }
     //We only want to see the requested expose event
     indi_dev_enable_blob(iprop->idev, FALSE);
 
@@ -112,7 +143,7 @@ static void camera_capture_cb(struct indi_prop_t *iprop, void *data)
     camera->image_size = ielem->value.blob.size;
     camera->image_format = ielem->value.blob.fmt;
 
-    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE);
+    INDI_exec_callbacks(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE); // calls expose_indi_cb in cameragui and obs_list_cmd_done in obslist
 }
 
 // get pixel scale, without binning
@@ -392,9 +423,9 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
 	/* property to set exposure */
 	if (iprop->type == INDI_PROP_BLOB) {
         d3_printf("Found BLOB property for camera %s\n", iprop->idev->name);
-		camera->has_blob = 1;
-		indi_prop_add_cb(iprop, (IndiPropCB)camera_capture_cb, camera);
-	}
+        camera->has_blob = 1; // is this equivalent to exposure_in_process ?
+        indi_prop_add_cb(iprop, (IndiPropCB)camera_capture_cb, camera);
+    }
     else if (strcmp(iprop->name, "CCD_EXPOSURE") == 0) {
         d3_printf("Found CCD_EXPOSURE for camera %s\n", iprop->idev->name);
 		camera->expose_prop = iprop;
@@ -448,8 +479,10 @@ printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL)
         camera->temp_prop = iprop;
         indi_prop_add_cb(iprop, (IndiPropCB)camera_temp_change_cb, camera);
 	}
-    else
+    else {
         INDI_try_dev_connect(iprop, INDI_COMMON (camera), camera->portname);
+//        camera->exposure_in_progress = 0;
+    }
 
     camera_check_state(camera);
 }

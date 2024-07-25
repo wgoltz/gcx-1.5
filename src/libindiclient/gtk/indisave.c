@@ -41,13 +41,13 @@ static GtkTreeModel *create_and_fill_model (struct indi_t *indi)
 	treestore = gtk_tree_store_new(2, G_TYPE_BOOLEAN, G_TYPE_STRING);
 
 	for (isl_d = il_iter(indi->devices); ! il_is_last(isl_d); isl_d = il_next(isl_d)) {
-		struct indi_device_t *dev = (struct indi_device_t *)il_item(isl_d);
+        struct indi_device_t *idev = (struct indi_device_t *)il_item(isl_d);
 		gtk_tree_store_append(treestore, &device, NULL);
 		gtk_tree_store_set(treestore, &device,
 			0, FALSE,
-			1, dev->name,
+            1, idev->name,
 			-1);
-		for (isl_p = il_iter(dev->props); ! il_is_last(isl_p); isl_p = il_next(isl_p)) {
+        for (isl_p = il_iter(idev->props); ! il_is_last(isl_p); isl_p = il_next(isl_p)) {
 			struct indi_prop_t *iprop = (struct indi_prop_t *)il_item(isl_p);
 			gtk_tree_store_append(treestore, &prop, &device);
 			gtk_tree_store_set(treestore, &prop,
