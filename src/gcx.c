@@ -566,7 +566,7 @@ d3_printf("gcx.extract_sources %s\n", starf);
     }
 
 	src = new_sources(P_INT(SD_MAX_STARS));
-	extract_stars(imf->fr, NULL, 0, P_DBL(SD_SNR), src);
+    extract_stars(imf->fr, NULL, P_DBL(SD_SIGMAS), NULL, src);
 
     if (outf && outf[0] != 0)
 		of = fopen(outf, "w");
@@ -607,7 +607,7 @@ static struct ccd_frame *make_blank_obj_fr(char *obj, gpointer window)
 
 //    GSList *fl = NULL;
 //    fl = g_slist_append(fl, fr);
-    window_add_frame(fr, fn, IMG_IN_MEMORY_ONLY | IMG_DIRTY | IMG_LOADED, window);
+    window_add_frame(fr, fn, IMG_STATE_IN_MEMORY_ONLY | IMG_STATE_DIRTY | IMG_STATE_LOADED, window);
 //    g_slist_free(fl);
 
 	return fr;
@@ -858,27 +858,27 @@ int fake_main(int ac, char **av)
 
                 switch(oc) {
 
-                case 'p': ccdr->ops |= IMG_OP_PHOT; batch = TRUE;
+                case 'p': ccdr->op_flags |= IMG_OP_PHOT; batch = TRUE;
                     ccdr->recipe = strdup(optarg);
                     continue;
 
-                case 'a': ccdr->ops |= IMG_OP_ALIGN; batch = TRUE;
+                case 'a': ccdr->op_flags |= IMG_OP_ALIGN; batch = TRUE;
                     ccdr->alignref = image_file_new(NULL, optarg);
                     continue;
 
-                case 'b': ccdr->ops |= IMG_OP_BIAS; batch = TRUE;
+                case 'b': ccdr->op_flags |= IMG_OP_BIAS; batch = TRUE;
                     ccdr->bias = image_file_new(NULL, optarg);
                     continue;
 
-                case 'f': ccdr->ops |= IMG_OP_FLAT; batch = TRUE;
+                case 'f': ccdr->op_flags |= IMG_OP_FLAT; batch = TRUE;
                     ccdr->flat = image_file_new(NULL, optarg);
                     continue;
 
-                case 'd': ccdr->ops |= IMG_OP_DARK; batch = TRUE;
+                case 'd': ccdr->op_flags |= IMG_OP_DARK; batch = TRUE;
                     ccdr->dark = image_file_new(NULL, optarg);
                     continue;
 
-                case 'B': ccdr->ops |= IMG_OP_BADPIX; batch = TRUE;
+                case 'B': ccdr->op_flags |= IMG_OP_BADPIX; batch = TRUE;
                     ccdr->bad_pix_map = bad_pix_map_new(optarg);
                     continue;
 
@@ -899,11 +899,11 @@ int fake_main(int ac, char **av)
                         batch = TRUE;
                         switch (oc) {
 
-                        case 'G': ccdr->blurv = v; ccdr->ops |= IMG_OP_BLUR; continue;
+                        case 'G': ccdr->blurv = v; ccdr->op_flags |= IMG_OP_BLUR; continue;
 
-                        case 'M': ccdr->mulv = v; ccdr->ops |= IMG_OP_MUL; continue;
+                        case 'M': ccdr->mulv = v; ccdr->op_flags |= IMG_OP_MUL; continue;
 
-                        case 'A': ccdr->addv = v; ccdr->ops |= IMG_OP_ADD; continue;
+                        case 'A': ccdr->addv = v; ccdr->op_flags |= IMG_OP_ADD; continue;
                         }
                     }
                 }
@@ -912,13 +912,13 @@ int fake_main(int ac, char **av)
                 if (ccdr == NULL) ccdr = ccd_reduce_new();
 
                 switch (oc) {
-                case 'u': ccdr->ops |= IMG_OP_INPLACE; update_files = TRUE; continue;
+                case 'u': ccdr->state_flags |= IMG_STATE_INPLACE; update_files = TRUE; continue;
 
-                case 's': ccdr->ops |= IMG_OP_STACK; batch = TRUE; continue;
+                case 's': ccdr->op_flags |= IMG_OP_STACK; batch = TRUE; continue;
 
-                case 'F': ccdr->ops |= (IMG_OP_STACK | IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
+                case 'F': ccdr->op_flags |= (IMG_OP_STACK | IMG_OP_BG_ALIGN_MUL); batch = TRUE; continue;
 
-                case 'c': ccdr->ops |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
+                case 'c': ccdr->op_flags |= IMG_OP_DEMOSAIC; batch = TRUE; continue;
 
                 }
             }
@@ -1107,7 +1107,7 @@ printf("home_path: %s\n", cwd); fflush(NULL);
                         imf = gl->data;
 
                         if (!imf) continue;
-                        if (imf->flags & IMG_SKIP) continue;
+                        if (imf->state_flags & IMG_STATE_SKIP) continue;
 
                         //printf("running photometry on %s\n", imf->filename);
                         if (imf_load_frame(imf) < 0) continue;

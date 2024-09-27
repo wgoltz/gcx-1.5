@@ -994,6 +994,8 @@ static void update_obs_entries( gpointer cam_control_dialog, struct obs_data *ob
 
 	if (obs->objname != NULL)
         named_entry_set(cam_control_dialog, "obs_object_entry", obs->objname);
+    // set first entry
+    // named_combo_text_entry_set(cam_control_dialog, "obs_object_entry", obs->objname);
 
     buf = NULL; asprintf(&buf, "%.0f", obs->equinox);
     if (buf) named_entry_set(cam_control_dialog, "obs_epoch_entry", buf), free(buf);
@@ -1063,6 +1065,13 @@ static void auto_filename(gpointer cam_control_dialog)
     }
 }
 
+// fill object combo box with all the "local" cat names
+static void get_local_object_names(gpointer cam_control_dialog)
+{
+
+}
+// replace obsdata_cb to "local" get the the active text in object combo
+
 /* called when the object on the obs page is changed */
 static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
@@ -1086,6 +1095,7 @@ static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )
 // use recipe if we have it as alternative for object_entry
     GtkWidget *wid = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_object_entry");
 	if (widget == wid) {
+// get first entry in combo box
         char *text = gtk_editable_get_chars(GTK_EDITABLE(widget), 0, -1);
 
         char *buf = NULL; asprintf(&buf, "looking up %s", text);
@@ -1365,19 +1375,25 @@ static void scope_sync_cb( GtkWidget *widget, gpointer cam_control_dialog )
 		return;
 	}
 
-    obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
-	if (obs == NULL) {
-		error_beep();
-        status_message(cam_control_dialog, "Set obs first");
-		return;
-	}
+//    obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
+//	if (obs == NULL) {
+//		error_beep();
+//        status_message(cam_control_dialog, "Set obs first");
+//		return;
+//	}
 
-    ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
-	if (!ret) {
-        status_message(cam_control_dialog, "Synchronised");
-	} else {
-		err_printf("Failed to synchronize\n");
-	}
+//    ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
+
+    // use wcs coords instead of object
+    struct wcs *wcs = window_get_wcs(main_window);
+    if (wcs->wcsset > WCS_INVALID) {
+        ret = tele_set_coords(tele, TELE_COORDS_SYNC, wcs->xref, wcs->yref, wcs->equinox);
+        if (!ret) {
+            status_message(cam_control_dialog, "Synchronised to wcs");
+        } else {
+            err_printf("Failed to synchronize\n");
+        }
+    }
 }
 
 /* external interface for slew_cb */
@@ -1412,6 +1428,9 @@ static int scope_auto_cb( GtkWidget *widget, gpointer cam_control_dialog )
     // precess obs coords to wcs coords
     if (obs->equinox != wcs->equinox)
         precess_hiprec(obs->equinox, wcs->equinox, &obs_ra, &obs_dec);
+
+    // wcs validate a frame
+    // sync on frame center
 
     double ra = tele->right_ascension;
     double dec = tele->declination;

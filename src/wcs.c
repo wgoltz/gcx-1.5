@@ -156,7 +156,7 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
     if (imf_wcs && imf_wcs->wcsset > fr_wcs->wcsset)
         wcs_clone(fr_wcs, imf_wcs);
 
-    if (fr_wcs->wcsset < WCS_VALID) {
+    if (fr_wcs->wcsset == WCS_INVALID) {
 
 //        if (fr_wcs->wcsset == WCS_INVALID) {
 //            fr_wcs->xrefpix = fr->w / 2.0;
@@ -172,7 +172,7 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 //        }
 
 //        if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
-        if (fr_wcs->wcsset == WCS_INVALID)
+//        if (fr_wcs->wcsset == WCS_INVALID)
             fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
 
         if (WCS_HAVE_INITIAL(fr_wcs)) {
@@ -208,11 +208,17 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
         }
     }
 
-    if (fr_wcs->flags != 0) { // && window_wcs->flags & WCS_HINTED) {
-        wcs_clone(window_wcs, fr_wcs);
+    if (fr_wcs->flags > WCS_INVALID) { // && window_wcs->flags & WCS_HINTED) {
+        if (window_wcs->wcsset > WCS_INVALID) {
+            if (fr_wcs->wcsset != WCS_VALID) {
+                wcs_clone(fr_wcs, window_wcs);
+                fr_wcs->wcsset = WCS_INITIAL;
+                fr_wcs->flags |= WCS_HINTED;
+            }
 
-        if (imf_wcs)
-            wcs_clone(imf_wcs, fr_wcs);
+            if (imf_wcs) wcs_clone(imf_wcs, fr_wcs);
+        }
+        wcs_clone(window_wcs, fr_wcs);
 
     } else {
         window_wcs->xrefpix = fr_wcs->xrefpix;
@@ -220,7 +226,7 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
     }
 
 //    if (fr_wcs->wcsset == WCS_INITIAL) // ?
-    window_wcs->flags |= WCS_HINTED;
+//    window_wcs->flags |= WCS_HINTED;
 
     wcs_to_fits_header(fr);
 }
@@ -234,6 +240,7 @@ struct wcs *wcs_new(void)
     if (wcs) {
 //        wcs->equinox = NAN;
 //        wcs->rot = NAN;
+        wcs->flags = 0;
         wcs->equinox = 2000;
         wcs->rot = 0;
         wcs->xref = NAN;
@@ -275,12 +282,16 @@ struct wcs *wcs_release(struct wcs *wcs)
 void wcs_clone(struct wcs *dst, struct wcs *src)
 {
     if (src == dst) return;
-
+    if (src == NULL || src->wcsset == WCS_INVALID || isnan(src->xinc) || isnan(src->xref) || isnan(src->yinc) || isnan(src->yref)) {
+        printf("wcs_clone: src not initialized\n"); fflush(NULL);
+    }
     int rc = dst->ref_count;
+    double jd = dst->jd;
 
     *dst = *src;
 
     dst->ref_count = rc;
+    if (jd) dst->jd = jd;
 }
 
 /* call xypix and worldpos with wcs data from a struct wcs */
@@ -394,10 +405,11 @@ void cats_to_XE (struct wcs *wcs, struct cat_star *cats, double *X, double *E)
 	double xref=wcs->xref;
 	double yref=wcs->yref;
 	double ra, dec;
-    double epoch = JD_EPOCH(wcs->jd);
 
 //	d3_printf("\ninitial ra:%.4f dec:%.4f\n", cats->ra, cats->dec);
 	if (wcs->flags & WCS_JD_VALID) {
+        double epoch = JD_EPOCH(wcs->jd);
+
 		cats_apparent_pos(cats, &ra, &dec, wcs->jd);
         precess_hiprec(wcs->equinox, epoch, &xref, &yref);
 		if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
@@ -905,7 +917,7 @@ int window_fit_wcs(GtkWidget *window)
     wcs_clone(frame_wcs, window_wcs);
 
     struct image_file *imf = fr->imf;
-    if (imf != NULL) {
+    if (imf) {
         if (imf->fim == NULL) imf->fim = wcs_new();
         if (imf->fim) wcs_clone(imf->fim, frame_wcs);
     }

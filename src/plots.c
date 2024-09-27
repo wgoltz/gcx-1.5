@@ -639,6 +639,10 @@ struct plot_sol_data {
     char *pos;
     char *neg;
     char *plot;
+
+    double period;
+    double jd0;
+    gboolean phase_plot;
 };
 
 static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
@@ -679,13 +683,26 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
                     me = sob->imagerr; //sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
             }
 
+            double jd0 = (data->phase_plot) ? data->jd0 : data->jdi;
+            double t = mjd_to_jd(sob->ofr->mjd) - jd0;
+            if (data->phase_plot) {
+                t /= data->period;
+                t -= floor(t); // phase
+            }
+
             if ((m != MAG_UNSET) && (me < BIG_ERR)) {
-                if (sob->flags & CPHOT_CENTERED) {
-                    str_join_varg(&data->pos, "\n%.7f %.4f %.4f", mjd_to_jd(sob->ofr->mjd) - data->jdi, m, me);
-                    n_pos++;
-                } else if (sob->flags & CPHOT_NOT_FOUND) {
-                    str_join_varg(&data->neg, "\n%.7f %.4f %s\n", mjd_to_jd(sob->ofr->mjd) - data->jdi, sob->ofr->lmag, "{/:Bold\\\\^}");
+                if (sob->flags & CPHOT_NOT_FOUND) {
+                    str_join_varg(&data->neg, "\n%.7f %.4f %s\n", t, sob->ofr->lmag, "{/:Bold\\\\^}");
+                    if (data->phase_plot)
+                        str_join_varg(&data->neg, "\n%.7f %.4f %s\n", 1 + t, sob->ofr->lmag, "{/:Bold\\\\^}");
+
                     n_neg++;
+                } else { // if (sob->flags & CPHOT_CENTERED) {
+                    str_join_varg(&data->pos, "\n%.7f %.4f %.4f", t, m, me);
+                    if (data->phase_plot)
+                        str_join_varg(&data->pos, "\n%.7f %.4f %.4f", 1 + t, m, me);
+
+                    n_pos++;
                 }
             }
         }
@@ -749,6 +766,8 @@ static void plot_sol(struct plot_sol_data *data, GList *sol)
         }
     }
 }
+
+
 #ifdef UPDATE_RECIPE
 static void update_star(star*, double *dif, gboolean *found_standard, struct stf *recipe, struct mband_dataset *mbds, char *standard_star)
 {
@@ -786,7 +805,7 @@ int plot_star_mag_vs_time(GList *sobs)
 
     if (round_range(&jdmin, &jdmax) < 0) return -1;
 
-    struct plot_sol_data data;
+    struct plot_sol_data data = { 0 };
 
     data.first_fr = STAR_OBS(sobs->data)->ofr;
     data.band = -1; // all bands; data.first_fr->band;
@@ -797,12 +816,19 @@ int plot_star_mag_vs_time(GList *sobs)
     data.sol = sobs;
     data.plot = NULL;
 
+    data.jd0 = P_DBL(PLOT_JD0);
+    data.period = P_DBL(PLOT_PERIOD);
+    data.phase_plot = P_INT(PLOT_PHASED);
+
     data.pop = open_plot(&data.plfp, NULL);
     if (data.pop < 0) return data.pop;
 
     plot_preamble(data.plfp);
 
-    fprintf( data.plfp, "set xlabel 'Days from JD %.1f'\n", data.jdi );
+    if (data.phase_plot)
+        fprintf( data.plfp, "set xlabel 'Phase, JD0 %.4f, Period %0.6f'\n", data.jd0, data.period );
+    else
+        fprintf( data.plfp, "set xlabel 'Days from JD %.1f'\n", floor(data.jdi) );
     fprintf( data.plfp, "set xtics autofreq\n" );
 //    fprintf( data.plfp,  "set x autoscale\n" );
     fprintf( data.plfp,  "set yrange [:] reverse\n" );
@@ -812,6 +838,7 @@ int plot_star_mag_vs_time(GList *sobs)
 
     return data.n;
 }
+
 
 /* generate a vector plot of astrometric errors */
 int stf_plot_astrom_errors(FILE *dfp, struct stf *stf, struct wcs *wcs) 

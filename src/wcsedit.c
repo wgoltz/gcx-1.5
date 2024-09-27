@@ -482,6 +482,9 @@ void wcs_set_validation(gpointer window, int valid)
 
     window_wcs->wcsset = valid;
     wcs_clone(frame_wcs, window_wcs); // copy window_wcs to frame
+
+    if (valid == WCS_INVALID) frame_wcs->flags = 0;
+
     if (fr->imf) wcs_clone(fr->imf->fim, window_wcs);
 
     if (valid == WCS_VALID) wcs_to_fits_header(fr); // update frame header

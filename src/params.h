@@ -122,9 +122,10 @@ typedef enum {
 	PAR_MBAND,		/* multiframe reduction */
 	PAR_SYNTH,		/* synthetic star generation */
 	PAR_QUERY,		/* on-line queries */
+    PAR_PLOT,   /* plot options */
 
 /* leaves for stardet */
-	SD_SNR ,
+	SD_SIGMAS ,
 	SD_MAX_STARS ,
 
 	SD_GSC_MAX_MAG ,
@@ -402,6 +403,10 @@ typedef enum {
 	QUERY_SKYVIEW_DIR,
 	QUERY_SKYVIEW_KEEPFILES,
 
+    PLOT_JD0,
+    PLOT_PERIOD,
+    PLOT_PHASED,
+
 	PAR_TABLE_SIZE
 } GcxPar;
 
@@ -461,11 +466,10 @@ enum {
 	PAR_DEFAULT_CFA_GBRG,
 };
 
-#define PAR_CHOICE_STACK_METHODS {"average", "weighted_average", "median", "kappa_sigma", "mean_median", NULL}
+#define PAR_CHOICE_STACK_METHODS {"average", "median", "kappa_sigma", "mean_median", NULL}
 
 enum {
 	PAR_STACK_METHOD_AVERAGE,
-    PAR_STACK_METHOD_WEIGHTED_AVERAGE,
 	PAR_STACK_METHOD_MEDIAN,
 	PAR_STACK_METHOD_KAPPA_SIGMA,
     PAR_STACK_METHOD_MEAN_MEDIAN

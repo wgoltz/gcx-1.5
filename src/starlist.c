@@ -932,7 +932,7 @@ void gui_star_release(struct gui_star *gs, char *msg)
             break;
         default:
             printf("gui_star_release: release star\n"); fflush(NULL);
-            release_star(STAR(gs->s), msg);
+//            release_star(STAR(gs->s), msg);
             break;
         }
     }

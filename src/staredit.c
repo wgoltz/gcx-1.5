@@ -394,8 +394,10 @@ static void move(int move_x, int move_y, gpointer dialog)
         double x_center, y_center;
         get_screen_center(window, &x_center, &y_center);
 
-        cats->pos[POS_X] = geom->width * x_center - 0.5;
-        cats->pos[POS_Y] = geom->height * y_center - 0.5;
+//        cats->pos[POS_X] = geom->width * x_center - 0.5;
+//        cats->pos[POS_Y] = geom->height * y_center - 0.5;
+        cats->pos[POS_X] = geom->width * x_center;
+        cats->pos[POS_Y] = geom->height * y_center;
 
     } else {
         cats->pos[POS_X] -= move_x / geom->zoom;

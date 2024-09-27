@@ -233,9 +233,18 @@ void init_ptable(void)
     add_par_tree(PAR_STAR_SHAPES,   PAR_STAR_DISPLAY, "shape",   "Star Display Shapes");
     add_par_tree(PAR_SYNTH,         PAR_NULL,         "synth",   "Synthetic Star Generation Options");
     add_par_tree(PAR_QUERY,         PAR_NULL,         "query",   "On-line Resources");
+    add_par_tree(PAR_PLOT,          PAR_NULL,         "plot",    "Plot Options");
 
 
 /* now leaves */
+/* leaves for plot */
+    add_par_double(PLOT_JD0, PAR_PLOT, PREC_8, "jd0", "JD0", 2457001.6086);
+    set_par_description(PLOT_JD0, "Julian Date of Ephemeris zero point");
+    add_par_double(PLOT_PERIOD, PAR_PLOT, PREC_8, "period", "period", 2.817237);
+    set_par_description(PLOT_PERIOD, "Ephemeris period in days");
+    add_par_int(PLOT_PHASED, PAR_PLOT, FMT_BOOL, "phased", "phase plot", 0);
+    set_par_description(PLOT_PHASED, "Use the Ephemeris to make a phased plot");
+
 /* leaves for query */
     add_par_string(QUERY_VIZQUERY, PAR_QUERY, 0, "vizquery", "Vizquery command", "vizquery");
     set_par_description(QUERY_VIZQUERY, "The command used to download catalog stars (normally vizquery from the cdstools package available from CDS) ");
@@ -273,8 +282,8 @@ void init_ptable(void)
 			    "SkyView image size in pixels.");
 
 /* leaves for stardet */
-    add_par_double(SD_SNR, PAR_STAR_DET, PREC_1, "det_snr", "Star Detection SNR", 9.0);
-	set_par_description(SD_SNR,
+    add_par_double(SD_SIGMAS, PAR_STAR_DET, PREC_1, "det_snr", "Star Detection Sigma", 9.0);
+	set_par_description(SD_SIGMAS,
 			    "A star must be above this threshold above the backround"
 			    " to be considered "
 			    "for detection. Expressed in sigmas of the image. "

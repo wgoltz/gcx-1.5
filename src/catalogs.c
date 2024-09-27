@@ -1152,6 +1152,7 @@ void local_load_catalogs(char *path)
     free(pathc);
 }
 
+
 static struct cat_star *local_search_file(char *fn, char *name)
 {
 	char *lbuf = NULL;
@@ -1194,10 +1195,10 @@ static struct cat_star *local_search_file(char *fn, char *name)
 		fseek(inf, -2, SEEK_CUR);
 		c = fgetc(inf);
 		if (c == '(') {
-			paren --;
+            paren --;
 			if (paren == 0) {
 //				fseek(inf, -1, SEEK_CUR);
-				break;
+                break; // found start of record
 			}
 		}
 		if (c == ')') 

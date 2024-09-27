@@ -61,7 +61,7 @@ struct gui_star *detect_guide_star(struct ccd_frame *fr, struct region *reg)
 //	rf = (fr->w * fr->w + fr->h * fr->h) / PI / 2;
 	xc = fr->w / 2;
 	yc = fr->h / 2;
-	extract_stars(fr, reg, 0, P_DBL(SD_SNR), src);
+    extract_stars(fr, reg, P_DBL(SD_SIGMAS), NULL, src);
 	if (src->ns <= 0)
 		return NULL;
 	for (i = 0; i < src->ns; i++) {

@@ -329,9 +329,9 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
 
 //        release_frame(star_fr, "act_stars_add_synthetic");
 
-    } else {
-        synth_stars_to_frame(dark_fr, wcs, ssl);
     }
+
+    synth_stars_to_frame(dark_fr, wcs, ssl);
 
     frame_stats(dark_fr);
 	i_ch->channel_changed = 1;

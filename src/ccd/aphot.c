@@ -197,10 +197,12 @@ int ring_stats(struct ccd_frame *fr, double x, double y,
 			sum += v;
 			sumsq += v*v;
 
-			if (v < rs->min) 
-				rs->min = v;
-			if (v > rs->max) 
+            if (v < rs->min) rs->min = v;
+            if (v > rs->max) {
 				rs->max = v;
+                rs->max_x = ix;
+                rs->max_y = iy;
+            }
 
             v = floor(v);
 
@@ -508,7 +510,7 @@ int aperture_photometry(struct ccd_frame *fr, struct star *s,
 	double cx, cy, cxerr=0.0, cyerr=0.0;
 //	double skn, rdn;
 
-	rm = ceil(p->r3) + 1;
+    rm = ceil(p->r3) + 1;
 
 //	d3_printf("rm = %f\n", rm);
 	if ((s->x - rm) <= 0 || (s->x + rm) >= fr->w ||

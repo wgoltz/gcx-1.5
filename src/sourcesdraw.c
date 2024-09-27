@@ -300,6 +300,10 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 // try this
     ix = (gs->x + 0.5) * zoom;
     iy = (gs->y + 0.5) * zoom;
+    //    ix = (gs->x + 1) * zoom;
+    //    iy = (gs->y + 1) * zoom;
+//    ix = gs->x * zoom + 0.5;
+//    iy = gs->y * zoom + 0.5;
 
 	if (gsl->shape[type] == STAR_SHAPE_APHOT) {
         isz = 2 * zoom;
@@ -334,8 +338,10 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 		cairo_set_line_cap (cr, CAIRO_LINE_CAP_BUTT);
 		cairo_set_line_join (cr, CAIRO_LINE_JOIN_BEVEL);
 
-		pix = (gs->pair->x + 0.5) * zoom;
-		piy = (gs->pair->y + 0.5) * zoom;
+        pix = (gs->pair->x + 0.5) * zoom;
+        piy = (gs->pair->y + 0.5) * zoom;
+//        pix = gs->pair->x * zoom + 0.5;
+//        piy = gs->pair->y * zoom + 0.5;
 
 		cairo_move_to (cr, ix, iy);
 		cairo_line_to (cr, pix, piy);
@@ -469,14 +475,18 @@ void draw_sources_hook(GtkWidget *darea, GtkWidget *window, GdkRectangle *area)
 
         int ix = (gs->x + 0.5) * geom->zoom;
         int iy = (gs->y + 0.5) * geom->zoom;
+//        int ix = gs->x * geom->zoom + 0.5;
+//        int iy = gs->y * geom->zoom + 0.5;
         int isz = size * geom->zoom + gsl->max_size; // gs->size * geom->zoom + gsl->max_size;
 		if (star_near_area(ix, iy, area, isz)) {
 			draw_star_helper(gs, cr, gsl, geom->zoom);
 		}
 
 		if (gs->pair != NULL) {
-			ix = (gs->pair->x + 0.5) * geom->zoom;
-			iy = (gs->pair->y + 0.5) * geom->zoom;
+            ix = (gs->pair->x + 0.5) * geom->zoom;
+            iy = (gs->pair->y + 0.5) * geom->zoom;
+//            ix = gs->pair->x * geom->zoom + 0.5;
+//            iy = gs->pair->y * geom->zoom + 0.5;
 			isz = gs->pair->size * geom->zoom + gsl->max_size;
 			if (star_near_area(ix, iy, area, isz)) {
 				draw_star_helper(gs, cr, gsl, geom->zoom);
@@ -600,14 +610,23 @@ void find_stars_cb(gpointer window, guint action)
 			return;
 		}
 		info_printf_sb2(window, "Searching for stars...");
-//		d3_printf("Star det SNR: %f(%d)\n", P_DBL(SD_SNR), SD_SNR);
+//		d3_printf("Star det SNR: %f(%d)\n", P_DBL(SD_SIGMAS), SD_SIGMAS);
 
         /* give the mainloop a chance to redraw under the popup */
 //        while (gtk_events_pending ()) gtk_main_iteration ();
 
         fr->window = window;
-        extract_stars(fr, NULL, 0, P_DBL(SD_SNR), src);
-		remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
+
+        struct region reg = { 0 };
+        double fraction = 0.5;
+        reg.xs = fr->w * (1.0 - fraction) / 2.0;
+        reg.ys = fr->h * (1.0 - fraction) / 2.0;
+        reg.w = fr->w * fraction;
+        reg.h = fr->h * fraction;
+
+//        extract_stars(fr, & reg, 0, P_DBL(SD_SIGMAS), src);
+        extract_stars(fr, NULL, P_DBL(SD_SIGMAS), NULL, src);
+        remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
 /* now add to the list */
 		for (i = 0; i < src->ns; i++) {
 //			if (src->s[i].peak > P_DBL(AP_SATURATION))
@@ -639,7 +658,7 @@ void find_stars_cb(gpointer window, guint action)
 		gsl->display_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
 		gsl->select_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
 
-		info_printf_sb2(window, "Found %d stars (SNR > %.1f)", nstars, P_DBL(SD_SNR));
+        info_printf_sb2(window, "Found %d stars (sigmas > %.1f)", nstars, P_DBL(SD_SIGMAS));
 		release_sources(src);
 		break;
 

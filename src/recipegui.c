@@ -232,22 +232,24 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     struct stf *rcp = create_recipe(gsl->sl, wcs, flags, comment, target, seq, w, h);
 
 	if (rcp == NULL) {
-		err_printf_sb2(window, "%s", last_err());
+		err_printf_sb2(window, "%s", last_err());        
 	} else {
-        g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)stf_free_all_);
 		stf_fprint(rfp, rcp, 0, 0);
 
         GList *stars = stf_find_glist(rcp, 0, SYM_STARS);
-        info_printf_sb2(window, "recipe", 10000, "Wrote %d star(s) to %s\n", g_list_length(stars), fn2);
-	}
+        info_printf_sb2(window, "recipe", 10000, "Wrote %d star(s) to %s\n", g_list_length(stars), fn2);        
+    }
 
-	fclose(rfp);
+    fclose(rfp);
 	free(fn2);
     free(comment);
     free(target);
     free(seq);
 
-    if (rcp != NULL) gtk_widget_hide(dialog);
+    if (rcp != NULL) {
+        g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)stf_free_all_);
+        gtk_widget_hide(dialog);
+    }
 }
 
 static void browse_cb( GtkWidget *widget, gpointer dialog)

@@ -344,7 +344,7 @@ void act_frame_new (GtkAction *action, gpointer window)
     get_frame(fr, "act_frame_new");
 // set wcs from window
 
-    window_add_frame(fr, NEW_FRAME, IMG_IN_MEMORY_ONLY | IMG_DIRTY | IMG_LOADED, window);
+    window_add_frame(fr, NEW_FRAME, IMG_STATE_IN_MEMORY_ONLY | IMG_STATE_DIRTY | IMG_STATE_LOADED, window);
 
 	frame_to_channel(fr, window, "i_channel");
     release_frame(fr, "act_frame_new");

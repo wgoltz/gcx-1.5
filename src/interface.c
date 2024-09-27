@@ -595,7 +595,7 @@ GtkWidget* create_camera_control (void)
   label = gtk_label_new ("Object:");
   gtk_misc_set_alignment (GTK_MISC (label), 1, 0.5);
   gtk_misc_set_padding (GTK_MISC (label), 3, 0);
-  item = gtk_entry_new ();
+  item = gtk_entry_new (); // item = gtk_combo_box_new_text();
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "obs_object_entry", item, (GDestroyNotify) g_object_unref);
 
@@ -2227,7 +2227,7 @@ GtkWidget* create_image_processing (void)
  item = gtk_combo_box_text_new();
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "mul_combo", item, (GDestroyNotify) g_object_unref);
- gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Disable");
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Disable Mul/Div");
  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Multiply");
  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Divide");
  gtk_combo_box_set_active(GTK_COMBO_BOX(item), 0);
@@ -2242,11 +2242,21 @@ GtkWidget* create_image_processing (void)
  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE);
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 2);
 
- item = gtk_check_button_new_with_label ("Enable");
+ item = gtk_combo_box_text_new();
  g_object_ref (item);
- g_object_set_data_full (G_OBJECT (image_processing), "add_checkb", item, (GDestroyNotify) g_object_unref);
- gtk_widget_set_tooltip_text (item, "Enable constant addition");
+ g_object_set_data_full (G_OBJECT (image_processing), "add_combo", item, (GDestroyNotify) g_object_unref);
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Disable Add");
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Add then Mul/Div");
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(item), "Mul/Div then Add");
+ gtk_combo_box_set_active(GTK_COMBO_BOX(item), 0);
+ gtk_widget_set_tooltip_text (item, "Add a constant before or after Mul/Div (if enabled)");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
+
+// item = gtk_check_button_new_with_label ("Enable");
+// g_object_ref (item);
+// g_object_set_data_full (G_OBJECT (image_processing), "add_checkb", item, (GDestroyNotify) g_object_unref);
+// gtk_widget_set_tooltip_text (item, "Enable constant addition");
+// gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
 // ******************* recipe
 
@@ -2382,7 +2392,7 @@ GtkWidget* create_image_processing (void)
 
 // ***************** smooth
 
- frame = gtk_frame_new ("Gaussian Smoothing");
+ frame = gtk_frame_new ("Lowpass Filter");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
  TABLE_ATTACH(table, frame, 3, 1, 1, 1);
@@ -2395,16 +2405,22 @@ GtkWidget* create_image_processing (void)
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "blur_spin", item, (GDestroyNotify) g_object_unref);
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);
- gtk_widget_set_tooltip_text (item, "FWHM of gaussin smoothing function (in pixels)");
+ gtk_widget_set_tooltip_text (item, "FWHM of gaussian blur function (in pixels)");
 
- item = gtk_label_new ("FWHM           ");
+ item = gtk_label_new ("FWHM");
  gtk_misc_set_padding (GTK_MISC (item), 3, 0);
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
- item = gtk_check_button_new_with_label ("Enable");
+ item = gtk_check_button_new_with_label ("Smooth");
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "blur_checkb", item, (GDestroyNotify) g_object_unref);
- gtk_widget_set_tooltip_text (item, "Smooth image after alignment");
+ gtk_widget_set_tooltip_text (item, "Apply gaussian blur to image");
+ gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
+
+ item = gtk_check_button_new_with_label ("Erase");
+ g_object_ref (item);
+ g_object_set_data_full (G_OBJECT (image_processing), "erase_checkb", item, (GDestroyNotify) g_object_unref);
+ gtk_widget_set_tooltip_text (item, "Find stars and replace with local sky background (before blur)");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
 // ******************* stack

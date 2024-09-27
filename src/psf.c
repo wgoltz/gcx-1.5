@@ -1034,7 +1034,7 @@ void do_fit_psf(gpointer window, GSList *found)
 
     struct psf *patch = psf_new(30, 30);
     extract_patch(fr, patch, gs->x, gs->y);
-    plot_psf(patch);
+    plot_psf(patch, gs->x, gs->y);
 //    plot_sky_aperture(window, found);
 /*
     struct psf *psf = psf_new(30, 30);
@@ -1127,6 +1127,8 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
 {
 	g_return_val_if_fail(fr != NULL, -1);
 
+    get_frame(fr, "do_plot_profile");
+
     double r1 = P_DBL(AP_R1); // get_binned_r1(fr);
 
     char *preamble = NULL;
@@ -1196,7 +1198,10 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
         }
 		i++;
 	}
-	if (g_slist_length(gr) <= 0) {
+
+    release_frame(fr, "do_plot_profile");
+
+    if (g_slist_length(gr) <= 0) {
 
         if (grc) free(grc);
         if (rpp) free(rpp);
@@ -1293,7 +1298,7 @@ void print_star_measures(gpointer window, GSList *found)
 }
 
 
-void plot_psf(struct psf *psf)
+void plot_psf(struct psf *psf, double xc, double yc)
 {
 	FILE *dfp;
 	int x, y;
@@ -1318,11 +1323,13 @@ void plot_psf(struct psf *psf)
 
         fprintf(dfp, "splot '-' with pm3d\n");
 
+        double dx = psf->cx + psf->dx;
+        double dy = psf->cy - psf->dy;
         for(x = 0; x < psf->w; x++) {
             for(y = 0; y < psf->h; y++) {
 				fprintf(dfp, "%.2f %.2f %.2f\n",
-                    1.0 * (x - psf->cx - psf->dx),
-                    1.0 * (y - psf->cy - psf->dy),
+                    x - dx + xc,
+                    y - dy + yc,
 					psf->d[x][y] > 0 ? psf->d[x][y] : -1);
 			}
             fprintf(dfp, "\n");
@@ -1362,7 +1369,7 @@ void plot_sky_aperture(gpointer window, GSList *found)
 
     aperture_multiply(fr, psf, gs->x, gs->y);
 
-	plot_psf(psf);
+    plot_psf(psf, gs->x, gs->y);
 	psf_release(psf);
 
 }
@@ -1395,7 +1402,9 @@ void plot_sky_histogram(gpointer window, GSList *found)
 		return;
 	}
 
-    struct rstats *rs = malloc(sizeof(struct rstats));
+//    struct rstats *rs = malloc(sizeof(struct rstats));
+    struct rstats rs_struct = { 0 }, *rs = &rs_struct;
+
     ring_stats(fr, gs->x, gs->y, P_DBL(AP_R2), P_DBL(AP_R3), ALLQUADS, rs, -HUGE, HUGE);
 
     FILE *dfp;
@@ -1408,7 +1417,7 @@ void plot_sky_histogram(gpointer window, GSList *found)
         int i;
 		for (i = 0; i < H_SIZE; i++) {
 			all += rs->h[i];
-		}
+        }
 		for (i = 0; i < H_SIZE; i++) { /* get the median */
 			iy += rs->h[i];
 			if (iy >= all / 2) {
@@ -1443,6 +1452,6 @@ void plot_sky_histogram(gpointer window, GSList *found)
 		close_plot(dfp, pop);
 	}
 	free(rpp);
-	free(rs);
+//	free(rs);
 }
 

@@ -445,10 +445,11 @@ struct star {
 	int datavalid;	/* shows the data below is valid */
 	double flux; 	// total flux of the star
 	double sky;		/* estimated sky around the star */
+    double sky_sigma; /* estimate of sky sigma */
 	int npix;		/* number of pixels used in flux calculation */
 	double peak;		/* max pixel value */
 	double starr;	// apparent radius of star image
-	double fwhm;	// average fwhm
+    double fwhm;	// estimated fwhm
 	double fwhm_ec;	// eccentricity of fwhm (major/minor)
 	double fwhm_pa;	// position angle of fwhm ellipse (0=horisontal)
 };
@@ -544,7 +545,8 @@ struct sources {
 			   s is also freed when the structure is destroyed */
 	int maxn; // maximum number of sources (size of s)
 	int ns;	// number of sources
-	struct star *s; // pointer to array of x'es (malloced)
+    struct star *s; // array of stars
+    void *gptrarray; // use gptrarray internally
 };
 
 
@@ -722,7 +724,8 @@ extern int locate_star(struct ccd_frame *fr, double x, double y, double r, doubl
 extern int get_star_near(struct ccd_frame *fr, int x, int y, double min_flux, struct star *s);
 extern int follow_star(struct ccd_frame *fr, double r, struct star *old_star, struct star *s);
 
-extern int extract_stars(struct ccd_frame *fr, struct region *reg, double min_flux, double sigmas, struct sources *src);
+extern int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *first_last_y, struct sources *src);
+extern int erase_stars(struct ccd_frame *fr);
 
 extern void release_sources(struct sources *src);
 extern void ref_sources(struct sources *src);

@@ -208,7 +208,7 @@ static int save_image_file_inplace(struct image_file *imf, progress_print_func p
 	g_return_val_if_fail(imf != NULL, -1);
 	g_return_val_if_fail(imf->fr != NULL, -1);
 
-    if (imf->flags & IMG_SKIP) return 0;
+    if (imf->state_flags & IMG_STATE_SKIP) return 0;
 
     char *fn = strdup(imf->filename);
 
@@ -225,7 +225,7 @@ static int save_image_file_to_dir(struct image_file *imf, char *dir, progress_pr
 	g_return_val_if_fail(imf->fr != NULL, -1);
     g_return_val_if_fail(dir != NULL, -1);
 
-    if (imf->flags & IMG_SKIP) return 0;
+    if (imf->state_flags & IMG_STATE_SKIP) return 0;
 
     char *fn = strdup(imf->filename);
 
@@ -259,7 +259,7 @@ static int save_image_file_to_stub(struct image_file *imf, char *outf, int *seq,
     g_return_val_if_fail(imf->filename != NULL, -1);
     g_return_val_if_fail(outf != NULL, -1);
 
-    if (imf->flags & IMG_SKIP) return 0;
+    if (imf->state_flags & IMG_STATE_SKIP) return 0;
 
     gboolean out_zipped = (is_zip_name(outf) > 0);
     gboolean in_zipped = (is_zip_name(imf->filename) > 0);
@@ -317,13 +317,13 @@ int save_image_file(struct image_file *imf, char *outf, int inplace, int *seq,
 	}
     if (progress) (* progress)("mock save\n", processing_dialog);
 
-    imf->flags &= ~IMG_DIRTY;
+    imf->state_flags &= ~IMG_STATE_DIRTY;
 
 	return 0;
 }
 
 /* call point from main; reduce the frames acording to ccdr.
- * Print progress messages at level 1. If the inplace flag in ccdr->ops is true,
+ * Print progress messages at level 1. If the inplace flag in ccdr->op_flags is true,
  * the source files are overwritten, else new files will be created according
  * to outf. if outf is a dir name, files will be saved there. If not,
  * it's used as the beginning of a filename.
@@ -343,31 +343,31 @@ int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, c
 	g_return_val_if_fail(ccdr != NULL, -1);
 
 	nframes = g_list_length(imfl->imlist);
-    if (!(ccdr->ops & IMG_OP_STACK)) { // no stack
+    if (!(ccdr->op_flags & IMG_OP_STACK)) { // no stack
 		gl = imfl->imlist;
 		while (gl != NULL) {
 			imf = gl->data;
 			gl = g_list_next(gl);
-			if (imf->flags & IMG_SKIP)
+            if (imf->state_flags & IMG_STATE_SKIP)
 				continue;
             ret = reduce_one_frame(imf, ccdr, progress_print, NULL);
 			if (ret || (outf == NULL))
 				continue;
 
-			if (ccdr->ops & IMG_OP_INPLACE) {
+            if (ccdr->state_flags & IMG_STATE_INPLACE) {
 				save_image_file(imf, outf, 1, NULL, progress_print, NULL);
 			} else {
                 save_image_file(imf, outf, 0, (nframes == 1 ? NULL : &seq),	progress_print, NULL);
 			}
-			imf->flags &= ~IMG_SKIP;
+            imf->state_flags &= ~IMG_STATE_SKIP;
 		}
 //printf("reduce.batch_reduce_frames return\n");
     } else { // stack
 
         if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA ||
                 P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_MEAN_MEDIAN ) {
-            if (!(ccdr->ops & IMG_OP_BG_ALIGN_MUL))
-                ccdr->ops |= IMG_OP_BG_ALIGN_ADD;
+            if (!(ccdr->op_flags & IMG_OP_BG_ALIGN_MUL))
+                ccdr->op_flags |= IMG_OP_BG_ALIGN_ADD;
         }
         if (reduce_frames(imfl, ccdr, progress_print, NULL)) return 1;
 
@@ -385,12 +385,12 @@ int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, c
 // check imf for change to file
 int imf_check_reload(struct image_file *imf)
 {
-    if (imf->flags & IMG_IN_MEMORY_ONLY) return 0;
+    if (imf->state_flags & IMG_STATE_IN_MEMORY_ONLY) return 0;
 
     struct stat imf_stat = { 0 };
     if (stat(imf->filename, &imf_stat)) return 1;
 
-    gboolean not_loaded = (imf->flags & IMG_LOADED) == 0;
+    gboolean not_loaded = (imf->state_flags & IMG_STATE_LOADED) == 0;
     gboolean reload_sec = (imf->mtime.tv_sec != imf_stat.st_mtim.tv_sec);
     gboolean reload_nsec = (imf->mtime.tv_nsec != imf_stat.st_mtim.tv_nsec);
 
@@ -428,7 +428,7 @@ int imf_load_frame(struct image_file *imf)
         imf->fr = fr;
         fr->imf = imf;
 
-        imf->flags |= IMG_LOADED;
+        imf->state_flags |= IMG_STATE_LOADED;
 
         struct stat imf_stat = { 0 };
         if (stat(imf->filename, &imf_stat) == 0) {
@@ -460,8 +460,8 @@ void unload_clean_frames(struct image_file_list *imfl)
         struct image_file *imf = fl->data;
         fl = g_list_next(fl);
 
-        if ( imf->flags & IMG_LOADED )
-            if (!(imf->flags & IMG_DIRTY))
+        if ( imf->state_flags & IMG_STATE_LOADED )
+            if (!(imf->state_flags & IMG_STATE_DIRTY))
                 imf_release_frame(imf, "unload_clean_frames");
     }
 }
@@ -474,13 +474,13 @@ void imf_release_frame(struct image_file *imf, char *msg)
 
     imf->fr = release_frame(imf->fr, msg);
 
-    if (imf->fr == NULL) imf->flags &= IMG_SKIP; // we keep the skip flag
+    if (imf->fr == NULL) imf->state_flags &= IMG_STATE_SKIP; // we keep the skip flag
 }
 
 void imf_unload(struct image_file *imf)
 {
     wcs_clone(imf->fim, &imf->fr->fim);
-    imf->flags &= ~IMG_LOADED;
+    imf->state_flags &= ~IMG_STATE_LOADED;
 }
 
 
@@ -499,7 +499,7 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
     g_return_val_if_fail(ccdr != NULL, NULL);
 
 //printf("reduce.reduce_frames_load\n");
-    if (!(ccdr->ops & IMG_OP_STACK)) { // no stack
+    if (!(ccdr->op_flags & IMG_OP_STACK)) { // no stack
 
 //        GList *gl = imfl->imlist;
 //		while (gl != NULL) {
@@ -508,11 +508,11 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 //            if (fr == NULL) fr = imf->fr; // first frame
 
 //			gl = g_list_next(gl);
-//            if (imf->flags & IMG_SKIP) continue;
+//            if (imf->state_flags & IMG_STATE_SKIP) continue;
 
 //            if (reduce_one_frame(imf, ccdr, progress_print, NULL)) continue;
 
-//            if (ccdr->ops & IMG_OP_INPLACE)
+//            if (ccdr->state & IMG_STATE_INPLACE)
 //                save_image_file(imf, NULL, 1, NULL, progress_print, NULL);
 //		}
         // try this
@@ -527,8 +527,8 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 
         if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA ||
                 P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_MEAN_MEDIAN ) {
-            if (!(ccdr->ops & IMG_OP_BG_ALIGN_MUL))
-                ccdr->ops |= IMG_OP_BG_ALIGN_ADD;
+            if (!(ccdr->op_flags & IMG_OP_BG_ALIGN_MUL))
+                ccdr->op_flags |= IMG_OP_BG_ALIGN_ADD;
         }
         if (reduce_frames(imfl, ccdr, progress_print, NULL)) return NULL; // reduce failed somehow
 
@@ -541,7 +541,7 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
 
 int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
-    if (ccdr->ops & IMG_OP_BIAS) {
+    if (ccdr->op_flags & IMG_OP_BIAS) {
 
         if (ccdr->bias == NULL) {
             err_printf("no bias image file\n");
@@ -556,7 +556,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, 
 
         imf_release_frame(ccdr->bias, "setup_for_ccd_reduce: bias");
     }
-    if (ccdr->ops & IMG_OP_DARK) {
+    if (ccdr->op_flags & IMG_OP_DARK) {
         if (ccdr->dark == NULL) {
             err_printf("no dark image file\n");
             return 1;
@@ -570,7 +570,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, 
 
         imf_release_frame(ccdr->dark, "setup_for_ccd_reduce: dark");
     }
-    if (ccdr->ops & IMG_OP_FLAT) {
+    if (ccdr->op_flags & IMG_OP_FLAT) {
 
         if (ccdr->flat == NULL) {
             err_printf("no flat image file\n");
@@ -585,7 +585,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, 
 
         imf_release_frame(ccdr->flat, "setup_for_ccd_reduce: flat");
     }
-    if (ccdr->ops & IMG_OP_BADPIX) {
+    if (ccdr->op_flags & IMG_OP_BADPIX) {
 
         if (ccdr->bad_pix_map == NULL) {
             err_printf("no bad pixel file\n");
@@ -599,7 +599,7 @@ int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, 
         if (ret) return ret;
     }
 
-    if (ccdr->ops & IMG_OP_ALIGN) {
+    if (ccdr->op_flags & IMG_OP_ALIGN) {
         if (ccdr->alignref == NULL) {
             err_printf("no alignment reference file\n");
             return 1;
@@ -628,18 +628,18 @@ static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, 
     g_return_val_if_fail(imf != NULL, -1);
     g_return_val_if_fail(imf->fr != NULL, -1);
 
-    if ( ! (ccdr->ops & CCDR_BG_VAL_SET) ) {
+    if ( ! (ccdr->state_flags & IMG_STATE_BG_VAL_SET) ) {
 d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.median);
         ccdr->bg = imf->fr->stats.median;
-        ccdr->ops |= CCDR_BG_VAL_SET;
+        ccdr->state_flags |= IMG_STATE_BG_VAL_SET;
     }
 
-    if ( ccdr->ops & IMG_OP_BIAS ) {
+    if ( ccdr->op_flags & IMG_OP_BIAS ) {
 //        g_return_val_if_fail(ccdr->bias->fr != NULL, -1);
 
         REPORT( " bias" )
 
-        if ( ! (imf->flags & IMG_OP_BIAS) ) {
+        if ( ! (imf->op_flags & IMG_OP_BIAS) ) {
 
             if ( ccdr->bias->fr && (sub_frames(imf->fr, ccdr->bias->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'BIAS FRAME SUBTRACTED'");
@@ -650,15 +650,16 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_BIAS | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_BIAS;
     }
 
-    if ( ccdr->ops & IMG_OP_DARK ) {
+    if ( ccdr->op_flags & IMG_OP_DARK ) {
 //        g_return_val_if_fail(ccdr->dark->fr != NULL, -1);
 
         REPORT( " dark" )
 
-        if ( ! (imf->flags & IMG_OP_DARK) ) {
+        if ( ! (imf->op_flags & IMG_OP_DARK) ) {
 
             if ( ccdr->dark->fr && (sub_frames(imf->fr, ccdr->dark->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'DARK FRAME SUBTRACTED'");
@@ -669,15 +670,16 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_DARK | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_DARK;
     }
 
-    if ( ccdr->ops & IMG_OP_FLAT ) {
+    if ( ccdr->op_flags & IMG_OP_FLAT ) {
 //        g_return_val_if_fail(ccdr->flat->fr != NULL, -1);
 
         REPORT( " flat" )
 
-        if (! (imf->flags & IMG_OP_FLAT) ) {
+        if (! (imf->op_flags & IMG_OP_FLAT) ) {
 
             if ( ccdr->flat->fr && (flat_frame(imf->fr, ccdr->flat->fr) == 0) ) {
 //                fits_add_history(imf->fr, "'FLAT FIELDED'");
@@ -688,15 +690,16 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_FLAT | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_FLAT;
     }
 
-    if ( ccdr->ops & IMG_OP_BADPIX ) {
+    if ( ccdr->op_flags & IMG_OP_BADPIX ) {
 //        g_return_val_if_fail(ccdr->bad_pix_map != NULL, -1);
 
         REPORT( " badpix" )
 
-        if ( ! (imf->flags & IMG_OP_BADPIX) ) {
+        if ( ! (imf->op_flags & IMG_OP_BADPIX) ) {
 
             if ( ccdr->bad_pix_map && (fix_bad_pixels(imf->fr, ccdr->bad_pix_map) == 0) )
                 fits_add_history(imf->fr, "'PIXEL DEFECTS REMOVED'");
@@ -705,39 +708,55 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_BADPIX | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_BADPIX;
     }
 
-    if ( ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD) ) {
-        REPORT( " mul/add" )
+    if ( ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD) ) {
+        if (ccdr->mul_before_add != 0)
+            REPORT( " add-mul" )
+        else
+            REPORT( " mul-add" )
 
-        if ( (ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD)) != (imf->flags & (IMG_OP_MUL | IMG_OP_ADD)) ) {
+        if ( (ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) != (imf->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) ) {
 
             double m = 1.0, a = 0.0;
-            if ( (ccdr->ops & IMG_OP_MUL) && !(imf->flags & IMG_OP_MUL) ) {
-                m = ccdr->mulv;
+            if ( (ccdr->op_flags & IMG_OP_MUL) && !(imf->op_flags & IMG_OP_MUL) ) m = ccdr->mulv;
 
 // horrible hack: m == 0 -> flag normalize CFA colours
-                if (m == 0) {
-                    if (normalize_CFA(imf->fr))	return -1;
+//              if (m == 0) {
+//                    if (normalize_CFA(imf->fr))	return -1;
 
-                    fits_add_history(imf->fr, "'NORMALIZE CFA band levels'");
-                }
-            }
-            if ( (ccdr->ops & IMG_OP_ADD) && !(imf->flags & IMG_OP_ADD) ) a = ccdr->addv;
+//                    fits_add_history(imf->fr, "'NORMALIZE CFA band levels'");
+//                }
 
-            scale_shift_frame(imf->fr, m, a);
+            if (m == 0) m = 1;
 
-            lb = NULL; asprintf(&lb, "'ARITHMETIC P <- P * %.3f + %.3f'", m, a);
+            if ( (ccdr->op_flags & IMG_OP_ADD) && !(imf->op_flags & IMG_OP_ADD) ) a = ccdr->addv;
+
+            if (ccdr->mul_before_add == 0)
+                scale_shift_frame(imf->fr, m, a); // multiply then add
+
+            else
+                scale_shift_frame(imf->fr, m, m * a); // add then multiply
+
+            lb = NULL;
+            if (ccdr->mul_before_add)
+                asprintf(&lb, "'ARITHMETIC SCALE: P * %.3f + %.3f -> P'", m, a);
+            else
+                asprintf(&lb, "'ARITHMETIC SCALE: (P + %.3f) * %.3f -> P'", a, m);
+
             if (lb) fits_add_history(imf->fr, lb), free(lb);
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= (ccdr->ops & (IMG_OP_MUL | IMG_OP_ADD)) | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+//        imf->op_flags |= (ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD)); ?
+        imf->op_flags |= IMG_OP_MUL | IMG_OP_ADD;
     }
 
-    if ( ccdr->ops & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
-        if ( ccdr->ops & IMG_OP_BG_ALIGN_ADD )
+    if ( ccdr->op_flags & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
+        if ( ccdr->op_flags & IMG_OP_BG_ALIGN_ADD )
         {
             REPORT( " bg_align" )
         }
@@ -748,46 +767,65 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if (! imf->fr->stats.statsok) frame_stats(imf->fr);
 
-        if ( (ccdr->ops & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) != (imf->flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) ) {
+        if ( (ccdr->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) != (imf->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) ) {
 
-            if ( (ccdr->ops & IMG_OP_BG_ALIGN_MUL) && (imf->fr->stats.median < P_DBL(MIN_BG_SIGMAS) * imf->fr->stats.csigma) ) {
+            if ( (ccdr->op_flags & IMG_OP_BG_ALIGN_MUL) && (imf->fr->stats.median < P_DBL(MIN_BG_SIGMAS) * imf->fr->stats.csigma) ) {
 
                 REPORT( " (too low)" )
-                imf->flags |= IMG_SKIP;
+                imf->state_flags |= IMG_STATE_SKIP;
 
             } else {
-                if ( ccdr->ops & IMG_OP_BG_ALIGN_MUL )
+                if ( ccdr->op_flags & IMG_OP_BG_ALIGN_MUL )
                     scale_shift_frame (imf->fr, ccdr->bg / imf->fr->stats.median, 0);
 
-                else if ( ccdr->ops & IMG_OP_BG_ALIGN_ADD )
+                else if ( ccdr->op_flags & IMG_OP_BG_ALIGN_ADD )
                     scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.median); // median poorly estimated for low signals
 //                    scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.avg);
             }
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= (ccdr->ops & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= (ccdr->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD));
     }
 
     noise_to_fits_header(imf->fr);
 
-    if ( ccdr->ops & IMG_OP_DEMOSAIC ) {
+    if ( ccdr->op_flags & IMG_OP_DEMOSAIC ) {
         REPORT( " demosaic" )
 
-        if ( ! (imf->flags & IMG_OP_DEMOSAIC) ) {
+        if ( ! (imf->op_flags & IMG_OP_DEMOSAIC) ) {
             bayer_interpolate(imf->fr);
             fits_add_history(imf->fr, "'DEMOSAIC'");
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_DEMOSAIC | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_DEMOSAIC;
     }
 
-    if ( ccdr->ops & IMG_OP_BLUR ) {
+    if ( ccdr->op_flags & IMG_OP_ERASE ) {
+        REPORT( " erase" )
+
+        if ( ! (imf->op_flags & IMG_OP_ERASE) ) {
+            if (! erase_stars(imf->fr))
+                REPORT( " (FAILED)" )
+            else {
+                lb = NULL; asprintf(&lb, "'ERASE STARS'");
+                if (lb) fits_add_history(imf->fr, lb), free(lb);
+            }
+
+        } else REPORT( " (already_done)" )
+
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_ERASE;
+    }
+
+    if ( ccdr->op_flags & IMG_OP_BLUR ) {
         REPORT( " blur" )
 
         remove_bayer_info(imf->fr);
-        if ( ! (imf->flags & IMG_OP_BLUR) ) {
+        if ( ! (imf->op_flags & IMG_OP_BLUR) ) {
             int res = 0;
             if (ccdr->blurv < 2) {
                 ccdr->blur = new_blur_kern(ccdr->blur, 7, ccdr->blurv);
@@ -804,16 +842,17 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_BLUR | IMG_DIRTY;
+        imf->state_flags |= IMG_STATE_DIRTY;
+        imf->op_flags |= IMG_OP_BLUR;
     }
 
-    if ( ccdr->ops & IMG_OP_ALIGN ) {
+    if ( ccdr->op_flags & IMG_OP_ALIGN ) {
         REPORT( " align" )
 
         // after alignment, it is no longer possible to use the raw frame
         remove_bayer_info(imf->fr);
 
-        if ( ! (imf->flags & IMG_OP_ALIGN) ) {
+        if ( ! (imf->op_flags & IMG_OP_ALIGN) ) {
             int result_ok = 0;
             if (ccdr->alignref->fr)
                 result_ok = align_imf(imf, ccdr, progress, processing_dialog) == 0;
@@ -821,43 +860,44 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             if (result_ok) {
                 fits_add_history(imf->fr, "'ALIGNED'");
 //                imf->fim->wcsset = WCS_VALID;
-                imf->flags |= IMG_OP_ALIGN | IMG_DIRTY;
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_ALIGN;
 
             } else {
                 REPORT( " (FAILED)" )
-                imf->flags |= IMG_SKIP | IMG_DIRTY;
+                imf->state_flags |= IMG_STATE_SKIP; // | IMG_STATE_DIRTY ?
             }
         } else REPORT( " (already_done)" )
     }
 
-    if ( ccdr->ops & IMG_OP_WCS ) {
+    if ( ccdr->op_flags & IMG_OP_WCS ) {
         REPORT( " wcs" )
 
-        if ( ! (imf->flags & IMG_OP_WCS) ) {
+        if ( ! (imf->op_flags & IMG_OP_WCS) ) {
 
             if ( fit_wcs(imf, ccdr, progress, processing_dialog) ) {
                 REPORT( " (FAILED)" )
-                imf->flags |= IMG_SKIP;
+                imf->state_flags |= IMG_STATE_SKIP;
             }
 
         } else REPORT( " (already_done)" )
 
-        imf->flags |= IMG_OP_WCS;
+        imf->op_flags |= IMG_OP_WCS;
     }
 
-    if ( (ccdr->ops & IMG_OP_PHOT) && ! (imf->flags & IMG_SKIP) ) {
+    if ( (ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP) ) {
 
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
             REPORT( " phot" )
             if ( aphot_imf(imf, ccdr, progress, processing_dialog) ) {
                 REPORT( " (FAILED)" )
-                imf->flags |= IMG_SKIP;
+                imf->state_flags |= IMG_STATE_SKIP;
             }
         }
 
         // else REPORT( " (already_done)" )
-        imf->flags |= IMG_DIRTY; // even though it isnt
+        imf->state_flags |= IMG_STATE_DIRTY; // even though it isnt
     }
 
     REPORT( "\n" )
@@ -878,7 +918,7 @@ int ccd_reduce_imf (struct image_file *imf, struct ccd_reduce *ccdr, progress_pr
 
     if (imf_load_frame(imf) < 0) {
         err_printf("frame will be skipped\n");
-        imf->flags |= IMG_SKIP;
+        imf->state_flags |= IMG_STATE_SKIP;
         REPORT( " SKIPPED\n");
         return 1;
     }
@@ -902,7 +942,7 @@ int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, progress_p
     int ret = setup_for_ccd_reduce (ccdr, progress, processing_dialog);
     if (ret) return ret;
 
-    if (imf->flags & IMG_SKIP) return 1;
+    if (imf->state_flags & IMG_STATE_SKIP) return 1;
 
     load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 
@@ -931,7 +971,7 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progres
             struct image_file *imf = gl->data;
             gl = g_list_next(gl);
 
-            if (imf->flags & IMG_SKIP) break;
+            if (imf->state_flags & IMG_STATE_SKIP) break;
 
             ret = ccd_reduce_imf (imf, ccdr, progress, processing_dialog);
             if (ret < 0) break;
@@ -992,7 +1032,7 @@ static int get_unskipped_frames (struct image_file_list *imfl, struct ccd_frame 
     while (gl != NULL) {
         struct image_file *imf = gl->data;
         gl = g_list_next(gl);
-        if (imf->flags & IMG_SKIP)
+        if (imf->state_flags & IMG_STATE_SKIP)
             continue;
 
         n++;
@@ -1010,7 +1050,7 @@ static int get_unskipped_frames (struct image_file_list *imfl, struct ccd_frame 
     while (gl != NULL) {
         struct image_file *imf = gl->data;
         gl = g_list_next(gl);
-        if (imf->flags & IMG_SKIP)
+        if (imf->state_flags & IMG_STATE_SKIP)
             continue;
 
         fr[i++] = imf->fr;
@@ -1050,7 +1090,7 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
     while (gl != NULL) {
         imf = gl->data;
         gl = g_list_next(gl);
-        if (imf->flags & IMG_SKIP)
+        if (imf->state_flags & IMG_STATE_SKIP)
             continue;
         if ((imf->fr->w < w) || (imf->fr->h < h)) {
             err_printf("bad frame size\n");
@@ -1109,7 +1149,7 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
 
-        if (imf->flags & IMG_SKIP) continue;
+        if (imf->state_flags & IMG_STATE_SKIP) continue;
         if ((imf->fr->w < w) || (imf->fr->h < h)) { err_printf("bad frame size\n"); continue; }
 
 		frames[i] = imf->fr;
@@ -1171,7 +1211,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
 
-        if (imf->flags & IMG_SKIP) continue;
+        if (imf->state_flags & IMG_STATE_SKIP) continue;
         if ((imf->fr->w < w) || (imf->fr->h < h)) {	err_printf("bad frame size\n");	continue; }
 
 		frames[i] = imf->fr;
@@ -1258,7 +1298,7 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
 
-        if (imf->flags & IMG_SKIP) continue;
+        if (imf->state_flags & IMG_STATE_SKIP) continue;
         if ((imf->fr->w < w) || (imf->fr->h < h)) {	err_printf("bad frame size\n");	continue; }
 
 		frames[i] = imf->fr;
@@ -1338,7 +1378,7 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 	while (gl != NULL) {
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
-		if (imf->flags & IMG_SKIP)
+        if (imf->state_flags & IMG_STATE_SKIP)
 			continue;
 		if (i >= COMB_MAX) {
 			d1_printf("reached stacking limit\n");
@@ -1395,7 +1435,8 @@ static int do_stack_time(struct image_file_list *imfl, struct ccd_frame *fr,
 
 //    lb = NULL; asprintf (&lb, "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
 //    if (lb) fits_add_keyword (fr, P_STR(FN_JDATE), lb), free(lb);
-    fits_keyword_add(fr, P_STR(FN_JDATE), "%20.8f / JULIAN DATE OF EXPOSURE CENTER", exptime / expsum);
+    fr->fim.jd = exptime / expsum;
+    fits_keyword_add(fr, P_STR(FN_JDATE), "%20.8f / JULIAN DATE OF EXPOSURE CENTER", fr->fim.jd);
 
 //    double tz = P_DBL(OBS_TIME_ZONE);
 //    if (tz) exptime = exptime + tz / 24 * expsum;
@@ -1449,7 +1490,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
 
-		if (imf->flags & IMG_SKIP)
+        if (imf->state_flags & IMG_STATE_SKIP)
 			continue;
 
         if (imf_load_frame(imf) < 0) {
@@ -1480,7 +1521,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 	while (gl != NULL) {
         struct image_file *imf = gl->data;
 		gl = g_list_next(gl);
-		if (imf->flags & IMG_SKIP)
+        if (imf->state_flags & IMG_STATE_SKIP)
 			continue;
 
         fr = clone_frame(imf->fr);
@@ -1488,6 +1529,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 			err_printf("Cannot create output frame\n");
             break;
 		}
+        fr->fim.jd = NAN; // try this
         crop_frame(fr, 0, 0, ow, oh);
 		break;
 	}
@@ -1509,11 +1551,11 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             eff = 1.0;
             err = (do_stack_avg(imfl, fr, progress, processing_dialog) != 0);
             break;
-        case PAR_STACK_METHOD_WEIGHTED_AVERAGE:
-            eff = 1.0;
+//        case PAR_STACK_METHOD_WEIGHTED_AVERAGE:
+//            eff = 1.0;
 //            err = (do_stack_weighted_avg(imfl, fr, progress, processing_dialog) != 0);
-            err = 1;
-            break;
+//            err = 1;
+//            break;
         case PAR_STACK_METHOD_KAPPA_SIGMA:
             eff = 0.9;
             err = (do_stack_ks(imfl, fr, progress, processing_dialog) != 0);
@@ -1536,6 +1578,10 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             fr = NULL;
 
         } else {
+            // set wcs
+            struct wcs *wcs = window_get_wcs(ccdr->window);
+            wcs_clone(&fr->fim, wcs);
+
             do_stack_time(imfl, fr, progress, processing_dialog);
             fr->exp.rdnoise = sqrt(rdnsq) / nf / eff;   // sum n frames
             fr->exp.flat_noise = fln / nf;
@@ -1551,29 +1597,25 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
     while(gl != NULL) {
         struct image_file *imf = gl->data;
         gl = g_list_next(gl);
-        if ( ! (imf->flags & IMG_SKIP) )
+        if ( ! (imf->state_flags & IMG_STATE_SKIP) )
             imf_release_frame(imf, "stack_frames");
     }
 
     if (fr)
-        add_image_file_to_list(imfl, fr, STACK_RESULT, IMG_LOADED | IMG_IN_MEMORY_ONLY | IMG_DIRTY);
+        add_image_file_to_list(imfl, fr, STACK_RESULT, IMG_STATE_LOADED | IMG_STATE_IN_MEMORY_ONLY | IMG_STATE_DIRTY);
 
 d3_printf("ccd_frame.stack_frames return ok\n");
     return fr;
 }
 
-
-
-
 static double star_size_flux(double flux, double ref_flux, double fwhm)
 {
 	double size;
-	size = 1.0 * P_INT(DO_MAX_STAR_SZ) + 2.5 * P_DBL(DO_PIXELS_PER_MAG)
-		* log10(flux / ref_flux);
-	clamp_double(&size, 1.0 * P_INT(DO_MIN_STAR_SZ),
-		     1.0 * P_INT(DO_MAX_STAR_SZ));
+    size = 1.0 * P_INT(DO_MAX_STAR_SZ) + 2.5 * P_DBL(DO_PIXELS_PER_MAG) * log10(flux / ref_flux);
+    clamp_double(&size, 1.0 * P_INT(DO_MIN_STAR_SZ), 1.0 * P_INT(DO_MAX_STAR_SZ));
 	return size;
 }
+
 
 /* detect the stars in frame and return them in a list of gui-stars
  * of "simple" type */
@@ -1587,7 +1629,7 @@ static GSList *detect_frame_stars(struct ccd_frame *fr)
         return NULL;
     }
 
-	extract_stars(fr, NULL, 0, P_DBL(SD_SNR), src);
+    extract_stars(fr, NULL, P_DBL(SD_SIGMAS), NULL, src);
 
 /* now add to the list */
 
@@ -1634,7 +1676,7 @@ d3_printf("free alignment stars\n");
 	}
 	g_slist_free(ccdr->align_stars);
 	ccdr->align_stars = NULL;
-    ccdr->ops &= ~CCDR_ALIGN_STARS; // turn off alignment
+    ccdr->state_flags &= ~IMG_STATE_ALIGN_STARS; // turn off alignment
 }
 
 /* search the alignment ref frame for alignment stars and build them in the
@@ -1644,7 +1686,7 @@ int load_alignment_stars(struct ccd_reduce *ccdr)
 	GSList *as = NULL;
 	struct gui_star *gs;
 d3_printf("load alignment stars");
-	if (!(ccdr->ops & IMG_OP_ALIGN)) {
+    if (!(ccdr->op_flags & IMG_OP_ALIGN)) {
 		err_printf("no alignment ref frame\n");
 		return -1;
 	}
@@ -1657,7 +1699,7 @@ d3_printf("load alignment stars");
         int res = imf_load_frame(ccdr->alignref);
         if (res < 0) return -1;
 
-        if (ccdr->ops & CCDR_ALIGN_STARS) free_alignment_stars (ccdr);
+        if (ccdr->state_flags & IMG_STATE_ALIGN_STARS) free_alignment_stars (ccdr);
 
         struct ccd_frame *fr = ccdr->alignref->fr;
 
@@ -1672,7 +1714,7 @@ d3_printf("load alignment stars");
 
                 as = g_slist_next(as);
             }
-            ccdr->ops |= CCDR_ALIGN_STARS; // turn on alignment
+            ccdr->state_flags |= IMG_STATE_ALIGN_STARS; // turn on alignment
         }
 // read wcs from alignment frame (if set)
 //        struct wcs *wcs = g_object_get_data (G_OBJECT(ccdr->window), "wcs_of_window");
@@ -2017,7 +2059,7 @@ int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func
     if (ccdr->recipe) load_rcp_to_window (window, ccdr->recipe, NULL);
 
     struct wcs *wcs = NULL;
-    if (ccdr->ops & IMG_OP_PHOT_REUSE_WCS) {
+    if (ccdr->state_flags & IMG_STATE_REUSE_WCS) {
         wcs = ccdr->wcs;
 
     } else {
@@ -2053,7 +2095,7 @@ int remove_off_frame_stars_for_list(struct image_file_list *imfl, struct ccd_red
 int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog)
 {
 
-    if (! (imf->flags & IMG_LOADED))  return -1;
+    if (! (imf->state_flags & IMG_STATE_LOADED))  return -1;
 //    if (imf_load_frame(imf) < 0) return -1;
 
     gpointer window = ccdr->window;
@@ -2062,7 +2104,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 //    load_rcp_to_window (window, ccdr->recipe, NULL);
 
     struct wcs *wcs = NULL;
-    if (ccdr->ops & IMG_OP_PHOT_REUSE_WCS) {
+    if (ccdr->state_flags & IMG_STATE_REUSE_WCS) {
         wcs = ccdr->wcs;
     } else {
         wcs = window_get_wcs(window);
@@ -2096,7 +2138,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
         }
 
 // remove this bit? move to mband calls?
-        if ( ccdr->multiband && ! (ccdr->ops & IMG_QUICKPHOT) ) { // add frame to ccdr->mbds
+        if ( ccdr->multiband && ! (ccdr->state_flags & IMG_STATE_QUICKPHOT) ) { // add frame to ccdr->mbds
 
             struct o_frame *ofr = stf_to_mband (ccdr->multiband, stf);
             if (ofr) ofr_link_imf(ofr, imf);
@@ -2210,7 +2252,7 @@ printf("imf freed '%s'\n", imf->filename); fflush(NULL);
     free(imf);
 }
 
-struct image_file* add_image_file_to_list(struct image_file_list *imfl, struct ccd_frame *fr, char *filename, int flags)
+struct image_file* add_image_file_to_list(struct image_file_list *imfl, struct ccd_frame *fr, char *filename, int state_flags)
 {
     struct image_file *imf;
     g_return_val_if_fail(imfl != NULL, NULL);
@@ -2218,13 +2260,13 @@ struct image_file* add_image_file_to_list(struct image_file_list *imfl, struct c
 //printf("reduce.add_image_file_to_list %s\n", filename);
     imf = image_file_new(fr, filename);
 
-    imf->flags |= flags;
+    imf->state_flags |= state_flags;
 
     imfl->imlist = g_list_append(imfl->imlist, imf);
 
     if (fr) {
         wcs_clone(imf->fim, &fr->fim);
-//        imf->flags = flags | IMG_IN_MEMORY_ONLY | IMG_LOADED | IMG_DIRTY;
+//        imf->state_flags = flags | IMG_STATE_IN_MEMORY_ONLY | IMG_STATE_LOADED | IMG_STATE_DIRTY;
 
         imf_load_frame(imf);
     }

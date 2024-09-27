@@ -61,7 +61,7 @@ double get_star(struct ccd_frame *fr, double x, double y, struct ap_params *p,
 int aphot_star(struct ccd_frame *fr, struct star *s, 
 	       struct ap_params *p, struct bad_pix_map *bp);
 void do_fit_psf(gpointer window, GSList *selection);
-void plot_psf(struct psf *psf);
+void plot_psf(struct psf *psf, double xc, double yc);
 
 
 #endif

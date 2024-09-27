@@ -253,16 +253,16 @@ static void save_fits(GtkWidget *chooser, gpointer user_data)
 
     struct image_file *imf = ich->fr->imf;
     if (imf) {
-        if (imf->flags & IMG_IN_MEMORY_ONLY) {
+        if (imf->state_flags & IMG_STATE_IN_MEMORY_ONLY) {
             if (imf->filename) free(imf->filename);
             imf->filename = strdup(fn);
 
             if (ich->fr->name) free(ich->fr->name);
             ich->fr->name = strdup(basename(fn));
 
-            imf->flags &= ~IMG_IN_MEMORY_ONLY;
+            imf->state_flags &= ~IMG_STATE_IN_MEMORY_ONLY;
         }
-        imf->flags &= ~IMG_DIRTY;
+        imf->state_flags &= ~IMG_STATE_DIRTY;
         // queue draw reduction window to load changed name?
     }
 
@@ -482,7 +482,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         }
         if (WCS_HAVE_INITIAL(window_wcs)) {
             wcs_set_validation(window, WCS_INITIAL);
-
+// is window_wcs fully setup ?
             wcs_clone(& fr->fim, window_wcs);
         }
     }
