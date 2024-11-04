@@ -69,6 +69,14 @@ struct map_geometry {
 	int height;
 };
 
+struct mouse_motion {
+    gboolean dragging;
+    double drag_x, drag_y;
+    int last_time;
+    double xc, yc;
+};
+
+void check_resize_cb(GtkWindow *window, gpointer scw);
 gboolean button_press_cb(GtkWidget *widget, GdkEventButton *event, gpointer scw);
 gboolean motion_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer scw);
 void get_screen_center(gpointer im_window, double *xc, double *yc);
@@ -81,7 +89,7 @@ int user_abort(void *window); // control-c polling using window flag
 /* function prototypes */
 /* from showimage.c */
 extern gboolean image_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer data);
-extern int frame_to_channel(struct ccd_frame *fr, GtkWidget *window, char *chname);
+extern int frame_to_channel(struct ccd_frame *fr, GtkWindow *window, char *chname);
 extern void ref_image_channel(struct image_channel *channel);
 extern void release_image_channel(struct image_channel *channel);
 extern int channel_to_pnm_file(struct image_channel *channel, GtkWidget *window, char *fn, int is_16bit);
@@ -96,7 +104,7 @@ extern void image_box_to_cache(struct map_cache *cache, struct image_channel *ch
 extern void error_beep(void);
 extern void warning_beep(void);
 extern void step_zoom(struct map_geometry *geom, int step);
-extern void set_scrolls(GtkWidget *window, double xc, double yc);
+extern void set_scrolls(GtkWindow *window, double xc, double yc);
 
 extern int modal_yes_no(char *text, char *title);
 
@@ -171,14 +179,13 @@ extern void act_stars_add_gsc2_file (GtkAction *action, gpointer window);
 
 /* from imadjust.c */
 extern void set_default_channel_cuts(struct image_channel* channel);
-extern void set_darea_size(GtkWidget *window, struct map_geometry *geom);
+extern void set_darea_size(GtkWindow *window, struct map_geometry *geom);
+extern void pan_cursor(GtkWindow *window);
 extern void drag_adjust_cuts(GtkWidget *window, int dx, int dy);
 extern void drag_pan(GtkWidget *window, int dx, int dy);
-extern void pan_cursor(GtkWidget *window);
 extern void show_region_stats(GtkWidget *window, double x, double y);
 extern void show_zoom_cuts(GtkWidget * window);
 extern void stats_cb(gpointer data, guint action);
-extern int get_scrolls(GtkWidget *window, double *xc, double *yc);
 
 extern void act_view_cuts_auto (GtkAction *action, gpointer window);
 extern void act_view_cuts_minmax (GtkAction *action, gpointer window);
@@ -304,6 +311,7 @@ extern void act_mband_hilight_stars(GtkAction *action, gpointer data);
 
 /* synth.c */
 extern void act_stars_add_synthetic(GtkAction *action, gpointer window);
+extern void add_sky_patch_to_frame(struct ccd_frame *fr, double x, double y, int r, double sky_level, double sky_sigma);
 
 /* query.c */
 extern void act_stars_add_cds_gsc_act (GtkAction *action, gpointer window);

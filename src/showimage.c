@@ -1057,7 +1057,7 @@ void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
  * it ref's the frame, so the frame should be released after
  * frame_to_channel is called
  */
-int frame_to_channel(struct ccd_frame *fr, GtkWidget *window, char *chname)
+int frame_to_channel(struct ccd_frame *fr, GtkWindow *window, char *chname)
 {
 //printf("showimage.frame_to_channel\n");
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
@@ -1092,9 +1092,10 @@ d2_printf("frame to channel\n");
 	int w, h, x, y, d;
 
 //    gdk_window_get_geometry(window->window, &x, &y, &w, &h, &d);
-    gdk_window_get_position(window->window, &x, &y);
-    w = gdk_window_get_width(window->window);
-    h = gdk_window_get_height(window->window);
+    GdkWindow *gwin = gtk_widget_get_window(GTK_WIDGET(window));
+    gdk_window_get_position(gwin, &x, &y);
+    w = gdk_window_get_width(gwin);
+    h = gdk_window_get_height(gwin);
 
     struct map_cache *cache = channel->cache;
 	if (fr->magic & FRAME_VALID_RGB) 

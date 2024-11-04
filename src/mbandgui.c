@@ -146,12 +146,12 @@ static void mbds_print_summary(gpointer mband_dialog)
             g_list_length(mbds->sobs), g_list_length(mbds->ostars), g_list_length(mbds->ofrs), skipped);
 }
 
-static int fit_progress(char *msg, void *data)
+static int fit_progress(char *msg, void *window)
 {
-    mbds_printf(data, "%s", msg);
+    mbds_printf(window, "%s", msg);
 
 //    while (gtk_events_pending ()) gtk_main_iteration ();
-    return user_abort(data);
+    return user_abort(window);
 
     return 0;
 }
@@ -684,7 +684,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
 
 //    if ((sob->ofr->zpstate & ZP_STATE_MASK) > ZP_FIT_ERR) {
 //        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
-// if (! (sob->flags & CPHOT_INVALID)) {
+//    if (! (sob->flags & CPHOT_INVALID)) {
 
     char *format[] = { ">%.1f", "[%.3f]", "%.3f" };
     enum { format_err = -1, format_faint, format_tgt, format_std };

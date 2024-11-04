@@ -201,34 +201,17 @@ static void star_moments(struct ccd_frame *fr, double x, double y, double r, dou
 			mxy += v * (ix - x) * (iy - y);
 			mx2 += v * sqr(ix - x);
             my2 += v * sqr(iy - y);
-/*
-            mx += v * ix;
-            my += v * iy;
-            mxy += v * ix * iy;
-			mx2 += v * sqr(ix);
-            my2 += v * sqr(iy);
-*/
+
             sum += v;
         }
 	}
-// fill the result structure with the stats
 
-    mx /= sum;
-    my /= sum;
-    mxy /= sum;
-    mx2 /= sum;
-    my2 /= sum;
-
-    m->mx = mx;
-    m->my = my;
-/*
-    m->mxy = mxy + (x - mx) * my + (y - my) * mx + (x - mx) * (y - my);
-	m->mx2 = mx2 + sqr(x - mx) + mx * (x - mx);
-	m->my2 = my2 + sqr(y - my) + my * (y - my);
-*/
-    m->mxy = mxy; // + m->mx * my + m->my * mx + m->mx * m->my;
-    m->mx2 = mx2; // + sqr(m->mx) + mx * m->mx;
-    m->my2 = my2; // + sqr(m->my) + my * m->my;
+    // central moments
+    m->mx = mx / sum; // xc
+    m->my = my / sum; // yc
+    m->mxy = mxy / sum - m->mx * m->my;
+    m->mx2 = mx2 / sum - sqr(m->mx);
+    m->my2 = my2 / sum - sqr(m->my);
 
     m->sum = sum;
 	m->npix = nring;
@@ -236,40 +219,45 @@ static void star_moments(struct ccd_frame *fr, double x, double y, double r, dou
 
 // compute the eccentricity and orientation of major
 // axis for a star, given it's moments
+// from Kilian: Simple Image Analysis by Moments
 static int moments_to_ecc(struct moments *m, double *pa, double *ecc)
 {
     if (m->mx2 + m->my2 == 0) return -1;	// bad moments
 
-    *pa = NAN;
-    *ecc = 0; // circle
+    *ecc = (sqr(m->mx2 - m->my2) + 4 * sqr(m->mxy)) / (m->mx2 + m->my2);
 
-    if (m->mx2 == m->my2) return 0;
+    if (m->mx2 == m->my2) {
+        if (m->mxy == 0)
+            *pa = 0;
+        else
+            *pa = (m->mxy > 0) ? PI / 4.0 : - PI / 4.0;
 
-    double t2a = - 2 * m->mxy / (m->mx2 - m->my2);
-    double a = 0.5 * atan(t2a);
+    } else {
+        if (m->mxy == 0)
+            *pa = (m->mx2 - m->my2 > 0) ? 0 : PI / 2.0;
+        else {
+            double t2a = - 2 * m->mxy / (m->mx2 - m->my2);
+            *pa = 0.5 * atan(t2a);
 
-    double csqa = sqr(cos(a));
-    double ssqa = sqr(sin(a));
-    double s2a = 2 * csqa * ssqa;
-
-    double mpx = csqa * m->mx2 + ssqa * m->my2 - s2a * m->mxy;
-    double mpy = csqa * m->my2 + ssqa * m->mx2 + s2a * m->mxy;
-
-    if (m->mx2 < 0 || m->my2 < 0) { // mx2 and my2 are positive definite ?
-        printf("moments_to_ecc: negative mx2 %f or my2 %f\n", m->mx2, m->my2); fflush(NULL);
-    }
-    if (mpx < 0 || mpy < 0) { // mpx and mpy are positive definite ?
-        printf("moments_to_ecc: negative mpx %f or mpy %f\n", mpx, mpy); fflush(NULL);
+            if (m->mx2 - m->my2 < 0)
+                *pa = (m->mxy > 0) ? *pa + PI / 2.0 : *pa - PI / 2.0;
+        }
     }
 
-// mpx + mpy = 0 if m->mx2 + m->my2 = 0
-// mpx = 0 only if mpy = 0
+//    double t2a = - 2 * m->mxy / (m->mx2 - m->my2);
+//    double a = 0.5 * atan(t2a);
+//    double csqa = sqr(cos(a));
+//    double ssqa = sqr(sin(a));
+//    double s2a = 2 * csqa * ssqa;
 
-    *ecc = sqrt(mpx / mpy);
-    *pa = a * 180.0 / PI; // horizontal major axis
+//    double mpx = csqa * m->mx2 + ssqa * m->my2 - s2a * m->mxy;
+//    double mpy = ssqa * m->mx2 + csqa * m->my2 + s2a * m->mxy;
 
-    if (mpx == mpy) // major axis vertical, change pa by 90 degrees
-        *pa = (a > 0) ? a - 90.0 : a + 90.0;
+//    *ecc = sqrt(mpx / mpy);
+//    *pa = a * 180.0 / PI; // horizontal major axis
+
+//    if (mpx == mpy) // major axis vertical, change pa by 90 degrees
+//        *pa = (a > 0) ? a - 90.0 : a + 90.0;
 
     return 0;
 }
@@ -318,7 +306,7 @@ static int star_radius(struct ccd_frame *fr, int x, int y, double peak, double s
         }
 
         if (rsn.avg > hm_flux * 0.9) {// we are before half maximum
-            inner_flux = rsn.avg;
+            inner_flux += rsn.avg; // accumulate ring flux
             half_radius = rn;
 
         } else if (outer_flux == 0.0) {// first radius after half maximum
@@ -355,7 +343,7 @@ int valid_star(struct ccd_frame *fr, double x, double y, double peak, double sky
     int starr = star_radius(fr, x, y, peak, sky, &fwhm);
 
     if (starr < 0) return -1;
-
+// estimate sky ring size from peak
     // estimate sky here
     struct rstats sky_stats;
     thin_ring_stats(fr, x, y, SKYR * starr, &sky_stats, -HUGE, HUGE);
@@ -426,7 +414,7 @@ int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_f
     int yc = floor(y + 0.5);
 
     int ring;
-    for (ring = 0; ring < r; ring++) {
+    for (ring = 1; ring < r; ring++) {
         double rmax = HUGE;
 
         do {
@@ -448,6 +436,66 @@ int locate_star(struct ccd_frame *fr, double x, double y, double r, double min_f
 	s->yerr = BIG_ERR;
 
     return -1;
+}
+
+static int star_at(struct ccd_frame *fr, double x, double y, double r, double min_flux, struct star *s)
+{
+    s->xerr = BIG_ERR;
+    s->yerr = BIG_ERR;
+
+    // find the stats for the star
+    struct rstats star_stats;
+    ring_stats(fr, x, y, 0, r, QUAD1|QUAD2|QUAD3|QUAD4, &star_stats, -HUGE, HUGE);
+
+    int xc = floor(x + 0.5);
+    int yc = floor(y + 0.5);
+
+    // estimate sky
+    struct rstats sky_stats;
+    thin_ring_stats(fr, xc, yc, 2 * r, &sky_stats, -HUGE, HUGE);
+
+    double fwhm;
+    int starr = star_radius(fr, x, y, star_stats.max, sky_stats.median, &fwhm);
+
+    if (starr < 0) return -1;
+
+    if (star_stats.max < sky_stats.median) return -1;
+
+    int skycut; // sky median + 3 sigma
+    if (fr->stats.statsok && fr->stats.csigma < sky_stats.sigma)
+        skycut = NSIGMA * fr->stats.csigma + sky_stats.median;
+    else
+        skycut = NSIGMA * sky_stats.sigma + sky_stats.median;
+
+    // get the star's centroid and flux
+    struct moments m;
+    star_moments(fr, x, y, starr, sky_stats.median, &m);
+
+    if (m.sum <= sky_stats.sum - sky_stats.used * skycut + min_flux) return -1;
+
+    // check that we have a few connected pixels above the cut
+    ring_stats(fr, x, y, 0, 3, QUAD1|QUAD2|QUAD3|QUAD4, &star_stats, skycut, HUGE);
+
+    if (star_stats.used < NCONN) return -1;
+
+    s->peak = star_stats.max; // star peak
+
+    // we have a star; fill up return values and exit
+    s->x = x + m.mx;
+    s->y = y + m.my;
+    s->flux = m.sum;
+    s->starr = starr;
+    s->fwhm = fwhm;
+    s->sky = sky_stats.median;
+    s->sky_sigma = sky_stats.sigma;
+    s->npix = m.npix;
+
+    s->xerr = (m.sum < 1) ? BIG_ERR : sqrt(m.mx2 - sqr(m.mx));
+    s->yerr = (m.sum < 1) ? BIG_ERR : sqrt(m.my2 - sqr(m.my));
+
+    moments_to_ecc(&m, &s->fwhm_pa, &s->fwhm_ec);
+
+    return 0;
 }
 
 // Find where the current star has moved, whithin a radius of r
@@ -575,7 +623,7 @@ static void check_multiple(struct sources *src)
     }
 
     double av_fwhm = (count > 0) ? sum_fwhm / count : 3;
-    av_fwhm = 3;
+
     for (i = 0; i < src->ns; i++) { // look for any duplicate sj close to si
         struct star *si = &(src->s[i]);
         if (si->datavalid) {
@@ -586,7 +634,7 @@ static void check_multiple(struct sources *src)
                     if (fabs(si->y - sj->y) > av_fwhm) break; // next si
 
                     if (fabs(si->x - sj->x) < av_fwhm) { // si, sj are duplicates
-                        if (si->fwhm > sj->fwhm) // set si to star with smallest fwhm
+                        if (si->fwhm < sj->fwhm) // set si to star with largest fwhm
                             *si = *sj; // copy sj to si
                         sj->datavalid = 0; // drop sj
                     }
@@ -674,11 +722,11 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *
 
                         if (at_peak) {
                             struct star st = { 0 };
-//                            if ( (abs(x - 803) < 5 && abs(y - 326) < 5))
+//                            if ( (abs(x - 1271) < 5 && abs(y - 780) < 5))
 
-                            if (locate_star(fr, x, y, 3, minpk, &st) == 0) {
+                            if (star_at(fr, x, y, 5, minpk, &st) == 0) {
 //                            if (locate_star(fr, x, y, SEARCH_R, min_flux, &st) == 0) {
-                                insert_star(src, &st);
+                                if (insert_star(src, &st) == 0) goto finished; // no more space in src
                             }
                         }
                     }
@@ -686,52 +734,364 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *
             }
         }
     }
-    if (first_last_y) *first_last_y = y;
+
+finished:
+    if (first_last_y) *first_last_y = (y == ye) ? fr->h : y;
 
     check_multiple(src);
 
     return src->ns;
 }
 
-// set frame circle region centered (x,y) radius r with gaussian random values about level
-static void simulate_level(struct ccd_frame *fr, double x, double y, int r, double level, double sigma)
+typedef struct {
+    int state; // 0 : not set, 1 : x_start set, 2 : both set
+    int start;
+    int end;
+} x_region;
+
+typedef struct {
+    struct ccd_frame *fr;
+    struct ccd_frame *fr_sub_blur;
+
+    int plane_iter;
+
+    int last_y;
+    x_region *last_xr;
+    GSList **list; // array[size] of GSList containing x_regions
+
+} region_struct;
+
+static x_region *add_x_range(region_struct *regions, int x, int y)
 {
-    int xc = x;
-    int yc = y;
+    if (x < 0 || y < 0 || x >= regions->fr->w || y >= regions->fr->h) return NULL;
 
-    int xs = xc - r;
-    int xe = xc + r + 1;
-    int ys = yc - r;
-    int ye = yc + r + 1;
+    GSList *sl = regions->list[y];
+    x_region *xr = (sl) ? sl->data : NULL; // bad sl->data
 
-    if (xs < 0) xs = 0;
-    if (ys < 0)	ys = 0;
+    if (sl == NULL) {
+        sl = g_slist_alloc();
+        if (sl == NULL) return NULL;
 
-    if (xe >= fr->w) xe = fr->w - 1;
-    if (ye >= fr->h) ye = fr->h - 1;
+        regions->list[y] = g_slist_prepend(sl, NULL);
+    }
 
-    int ring;
+    if (xr == NULL) {
+        xr = calloc(1, sizeof(x_region));
+        if (xr == NULL) return NULL;
 
-    for (ring = 0; ring < r; ring++) {
-        int r_sq_lo = sqr(ring);
-        int r_sq_hi = sqr(ring + 1.001);
+        sl->data = xr;
+    }
 
-        int iy;
-        for (iy = ys; iy < ye; iy++) {
-            int dy_sq = (iy - yc) * (iy - yc);
+    if (xr->state == 0) {
+        xr->start = x;
+        xr->state = 1;
 
-            int ix;
-            for (ix = xs; ix < xe; ix++) {
-                int dx_sq = (ix - xc) * (ix - xc);
+    } else if (xr->state == 1) {
+        int t = xr->start;
+        if (x < t) {
+            xr->end = t;
+            xr->start = x;
+        } else {
+            xr->end = x;
+        }
+        xr->state = 2;
+    } else if (xr->state == 2) {
+//        printf("over-write xr\n"); fflush(NULL);
+        if (x < xr->start) xr->start = x;
+        if (x > xr->end) xr->end = x;
+    }
 
-                double r_sq = dx_sq + dy_sq;
-                if (r_sq < r_sq_lo || r_sq > r_sq_hi) continue;
+    regions->last_xr = xr;
+    regions->last_y = y;
 
-//                set_pixel_luminance(fr, ix, iy, gaussian_estimate(level, sigma));
+    return xr;
+}
+
+
+static void add_region(region_struct *regions, int xi, int yi, float **dpp)
+{    
+    int DIRECTIONS[8][2] = { { -1, -1 }, { 0, -1}, { 1, -1 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0} };
+
+    // xi, yi is topleft of region
+    int y = yi, x = xi;
+
+    int dirindex = 0;
+
+    int *dir = DIRECTIONS[dirindex];
+
+    float *pix_ptr = *dpp;
+
+    do {
+        if (add_x_range(regions, x, y) == NULL) return;
+
+        while (1) { // walk perimeter
+            int xt = x + dir[0];
+            int yt = y + dir[1];
+
+            if (yt < yi) break;
+            if (yt >= regions->fr->h) break;
+            if (xt < xi) break;
+            if (xt >= regions->fr->w) break;
+
+//            if (xt < 0 || xt >= regions->fr->w) return;
+
+            if ((pix_ptr + yt * regions->fr->w)[xt] < 0) break;
+
+            printf("%d %d %.1f\n", xt, yt, (pix_ptr + yt * regions->fr->w)[xt]); fflush(NULL);
+
+            dirindex = (dirindex + 1) % 8;
+
+            dir = DIRECTIONS[dirindex];
+        }
+
+        x += dir[0];
+        y += dir[1];
+
+        dirindex = (dirindex + 5) % 8;
+    } while (x != xi && y != yi);
+}
+
+static gboolean in_region(region_struct *regions, int xi, int yi)
+{
+    x_region *xr = (yi == regions->last_y) ? regions->last_xr : NULL; // quick check to see if we are still in a region
+    if (xr && xr->state > 0) {
+        if (xi >= xr->start) {
+            if (xr->state == 1) return TRUE; // ?
+            if (xr->state == 2 && xi < xr->end) return TRUE;
+            //                    return FALSE;
+        }
+    }
+
+    GSList *sl = regions->list[yi]; // otherwise walk the list
+    while (sl) {
+        xr = sl->data;
+        if (xr && xr->state > 0) {
+                if (xi >= xr->start) {
+                    if (xr->state == 1) return TRUE; // ?
+                    if (xr->state == 2 && xi < xr->end) return TRUE;
+//                    return FALSE;
             }
+        }
+
+        sl = g_slist_next(sl);
+    };
+    return FALSE;
+}
+
+static void find_regions(region_struct *regions)
+{
+    float **dpp = get_color_planeptr(regions->fr_sub_blur, regions->plane_iter);
+    float *pix_ptr = *dpp;
+
+    int yi;
+    for (yi = 0; yi < regions->fr->h; yi++) {
+        int xi;
+        for (xi = 0; xi < regions->fr->w; xi++) { // build regions
+            if (pix_ptr[xi] < 0.0)
+                if (! in_region(regions, xi, yi))
+                    add_region(regions, xi, yi, dpp);
+
+        }
+        pix_ptr += regions->fr->w;
+    }
+    for (yi = 0; yi < regions->fr->h; yi++) {
+        if (regions->list[yi])
+            regions->list[yi] = g_slist_reverse(regions->list[yi]);
+    }
+}
+
+static void clear_regions(region_struct *regions)
+{   
+    float **dpp = get_color_planeptr(regions->fr, regions->plane_iter);
+    float *pix_ptr = *dpp;
+
+    // figure out a fill value from x_start, x_end values ?
+    float fill_value = 0;
+
+    int yi;
+    for (yi = 0; yi < regions->fr->h; yi++) { // apply regions fill_values to fr_pi
+        GSList *sl;
+        for (sl = regions->list[yi]; sl != NULL; sl = g_slist_next(sl)) {
+            x_region *xr = sl->data;
+            sl = g_slist_next(sl);
+
+            if (xr && xr->state == 2) {
+
+                fill_value = (pix_ptr[xr->start] + pix_ptr[xr->end]) / 2.0; // average or interpolate ?
+
+                int xi;
+                for (xi = xr->start; xi < xr->end; xi++) {
+                    printf("%d %d %.f\n", xi, yi, fill_value); fflush(NULL);
+                    pix_ptr[xi] = fill_value;
+                }
+            }
+        }
+        pix_ptr += regions->fr->w;
+    }
+}
+
+static region_struct *create_regions(struct ccd_frame *fr)
+{
+    region_struct *regions = calloc(1, sizeof(region_struct));
+    regions->list = calloc(fr->h, sizeof(void *));
+
+    struct ccd_frame *blur_fr = clone_frame(fr); // create blur frame
+    gauss_blur_frame(blur_fr, 2);
+
+    struct ccd_frame *copy_fr = clone_frame(fr); // create fr sub blur
+    sub_frames(copy_fr, blur_fr);
+
+    release_frame(blur_fr, NULL);
+
+    regions->fr = fr;
+    regions->fr_sub_blur = copy_fr;
+
+    return regions;
+}
+
+static void my_free(GSList *sl)
+{
+    if (sl->data) free(sl->data);
+}
+
+static void free_regions(region_struct *regions)
+{
+    release_frame(regions->fr_sub_blur, NULL);
+    int yi;
+    for (yi = 0; yi < regions->fr->h; yi++) {
+        if (regions->list[yi]) {
+            g_slist_foreach(regions->list[yi], (GFunc)my_free, NULL);
+            g_slist_free((GSList *)regions->list[yi]);
         }
     }
 }
+
+int erase_stars_regions(struct ccd_frame *fr)
+{
+    region_struct *regions = create_regions(fr);
+
+    regions->plane_iter = 0;
+    while ((regions->plane_iter = color_plane_iter(fr, regions->plane_iter))) {
+
+        find_regions(regions);
+        clear_regions(regions);
+
+    }
+
+    free_regions(regions);
+
+    return 1;
+}
+
+typedef struct {
+    float value;
+    int index;
+    int sorted_ix;
+} sort_struct;
+
+gint sort_pix(gconstpointer pa, gconstpointer pb)
+{
+    const sort_struct *a = *(sort_struct **)pa;
+    const sort_struct *b = *(sort_struct **)pb;
+    if (a->value < b->value) return -1;
+    if (a->value > b->value) return 1;
+    return 0;
+}
+
+gboolean find_pixel(gconstpointer pa, gconstpointer pb)
+{
+    const sort_struct *b = (sort_struct *)pb;
+    const sort_struct *a = (sort_struct *)pa;
+    if (b->index == a->index) return TRUE;
+    return FALSE;
+}
+
+int erase_stars_running_median(struct ccd_frame *fr)
+{
+    int plane_iter = 0;
+    while ((plane_iter = color_plane_iter(fr, plane_iter))) {
+        float *dpi = get_color_plane(fr, plane_iter);
+
+        guint s_size = 40;
+        sort_struct *s_array = calloc(s_size, sizeof(sort_struct));
+
+        int yi;
+        for (yi = 0; yi < fr->h; yi++) {
+            float *row = dpi;
+
+            GPtrArray *sorted_pix = g_ptr_array_sized_new(s_size * sizeof(sort_struct));
+
+            guint si;
+            for (si = 0; si < s_size; si++) { // initialize s_array
+                s_array[si] = (sort_struct){ row[si], si, si };
+                g_ptr_array_insert(sorted_pix, si, &s_array[si]);
+            }
+
+            g_ptr_array_sort(sorted_pix, sort_pix);
+
+            sort_struct *pd_ptr;
+
+            pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.50)];
+            float sky_hi = pd_ptr->value;
+
+            pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.05)];
+            float sky_lo = pd_ptr->value; // sky_lo to sky_hi are sky
+
+            int xi; si = 0;
+            for (xi = 0; xi < fr->w; xi++) {
+
+                if (xi >= (int) s_size / 2 && xi < fr->w - (int) s_size / 2) { // update s_array with next pix
+
+                    if (si == s_size) si = 0; // circular buffer
+
+                    guint pdi;
+                    for (pdi = 0; pdi < s_size; pdi++) { // crossref sorted
+                        pd_ptr = (sort_struct *)sorted_pix->pdata[pdi];
+                        s_array[pdi].sorted_ix = pd_ptr->index; // the position in sorted array
+                    }
+
+                    pd_ptr = (sort_struct *)sorted_pix->pdata[s_size - 1];
+                    float max = pd_ptr->value;
+
+                    pd_ptr = (sort_struct *)sorted_pix->pdata[0];
+                    float min = pd_ptr->value;
+
+                    float range = max - min;
+
+ //                   if (row[xi] < max + 0.5 * range && row[xi] > min - 0.1 * range) {
+                        pdi = s_array[si].sorted_ix; // get index to replace
+                        pd_ptr = (sort_struct *)sorted_pix->pdata[pdi];
+
+// should use insert_array_sorted
+                        s_array[si] = (sort_struct){ row[xi], xi, si }; // push next pix to s_array
+
+                        g_ptr_array_sort(sorted_pix, sort_pix); // resort
+//                    }
+
+                    si++;
+                }
+
+                pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.50)];
+                sky_hi = pd_ptr->value;
+
+                pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.30)];
+                float sky_pix = pd_ptr->value;
+
+                if (*dpi > sky_hi) {
+                    // replace it with a sky value
+                    *dpi = sky_pix;
+                }
+
+                dpi++;
+            }
+            if (sorted_pix) g_ptr_array_free(sorted_pix, TRUE);
+
+        }
+        if (s_array) free(s_array);
+    }
+    return 1;
+}
+
 
 int erase_stars(struct ccd_frame *fr)
 {
@@ -744,15 +1104,15 @@ int erase_stars(struct ccd_frame *fr)
             err_printf("find_stars_cb: cannot create sources\n");
             return -1;
         }
-        int extracted = extract_stars(copy_fr, NULL, 2, &first_last_y, src);
+
+        int extracted = extract_stars(copy_fr, NULL, 5, &first_last_y, src);
         if (extracted > 0) {
             int i;
             for (i = 0; i < extracted; i++) {
                 struct star *s = &(src->s[i]);
-                simulate_level(fr, s->x, s->y, s->starr, s->sky, s->sky_sigma);
+                add_sky_patch_to_frame(fr, s->x, s->y, s->starr * 2, s->sky, s->sky_sigma);
             }
             ns += extracted;
-
         }
 
         release_sources(src);

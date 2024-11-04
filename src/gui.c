@@ -350,13 +350,6 @@ void act_frame_new (GtkAction *action, gpointer window)
     release_frame(fr, "act_frame_new");
 }
 
-struct mouse_motion {
-    gboolean dragging;
-    double drag_x, drag_y;
-    int last_time;
-    double xc, yc;
-};
-
 static struct mouse_motion *get_mouse_motion(gpointer parent)
 {
     struct mouse_motion *mm = g_object_get_data (parent, "mouse_motion");
@@ -372,26 +365,6 @@ static struct mouse_motion *get_mouse_motion(gpointer parent)
     return mm;
 }
 
-void get_screen_center(gpointer im_window, double *xc, double *yc)
-{
-    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(im_window), "scrolled_window");
-
-    struct mouse_motion *mm = get_mouse_motion (scw);
-
-    *xc = mm->xc;
-    *yc = mm->yc;
-}
-
-// center scw in window
-static void center_scw (gpointer scw)
-{
-    double w = gdk_window_get_width (GTK_WIDGET(scw)->window) - 20; // how to get width and height without scroller sizes?
-    double h = gdk_window_get_height (GTK_WIDGET(scw)->window) - 55;
-
-    gpointer alignment = g_object_get_data (scw, "alignment");
-
-    gtk_alignment_set_padding (GTK_ALIGNMENT(alignment), h / 2, h / 2, w / 2, w / 2);
-}
 
 #define CLIP(v, lo, hi) (v < lo ? lo : v > hi ? hi : v)
 #define SCALE_CLIP(v, lo, hi) (CLIP(lo + v * (hi - lo), lo, hi))
@@ -426,12 +399,18 @@ gboolean button_press_cb(GtkWidget *widget, GdkEventButton *event, gpointer scw)
             mm->drag_x = hadj->value + x;
             mm->drag_y = vadj->value + y;
 
+//            double zw = hadj->upper - hadj->page_size;
+//            double zh = vadj->upper - vadj->page_size;
+//            mm->drag_x = CLIP(hadj->value + x, 0, zw);
+//            mm->drag_y = CLIP(vadj->value + y, 0, zh);
+
         } else if (event->type == GDK_BUTTON_RELEASE) {
             mm->dragging = FALSE;
         }
     }
 	return FALSE;
 }
+
 
 gboolean motion_event_cb(GtkWidget *darea, GdkEventMotion *event, gpointer scw)
 {
@@ -448,17 +427,17 @@ gboolean motion_event_cb(GtkWidget *darea, GdkEventMotion *event, gpointer scw)
 
     gdk_window_get_pointer(GTK_WIDGET(scw)->window, &x, &y, &mask);
 
-    int t = gdk_event_get_time(event);
+//    int t = gdk_event_get_time(event);
 //printf("%d\n", t - last_time);
-    if (t - mm->last_time < 20) return TRUE;
+//    if (t - mm->last_time < 20) return TRUE;
 
-    mm->last_time = t;
+//    mm->last_time = t;
 
     GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment (scw);
     GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment (scw);
 
-    double zw = hadj->upper - hadj->page_size;
-    double zh = vadj->upper - vadj->page_size;
+    double zw = gdk_window_get_width (darea->window);
+    double zh = gdk_window_get_height (darea->window);
 
     hadj->value = CLIP(mm->drag_x - x, 0, zw);
     vadj->value = CLIP(mm->drag_y - y, 0, zh);
@@ -476,12 +455,52 @@ gboolean motion_event_cb(GtkWidget *darea, GdkEventMotion *event, gpointer scw)
 
 /* ****************************************************************** */
 
+// center scw in window
+static void center_scw (gpointer scw)
+{
+    GtkWidget *hscrollbar = gtk_scrolled_window_get_hscrollbar(scw);
+    GtkWidget *vscrollbar = gtk_scrolled_window_get_vscrollbar(scw);
+
+    GtkAllocation hscrollbar_rect;
+    gtk_widget_get_allocation (GTK_WIDGET(hscrollbar), &hscrollbar_rect);
+
+    GtkAllocation vscrollbar_rect;
+    gtk_widget_get_allocation (GTK_WIDGET(vscrollbar), &vscrollbar_rect);
+
+    int h = vscrollbar_rect.height;
+    int w = hscrollbar_rect.width;
+
+    if (h == 1 && w == 1) return;
+//    {
+//        GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scw));
+//        GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(scw));
+
+//        w = gtk_adjustment_get_upper(hadj);
+//        h = gtk_adjustment_get_upper(vadj);
+//    }
+
+    GtkAlignment *alignment = g_object_get_data (scw, "alignment");
+    gtk_alignment_set_padding (alignment, h / 2, h / 2, w / 2, w / 2);
+}
+
+/* get coords of center of view as fraction of full size */
+
+void get_screen_center(gpointer im_window, double *xc, double *yc)
+{
+    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(im_window), "scrolled_window");
+
+    struct mouse_motion *mm = get_mouse_motion (scw);
+
+    *xc = mm->xc;
+    *yc = mm->yc;
+}
+
 /* pan the image in the scrolled window
  * so that the center of the viewable area is at xc and yc
- * of the image's width/height
+ * (xc/yc fractions of darea size)
  */
 
-void set_scrolls(GtkWidget *window, double xc, double yc)
+void set_scrolls(GtkWindow *window, double xc, double yc)
 {
     GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(window), "scrolled_window");
 
@@ -503,53 +522,13 @@ void set_scrolls(GtkWidget *window, double xc, double yc)
 
     center_scw(scw);
 
-    gtk_widget_queue_draw(window);
+    gtk_widget_queue_draw(GTK_WIDGET(window));
 }
-
-int configure_event_cb(GtkWidget *window, GdkEvent *event, gpointer scw)
-{
-//    printf("in configure event type %d\n", event->type); fflush(NULL);
-//    return FALSE;
-
-//    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(window), "scrolled_window");
-
-    center_scw(scw);
-
-    return 0;
-}
-
-void set_darea_size(GtkWidget *window, struct map_geometry *geom)
-{
-    int zi = 1, zo = 1;
-    if (geom->zoom > 1) {
-        zi = floor(geom->zoom + 0.5);
-    } else {
-        zo = floor(1.0 / geom->zoom + 0.5);
-    }
-
-    int zw = geom->width * zi / zo;
-    int zh = geom->height * zi / zo;
-
-    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(window), "scrolled_window");
-    struct mouse_motion *mm = get_mouse_motion (scw);
-
-    GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(scw);
-    GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(scw);
-
-    set_adjustment(hadj, mm->xc, zw);
-    set_adjustment(vadj, mm->yc, zh);
-
-    center_scw(scw);
-
-    GtkWidget *darea = g_object_get_data(G_OBJECT(window), "darea");
-    gtk_widget_set_size_request(darea, zw, zh);
-}
-
 
 /*
  * pan window so that the pixel pointed by the cursor is centered
  */
-void pan_cursor(GtkWidget *window)
+void pan_cursor(GtkWindow *window)
 {
     GtkWidget *darea = g_object_get_data(G_OBJECT(window), "darea");
 
@@ -563,6 +542,64 @@ void pan_cursor(GtkWidget *window)
 
     set_scrolls(window, CLIP( x / zw, 0.0, 1.0 ), CLIP( y / zh, 0.0, 1.0 ));
 }
+
+
+void set_darea_size(GtkWindow *window, struct map_geometry *geom)
+{
+    GtkScrolledWindow *scw = g_object_get_data(G_OBJECT(window), "scrolled_window");
+    struct mouse_motion *mm = get_mouse_motion (scw);
+    GtkWidget *darea = g_object_get_data(G_OBJECT(window), "darea");
+
+    GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(scw);
+    GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(scw);
+
+    double zw = gdk_window_get_width (darea->window);
+    double zh = gdk_window_get_height (darea->window);
+
+// this syncs two finger scroll with mm but there is occasional glitch
+//    if (zw > 1 && zh > 1) {
+//        mm->xc = hadj->value / zw; // sync mm with adj
+//        mm->yc = vadj->value / zh;
+//    }
+
+    int zi = 1, zo = 1;
+    if (geom->zoom > 1) {
+        zi = floor(geom->zoom + 0.5);
+    } else {
+        zo = floor(1.0 / geom->zoom + 0.5);
+    }
+
+    zw = geom->width * zi / zo; // adjust zoom
+    zh = geom->height * zi / zo;
+
+    set_adjustment(hadj, mm->xc, zw);
+    set_adjustment(vadj, mm->yc, zh);
+
+    center_scw(scw);
+
+    gtk_widget_set_size_request(darea, zw, zh);
+}
+
+
+void check_resize_cb (GtkWindow* window, gpointer scw)
+{
+    struct mouse_motion *mm = get_mouse_motion(window);
+    GtkWidget *darea = g_object_get_data(G_OBJECT(window), "darea");
+
+    GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment (scw);
+    GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment (scw);
+
+    double zw = gdk_window_get_width (darea->window);
+    double zh = gdk_window_get_height (darea->window);
+
+    if (zw == 1 && zh == 1) return;
+
+    mm->xc = hadj->value / zw;
+    mm->yc = vadj->value / zh;
+
+    center_scw(scw);
+}
+
 
 /* ********************************************************************** */
 
@@ -1104,14 +1141,15 @@ GtkWidget * create_image_window()
     gtk_box_pack_start(GTK_BOX(hbox), menubar, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(hbox), zoom_and_cuts, FALSE, FALSE, 0);
 
-    GtkWidget *scw = gtk_scrolled_window_new (NULL, NULL);
-    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scw), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
     GtkWidget *alignment = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
-    gtk_scrolled_window_add_with_viewport (GTK_SCROLLED_WINDOW(scw), alignment);
 
     GtkWidget *darea = gtk_drawing_area_new();
     gtk_container_add (GTK_CONTAINER(alignment), darea);
+
+    GtkWidget *scw = gtk_scrolled_window_new (NULL, NULL);
+    gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scw), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+    gtk_scrolled_window_add_with_viewport (GTK_SCROLLED_WINDOW(scw), alignment);
 
     GtkWidget *main_window_status_label = gtk_label_new ("Welcome to GCX.");
     g_object_ref (main_window_status_label);
@@ -1129,6 +1167,7 @@ GtkWidget * create_image_window()
     g_object_set_data(G_OBJECT(window), "scrolled_window", scw);
     g_object_set_data(G_OBJECT(window), "darea", darea);
     g_object_set_data(G_OBJECT(scw), "alignment", alignment);
+    g_object_set_data(G_OBJECT(scw), "window", window);
 
     g_signal_connect(G_OBJECT(darea), "button_release_event", G_CALLBACK(button_press_cb), scw);
     g_signal_connect(G_OBJECT(darea), "button_press_event", G_CALLBACK(button_press_cb), scw);
@@ -1138,7 +1177,7 @@ GtkWidget * create_image_window()
     g_signal_connect(G_OBJECT(darea), "button_press_event", G_CALLBACK(image_clicked_cb), window);
     g_signal_connect(G_OBJECT(darea), "expose_event", G_CALLBACK(image_expose_cb), window);
 
-    g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(configure_event_cb), scw);
+    g_signal_connect(G_OBJECT(window), "check-resize", G_CALLBACK(check_resize_cb), scw);
 
     gtk_widget_set_events(darea,  GDK_BUTTON_PRESS_MASK
 			      | GDK_POINTER_MOTION_MASK
@@ -1146,9 +1185,6 @@ GtkWidget * create_image_window()
                   | GDK_BUTTON_RELEASE_MASK);
 
   	gtk_window_set_default_size(GTK_WINDOW(window), 700, 500);
-
-//    gtk_widget_add_events(window, GDK_CONFIGURE);
-//    gtk_widget_add_events(window, GDK_STRUCTURE_MASK);
 
     GtkWidget *image_popup = get_image_popup_menu(window);
     g_object_set_data_full(G_OBJECT(window), "image_popup", image_popup, (GDestroyNotify) g_object_unref);

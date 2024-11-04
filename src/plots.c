@@ -303,14 +303,14 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
     double jdmin = mjd_to_jd(mjdmin), jdmax = mjd_to_jd(mjdmax);
     if (round_range(&jdmin, &jdmax) < 0) return -1;
 
-    double jdi = jdmin;
+    double jdi = floor(jdmin);
 
 	plot_preamble(dfp);
-    fprintf(dfp, "set xlabel 'Days from JD %.1f'\n", jdi);
+    fprintf(dfp, "set xlabel 'Days from JD %.0f'\n", jdi);
 	fprintf(dfp, "set ylabel 'Magnitude'\n");
 	fprintf(dfp, "set title 'Fitted Frame Zeropoints'\n");
     fprintf(dfp, "set format x \"%%.4f\"\n");
-	fprintf(dfp, "set xtics autofreq\n");
+//	fprintf(dfp, "set xtics autofreq\n");
     fprintf(dfp, "set yrange [:] reverse\n");
 //	fprintf(dfp, "set title '%s: band:%s mjd=%.6f'\n",
 //		ofr->obs->objname, ofr->filter, ofr->mjd);
@@ -745,7 +745,7 @@ static void plot_sol(struct plot_sol_data *data, GList *sol)
         } else {
             int result = plot_sol_obs(data, sob->ost->sobs);
             if (result & 0x1) { // pos
-                str_join_varg(&data->plot, ", $POS%d title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me:%4.1f n:%2d' with errorbars",
+                str_join_varg(&data->plot, ", $POS%d title '%s(%s) avg:%.3f sd:%.3f min:%.3f max:%.3f me:%.3f sd/me:%4.1f n:%2d     ' with errorbars",
                         data->n, sob->cats->name, ofr->trans->bname, avg, sigma, min, max, merr, sigma/merr, ns);
             }
             if (result & 0x2) { // neg
@@ -809,7 +809,7 @@ int plot_star_mag_vs_time(GList *sobs)
 
     data.first_fr = STAR_OBS(sobs->data)->ofr;
     data.band = -1; // all bands; data.first_fr->band;
-    data.jdi = jdmin;
+    data.jdi = floor(jdmin);
     data.plfp = NULL;
     data.pop = 0;
     data.n = 0;
@@ -828,8 +828,8 @@ int plot_star_mag_vs_time(GList *sobs)
     if (data.phase_plot)
         fprintf( data.plfp, "set xlabel 'Phase, JD0 %.4f, Period %0.6f'\n", data.jd0, data.period );
     else
-        fprintf( data.plfp, "set xlabel 'Days from JD %.1f'\n", floor(data.jdi) );
-    fprintf( data.plfp, "set xtics autofreq\n" );
+        fprintf( data.plfp, "set xlabel 'Days from JD %.0f'\n", floor(data.jdi) );
+//    fprintf( data.plfp, "set xtics autofreq\n" );
 //    fprintf( data.plfp,  "set x autoscale\n" );
     fprintf( data.plfp,  "set yrange [:] reverse\n" );
 

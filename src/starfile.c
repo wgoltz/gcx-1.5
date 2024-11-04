@@ -755,7 +755,7 @@ int parse_star(GScanner *scan, struct cat_star *cats)
 			break;
 		}
 	} while (tok != ')' && tok != G_TOKEN_EOF);
-	if (!havemag || cats->mag == 0.0) {
+    if (!havemag || isnan(cats->mag)) {
 //		mag_from_smags(cats);
 	}
 	if (!haveeq)
@@ -953,13 +953,10 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
         ras = degrees_to_hms_pr(cats->ra, 2);
         decs = degrees_to_dms_pr(cats->dec, 1);
 	}
-	fprintf(repfp, "(%s \"%s\" %s %s ",
-		symname[SYM_NAME], cats->name, 
-		symname[SYM_TYPE], typestr);
-	if (cats->mag != 0.0)
-		fprintf(repfp, "%s %.3g ", symname[SYM_MAG], cats->mag);
-	if (CATS_INFO(cats) & INFO_DIFFAM)
-		fprintf(repfp, "%s %.3f ", symname[SYM_DIFFAM], cats->diffam);
+    fprintf(repfp, "(%s \"%s\" %s %s ",	symname[SYM_NAME], cats->name, symname[SYM_TYPE], typestr);
+
+    if (! isnan(cats->mag))	fprintf(repfp, "%s %.3g ", symname[SYM_MAG], cats->mag);
+    if (CATS_INFO(cats) & INFO_DIFFAM) fprintf(repfp, "%s %.3f ", symname[SYM_DIFFAM], cats->diffam);
 
 	stf_linebreak(repfp, level);
 
@@ -967,10 +964,8 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
     if (ras) free(ras);
     if (decs) free(decs);
 
-	if (cats->perr < BIG_ERR) {
-		fprintf(repfp, "%s %.2g",
-			symname[SYM_PERR], cats->perr);
-	}
+    if (cats->perr < BIG_ERR) fprintf(repfp, "%s %.2g", symname[SYM_PERR], cats->perr);
+
 	stf_linebreak(repfp, level);
 
 	if (cats->comments != NULL && cats->comments[0] != 0) {
@@ -993,14 +988,10 @@ static int fprint_cat_star(FILE *repfp, struct cat_star *cats, int level)
 		rep_star_pos(repfp, cats);
 		stf_linebreak(repfp, level);
 	}
-	if (CATS_INFO(cats) & INFO_SKY)
-		fprintf(repfp, "%s %.4g ", symname[SYM_SKY], cats->sky);
-	if (CATS_INFO(cats) & INFO_RESIDUAL)
-		fprintf(repfp, "%s %.4g ", symname[SYM_RESIDUAL], cats->residual);
-	if (CATS_INFO(cats) & INFO_STDERR)
-		fprintf(repfp, "%s %.4g ", symname[SYM_STDERR], cats->std_err);
-	if (CATS_INFO(cats) & (INFO_STDERR|INFO_RESIDUAL|INFO_SKY))
-		stf_linebreak(repfp, level);
+    if (CATS_INFO(cats) & INFO_SKY) fprintf(repfp, "%s %.4g ", symname[SYM_SKY], cats->sky);
+    if (CATS_INFO(cats) & INFO_RESIDUAL) fprintf(repfp, "%s %.4g ", symname[SYM_RESIDUAL], cats->residual);
+    if (CATS_INFO(cats) & INFO_STDERR) fprintf(repfp, "%s %.4g ", symname[SYM_STDERR], cats->std_err);
+    if (CATS_INFO(cats) & (INFO_STDERR|INFO_RESIDUAL|INFO_SKY)) stf_linebreak(repfp, level);
 	if (CATS_INFO(cats) & INFO_NOISE) {
 		rep_star_noise(repfp, cats);
 		stf_linebreak(repfp, level);

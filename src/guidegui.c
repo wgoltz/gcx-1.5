@@ -62,7 +62,7 @@ static GtkActionEntry guide_menu_actions[] = {
 
 	/* Image */
 	{ "image-menu",          NULL, "_Image" },
-	{ "image-curves",        NULL, "Curves&Histogram...", "C",       NULL, G_CALLBACK (act_control_histogram) },
+    { "image-curves",        NULL, "Curves&Histogram...", "V",       NULL, G_CALLBACK (act_control_histogram) },
 	{ "image-zoom-in",       NULL, "Zoom _In",       "equal",        NULL, G_CALLBACK (act_view_zoom_in) },
 	{ "image-zoom-out",      NULL, "Zoom _Out",      "minus",        NULL, G_CALLBACK (act_view_zoom_out) },
 	{ "image-zoom-pixels",   NULL, "Actual _Pixels", "bracketright", NULL, G_CALLBACK (act_view_pixels) },
@@ -303,6 +303,7 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer w
 //	}
 //	return TRUE;
 //}
+
 
 /* find a guide star from the image */
 /* if we have user stars, we use the first of them; otherwise we search for stars */
@@ -806,13 +807,10 @@ void act_control_guider (GtkAction *action, gpointer window)
 
         GtkWidget *im = g_object_get_data(G_OBJECT(gwindow), "darea");
 //        g_signal_connect(G_OBJECT(im), "motion-notify-event", G_CALLBACK(motion_event_cb), gwindow);
-
         gtk_widget_add_events(im, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK | GDK_POINTER_MOTION_HINT_MASK);
 
         GtkWidget *darea = g_object_get_data(G_OBJECT(gwindow), "guider-darea");
         gtk_widget_set_size_request(GTK_WIDGET(darea), GUIDE_BOX_SIZE, GUIDE_BOX_SIZE);
-
-        set_named_callback(gwindow, "guider-darea", "expose_event", gbox_expose_cb);
 
         GtkWidget *scw = g_object_get_data(G_OBJECT(gwindow), "scrolled_window");
         g_signal_connect(G_OBJECT(scw), "button_press_event", G_CALLBACK(sources_clicked_cb), gwindow);
@@ -821,6 +819,11 @@ void act_control_guider (GtkAction *action, gpointer window)
         g_signal_connect(G_OBJECT(im), "button_press_event", G_CALLBACK(button_press_cb), scw);
         g_signal_connect(G_OBJECT(im), "button_release_event", G_CALLBACK(button_press_cb), scw);
         g_signal_connect(G_OBJECT(im), "motion_notify_event", G_CALLBACK(motion_event_cb), scw);
+
+        set_named_callback(gwindow, "guider-darea", "expose_event", gbox_expose_cb);
+//        g_signal_connect(G_OBJECT(gwindow), "configure-event", G_CALLBACK(configure_event_cb), scw);
+        g_signal_connect(G_OBJECT(gwindow), "check-resize", G_CALLBACK(check_resize_cb), scw);
+
 
 		set_named_callback(gwindow, "guide_find_star", "clicked", find_guide_star_cb);
 

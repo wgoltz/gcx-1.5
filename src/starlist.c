@@ -451,9 +451,8 @@ int add_star_from_frame_header(struct ccd_frame *fr,
 	}
 
 // use fits_get_pos
-    char *endp;
 
-    double ra; endp = fits_get_dms(fr, P_STR(FN_OBJECTRA), &ra); if (isnan(ra)) return -1;
+    double ra; fits_get_dms(fr, P_STR(FN_OBJECTRA), &ra); if (isnan(ra)) return -1;
 
     ra *= 15;
 
@@ -469,7 +468,7 @@ int add_star_from_frame_header(struct ccd_frame *fr,
     cats->ra = ra;
 	cats->dec = dec;
 	cats->equinox = equinox;
-	cats->mag = 0.0;
+    cats->mag = NAN;
     cats->name = strdup(object);
     cats->type = CATS_TYPE_CAT;
 

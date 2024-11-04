@@ -284,7 +284,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 		}
 		cats->pos[POS_X] = s.x;
 		cats->pos[POS_Y] = s.y;
-		cats->pos[POS_XERR] = s.xerr * s.aph.star_err/s.aph.star;
+        cats->pos[POS_XERR] = s.xerr * s.aph.star_err/s.aph.star; // how does this work ?
 		cats->pos[POS_YERR] = s.yerr * s.aph.star_err/s.aph.star;
 		cats->flags |= INFO_POS;
 
@@ -497,18 +497,19 @@ static void stf_keep_good_phot(struct stf *stf)
 
         if (cats == NULL) continue;
 
-        if (CATS_TYPE (cats) != CATS_TYPE_APSTAR && CATS_TYPE (cats) != CATS_TYPE_APSTD) {
-            cat_star_release(cats, "");
-            continue;
-        }
+// keep field stars
+//        if (CATS_TYPE (cats) != CATS_TYPE_APSTAR && CATS_TYPE (cats) != CATS_TYPE_APSTD) {
+//            cat_star_release(cats, "");
+//            continue;
+//        }
 
         if (cats->flags & CPHOT_INVALID) {
-            cat_star_release(cats, "");
+//            cat_star_release(cats, "");
             continue;
         }
 
         if ((CATS_TYPE (cats) == CATS_TYPE_APSTD) && (cats->flags & CPHOT_NOT_FOUND) && P_INT(AP_DISCARD_UNLOCATED)) {
-            cat_star_release(cats, "");
+//            cat_star_release(cats, "");
             continue;
         }
 
@@ -607,7 +608,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
         }
     }
 
-//    stf_keep_good_phot (stf);
+    stf_keep_good_phot (stf);
 
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 
@@ -784,12 +785,14 @@ static void photometry_cb(gpointer window, guint action)
                 mbds = g_object_get_data(G_OBJECT(window), "mband_window");
 			}
             struct o_frame *ofr = stf_to_mband(mbds, stf); // no imf to link to
-			return;
+            ofr_link_imf(ofr, fr->imf); // do an unlk somewhere
+            return;
 
         } else { // phot a single frame
             struct mband_dataset *mbds = mband_dataset_new();
             struct o_frame *ofr = mband_dataset_add_stf(mbds, stf);
 //            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
+            ofr_link_imf(ofr, fr->imf); // do an unlk somewhere
             mband_dataset_add_sobs_to_ofr(mbds, ofr);
 
             ofr_fit_zpoint(ofr, P_DBL(AP_ALPHA), P_DBL(AP_BETA), 1, 0);

@@ -19,6 +19,8 @@
   Contact Information: gcx@phracturedblue.com <Geoffrey Hausheer>
 *******************************************************************************/
 
+#define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,6 +31,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <stdio.h>
+#include <unistd.h>
 
 int io_indi_sock_read(void *_fh, void *data, int len)
 {
@@ -68,25 +71,72 @@ static gboolean io_indi_cb(GIOChannel *source, GIOCondition condition, void *obj
 
 void *io_indi_open_server(const char *host, int port, void (*cb)(void *fd, void *opaque), void *opaque)
 {
-	struct hostent *hp;
 	int sockfd;
 	GIOChannel *fh;
 
 	/* lookup host address */
-	hp = gethostbyname (host);
-    if (!hp) return NULL;
+//    struct hostent *hp = gethostbyname (host);
+//    if (!hp) return NULL;
 
-	/* create a socket to the INDI server */
-    struct sockaddr_in serv_addr = { 0 };
+//	/* create a socket to the INDI server */
+//    struct sockaddr_in serv_addr = { 0 };
 
-	serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = ((struct in_addr *)(hp->h_addr_list[0]))->s_addr;
-    serv_addr.sin_port = htons(port);
+//	serv_addr.sin_family = AF_INET;
+//    serv_addr.sin_addr.s_addr = ((struct in_addr *)(hp->h_addr_list[0]))->s_addr;
+//    serv_addr.sin_port = htons(port);
 
-    if ((sockfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) return NULL;
+//    if ((sockfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) return NULL;
 
-	/* connect */
-    if (connect (sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) return NULL;
+    /* connect */
+//    if (connect (sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) return NULL;
+
+    int err;
+    struct addrinfo hints = {}, *addrs;
+    char *port_str = NULL;
+
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    asprintf(&port_str, "%d", port);
+    if (port_str == NULL) return NULL;
+
+    err = getaddrinfo(host, port_str, &hints, &addrs);
+    free(port_str);
+
+    if (err != 0)
+    {
+        fprintf(stderr, "%s: %s\n", host, gai_strerror(err));
+        return NULL;
+    }
+
+    for(struct addrinfo *addr = addrs; addr != NULL; addr = addr->ai_next)
+    {
+        sockfd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+        if (sockfd == -1)
+        {
+            err = errno;
+            break; // if using AF_UNSPEC above instead of AF_INET/6 specifically,
+            // replace this 'break' with 'continue' instead, as the 'ai_family'
+            // may be different on the next iteration...
+        }
+
+        if (connect(sockfd, addr->ai_addr, addr->ai_addrlen) == 0)
+            break;
+
+        err = errno;
+
+        close(sockfd);
+        sockfd = -1;
+    }
+
+    freeaddrinfo(addrs);
+
+    if (sockfd == -1)
+    {
+        fprintf(stderr, "%s: %s\n", host, strerror(err));
+        return NULL;
+    }
 
 	/* prepare for line-oriented i/o with client */
 	fh = g_io_channel_unix_new(sockfd);

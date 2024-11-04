@@ -2400,6 +2400,12 @@ GtkWidget* create_image_processing (void)
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
+ item = gtk_check_button_new_with_label ("Erase Stars");
+ g_object_ref (item);
+ g_object_set_data_full (G_OBJECT (image_processing), "erase_checkb", item, (GDestroyNotify) g_object_unref);
+ gtk_widget_set_tooltip_text (item, "Find stars and replace with local sky background (before blur)");
+ gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
+
  adjustment = gtk_adjustment_new (0.5, 0, 50, 0.1, 10, 0);
  item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 1);
  g_object_ref (item);
@@ -2415,12 +2421,6 @@ GtkWidget* create_image_processing (void)
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "blur_checkb", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Apply gaussian blur to image");
- gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
-
- item = gtk_check_button_new_with_label ("Erase");
- g_object_ref (item);
- g_object_set_data_full (G_OBJECT (image_processing), "erase_checkb", item, (GDestroyNotify) g_object_unref);
- gtk_widget_set_tooltip_text (item, "Find stars and replace with local sky background (before blur)");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
 // ******************* stack
@@ -3674,20 +3674,22 @@ GtkWidget* create_guide_window (void)
   gtk_widget_show (hbox24);
   gtk_box_pack_start (GTK_BOX (guide_vbox), hbox24, TRUE, TRUE, 0);
 
-  GtkWidget *scrolled_window = gtk_scrolled_window_new (NULL, NULL);
-  gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolled_window), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-  g_object_ref (scrolled_window);
-  g_object_set_data_full (G_OBJECT (guide_window), "scrolled_window", scrolled_window, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (scrolled_window);
-
   GtkWidget *alignment = gtk_alignment_new(0.5, 0.5, 0.0, 0.0);
   g_object_ref (alignment);
-  g_object_set_data_full (G_OBJECT (scrolled_window), "alignment", alignment, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (alignment);
 
   GtkWidget *darea = gtk_drawing_area_new();
   gtk_container_add (GTK_CONTAINER(alignment), darea);
   gtk_widget_show (darea);
+
+  GtkWidget *scrolled_window = gtk_scrolled_window_new (NULL, NULL);
+  gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (scrolled_window), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+  g_object_ref (scrolled_window);
+
+  g_object_set_data_full (G_OBJECT (scrolled_window), "alignment", alignment, (GDestroyNotify) g_object_unref);
+//  gtk_widget_show (alignment);
+
+  g_object_set_data_full (G_OBJECT (guide_window), "scrolled_window", scrolled_window, (GDestroyNotify) g_object_unref);
+  gtk_widget_show (scrolled_window);
 
   gtk_scrolled_window_add_with_viewport (GTK_SCROLLED_WINDOW (scrolled_window), alignment);
 

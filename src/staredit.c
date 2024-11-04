@@ -707,7 +707,7 @@ d3_printf("making cats\n");
 			cats->ra = ra;
 			cats->dec = dec;
 			cats->equinox = 1.0 * wcs->equinox;
-			cats->mag = 0.0;
+            cats->mag = NAN;
             cats->type = CATS_TYPE_SREF;
             gs->s = cats; // edit new star
 

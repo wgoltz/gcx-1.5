@@ -86,7 +86,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 				cats->ra = ra;
 				cats->dec = dec;
 				cats->equinox = 1.0 * wcs->equinox;
-				cats->mag = 0.0;
+                cats->mag = NAN;
                 cats->type = CATS_TYPE_SREF;
 				cats->comments = NULL;
                 if (flags & MKRCP_DET_TO_TGT) cats->type = CATS_TYPE_APSTAR;
@@ -106,7 +106,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 				cats->ra = ra;
 				cats->dec = dec;
 				cats->equinox = 1.0 * wcs->equinox;
-				cats->mag = 0.0;
+                cats->mag = NAN;
                 cats->type = CATS_TYPE_SREF;
 				cats->comments = NULL;
                 if (flags & MKRCP_USER_TO_TGT) cats->type = CATS_TYPE_APSTAR;
@@ -684,7 +684,7 @@ int read_varlist_table(struct cat_star *csl[], FILE *fp, int n, double *cra, dou
 
         cats->ra = ra;
 		cats->dec = dec;
-		cats->mag = 0.0;
+        cats->mag = NAN;
 		cats->equinox = 2000.0;
         cats->type = CATS_TYPE_CAT;
 		if (field[4] != 0)
@@ -1233,7 +1233,7 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 //        cats->ra = ra; // is ra recorded as degrees for this format?
         cats->ra = ra;
 		cats->dec = dec;
-		cats->mag = 0.0;
+        cats->mag = NAN;
 		cats->equinox = 2000.0;
         cats->type = CATS_TYPE_CAT;
         cats->flags = CATS_FLAG_VARIABLE;

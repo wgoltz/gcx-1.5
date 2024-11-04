@@ -387,7 +387,7 @@ void camera_abort_exposure(struct camera_t *camera)
 void camera_expose(struct camera_t *camera, double time)
 {
 	if (! camera->ready) {
-//		err_printf("Camera isn't ready.  Aborting exposure\n");
+        err_printf("Camera isn't ready.  Aborting exposure\n");
 		return;
 	}
 	indi_dev_enable_blob(camera->expose_prop->idev, TRUE);

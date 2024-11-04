@@ -375,16 +375,12 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 /* compute display size for a cat_star */
 double cat_star_size(struct cat_star *cats)
 {
-	double size;
-	if (cats == NULL)
-		return 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
-	if (cats->mag == 0.0)
-		return 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
+    if (cats == NULL) return 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
+    if (isnan(cats->mag)) return 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
 
-	size = 1.0 * P_INT(DO_MIN_STAR_SZ) +
-		P_DBL(DO_PIXELS_PER_MAG) * (P_DBL(DO_DLIM_MAG) - cats->mag);
-	clamp_double(&(size), 1.0 * P_INT(DO_MIN_STAR_SZ),
-		     1.0 * P_INT(DO_MAX_STAR_SZ));
+    double size = 1.0 * P_INT(DO_MIN_STAR_SZ) + P_DBL(DO_PIXELS_PER_MAG) * (P_DBL(DO_DLIM_MAG) - cats->mag);
+    clamp_double(&(size), 1.0 * P_INT(DO_MIN_STAR_SZ), 1.0 * P_INT(DO_MAX_STAR_SZ));
+
 	return size;
 }
 

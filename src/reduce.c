@@ -461,18 +461,20 @@ void unload_clean_frames(struct image_file_list *imfl)
         fl = g_list_next(fl);
 
         if ( imf->state_flags & IMG_STATE_LOADED )
-            if (!(imf->state_flags & IMG_STATE_DIRTY))
+            if (!(imf->state_flags & IMG_STATE_DIRTY)) {
+                imf->op_flags = 0;
                 imf_release_frame(imf, "unload_clean_frames");
+            }
     }
 }
 
 
 void imf_release_frame(struct image_file *imf, char *msg)
 {
-    if (imf->ofr) // unlink from ofr
-        ofr_unlink_imf(imf->ofr);
+//    if (imf->ofr) // unlink from ofr
+//        ofr_unlink_imf(imf->ofr);
 
-    imf->fr = release_frame(imf->fr, msg);
+    imf->fr = release_frame(imf->fr, msg); // maybe if imf->fr is released then do unlk ?
 
     if (imf->fr == NULL) imf->state_flags &= IMG_STATE_SKIP; // we keep the skip flag
 }
@@ -645,13 +647,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                fits_add_history(imf->fr, "'BIAS FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'BIASSUB'");
 
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_BIAS;
             } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_BIAS;
     }
 
     if ( ccdr->op_flags & IMG_OP_DARK ) {
@@ -665,13 +666,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                fits_add_history(imf->fr, "'DARK FRAME SUBTRACTED'");
                 fits_add_history(imf->fr, "'DARKSUB'");
 
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_DARK;
             } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_DARK;
     }
 
     if ( ccdr->op_flags & IMG_OP_FLAT ) {
@@ -685,13 +685,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                fits_add_history(imf->fr, "'FLAT FIELDED'");
                 fits_add_history(imf->fr, "'FLATTED'");
 
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_FLAT;
             } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_FLAT;
     }
 
     if ( ccdr->op_flags & IMG_OP_BADPIX ) {
@@ -701,27 +700,23 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->op_flags & IMG_OP_BADPIX) ) {
 
-            if ( ccdr->bad_pix_map && (fix_bad_pixels(imf->fr, ccdr->bad_pix_map) == 0) )
+            if ( ccdr->bad_pix_map && (fix_bad_pixels(imf->fr, ccdr->bad_pix_map) == 0) ) {
                 fits_add_history(imf->fr, "'PIXEL DEFECTS REMOVED'");
-            else
+
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_BADPIX;
+            } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_BADPIX;
     }
 
     if ( ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD) ) {
-        if (ccdr->mul_before_add != 0)
-            REPORT( " add-mul" )
-        else
-            REPORT( " mul-add" )
 
         if ( (ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) != (imf->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) ) {
 
-            double m = 1.0, a = 0.0;
-            if ( (ccdr->op_flags & IMG_OP_MUL) && !(imf->op_flags & IMG_OP_MUL) ) m = ccdr->mulv;
+            double m = ( (ccdr->op_flags & IMG_OP_MUL) && !(imf->op_flags & IMG_OP_MUL) ) ? ccdr->mulv : NAN;
+            double a = ( (ccdr->op_flags & IMG_OP_ADD) && !(imf->op_flags & IMG_OP_ADD) ) ? ccdr->addv : NAN;
 
 // horrible hack: m == 0 -> flag normalize CFA colours
 //              if (m == 0) {
@@ -730,29 +725,38 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //                    fits_add_history(imf->fr, "'NORMALIZE CFA band levels'");
 //                }
 
-            if (m == 0) m = 1;
-
-            if ( (ccdr->op_flags & IMG_OP_ADD) && !(imf->op_flags & IMG_OP_ADD) ) a = ccdr->addv;
-
-            if (ccdr->mul_before_add == 0)
-                scale_shift_frame(imf->fr, m, a); // multiply then add
-
-            else
-                scale_shift_frame(imf->fr, m, m * a); // add then multiply
-
             lb = NULL;
-            if (ccdr->mul_before_add)
-                asprintf(&lb, "'ARITHMETIC SCALE: P * %.3f + %.3f -> P'", m, a);
-            else
-                asprintf(&lb, "'ARITHMETIC SCALE: (P + %.3f) * %.3f -> P'", a, m);
+            char *op = NULL;
+
+            if (! (isnan(m) || isnan(a))) {
+                if (ccdr->mul_before_add) {
+                    op = " mul-add";
+                    asprintf(&lb, "'ARITHMETIC SCALE: P * %.3f + %.3f -> P'", m, a);
+                } else {
+                    op = " add-mul";
+                    asprintf(&lb, "'ARITHMETIC SCALE: (P + %.3f) * %.3f -> P'", a, m);
+                }
+            } else if (isnan(m)) {
+                op = " add";
+                asprintf(&lb, "'ARITHMETIC SCALE: P + %.3f -> P'", a);
+            } else if (isnan(a)) {
+                op = " mul";
+                asprintf(&lb, "'ARITHMETIC SCALE: P * %.3f -> P'", m);
+            }
+
+            if (! (isnan(m) && isnan(a)))
+                scale_shift_frame(imf->fr, isnan(m) ? 1.0 : m, isnan(a) ? 0 : a); // multiply then add
 
             if (lb) fits_add_history(imf->fr, lb), free(lb);
 
-        } else REPORT( " (already_done)" )
+            if (! isnan(m)) imf->op_flags |= IMG_OP_MUL;
+            if (! isnan(a)) imf->op_flags |= IMG_OP_ADD;
 
-        imf->state_flags |= IMG_STATE_DIRTY;
-//        imf->op_flags |= (ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD)); ?
-        imf->op_flags |= IMG_OP_MUL | IMG_OP_ADD;
+            if (! isnan(m) || ! isnan(a)) imf->state_flags |= IMG_STATE_DIRTY;
+
+            if (op) REPORT( op )
+
+        } else REPORT( " mul/add(already_done)" )
     }
 
     if ( ccdr->op_flags & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
@@ -775,21 +779,24 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 imf->state_flags |= IMG_STATE_SKIP;
 
             } else {
+                double m = NAN, a = NAN;
                 if ( ccdr->op_flags & IMG_OP_BG_ALIGN_MUL )
-                    scale_shift_frame (imf->fr, ccdr->bg / imf->fr->stats.median, 0);
+                    m = ccdr->bg / imf->fr->stats.median;
 
                 else if ( ccdr->op_flags & IMG_OP_BG_ALIGN_ADD )
-                    scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.median); // median poorly estimated for low signals
+                    a = ccdr->bg - imf->fr->stats.median;
 //                    scale_shift_frame (imf->fr, 1.0, ccdr->bg - imf->fr->stats.avg);
+
+                scale_shift_frame (imf->fr, isnan(m) ? 1 : m, isnan(a) ? 0 : a);
+
+                imf->state_flags |= IMG_STATE_DIRTY;
+
+                if (! isnan(m)) imf->op_flags |= IMG_OP_BG_ALIGN_MUL;
+                if (! isnan(a)) imf->op_flags |= IMG_OP_BG_ALIGN_ADD;
             }
 
-        } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= (ccdr->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD));
+        } else REPORT( " (already_done)" )        
     }
-
-    noise_to_fits_header(imf->fr);
 
     if ( ccdr->op_flags & IMG_OP_DEMOSAIC ) {
         REPORT( " demosaic" )
@@ -798,10 +805,10 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             bayer_interpolate(imf->fr);
             fits_add_history(imf->fr, "'DEMOSAIC'");
 
-        } else REPORT( " (already_done)" )
+            imf->state_flags |= IMG_STATE_DIRTY;
+            imf->op_flags |= IMG_OP_DEMOSAIC;
 
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_DEMOSAIC;
+        } else REPORT( " (already_done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_ERASE ) {
@@ -813,12 +820,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             else {
                 lb = NULL; asprintf(&lb, "'ERASE STARS'");
                 if (lb) fits_add_history(imf->fr, lb), free(lb);
+
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_ERASE;
             }
 
         } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_ERASE;
     }
 
     if ( ccdr->op_flags & IMG_OP_BLUR ) {
@@ -838,12 +845,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             else {
                 lb = NULL; asprintf(&lb, "'GAUSSIAN BLUR (FWHM=%.1f)'", ccdr->blurv);
                 if (lb) fits_add_history(imf->fr, lb), free(lb);
+
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_BLUR;
             }
 
         } else REPORT( " (already_done)" )
-
-        imf->state_flags |= IMG_STATE_DIRTY;
-        imf->op_flags |= IMG_OP_BLUR;
     }
 
     if ( ccdr->op_flags & IMG_OP_ALIGN ) {
@@ -878,11 +885,10 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             if ( fit_wcs(imf, ccdr, progress, processing_dialog) ) {
                 REPORT( " (FAILED)" )
                 imf->state_flags |= IMG_STATE_SKIP;
-            }
+            } else
+                imf->op_flags |= IMG_OP_WCS;
 
         } else REPORT( " (already_done)" )
-
-        imf->op_flags |= IMG_OP_WCS;
     }
 
     if ( (ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP) ) {
@@ -897,10 +903,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         }
 
         // else REPORT( " (already_done)" )
-        imf->state_flags |= IMG_STATE_DIRTY; // even though it isnt
+//        imf->state_flags |= IMG_STATE_DIRTY; // even though it isnt
     }
 
     REPORT( "\n" )
+
+    noise_to_fits_header(imf->fr);
 
 //	d4_printf("\nrdnoise: %.3f\n", imf->fr->exp.rdnoise);
 //	d4_printf("scale: %.3f\n", imf->fr->exp.scale);
@@ -967,6 +975,7 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progres
         load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 
         while (gl != NULL) {
+            if (user_abort(ccdr->window)) break;
 
             struct image_file *imf = gl->data;
             gl = g_list_next(gl);
@@ -1117,6 +1126,9 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
         }
         odp = get_color_plane(fr, plane_iter);
         for (y = 0; y < h; y++) {
+
+            if (user_abort(fr->window)) break;
+
             for (x = 0; x < w; x++) {
                 *odp = pix_average(dp, n, 0, 1);
                 for (i = 0; i < n; i++)
@@ -1177,6 +1189,9 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
         float *odp = get_color_plane(fr, plane_iter);
         int y;
 		for (y = 0; y < h; y++) {
+
+            if (user_abort(fr->window)) break;
+
             int x;
 			for (x = 0; x < w; x++) {
 				*odp = pix_median(dp, n, 0, 1);
@@ -1254,6 +1269,9 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
 
         int y;
 		for (y = 0; y < h; y++) {
+
+            if (user_abort(fr->window)) break;
+
 			if (t-- == 0 && progress) {
                 int ret = (* progress)(".", processing_dialog);
                 if (ret) { d1_printf("aborted\n"); return -1; }
@@ -1338,6 +1356,9 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
 
         int y;
 		for (y = 0; y < h; y++) {
+
+            if (user_abort(fr->window)) break;
+
             if ((t-- == 0) && progress) {
                 int ret = (* progress)(".", processing_dialog);
                 if (ret) { d1_printf("aborted\n"); return -1; }

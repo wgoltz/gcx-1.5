@@ -436,10 +436,13 @@ static void update_dialog_from_ccdr(GtkWidget *processing_dialog, struct ccd_red
         named_entry_set(processing_dialog, "recipe_entry", ccdr->recipe);
         set_named_checkb_val(processing_dialog, "phot_en_checkb", 1);
     }
+    if ((ccdr->op_flags & IMG_OP_ERASE)) {
+        set_named_checkb_val(processing_dialog, "erase_checkb", 1);
+    }
     if ((ccdr->op_flags & IMG_OP_BLUR)) {
         named_spin_set(processing_dialog, "blur_spin", ccdr->blurv);
         set_named_checkb_val(processing_dialog, "blur_checkb", 1);
-	}
+    }
     if ((ccdr->op_flags & IMG_OP_ADD)) {
         named_spin_set(processing_dialog, "add_spin", ccdr->addv);
         set_named_checkb_val(processing_dialog, "add_checkb", 1);
@@ -991,6 +994,7 @@ static void imf_update_mband_status_label(GtkTreeModel *image_file_store, GtkTre
     if (imf->op_flags & IMG_OP_ADD) str_join_str(&msg, " %s", "ADD");
     if (imf->op_flags & IMG_OP_ALIGN) str_join_str(&msg, " %s", "ALIGN");
     if (imf->op_flags & IMG_OP_DEMOSAIC) str_join_str(&msg, " %s", "DEMOSAIC");
+    if (imf->op_flags & IMG_OP_ERASE) str_join_str(&msg, " %s", "ERASE");
     if (imf->op_flags & IMG_OP_BLUR) str_join_str(&msg, " %s", "BLUR");
     if (imf->op_flags & IMG_OP_BG_ALIGN_ADD) str_join_str(&msg, " %s", "BG/ADD");
     if (imf->op_flags & IMG_OP_BG_ALIGN_MUL) str_join_str(&msg, " %s", "BG/MUL");
@@ -1213,6 +1217,12 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
 //	} else {
 //		ccdr->op_flags &= ~IMG_OP_ADD;
 //	}
+
+    if (get_named_checkb_val(processing_dialog, "erase_checkb")) {
+        ccdr->op_flags |= IMG_OP_ERASE;
+    } else {
+        ccdr->op_flags &= ~IMG_OP_ERASE;
+    }
 
     if (get_named_checkb_val(processing_dialog, "blur_checkb")) {
         ccdr->op_flags |= IMG_OP_BLUR;
@@ -1501,8 +1511,8 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
                             imf->state_flags &= ~IMG_STATE_DIRTY;
 
 //                    } else if ( (ccdr->op_flags & IMG_OP_PHOT) && !(ccdr->op_flags & IMG_OP_ALIGN) ) {
-                    } else if (ccdr->op_flags & IMG_OP_PHOT && P_INT(FILE_SAVE_MEM)) { // ignore dirty and release if save_mem
-                        imf->state_flags &= ~IMG_STATE_DIRTY;
+//                    } else if (ccdr->op_flags & IMG_OP_PHOT && P_INT(FILE_SAVE_MEM)) { // ignore dirty and release if save_mem
+//                        imf->state_flags &= ~IMG_STATE_DIRTY;
 // have to clear link back to frame when frame is deleted
                         //               imf->state_flags &= ~(IMG_STATE_LOADED); // needs checking
                     }

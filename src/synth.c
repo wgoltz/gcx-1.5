@@ -66,7 +66,7 @@ static double create_gaussian_psf(float *data, int pw, int ph,
 	for (i = 0; i < ph; i++)
 		for (j=0; j < pw; j++) {
 			v = exp( - (sqr(j - xc) + sqr(i - yc)) / 2 / sqr(s));
-//            v += gauss(v, sqrt(v)); // add photon noise
+//            v = gauss(v, sqrt(v)); // add photon noise
 			vol += v;
 			*data ++ = v;
 		}
@@ -88,20 +88,94 @@ static double create_moffat_psf(float *data, int pw, int ph,
 	for (i = 0; i < ph; i++)
 		for (j=0; j < pw; j++) {
 			v = pow(1 + (sqr(j - xc) + sqr(i - yc)) / sqr(s), -b);
-//            v += gauss(v, sqrt(v)); // add photon noise
+//            v = gauss(v, sqrt(v)); // add photon noise
             vol += v;
 			*data ++ = v;
 		}
 	return vol;
 }
 
+// create an r x r sky patch centered at x, y
+static void create_sky_patch(float *data, int r, double x, double y, double sky_level, double sky_sigma)
+{
+    int xc = x;
+    int yc = y;
+
+    int d = 2 * r;
+
+    int xs = xc - r;
+    int xe = xc + d;
+    int ys = yc - r;
+    int ye = yc + d;
+
+    if (xs < 0) xs = 0;
+    if (ys < 0)	ys = 0;
+
+    if (xe > d) xe = d;
+    if (ye > d) ye = d;
+
+    int iy;
+    for (iy = ys; iy < ye; iy++) {
+        int dy_sq = (iy - yc) * (iy - yc);
+
+        int ix;
+        for (ix = xs; ix < xe; ix++) {
+            int dx_sq = (ix - xc) * (ix - xc);
+
+            double r_sq = dx_sq + dy_sq;
+            if (r_sq > r * r)
+                *data++ = NAN;
+            else
+                *data++ = gauss(sky_level, sky_sigma);
+        }
+    }
+}
+
+// set patch radius r at (x, h) to sky_level
+void add_sky_patch_to_frame(struct ccd_frame *fr, double x, double y, int r, double sky_level, double sky_sigma)
+{
+    int xc = x;
+    int yc = y;
+
+    int d = 2 * r;
+
+    int xs = xc - r;
+    int xe = xc + d;
+    int ys = yc - r;
+    int ye = yc + d;
+
+    if (xs < 0) xs = 0;
+    if (ys < 0)	ys = 0;
+
+    if (xe > fr->w) xe = fr->w;
+    if (ye > fr->h) ye = fr->h;
+
+    int plane_iter = 0;
+    while ((plane_iter = color_plane_iter(fr, plane_iter))) {
+        float *frp = get_color_plane(fr, plane_iter);
+
+        int yi;
+        for (yi = ys; yi < ye; yi++) {
+            int dy_sq = (yi - yc) * (yi - yc);
+
+            int xi;
+            for (xi = xs; xi < xe; xi++) {
+                int dx_sq = (xi - xc) * (xi - xc);
+
+                double r_sq = dx_sq + dy_sq;
+                if (r_sq <= r * r)
+                    *(frp + fr->w * yi + xi) = gauss(sky_level, sky_sigma);
+            }
+        }
+    }
+}
 
 /* downscale and add a psf profile to a image frame. the psf has dimensions pw and ph,
    it's center is at xc, yc, and will be placed onto the frame at x, y.
    An amplitude scale of g is applied. The psf is geometrically downscaled
    by a factor of d; return the resulting volume */
 
-double add_psf_to_frame(struct ccd_frame *fr, float *psf, int pw, int ph, int xc, int yc,
+static double add_psf_to_frame(struct ccd_frame *fr, float *psf, int pw, int ph, int xc, int yc,
 		     double x, double y, double g, int d)
 {
 	int xf, yf;
@@ -164,7 +238,7 @@ double add_psf_to_frame(struct ccd_frame *fr, float *psf, int pw, int ph, int xc
 					prp2 += pw;
 				}
                 double f = g * v;
-                f += gauss(f, sqrt(f)); // add photon noise
+                f = gauss(f, sqrt(f)); // add photon noise
 
                 frp[xi] += f;
                 vv += f;
@@ -179,25 +253,21 @@ double add_psf_to_frame(struct ccd_frame *fr, float *psf, int pw, int ph, int xc
 
 /* add synthetic stars from the cat_stars in sl to the frame */
 
-int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *sl)
+static int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *sl)
 {
-	float *psf;
-	int pw, ph, xc, yc;
-	double vol;
-	double x, y;
-	struct cat_star *cats;
-	int n = 0;
-
 	g_return_val_if_fail(fr != NULL, 0);
 	g_return_val_if_fail(wcs != NULL, 0);
 
+    int pw, ph;
     ph = pw = 15 * P_INT(SYNTH_OVSAMPLE) * P_DBL(SYNTH_FWHM);
+
+    int xc, yc;
 	yc = xc = pw / 2;
 
-	psf = malloc(pw * ph * sizeof(float));
-	if (psf == NULL)
-		return 0;
+    float *psf = malloc(pw * ph * sizeof(float));
+    if (psf == NULL) return 0;
 
+    double vol;
 	switch(P_INT(SYNTH_PROFILE)) {
 	case PAR_SYNTH_GAUSSIAN:
         vol = create_gaussian_psf(psf, pw, ph, xc, yc, 0.4246 * P_DBL(SYNTH_FWHM) * P_INT(SYNTH_OVSAMPLE));
@@ -213,12 +283,16 @@ int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *sl)
 
 	d3_printf("vol is %.3g pw %d ph %d\n", vol, pw, ph);
 
+    int n = 0;
+
 	for (; sl != NULL; sl = sl->next) {
-		double mag;
 		double vv, v;
-		double flux;
-		cats = CAT_STAR(sl->data);
+
+        struct cat_star *cats = CAT_STAR(sl->data);
+
+        double x, y;
 		cats_xypix(wcs, cats, &x, &y);
+
 		cats->flags |= INFO_POS;
 		cats->pos[POS_X] = x;
 		cats->pos[POS_Y] = y;
@@ -226,13 +300,14 @@ int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *sl)
 		cats->pos[POS_DY] = 0.0;
 		cats->pos[POS_XERR] = 0.0;
 		cats->pos[POS_YERR] = 0.0;
-mag = 0;
-        if (get_band_by_name(cats->smags, P_STR(AP_IBAND_NAME), &mag, NULL))
-			mag = cats->mag;
-		flux = absmag_to_flux(mag - P_DBL(SYNTH_ZP));
+
+        double mag = NAN;
+        if (get_band_by_name(cats->smags, P_STR(AP_IBAND_NAME), &mag, NULL)) mag = cats->mag;
+
+        double flux = absmag_to_flux(mag - P_DBL(SYNTH_ZP));
         vv = v = add_psf_to_frame(fr, psf, pw, ph, xc, yc, x - 1.0, y - 1.0, flux / vol, P_INT(SYNTH_OVSAMPLE));
-		if (vv == 0)
-			continue;
+
+        if (vv == 0) continue;
 /*
 		while (v > 0 && (flux - vv > flux / 10000.0)) {
 			v = add_psf_to_frame(fr, psf, pw, ph, xc, yc,
