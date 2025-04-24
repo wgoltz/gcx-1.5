@@ -841,6 +841,7 @@ static GtkActionEntry image_actions[] = {
     { "stars-set-std",     NULL, "Change to Std",       NULL, NULL, G_CALLBACK (act_selected_to_std) },
     { "stars-set-target",  NULL, "Change to Target",       NULL, NULL, G_CALLBACK (act_selected_to_target) },
     { "stars-set-field",   NULL, "Change to Field",       NULL, NULL, G_CALLBACK (act_selected_to_field) },
+    { "stars-set-cat",     NULL, "Change to Cat",       NULL, NULL, G_CALLBACK (act_selected_to_cat) },
     { "stars-toggle-detected", NULL, "Toggle Detected _Stars", "<shift>S",   NULL, G_CALLBACK (act_stars_toggle_detected) },
     { "stars-toggle-user",     NULL, "Toggle _User Stars",     "<shift>U",   NULL, G_CALLBACK (act_stars_toggle_user) },
     { "stars-toggle-field",    NULL, "Toggle _Field Stars",    "<shift>F",   NULL, G_CALLBACK (act_stars_toggle_field) },
@@ -975,6 +976,7 @@ static char *image_common_ui =
     "  <menuitem name='stars-set-std' action='stars-set-std'/>"
     "  <menuitem name='stars-set-target' action='stars-set-target'/>"
     "  <menuitem name='stars-set-field' action='stars-set-field'/>"
+    "  <menuitem name='stars-set-cat' action='stars-set-cat'/>"
     "  <menuitem name='stars-toggle-detected' action='stars-toggle-detected'/>"
     "  <menuitem name='stars-toggle-user' action='stars-toggle-user'/>"
     "  <menuitem name='stars-toggle-field' action='stars-toggle-field'/>"
@@ -1423,6 +1425,12 @@ void act_selected_to_std (GtkAction *action, gpointer window)
 void act_selected_to_field (GtkAction *action, gpointer window)
 {
     selected_stars_set_type(window, STAR_TYPE_SREF);
+}
+
+
+void act_selected_to_cat (GtkAction *action, gpointer window)
+{
+    selected_stars_set_type(window, STAR_TYPE_CAT);
 }
 
 void act_stars_toggle_detected (GtkAction *action, gpointer window)

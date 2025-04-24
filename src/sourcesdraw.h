@@ -24,10 +24,10 @@ typedef enum {
     STAR_TYPE_SREF, /* field star (cat star) */
     STAR_TYPE_APSTD, /* photometry standard star (cat star) */
     STAR_TYPE_APSTAR, /* a photometry target star (cat star) */
-    STAR_TYPE_CAT, /* a generic object */
-    STAR_TYPE_USEL, /* simple star, marked by the user */
+    STAR_TYPE_CAT, /* a catalog object */
     STAR_TYPE_ALIGN, /* a star used for frame alignment */
     STAR_TYPE_MOVING, /* its moving between frames */
+    STAR_TYPE_USEL, /* simple star, marked by the user */
     STAR_TYPES // 8
 } star_type;
 
@@ -89,6 +89,7 @@ struct gui_star_list {
 #define STAR_SHAPE_APHOT 3
 #define STAR_SHAPE_DIAMOND 4
 #define STAR_SHAPE_CROSS 5
+#define STAR_SHAPE_STAR 6
 
 #define STAR_OF_TYPE(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
 #define STAR_TYPE(gs) ((gs)->type)
@@ -98,7 +99,7 @@ struct gui_star_list {
 /* selection mask for stars that are specific to a particular frame */
 #define TYPE_FRSTAR (TYPE_MASK(STAR_TYPE_SIMPLE)|TYPE_MASK(STAR_TYPE_USEL))
 /* selection mask for stars that paticipate in photometry */
-#define TYPE_PHOT (TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD))
+#define TYPE_PHOT (TYPE_MASK(STAR_TYPE_APSTAR)|TYPE_MASK(STAR_TYPE_APSTD)|TYPE_MASK(STAR_TYPE_CAT)) // add STAR_TYPE_CAT
 /* align stars */
 #define TYPE_ALIGN (TYPE_MASK(STAR_TYPE_ALIGN))
 

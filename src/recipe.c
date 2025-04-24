@@ -71,6 +71,8 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 	for (sl = gsl; sl != NULL; sl = sl->next) {
         struct gui_star *gs = GUI_STAR(sl->data);
 
+        if (gs->flags & STAR_DELETED) continue;
+
 		if ( ((flags & MKRCP_INCLUDE_OFF_FRAME) == 0) && w > 0 && h > 0 && 
             (gs->x < 0 || gs->x > w || gs->y < 0 || gs->y > h) ) continue;
 
@@ -1406,8 +1408,11 @@ static GList * merge_star(GList *csl, struct cat_star *new_star)
                     cat_star_ref(new_star, "merge_star 5&6");
                     sl->data = new_star;
 				}
-            } else if (cats->type == CATS_TYPE_APSTD || cats->type == CATS_TYPE_APSTAR) {
-                if (new_star->type == CATS_TYPE_APSTD || new_star->type == CATS_TYPE_APSTAR) {
+//            } else if (cats->type == CATS_TYPE_APSTD || cats->type == CATS_TYPE_APSTAR) {
+//                if (new_star->type == CATS_TYPE_APSTD || new_star->type == CATS_TYPE_APSTAR) {
+
+            } else if (CATS_TYPE(cats) & CATS_TYPE_APHOT) {
+                if (CATS_TYPE(new_star) & CATS_TYPE_APHOT) {
                     cat_star_release(cats, "merge_star 7&8");
                     cat_star_ref(new_star, "merge_star 7&8");
                     sl->data = new_star;

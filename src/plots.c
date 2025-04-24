@@ -172,22 +172,26 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 		while (osl != NULL) {
 			ofr = O_FRAME(osl->data);
 			osl = g_list_next(osl);
-			if (ofr->band != band) 
-				continue;
+            if (ofr->band != band) continue;
+
 			sl = ofr->sobs;
 			while(sl != NULL) {
 				sob = STAR_OBS(sl->data);
 				sl = g_list_next(sl);
 
-                struct cat_star *cats = sob->cats;
+                if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
-                if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
-                if (GUI_STAR(cats->gs)->flags & STAR_DELETED) continue;
+        //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+                if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+                if (sob->cats->gs->flags & STAR_DELETED) continue;
+                if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
+                if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
 
-                if (sob->weight <= 0.0001) continue;
                 if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
                 if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
                 if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+
+                if (sob->weight <= 0.0001) continue;
 
 				n++;
 				v = sob->residual * sqrt(sob->nweight);
@@ -536,15 +540,19 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 			sob = STAR_OBS(sl->data);
 			sl = g_list_next(sl);
 
-            struct cat_star *cats = sob->cats;
+            if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
-            if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
-            if (GUI_STAR(cats->gs)->flags & STAR_DELETED) continue;
+    //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+            if (sob->cats->gs->flags & STAR_DELETED) continue;
+            if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
+            if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
 
-            if (sob->weight <= 0.00001) continue;
             if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
             if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
             if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+
+            if (sob->weight <= 0.00001) continue;
 
 			n++;
 
@@ -592,7 +600,7 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
         struct o_frame *ofr = O_FRAME(sob->ofr);
 
         if (ofr->skip) continue;
-        if (ofr->zpstate <= ZP_FIT_ERR) continue;
+        if (ZPSTATE(ofr) <= ZP_FIT_ERR) continue;
         if (sob->imagerr >= BIG_ERR) continue;
         if (sob->imag == MAG_UNSET) continue;
         if (sob->flags & CPHOT_INVALID) continue;
@@ -600,7 +608,9 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
 
         if ((ofr->band == -1) || (ofr->band == band)) {
 
-            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR && CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+//            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTAR && CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            if (! (CATS_TYPE(sob->cats) & CATS_TYPE_APHOT)) continue;
+
 //            if (sob->ost->smag[band] == MAG_UNSET) continue;
 
             double m = sob->imag + sob->ofr->zpoint;
@@ -616,9 +626,9 @@ static int sol_stats(GList *sol, int band, double *avg, double *sigma, double *m
         }
 	}
 	if (n > 0) {
-        if (avg) *avg = sum/n;
+        if (avg) *avg = sum / n;
         if (sigma) *sigma = SIGMA(sumsq, sum, n);
-        if (merr) *merr = esum/n;
+        if (merr) *merr = esum / n;
 	}
     if (min) *min = mi;
     if (max) *max = ma;
@@ -659,7 +669,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
         struct star_obs *sob = STAR_OBS(sl->data);
 
         if (sob->ofr->skip) continue;
-        if (sob->ofr->zpstate <= ZP_FIT_ERR) continue;
+        if (ZPSTATE(sob->ofr) <= ZP_FIT_ERR) continue;
 
         if ((data->band == -1) || (sob->ofr->band == data->band)) {
 
@@ -670,7 +680,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
             double m = MAG_UNSET;
             double me = BIG_ERR;
 
-            if (CATS_TYPE(cats) == CATS_TYPE_APSTAR) {
+            if (CATS_TYPE(cats) & (CATS_TYPE_APSTAR | CATS_TYPE_CAT)) {
                 if (sob->mag != MAG_UNSET)
                     m = sob->mag;
                 if (sob->err < BIG_ERR)
@@ -731,7 +741,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 
 static void plot_sol(struct plot_sol_data *data, GList *sol)
 {
-    if (sol != NULL) {
+        if (sol != NULL) {
 
         double min, max, avg = 0.0, sigma = 0.0, merr = BIG_ERR;
         struct star_obs *sob = STAR_OBS(sol->data);

@@ -367,7 +367,7 @@ int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, c
         if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA ||
                 P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_MEAN_MEDIAN ) {
             if (!(ccdr->op_flags & IMG_OP_BG_ALIGN_MUL))
-                ccdr->op_flags |= IMG_OP_BG_ALIGN_ADD;
+                ccdr->op_flags |= IMG_OP_BG_ALIGN_ADD; // ?
         }
         if (reduce_frames(imfl, ccdr, progress_print, NULL)) return 1;
 
@@ -530,7 +530,7 @@ struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_re
         if (P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_KAPPA_SIGMA ||
                 P_INT(CCDRED_STACK_METHOD) == PAR_STACK_METHOD_MEAN_MEDIAN ) {
             if (!(ccdr->op_flags & IMG_OP_BG_ALIGN_MUL))
-                ccdr->op_flags |= IMG_OP_BG_ALIGN_ADD;
+                ccdr->op_flags |= IMG_OP_BG_ALIGN_ADD; // ?
         }
         if (reduce_frames(imfl, ccdr, progress_print, NULL)) return NULL; // reduce failed somehow
 
@@ -630,6 +630,25 @@ static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, 
     g_return_val_if_fail(imf != NULL, -1);
     g_return_val_if_fail(imf->fr != NULL, -1);
 
+    if ( ccdr->op_flags & IMG_OP_SUB_MASK && ~(imf->op_flags & IMG_OP_SUB_MASK) ) {
+        if (imf->op_flags & (IMG_OP_BLUR | IMG_OP_MEDIAN)) { // redo processing up to where mask(s) applied
+            // reload frame
+            if (!(imf->state_flags & IMG_STATE_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
+                imf_release_frame(imf, "imf_reload_cb");
+
+                struct ccd_frame *fr = imf->fr;
+                if (fr) fr->imf = NULL;
+
+                imf->fr = NULL;
+
+                imf->state_flags &= IMG_STATE_SKIP; // we keep the skip flag
+                imf->op_flags = 0; // clear the op flags
+
+                imf_load_frame(imf);
+            }
+        }
+    }
+
     if ( ! (ccdr->state_flags & IMG_STATE_BG_VAL_SET) ) {
 d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.median);
         ccdr->bg = imf->fr->stats.median;
@@ -652,7 +671,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_DARK ) {
@@ -671,7 +690,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_FLAT ) {
@@ -690,7 +709,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_BADPIX ) {
@@ -708,7 +727,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD) ) {
@@ -756,7 +775,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
             if (op) REPORT( op )
 
-        } else REPORT( " mul/add(already_done)" )
+        } else REPORT( " mul/add(already done)" )
     }
 
     if ( ccdr->op_flags & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
@@ -791,11 +810,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
                 imf->state_flags |= IMG_STATE_DIRTY;
 
+                imf->op_flags &= ~(IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD);
                 if (! isnan(m)) imf->op_flags |= IMG_OP_BG_ALIGN_MUL;
                 if (! isnan(a)) imf->op_flags |= IMG_OP_BG_ALIGN_ADD;
             }
 
-        } else REPORT( " (already_done)" )        
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_DEMOSAIC ) {
@@ -808,24 +828,31 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             imf->state_flags |= IMG_STATE_DIRTY;
             imf->op_flags |= IMG_OP_DEMOSAIC;
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_ERASE ) {
-        REPORT( " erase" )
+    struct ccd_frame *mask_frame = NULL;
+    if ( ccdr->op_flags & IMG_OP_SUB_MASK ) {
+        mask_frame = clone_frame(imf->fr);
+        get_frame(mask_frame, NULL);
+    }
 
-        if ( ! (imf->op_flags & IMG_OP_ERASE) ) {
-            if (! erase_stars(imf->fr))
+    if ( ccdr->op_flags & IMG_OP_MEDIAN ) {
+        REPORT( " median" )
+
+        remove_bayer_info(imf->fr);
+        if ( ! (imf->op_flags & IMG_OP_MEDIAN) ) {
+            if (! erase_stars(imf->fr)) // median filter with star exclusion
                 REPORT( " (FAILED)" )
             else {
-                lb = NULL; asprintf(&lb, "'ERASE STARS'");
+                lb = NULL; asprintf(&lb, "'MEDIAN FILTER'");
                 if (lb) fits_add_history(imf->fr, lb), free(lb);
 
                 imf->state_flags |= IMG_STATE_DIRTY;
-                imf->op_flags |= IMG_OP_ERASE;
+                imf->op_flags |= IMG_OP_MEDIAN;
             }
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_BLUR ) {
@@ -850,7 +877,29 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 imf->op_flags |= IMG_OP_BLUR;
             }
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
+    }
+
+    if ( ccdr->op_flags & IMG_OP_SUB_MASK ) {
+        REPORT( " sub_mask" )
+
+        if ( ! (imf->op_flags & IMG_OP_SUB_MASK) ) {
+
+            if ( mask_frame && (sub_frames(mask_frame, imf->fr) == 0) ) {
+
+                release_frame(imf->fr, NULL);
+                imf->fr = mask_frame;
+
+                lb = NULL; asprintf(&lb, "'SUB_MASK'");
+                if (lb) fits_add_history(imf->fr, lb), free(lb);
+
+                imf->state_flags |= IMG_STATE_DIRTY;
+                imf->op_flags |= IMG_OP_SUB_MASK;
+
+            } else
+                REPORT( " (FAILED)" )
+
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_ALIGN ) {
@@ -874,7 +923,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 REPORT( " (FAILED)" )
                 imf->state_flags |= IMG_STATE_SKIP; // | IMG_STATE_DIRTY ?
             }
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( ccdr->op_flags & IMG_OP_WCS ) {
@@ -888,7 +937,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 imf->op_flags |= IMG_OP_WCS;
 
-        } else REPORT( " (already_done)" )
+        } else REPORT( " (already done)" )
     }
 
     if ( (ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP) ) {
@@ -902,7 +951,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             }
         }
 
-        // else REPORT( " (already_done)" )
+        // else REPORT( " (already done)" )
 //        imf->state_flags |= IMG_STATE_DIRTY; // even though it isnt
     }
 

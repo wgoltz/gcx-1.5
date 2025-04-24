@@ -308,13 +308,13 @@ static void ofr_store_set_row_vals(GtkListStore *ofr_store, GtkTreeIter *iter, s
     if (ofr->trans)
         add_ofr_store_entry( OFR_BAND_COL, "%s", ofr->trans->bname);
 
-    add_ofr_store_entry( OFR_STATUS_COL, "%s%s", states[ofr->zpstate & ZP_STATE_MASK], ofr->as_zp_valid ? "-AV" : "" ); // clear as_zp_valid somewhere
-    if (ofr->zpstate >= ZP_ALL_SKY) {
+    add_ofr_store_entry( OFR_STATUS_COL, "%s%s", states[ZPSTATE(ofr)], ofr->as_zp_valid ? "-AV" : "" ); // clear as_zp_valid somewhere
+    if (ZPSTATE(ofr) >= ZP_ALL_SKY) {
         add_ofr_store_entry( OFR_ZPOINT_COL, "%.3f", ofr->zpoint );
         add_ofr_store_entry( OFR_ERR_COL, "%.3f", ofr->zpointerr );
         add_ofr_store_entry( OFR_MEU_COL, "%.2f", ofr->me1 );
     }
-    if ((ofr->zpstate & ZP_STATE_MASK) > ZP_NOT_FITTED) {
+    if ((ZPSTATE(ofr)) > ZP_NOT_FITTED) {
         add_ofr_store_entry( OFR_FITTED_COL, "%d", ofr->vstars );
         add_ofr_store_entry( OFR_OUTLIERS_COL, "%d", ofr->outliers );
     }
@@ -682,7 +682,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
         }
     }
 
-//    if ((sob->ofr->zpstate & ZP_STATE_MASK) > ZP_FIT_ERR) {
+//    if ((ZPSTATE(sob->ofr)) > ZP_FIT_ERR) {
 //        if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
 //    if (! (sob->flags & CPHOT_INVALID)) {
 
@@ -707,19 +707,20 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
                     me = DEFAULT_ERR(sob->ost->smagerr[band]);
                     fix = format_std;
 
-                } else if (sob->imag != MAG_UNSET && sob->imagerr != BIG_ERR) {
+                } else if (ZPSTATE(sob->ofr) > ZP_FIT_ERR) {
                     m = sob->imag + sob->ofr->zpoint;
                     me = sqrt(sqr(sob->imagerr) + sqr(sob->ofr->zpointerr));
                     fix = format_tgt;
                 }
             }
 
-        } else {
+        } else { // if (ZPSTATE(sob->ofr) > ZP_FIT_ERR) {
             m = sob->mag;
             me = sob->err;
             fix = format_tgt;
         }
     }
+
     if (fix != format_err) {
         add_sob_store_entry( SOB_SMAG_COL, format[fix], m );
         if (fix != format_faint) add_sob_store_entry( SOB_SERR_COL, "%.3f", me );
@@ -730,10 +731,7 @@ static void sob_store_set_row_vals(GtkListStore *sob_store, GtkTreeIter *iter, s
         add_sob_store_entry( SOB_IMAG_ERR, "%.4f", sob->imagerr );
     }
 
-//    }
-
-
-    if ((sob->ofr->zpstate & ZP_STATE_MASK) >= ZP_ALL_SKY && sob->nweight > 0.0) {
+    if (ZPSTATE(sob->ofr) >= ZP_ALL_SKY && sob->nweight > 0.0) {
         add_sob_store_entry( SOB_RESIDUAL_COL, "%7.3f", sob->residual );
 
         double se = fabs(sob->residual * sqrt(sob->nweight));
@@ -758,7 +756,7 @@ static void sobs_to_sob_list(GtkWidget *sob_list, GList *sol)
         struct star_obs *sob = STAR_OBS(sl->data);
         sl = g_list_next(sl);
 
-//        if ((sob->ofr->zpstate & ZP_STATE_MASK) != ZP_NOT_FITTED) {
+//        if ((ZPSTATE(sob->ofr)) != ZP_NOT_FITTED) {
             if (! (sob->flags & (CPHOT_BURNED | CPHOT_INVALID))) {
                 gtk_list_store_prepend(GTK_LIST_STORE(sob_store), &iter);
                 sob_store_set_row_vals(GTK_LIST_STORE(sob_store), &iter, sob);

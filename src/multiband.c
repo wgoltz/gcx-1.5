@@ -287,6 +287,9 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
     get_band_by_name(cats->imags, ofr->trans->bname, &m, &me);
     sob->imag = m;
     sob->imagerr = me;
+    if (isnan(sob->imagerr)) {
+        sob->imagerr = BIG_ERR;
+    }
 }
 
 void d3_print_decimal_string(char *c)
@@ -441,14 +444,17 @@ static void ofr_sob_initial_weights(struct o_frame *ofr, struct transform *trans
 		sob->nweight = 0.0;
 
         if (ofr->band < 0) continue;
+        if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
+
 //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
         if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-        if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
         if (sob->cats->gs->flags & STAR_DELETED) continue;
+        if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
+        if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
 
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-        if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-        if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+//        if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
+//        if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
         double trsqe = 0;
 		if (trans != NULL) {
@@ -489,13 +495,19 @@ static double ofr_sob_residuals(struct o_frame *ofr, struct transform *trans)
 		sl = g_list_next(sl);
 
         if (ofr->band < 0) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
+
+        if (sob->imag == MAG_UNSET || sob->imagerr == BIG_ERR) continue;
 
 //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (sob->cats->gs->flags & STAR_DELETED) continue;
+        if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
+        if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
 
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-        if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-        if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
+//        if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
+//        if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
         if (sob->weight < 0.000000001) continue;
 
@@ -528,7 +540,7 @@ static double ofr_sob_residuals(struct o_frame *ofr, struct transform *trans)
     if (ns > 2) {
         ofr->me1 = sqrt(r2nw / (ns - 1));
 	} else {
-		ofr->me1 = 0;
+        ofr->me1 = BIG_ERR;
 	}
 
     if (ofr->tweight > 0) {
@@ -546,7 +558,7 @@ static double ofr_sob_residuals(struct o_frame *ofr, struct transform *trans)
     if (w > 0)
         return rw / w;
 
-    return 0.0;
+    return BIG_ERR;
 }
 
 /* calculate new weights for the sobs, according to their current residuals; 
@@ -751,17 +763,16 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res,
             continue;
         }
 
-        if (cats->gs->type == STAR_TYPE_APSTD) { // reset smags
-//        if (CATS_TYPE(cats) == CATS_TYPE_APSTD) { // reset smags
-            char *mag_source[] = { cats->smags, cats->cmags };
-            int i;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
 
-            for (i = 0; i < mbds->nbands; i++) {
-                double m = MAG_UNSET, me = BIG_ERR;
-                get_band_by_name(mag_source[mbds->mag_source], mbds->trans[i].bname, &m, &me);
-                ost->smag[i] = m;
-                ost->smagerr[i] = me;
-            }
+        char *mag_source[] = { cats->smags, cats->cmags };
+        int i;
+
+        for (i = 0; i < mbds->nbands; i++) {
+            double m = MAG_UNSET, me = BIG_ERR;
+            get_band_by_name(mag_source[mbds->mag_source], mbds->trans[i].bname, &m, &me);
+            ost->smag[i] = m;
+            ost->smagerr[i] = me;
         }
     }
 
@@ -771,6 +782,7 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res,
     }
 
 //
+    ofr->me1 = BIG_ERR;
 
 	if (w_res) {
         ofr->zpoint = MAG_UNSET;
@@ -778,15 +790,18 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res,
         ofr->zpointerr = BIG_ERR;
 
 		ofr_sob_initial_weights(ofr, trans);
-        ofr_sob_residuals(ofr, trans);
-		/* use the median as a starting point for zp robust fitting */
-        ofr->zpoint = ofr_median_residual(ofr);
-		ofr_sob_reweight(ofr, trans, alpha, beta);
+
+        if (ofr_sob_residuals(ofr, trans) != BIG_ERR) {
+            /* use the median as a starting point for zp robust fitting */
+            ofr->zpoint = ofr_median_residual(ofr);
+            ofr_sob_reweight(ofr, trans, alpha, beta);
+        }
 	}
 
     int i;
     for (i = 0; i < 16; i++) {
         double res = ofr_sob_residuals(ofr, trans);
+        if (res == BIG_ERR) break;
         if (fabs(res) < SMALL_ERR) break;
 
         ofr->zpoint += res;
@@ -795,17 +810,17 @@ double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res,
 
 	if ((ofr->vstars > 1) && (ofr->tweight > 0)) {
 		if (trans == NULL || trans->kerr >= BIG_ERR) {
-			ofr->zpstate = ZP_FIT_NOCOLOR;
+            ofr->zpstate = ZP_FIT_NOCOLOR;
 		} else {
-			ofr->zpstate = ZP_FIT_OK;
+            ofr->zpstate = ZP_FIT_OK;
 		}
 
 	} else if ((ofr->vstars == 1) && (ofr->tnweight > 0)) {
-		ofr->zpstate = ZP_DIFF;
+        ofr->zpstate = ZP_DIFF;
 		ofr->zpointerr = 1 / sqrt(ofr->tnweight);
 
 	} else {
-		ofr->zpstate = ZP_FIT_ERR;
+        ofr->zpstate = ZP_FIT_ERR;
 		ofr->zpointerr = BIG_ERR;
 	}
 
@@ -1055,20 +1070,19 @@ void mbds_smags_from_cmag_avgs(GList *ofrs)
         GList *sl;
         for (sl = ofr->sobs; sl != NULL; sl = g_list_next(sl)) { // sob lists differ for each frame
             struct star_obs *sob = STAR_OBS(sl->data);
-            struct cat_star *cats = CAT_STAR(sob->cats);
 
-//            if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
-            if (cats->gs->type != STAR_TYPE_APSTD) continue;
+            if (ofr->band < 0) continue;
+            if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
+
+    //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+            if (sob->cats->gs->flags & STAR_DELETED) continue;
+            if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
+            if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
 
             if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-            if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-            if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
-
-//            if (ofr->band < 0) continue; where should this go (if anywhere)
-
-            // check cats
-            if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
-            if (sob->mag == MAG_UNSET) continue;
+//            if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
+//            if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
             struct accum *acc = sob->ost->acc[ofr->band];
             if (acc == NULL) {
@@ -1548,7 +1562,7 @@ static void all_sky_initial_weights(GList *ofrs)
 
 		ofr->weight = ofr->nweight = 0.0;
 
-        if (ofr->zpstate < ZP_FIT_NOCOLOR) continue;
+        if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
         if (ofr->zpointerr <= 0) continue;
 
 		ofr->weight = ofr->nweight = 1 / sqr(ofr->zpointerr);
@@ -1960,23 +1974,23 @@ void ofr_to_stf_cats(struct o_frame *ofr)
         double m = sob->mag;
         double me = sob->err;
 
-//        if (CATS_TYPE(cats) == CATS_TYPE_APSTD) {
-        if (cats->gs->type == STAR_TYPE_APSTD) {
-            if (sob->nweight == 0) {
-                m = sob->imag + ofr->zpoint;
-                me = sqrt(sqr(sob->imagerr) + sqr(ofr->zpointerr));
-                cats->flags = sob->flags & ~INFO_RESIDUAL & ~INFO_STDERR;
+        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
 
-            } else {
-                m = sob->ost->smag[ofr->band];
-//                me = 1 / sqrt(sob->weight); // probably not
-                me = 1 / sqrt(sob->nweight); // ? try this
+        if (sob->nweight == 0) {
+            m = sob->imag + ofr->zpoint;
+            me = sqrt(sqr(sob->imagerr) + sqr(ofr->zpointerr));
+            cats->flags = sob->flags & ~INFO_RESIDUAL & ~INFO_STDERR;
 
-                cats->residual = sob->residual;
-                cats->std_err = fabs(sob->residual * sqrt(sob->nweight));
-                cats->flags = sob->flags | INFO_RESIDUAL | INFO_STDERR;
-            }
+        } else {
+            m = sob->ost->smag[ofr->band];
+            //                me = 1 / sqrt(sob->weight); // probably not
+            me = 1 / sqrt(sob->nweight); // ? try this
+
+            cats->residual = sob->residual;
+            cats->std_err = fabs(sob->residual * sqrt(sob->nweight));
+            cats->flags = sob->flags | INFO_RESIDUAL | INFO_STDERR;
         }
+
 
         update_band_by_name(&cats->smags, ofr->trans->bname, m, me);
 	}	
@@ -1994,14 +2008,14 @@ void ofr_transform_to_stf(struct mband_dataset *mbds, struct o_frame *ofr)
         asprintf(&buf, "%s-%s", mbds->trans[ofr->ltrans.c1].bname, mbds->trans[ofr->ltrans.c2].bname);
         if (buf) stf_append_string(stf, SYM_COLOR, buf), free(buf);
 	}
-	if (ofr->zpstate >= ZP_ALL_SKY) {
+    if (ZPSTATE(ofr) >= ZP_ALL_SKY) {
 		stf_append_double(stf, SYM_ZP, rprec(ofr->zpoint, 0.001));
 		stf_append_double(stf, SYM_ZPERR, rprec(ofr->zpointerr, 0.001));
 	}
-	if (ofr->zpstate >= ZP_FIT_NOCOLOR) {
+    if (ZPSTATE(ofr) >= ZP_FIT_NOCOLOR) {
 		stf_append_double(stf, SYM_ZPME1, rprec(ofr->me1, 0.01));
 	}
-	if (ofr->zpstate >= ZP_FIT_OK && ofr->ltrans.kerr < BIG_ERR) {
+    if (ZPSTATE(ofr) >= ZP_FIT_OK && ofr->ltrans.kerr < BIG_ERR) {
 		stf_append_double(stf, SYM_CCOEFF, rprec(ofr->ltrans.k, 0.001));
 		stf_append_double(stf, SYM_CCERR, rprec(ofr->ltrans.kerr, 0.001));
 	}
@@ -2010,7 +2024,7 @@ void ofr_transform_to_stf(struct mband_dataset *mbds, struct o_frame *ofr)
 		stf_append_double(stf, SYM_ECERR, rprec(ofr->ltrans.zzerr, 0.001));
 		stf_append_double(stf, SYM_ECME1, rprec(ofr->ltrans.eme1, 0.01));
 	}
-	if (ofr->zpstate >= ZP_ALL_SKY && ofr->outliers > 0) {
+    if (ZPSTATE(ofr) >= ZP_ALL_SKY && ofr->outliers > 0) {
 		stf_append_double(stf, SYM_OUTLIERS, 1.0 * ofr->outliers);
 	}
 	st = stf_find(ofr->stf, 0, SYM_TRANSFORM);

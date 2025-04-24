@@ -153,10 +153,14 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
     struct wcs *fr_wcs = & fr->fim;
     struct wcs *imf_wcs = (fr->imf && fr->imf->fim) ? fr->imf->fim : NULL;
 
-    if (imf_wcs && imf_wcs->wcsset > fr_wcs->wcsset)
-        wcs_clone(fr_wcs, imf_wcs);
+    if (imf_wcs) {
+        if (imf_wcs->wcsset > fr_wcs->wcsset)
+            wcs_clone(fr_wcs, imf_wcs);
+        else if (imf_wcs->wcsset == WCS_INVALID) // reload from window_wcs
+            wcs_clone(fr_wcs, window_wcs);
+    }
 
-    if (fr_wcs->wcsset == WCS_INVALID) {
+    if (fr_wcs->wcsset < WCS_VALID) {
 
 //        if (fr_wcs->wcsset == WCS_INVALID) {
 //            fr_wcs->xrefpix = fr->w / 2.0;
@@ -175,18 +179,8 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 //        if (fr_wcs->wcsset == WCS_INVALID)
             fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
 
-        if (WCS_HAVE_INITIAL(fr_wcs)) {
-            fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
-
-        } else { // copy pos, scale and loc from window_wcs, if they are set there
-            if ((fr_wcs->flags & WCS_HINTED) || ! (fr_wcs->flags & WCS_HAVE_POS)) {
-                if (window_wcs->flags & WCS_HAVE_POS) {
-                    fr_wcs->xref = window_wcs->xref;
-                    fr_wcs->yref = window_wcs->yref;
-                    fr_wcs->flags |= WCS_HAVE_POS;
-                }
-            }
-            if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
+        if (! (fr_wcs->flags & WCS_HINTED)) {
+            if ( ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
                 if (window_wcs->flags & WCS_HAVE_SCALE) {
                     fr_wcs->xinc = window_wcs->xinc;
                     fr_wcs->yinc = window_wcs->yinc;
@@ -194,30 +188,37 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
                     fr_wcs->flags |= WCS_HAVE_SCALE;
                 }
             }
-            if ((fr_wcs->flags & WCS_HINTED) | ! (fr_wcs->flags & WCS_LOC_VALID)) {
+            if ( ! (fr_wcs->flags & WCS_LOC_VALID)) {
                 if (window_wcs->flags & WCS_LOC_VALID) {
                     fr_wcs->lat = window_wcs->lat;
                     fr_wcs->lng = window_wcs->lng;
                     fr_wcs->flags |= WCS_LOC_VALID;
                 }
             }
-
-            if (WCS_HAVE_INITIAL(fr_wcs)) {
-                fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
+            if ( ! (fr_wcs->flags & WCS_HAVE_POS)) {
+                if (window_wcs->flags & WCS_HAVE_POS) {
+                    fr_wcs->xref = window_wcs->xref;
+                    fr_wcs->yref = window_wcs->yref;
+                    fr_wcs->flags |= WCS_HAVE_POS;
+                }
             }
         }
     }
 
-    if (fr_wcs->flags > WCS_INVALID) { // && window_wcs->flags & WCS_HINTED) {
-        if (window_wcs->wcsset > WCS_INVALID) {
-            if (fr_wcs->wcsset != WCS_VALID) {
-                wcs_clone(fr_wcs, window_wcs);
-                fr_wcs->wcsset = WCS_INITIAL;
-                fr_wcs->flags |= WCS_HINTED;
-            }
+    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) {
+        fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
+    }
+
+    if (fr_wcs->wcsset > WCS_INVALID) { // && window_wcs->flags & WCS_HINTED) {
+//        if (window_wcs->wcsset > WCS_INVALID) {
+//            if (fr_wcs->wcsset != WCS_VALID) {
+//                wcs_clone(fr_wcs, window_wcs);
+//                fr_wcs->wcsset = WCS_INITIAL;
+//                fr_wcs->flags |= WCS_HINTED;
+//            }
 
             if (imf_wcs) wcs_clone(imf_wcs, fr_wcs);
-        }
+//        }
         wcs_clone(window_wcs, fr_wcs);
 
     } else {

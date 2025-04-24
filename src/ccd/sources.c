@@ -743,357 +743,230 @@ finished:
     return src->ns;
 }
 
-typedef struct {
-    int state; // 0 : not set, 1 : x_start set, 2 : both set
-    int start;
-    int end;
-} x_region;
+#define MEDIAN_IX 20
+#define MED_SIZE MEDIAN_IX * 2 + 1
 
-typedef struct {
-    struct ccd_frame *fr;
-    struct ccd_frame *fr_sub_blur;
-
-    int plane_iter;
-
-    int last_y;
-    x_region *last_xr;
-    GSList **list; // array[size] of GSList containing x_regions
-
-} region_struct;
-
-static x_region *add_x_range(region_struct *regions, int x, int y)
-{
-    if (x < 0 || y < 0 || x >= regions->fr->w || y >= regions->fr->h) return NULL;
-
-    GSList *sl = regions->list[y];
-    x_region *xr = (sl) ? sl->data : NULL; // bad sl->data
-
-    if (sl == NULL) {
-        sl = g_slist_alloc();
-        if (sl == NULL) return NULL;
-
-        regions->list[y] = g_slist_prepend(sl, NULL);
-    }
-
-    if (xr == NULL) {
-        xr = calloc(1, sizeof(x_region));
-        if (xr == NULL) return NULL;
-
-        sl->data = xr;
-    }
-
-    if (xr->state == 0) {
-        xr->start = x;
-        xr->state = 1;
-
-    } else if (xr->state == 1) {
-        int t = xr->start;
-        if (x < t) {
-            xr->end = t;
-            xr->start = x;
-        } else {
-            xr->end = x;
-        }
-        xr->state = 2;
-    } else if (xr->state == 2) {
-//        printf("over-write xr\n"); fflush(NULL);
-        if (x < xr->start) xr->start = x;
-        if (x > xr->end) xr->end = x;
-    }
-
-    regions->last_xr = xr;
-    regions->last_y = y;
-
-    return xr;
-}
-
-
-static void add_region(region_struct *regions, int xi, int yi, float **dpp)
-{    
-    int DIRECTIONS[8][2] = { { -1, -1 }, { 0, -1}, { 1, -1 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0} };
-
-    // xi, yi is topleft of region
-    int y = yi, x = xi;
-
-    int dirindex = 0;
-
-    int *dir = DIRECTIONS[dirindex];
-
-    float *pix_ptr = *dpp;
-
-    do {
-        if (add_x_range(regions, x, y) == NULL) return;
-
-        while (1) { // walk perimeter
-            int xt = x + dir[0];
-            int yt = y + dir[1];
-
-            if (yt < yi) break;
-            if (yt >= regions->fr->h) break;
-            if (xt < xi) break;
-            if (xt >= regions->fr->w) break;
-
-//            if (xt < 0 || xt >= regions->fr->w) return;
-
-            if ((pix_ptr + yt * regions->fr->w)[xt] < 0) break;
-
-            printf("%d %d %.1f\n", xt, yt, (pix_ptr + yt * regions->fr->w)[xt]); fflush(NULL);
-
-            dirindex = (dirindex + 1) % 8;
-
-            dir = DIRECTIONS[dirindex];
-        }
-
-        x += dir[0];
-        y += dir[1];
-
-        dirindex = (dirindex + 5) % 8;
-    } while (x != xi && y != yi);
-}
-
-static gboolean in_region(region_struct *regions, int xi, int yi)
-{
-    x_region *xr = (yi == regions->last_y) ? regions->last_xr : NULL; // quick check to see if we are still in a region
-    if (xr && xr->state > 0) {
-        if (xi >= xr->start) {
-            if (xr->state == 1) return TRUE; // ?
-            if (xr->state == 2 && xi < xr->end) return TRUE;
-            //                    return FALSE;
-        }
-    }
-
-    GSList *sl = regions->list[yi]; // otherwise walk the list
-    while (sl) {
-        xr = sl->data;
-        if (xr && xr->state > 0) {
-                if (xi >= xr->start) {
-                    if (xr->state == 1) return TRUE; // ?
-                    if (xr->state == 2 && xi < xr->end) return TRUE;
-//                    return FALSE;
-            }
-        }
-
-        sl = g_slist_next(sl);
-    };
-    return FALSE;
-}
-
-static void find_regions(region_struct *regions)
-{
-    float **dpp = get_color_planeptr(regions->fr_sub_blur, regions->plane_iter);
-    float *pix_ptr = *dpp;
-
-    int yi;
-    for (yi = 0; yi < regions->fr->h; yi++) {
-        int xi;
-        for (xi = 0; xi < regions->fr->w; xi++) { // build regions
-            if (pix_ptr[xi] < 0.0)
-                if (! in_region(regions, xi, yi))
-                    add_region(regions, xi, yi, dpp);
-
-        }
-        pix_ptr += regions->fr->w;
-    }
-    for (yi = 0; yi < regions->fr->h; yi++) {
-        if (regions->list[yi])
-            regions->list[yi] = g_slist_reverse(regions->list[yi]);
-    }
-}
-
-static void clear_regions(region_struct *regions)
-{   
-    float **dpp = get_color_planeptr(regions->fr, regions->plane_iter);
-    float *pix_ptr = *dpp;
-
-    // figure out a fill value from x_start, x_end values ?
-    float fill_value = 0;
-
-    int yi;
-    for (yi = 0; yi < regions->fr->h; yi++) { // apply regions fill_values to fr_pi
-        GSList *sl;
-        for (sl = regions->list[yi]; sl != NULL; sl = g_slist_next(sl)) {
-            x_region *xr = sl->data;
-            sl = g_slist_next(sl);
-
-            if (xr && xr->state == 2) {
-
-                fill_value = (pix_ptr[xr->start] + pix_ptr[xr->end]) / 2.0; // average or interpolate ?
-
-                int xi;
-                for (xi = xr->start; xi < xr->end; xi++) {
-                    printf("%d %d %.f\n", xi, yi, fill_value); fflush(NULL);
-                    pix_ptr[xi] = fill_value;
-                }
-            }
-        }
-        pix_ptr += regions->fr->w;
-    }
-}
-
-static region_struct *create_regions(struct ccd_frame *fr)
-{
-    region_struct *regions = calloc(1, sizeof(region_struct));
-    regions->list = calloc(fr->h, sizeof(void *));
-
-    struct ccd_frame *blur_fr = clone_frame(fr); // create blur frame
-    gauss_blur_frame(blur_fr, 2);
-
-    struct ccd_frame *copy_fr = clone_frame(fr); // create fr sub blur
-    sub_frames(copy_fr, blur_fr);
-
-    release_frame(blur_fr, NULL);
-
-    regions->fr = fr;
-    regions->fr_sub_blur = copy_fr;
-
-    return regions;
-}
-
-static void my_free(GSList *sl)
-{
-    if (sl->data) free(sl->data);
-}
-
-static void free_regions(region_struct *regions)
-{
-    release_frame(regions->fr_sub_blur, NULL);
-    int yi;
-    for (yi = 0; yi < regions->fr->h; yi++) {
-        if (regions->list[yi]) {
-            g_slist_foreach(regions->list[yi], (GFunc)my_free, NULL);
-            g_slist_free((GSList *)regions->list[yi]);
-        }
-    }
-}
-
-int erase_stars_regions(struct ccd_frame *fr)
-{
-    region_struct *regions = create_regions(fr);
-
-    regions->plane_iter = 0;
-    while ((regions->plane_iter = color_plane_iter(fr, regions->plane_iter))) {
-
-        find_regions(regions);
-        clear_regions(regions);
-
-    }
-
-    free_regions(regions);
-
-    return 1;
-}
-
-typedef struct {
+typedef struct _point {
     float value;
-    int index;
-    int sorted_ix;
-} sort_struct;
+    gboolean exclude;
+    int id; // offset into frame (-edge_left to +edge_right)
+} Point;
 
-gint sort_pix(gconstpointer pa, gconstpointer pb)
+gint sort_points(gconstpointer pa, gconstpointer pb)
 {
-    const sort_struct *a = *(sort_struct **)pa;
-    const sort_struct *b = *(sort_struct **)pb;
+    const Point *a = *(Point **)pa;
+    const Point *b = *(Point **)pb;
+
     if (a->value < b->value) return -1;
     if (a->value > b->value) return 1;
     return 0;
 }
 
-gboolean find_pixel(gconstpointer pa, gconstpointer pb)
+
+void array_insert(GPtrArray *array, int b, Point *v)
 {
-    const sort_struct *b = (sort_struct *)pb;
-    const sort_struct *a = (sort_struct *)pa;
-    if (b->index == a->index) return TRUE;
-    return FALSE;
+    g_ptr_array_insert(array, b, v);
 }
 
-int erase_stars_running_median(struct ccd_frame *fr)
+float array_median_exclude(GPtrArray *array, Point *points)
 {
+    g_ptr_array_sort(array, sort_points);
+
+    int n = MED_SIZE;
+    Point *v;
+    double sum = 0, sum2 = 0;
+    for (v = points; v < points + MED_SIZE; v++) {
+        sum += v->value;
+        sum2 += v->value * v->value;
+    }
+
+    double mean = sum / n;
+    double stddev = sqrt(sum2 / n - mean * mean);
+
+    long int median_ix = MEDIAN_IX;
+    double k = 1.3;
+
+    Point **vptr = (Point **)array->pdata;
+    v = vptr[n - 1];
+    while (v->value - mean > k * stddev) { // remove bright values (stars)
+        if (! v->exclude) {
+            v->exclude = TRUE; // drop it
+            n--;
+            sum -= v->value;
+            sum2 -= v->value * v->value;
+
+            mean = sum / n;
+            stddev = sqrt(sum2 / n - mean * mean);
+
+            if (n % 2) median_ix--;
+        } else
+            n--;
+
+        v = vptr[n - 1];
+    }
+
+    v = vptr[median_ix]; // median Point
+    float median = v->value;
+    if (n % 2 == 0) {
+        v = vptr[median_ix - 1]; // median Point
+        median = (median + v->value) / 2;
+    }
+
+    return median;
+}
+
+// median filter row and column with star exclusion
+int median_with_star_exclusion(struct ccd_frame *fr)
+{
+    // find avg, std dev, exclude points more than k * (std dev) above avg, iterate
+    // interpolate excluded values
+    Point *points = calloc(MED_SIZE, sizeof(Point));
+    if (points == NULL) return 0;
+
     int plane_iter = 0;
     while ((plane_iter = color_plane_iter(fr, plane_iter))) {
         float *dpi = get_color_plane(fr, plane_iter);
 
-        guint s_size = 40;
-        sort_struct *s_array = calloc(s_size, sizeof(sort_struct));
+        float *row_median = calloc(fr->w * fr->h, sizeof(float));
+        float *column_median = calloc(fr->w * fr->h, sizeof(float));
 
-        int yi;
-        for (yi = 0; yi < fr->h; yi++) {
-            float *row = dpi;
+        if (! (row_median && column_median)) {
+            if (row_median) free(row_median);
+            if (column_median) free(column_median);
+            free(points);
+            return 0;
+        }
 
-            GPtrArray *sorted_pix = g_ptr_array_sized_new(s_size * sizeof(sort_struct));
+        int edge_bit, do_edges, edge_left, edge_right;
 
-            guint si;
-            for (si = 0; si < s_size; si++) { // initialize s_array
-                s_array[si] = (sort_struct){ row[si], si, si };
-                g_ptr_array_insert(sorted_pix, si, &s_array[si]);
-            }
+        edge_bit = fr->w % MED_SIZE;
+        do_edges = (edge_bit != 0);
 
-            g_ptr_array_sort(sorted_pix, sort_pix);
+        edge_left = edge_bit / 2;
+        edge_right = (do_edges) ? MED_SIZE - edge_left - 1: 0;
 
-            sort_struct *pd_ptr;
+        int yi; float *row; // filter rows
+        for (yi = 0, row = dpi; yi < fr->h; yi++, row += fr->w) {
 
-            pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.50)];
-            float sky_hi = pd_ptr->value;
+            float *in = row;
+            float *out_start = row_median + yi * fr->w;
 
-            pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.05)];
-            float sky_lo = pd_ptr->value; // sky_lo to sky_hi are sky
+            GPtrArray *array = NULL;
 
-            int xi; si = 0;
-            for (xi = 0; xi < fr->w; xi++) {
+            Point *v = points;
+            int b;
+            for (b = -edge_left; b < fr->w + edge_right; b++) {
+                v->value = *in;
+                v->exclude = FALSE;
+                v->id = b;
 
-                if (xi >= (int) s_size / 2 && xi < fr->w - (int) s_size / 2) { // update s_array with next pix
+                if (array == NULL) array = g_ptr_array_sized_new(MED_SIZE);
 
-                    if (si == s_size) si = 0; // circular buffer
+                if (array == NULL) break;
 
-                    guint pdi;
-                    for (pdi = 0; pdi < s_size; pdi++) { // crossref sorted
-                        pd_ptr = (sort_struct *)sorted_pix->pdata[pdi];
-                        s_array[pdi].sorted_ix = pd_ptr->index; // the position in sorted array
+                g_ptr_array_insert(array, v - points, v);
+
+                if (b >= 0 && b < fr->w - 1) in++;
+                v++;
+
+                if (v == points + MED_SIZE) { // calculate median for sample
+                    float median = array_median_exclude(array, points);
+
+                    for (v = points; v < points + MED_SIZE; v++) { // output sample
+                        if (v->id >= 0) {
+                            if (v->id >= fr->w) break;
+
+                            float *out = out_start + v->id;
+                            *out = (v->exclude) ? median : v->value;
+                        }
                     }
 
-                    pd_ptr = (sort_struct *)sorted_pix->pdata[s_size - 1];
-                    float max = pd_ptr->value;
+                    g_ptr_array_free(array, TRUE);
 
-                    pd_ptr = (sort_struct *)sorted_pix->pdata[0];
-                    float min = pd_ptr->value;
-
-                    float range = max - min;
-
- //                   if (row[xi] < max + 0.5 * range && row[xi] > min - 0.1 * range) {
-                        pdi = s_array[si].sorted_ix; // get index to replace
-                        pd_ptr = (sort_struct *)sorted_pix->pdata[pdi];
-
-// should use insert_array_sorted
-                        s_array[si] = (sort_struct){ row[xi], xi, si }; // push next pix to s_array
-
-                        g_ptr_array_sort(sorted_pix, sort_pix); // resort
-//                    }
-
-                    si++;
+                    array = NULL;
+                    v = points;
                 }
-
-                pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.50)];
-                sky_hi = pd_ptr->value;
-
-                pd_ptr = (sort_struct *)sorted_pix->pdata[(int) (s_size * 0.30)];
-                float sky_pix = pd_ptr->value;
-
-                if (*dpi > sky_hi) {
-                    // replace it with a sky value
-                    *dpi = sky_pix;
-                }
-
-                dpi++;
             }
-            if (sorted_pix) g_ptr_array_free(sorted_pix, TRUE);
-
         }
-        if (s_array) free(s_array);
+
+        edge_bit = fr->h % MED_SIZE;
+        do_edges = (edge_bit != 0);
+
+        edge_left = edge_bit / 2;
+        edge_right = (do_edges) ? MED_SIZE - edge_left - 1: 0;
+
+        int xi; float *column; // filter columns
+
+#define MEDIAN_OF_MEDIANS
+
+#ifdef MEDIAN_OF_MEDIANS
+        column = row_median; // column median of row medians
+#else
+        column = dpi;
+#endif
+
+        for (xi = 0; xi < fr->w; xi++, column++) {
+
+            float *in = column;
+            float *out_start = column_median + xi; // 0 to fr->w
+
+            GPtrArray *array = NULL;
+            Point *v = points;
+
+            int b;
+            for (b = -edge_left; b < fr->h + edge_right; b++) {
+                v->value = *in;
+                v->exclude = FALSE;
+                v->id = b;
+
+                if (array == NULL) array = g_ptr_array_sized_new(MED_SIZE);
+
+                if (array == NULL) break;
+
+                g_ptr_array_insert(array, v - points, v);
+
+                if (b >= 0 && b < fr->h - 1) in += fr->w;
+                v++;
+
+                if (v == points + MED_SIZE) { // calculate median for sample
+                    float median = array_median_exclude(array, points);
+
+                    for (v = points; v < points + MED_SIZE; v++) { // output sample
+                        if (v->id >= 0) {
+                            if (v->id >= fr->h) break;
+
+                            float *out = out_start + v->id * fr->w;
+                            *out = (v->exclude) ? median : v->value;
+                        }
+                    }
+
+                    g_ptr_array_free(array, TRUE);
+
+                    array = NULL;
+                    v = points;
+                }
+            }
+        }
+
+#ifdef MEDIAN_OF_MEDIANS
+        float *out, *p; // column median of row median
+        for (out = dpi, p = column_median; out < dpi + fr->w * fr->h; out++, p++) *out = *p;
+#else
+        float *out, *rp, *cp;
+        for (out = dpi, rp = row_median, cp = column_median; out < dpi + fr->w * fr->h; out++, rp++, cp++) *out = (*rp + *cp) / 2;
+#endif
+
+        free(column_median);
+        free(row_median);
     }
+    free(points);
+
+    fr->stats.statsok = 0;
+
     return 1;
 }
 
-
-int erase_stars(struct ccd_frame *fr)
+int erase_stars_from_extracted(struct ccd_frame *fr)
 {
     struct ccd_frame *copy_fr = clone_frame(fr);
     int first_last_y = 0;
@@ -1105,12 +978,12 @@ int erase_stars(struct ccd_frame *fr)
             return -1;
         }
 
-        int extracted = extract_stars(copy_fr, NULL, 5, &first_last_y, src);
+        int extracted = extract_stars(copy_fr, NULL, 3, &first_last_y, src);
         if (extracted > 0) {
             int i;
             for (i = 0; i < extracted; i++) {
                 struct star *s = &(src->s[i]);
-                add_sky_patch_to_frame(fr, s->x, s->y, s->starr * 2, s->sky, s->sky_sigma);
+                add_sky_patch_to_frame(fr, s->x, s->y, s->starr * 2.5, s->sky, s->sky_sigma);
             }
             ns += extracted;
         }
@@ -1121,7 +994,17 @@ int erase_stars(struct ccd_frame *fr)
 
     release_frame(copy_fr, "erase_stars");
 
+    fr->stats.statsok = 0;
+
     return ns > 0;
+}
+
+int erase_stars(struct ccd_frame *fr)
+{
+//    return erase_stars_median_separated(fr);
+//    return erase_stars_median_unseparated(fr);
+    return median_with_star_exclusion(fr);
+    return erase_stars_from_extracted(fr);
 }
 
 // free a sources structure

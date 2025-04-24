@@ -226,6 +226,25 @@ static void draw_a_star(cairo_t *cr, double x, double y, double size, int shape,
 		yl = y + oy + 2;
 		break;
 
+    case STAR_SHAPE_STAR: // r1 ring
+/* size is the zoom here. for x1, size = 2
+   (so we never make the rings too small */
+        r = P_DBL(AP_R1) * size / 2;
+        cairo_arc (cr, x, y, r, 0, 2 * M_PI);
+        cairo_stroke (cr);
+
+//		r = P_DBL(AP_R2) * size / 2;
+//		cairo_arc (cr, x, y, r, 0, 2 * M_PI);
+//		cairo_stroke (cr);
+
+//		r = P_DBL(AP_R3) * size / 2;
+//		cairo_arc (cr, x, y, r, 0, 2 * M_PI);
+//		cairo_stroke (cr);
+
+        xl = x + r + ox + 2;
+        yl = y + oy + 2;
+        break;
+
 	case STAR_SHAPE_CROSS:
 
         cairo_move_to (cr, x + inner_limit, y);
@@ -305,7 +324,7 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 //    ix = gs->x * zoom + 0.5;
 //    iy = gs->y * zoom + 0.5;
 
-	if (gsl->shape[type] == STAR_SHAPE_APHOT) {
+    if (gsl->shape[type] == STAR_SHAPE_APHOT || gsl->shape[type] == STAR_SHAPE_STAR) {
         isz = 2 * zoom;
 	} else if (gsl->shape[type] == STAR_SHAPE_BLOB) {
         isz = size; // gs->size;

@@ -273,7 +273,8 @@ int mbds_report_from_ofrs(struct mband_dataset *mbds, FILE *repfp, GList *ofrs, 
                 nstars = 0; // could be different for different frames?
                 for (fl = ofr->sobs; fl != NULL; fl = g_list_next(fl)) { // report target stars
                     struct star_obs *sob = STAR_OBS(fl->data);
-                    if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR || CATS_TYPE(sob->cats) == CATS_TYPE_APSTD)
+//                    if (CATS_TYPE(sob->cats) == CATS_TYPE_APSTAR || CATS_TYPE(sob->cats) == CATS_TYPE_APSTD)
+                    if (CATS_TYPE(sob->cats) & CATS_TYPE_APHOT)
                         nstars += ! rep_star(repfp, sob, action & REP_FMT_MASK, nstd == 1 ? comp : NULL, check_stars);
                 }
 
@@ -303,6 +304,8 @@ char * mbds_short_result(struct o_frame *ofr)
 
 	d3_printf("qr\n");
 	g_return_val_if_fail(ofr != NULL, NULL);
+
+    if (ZPSTATE(ofr) <= ZP_FIT_ERR) return "not fitted";
 
 	ofr_to_stf_cats(ofr);
 

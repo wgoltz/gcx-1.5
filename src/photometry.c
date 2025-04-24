@@ -137,7 +137,6 @@ static int stf_am_pars(struct stf *stf, double *lat, double *lng, double *jd)
 static int star_in_frame(struct ccd_frame *fr, double x, double y, int margin)
 {
     if (x < margin || x > fr->w - margin || y < margin || y > fr->h - margin) return 0;
-    if ( sqr (x - fr->w / 2) + sqr (y - fr->h / 2) > sqr (P_DBL(AP_MAX_STD_RADIUS)) * (sqr (fr->w / 2) + sqr (fr->h / 2)) ) return 0;
 
     return 1;
 }
@@ -239,6 +238,11 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         cats->pos[POS_X] = x;
         cats->pos[POS_Y] = y;
 
+        cats->pos[CD_FRAC_X] = fabs(2 * x - fr->w) / fr->w;
+        cats->pos[CD_FRAC_Y] = fabs(2 * y - fr->h) / fr->h;
+
+//        if ( sqr (x - fr->w / 2) + sqr (y - fr->h / 2) > sqr (P_DBL(AP_MAX_STD_RADIUS)) * (sqr (fr->w / 2) + sqr (fr->h / 2)) ) return 0;
+
         if (! star_in_frame (fr, x, y, rm)) {
 			cats->flags |= CPHOT_INVALID;
 			continue;
@@ -248,7 +252,6 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
             cats->diffam = calculate_airmass (cats->ra, cats->dec, ast, lat, lng) - fam;
 			cats->flags |= INFO_DIFFAM;
 		}
-
 
         struct star s = { 0 };
 		s.x = x;
@@ -284,8 +287,8 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 		}
 		cats->pos[POS_X] = s.x;
 		cats->pos[POS_Y] = s.y;
-        cats->pos[POS_XERR] = s.xerr * s.aph.star_err/s.aph.star; // how does this work ?
-		cats->pos[POS_YERR] = s.yerr * s.aph.star_err/s.aph.star;
+        cats->pos[POS_XERR] = s.xerr * s.aph.star_err / s.aph.star; // how does this work ?
+        cats->pos[POS_YERR] = s.yerr * s.aph.star_err / s.aph.star;
 		cats->flags |= INFO_POS;
 
         if (s.aph.flags & AP_STAR_SKIP) cats->flags |= CPHOT_BADPIX;
@@ -439,7 +442,8 @@ static struct stf * build_stf_from_frame(struct wcs *wcs, GList *sl, struct ccd_
 
 	for (; sl != NULL; sl = g_list_next(sl)) {
         struct cat_star *cats = CAT_STAR(sl->data);
-        if (CATS_TYPE(cats) == CATS_TYPE_APSTAR || CATS_TYPE(cats) == CATS_TYPE_APSTD) {
+//        if (CATS_TYPE(cats) == CATS_TYPE_APSTAR || CATS_TYPE(cats) == CATS_TYPE_APSTD) {
+        if (CATS_TYPE(cats) & CATS_TYPE_APHOT) {
             apsl = g_list_prepend (apsl, cats);
         }
 	}

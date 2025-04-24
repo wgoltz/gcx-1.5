@@ -233,7 +233,7 @@ GtkWidget* create_pstar (void)
   g_object_ref (pstar_type_combo);
   g_object_set_data_full (G_OBJECT (pstar), "pstar_type_combo", pstar_type_combo, (GDestroyNotify) g_object_unref);
 
-  char *pstar_type_choices[] = { "Field Star", "Standard Star", "Photometry Target", "Generic Object", NULL };
+  char *pstar_type_choices[] = { "Field Star", "Standard Star", "Photometry Target", "Catalog Object", NULL };
 
   char **c = pstar_type_choices;
   while (*c != NULL) {
@@ -2400,10 +2400,21 @@ GtkWidget* create_image_processing (void)
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
- item = gtk_check_button_new_with_label ("Erase Stars");
+ adjustment = gtk_adjustment_new (20, 0, 150, 1, 20, 0);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 1);
  g_object_ref (item);
- g_object_set_data_full (G_OBJECT (image_processing), "erase_checkb", item, (GDestroyNotify) g_object_unref);
- gtk_widget_set_tooltip_text (item, "Find stars and replace with local sky background (before blur)");
+ g_object_set_data_full (G_OBJECT (image_processing), "median_spin", item, (GDestroyNotify) g_object_unref);
+ gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);
+ gtk_widget_set_tooltip_text (item, "Width/height of median filter (in pixels)");
+
+ item = gtk_label_new ("Width");
+ gtk_misc_set_padding (GTK_MISC (item), 3, 0);
+ gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
+
+ item = gtk_check_button_new_with_label ("Median");
+ g_object_ref (item);
+ g_object_set_data_full (G_OBJECT (image_processing), "median_checkb", item, (GDestroyNotify) g_object_unref);
+ gtk_widget_set_tooltip_text (item, "Apply two pass (row then column) spatial median filter with star rejection");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
  adjustment = gtk_adjustment_new (0.5, 0, 50, 0.1, 10, 0);
@@ -2421,6 +2432,12 @@ GtkWidget* create_image_processing (void)
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "blur_checkb", item, (GDestroyNotify) g_object_unref);
  gtk_widget_set_tooltip_text (item, "Apply gaussian blur to image");
+ gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
+
+ item = gtk_check_button_new_with_label ("Sub Mask");
+ g_object_ref (item);
+ g_object_set_data_full (G_OBJECT (image_processing), "sub_mask_checkb", item, (GDestroyNotify) g_object_unref);
+ gtk_widget_set_tooltip_text (item, "Subtract median and/or smoothed frame from original to produce unsharp mask or synthetic flattened frame");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
 // ******************* stack

@@ -854,6 +854,8 @@ void free_band_def (struct band_def *bd)
 
 int get_band_by_name(char *mags, char *band, double *mag, double *err)
 {
+    if (mags == NULL) return -1;
+
 	char *text = mags;
 
     if (text == NULL || band == NULL) return -1;
@@ -874,7 +876,7 @@ int get_band_by_name(char *mags, char *band, double *mag, double *err)
             free_band_def(&nd);
 
             char *endp;
-            double m, me;
+            double m = MAG_UNSET, me = BIG_ERR;
 
             type = band_crack(text, &nd.n1, &nd.n2, &nd.qual, &m, &me, &endp);
             text = endp;
@@ -956,7 +958,7 @@ if (isnan(me))
             free_band_def(&nd);
 
             char *endp;
-            double m, me;
+            double m = MAG_UNSET, me = BIG_ERR;
             type = band_crack(text, &nd.n1, &nd.n2, &nd.qual, &m, &me, &endp);
 			text = endp;
 

@@ -413,14 +413,15 @@ typedef enum {
 #define PAR_FIRST PAR_FILES
 
 /* choices enums and string intialisers */
-#define PAR_CHOICE_STAR_SHAPES {"circle", "square", "blob", "aphot", "diamond", "cross", NULL}
+#define PAR_CHOICE_STAR_SHAPES {"circle", "square", "blob", "aphot", "diamond", "cross", "star", NULL}
 enum {
 	PAR_STAR_SHAPE_CIRCLE,
 	PAR_STAR_SHAPE_SQUARE,
 	PAR_STAR_SHAPE_BLOB,
 	PAR_STAR_SHAPE_APHOT,
 	PAR_STAR_SHAPE_DIAMOND,
-	PAR_STAR_SHAPE_CROSS,
+    PAR_STAR_SHAPE_CROSS,
+    PAR_STAR_SHAPE_STAR,
 };
 
 #define PAR_CHOICE_COLOR_TYPES {"instrumental", "standard", NULL}

@@ -66,11 +66,11 @@ struct stf{
 #define MKRCP_USER 8
 #define MKRCP_DET 0x10
 #define MKRCP_CAT 0x20
-#define MKRCP_FIELD_TO_TGT 0x20
-#define MKRCP_USER_TO_TGT 0x40
-#define MKRCP_DET_TO_TGT 0x80
-#define MKRCP_CAT_TO_STD 0x100
-#define MKRCP_INCLUDE_OFF_FRAME 0x200
+#define MKRCP_FIELD_TO_TGT 0x40
+#define MKRCP_USER_TO_TGT 0x80
+#define MKRCP_DET_TO_TGT 0x100
+#define MKRCP_CAT_TO_STD 0x200
+#define MKRCP_INCLUDE_OFF_FRAME 0x400
 
 
 /* Structure describing tabular format fields */

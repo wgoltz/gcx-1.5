@@ -436,8 +436,8 @@ static void update_dialog_from_ccdr(GtkWidget *processing_dialog, struct ccd_red
         named_entry_set(processing_dialog, "recipe_entry", ccdr->recipe);
         set_named_checkb_val(processing_dialog, "phot_en_checkb", 1);
     }
-    if ((ccdr->op_flags & IMG_OP_ERASE)) {
-        set_named_checkb_val(processing_dialog, "erase_checkb", 1);
+    if ((ccdr->op_flags & IMG_OP_MEDIAN)) {
+        set_named_checkb_val(processing_dialog, "median_checkb", 1);
     }
     if ((ccdr->op_flags & IMG_OP_BLUR)) {
         named_spin_set(processing_dialog, "blur_spin", ccdr->blurv);
@@ -994,8 +994,9 @@ static void imf_update_mband_status_label(GtkTreeModel *image_file_store, GtkTre
     if (imf->op_flags & IMG_OP_ADD) str_join_str(&msg, " %s", "ADD");
     if (imf->op_flags & IMG_OP_ALIGN) str_join_str(&msg, " %s", "ALIGN");
     if (imf->op_flags & IMG_OP_DEMOSAIC) str_join_str(&msg, " %s", "DEMOSAIC");
-    if (imf->op_flags & IMG_OP_ERASE) str_join_str(&msg, " %s", "ERASE");
+    if (imf->op_flags & IMG_OP_MEDIAN) str_join_str(&msg, " %s", "MEDIAN");
     if (imf->op_flags & IMG_OP_BLUR) str_join_str(&msg, " %s", "BLUR");
+    if (imf->op_flags & IMG_OP_SUB_MASK) str_join_str(&msg, " %s", "SUB_MASK");
     if (imf->op_flags & IMG_OP_BG_ALIGN_ADD) str_join_str(&msg, " %s", "BG/ADD");
     if (imf->op_flags & IMG_OP_BG_ALIGN_MUL) str_join_str(&msg, " %s", "BG/MUL");
     if (imf->op_flags & IMG_OP_WCS) str_join_str(&msg, " %s", "WCS");
@@ -1207,6 +1208,7 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
         ccdr->op_flags |= IMG_OP_ADD;
         double v = named_spin_get_value(processing_dialog, "add_spin");
         ccdr->mul_before_add = (active == 2) ? 0 : 1;
+        ccdr->addv = v;
     } else {
         ccdr->op_flags &= ~IMG_OP_ADD;
     }
@@ -1218,10 +1220,10 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
 //		ccdr->op_flags &= ~IMG_OP_ADD;
 //	}
 
-    if (get_named_checkb_val(processing_dialog, "erase_checkb")) {
-        ccdr->op_flags |= IMG_OP_ERASE;
+    if (get_named_checkb_val(processing_dialog, "median_checkb")) {
+        ccdr->op_flags |= IMG_OP_MEDIAN;
     } else {
-        ccdr->op_flags &= ~IMG_OP_ERASE;
+        ccdr->op_flags &= ~IMG_OP_MEDIAN;
     }
 
     if (get_named_checkb_val(processing_dialog, "blur_checkb")) {
@@ -1230,6 +1232,12 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
         ccdr->op_flags &= ~IMG_OP_BLUR;
 	}
     ccdr->blurv = named_spin_get_value(processing_dialog, "blur_spin");  // set blur anyway
+
+    if (get_named_checkb_val(processing_dialog, "sub_mask_checkb")) {
+        ccdr->op_flags |= IMG_OP_SUB_MASK;
+    } else {
+        ccdr->op_flags &= ~IMG_OP_SUB_MASK;
+    }
 
     if (get_named_checkb_val(processing_dialog, "phot_en_checkb")) {
 		if (ccdr->wcs) {

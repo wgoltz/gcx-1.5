@@ -157,8 +157,9 @@ static int get_recipe_flags(GtkWidget *dialog)
 }
 
 
-static void stf_free_all_(struct stf *stf)
+static void rcp_free_all(struct stf *stf)
 {
+    // cats not being ref'd / released too soon ?
     stf_free_all(stf, "mkrcp_ok_cb");
 }
 
@@ -247,7 +248,7 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     free(seq);
 
     if (rcp != NULL) {
-        g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)stf_free_all_);
+        g_object_set_data_full(G_OBJECT(window), "recipe", rcp, (GDestroyNotify)rcp_free_all);
         gtk_widget_hide(dialog);
     }
 }

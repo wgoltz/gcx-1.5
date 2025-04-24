@@ -30,10 +30,11 @@ struct image_file {
 #define IMG_OP_BG_ALIGN_ADD 0x100   /* align background additively */
 #define IMG_OP_BG_ALIGN_MUL 0x200   /* align background multiplicatively */
 #define IMG_OP_BLUR 0x400           /* gaussian-blur */
-#define IMG_OP_ERASE 0x800          /* erase stars */
-#define IMG_OP_PHOT 0x1000          /* aphot image */
-#define IMG_OP_WCS 0x2000           /* fit wcs */
-#define IMG_OP_DEMOSAIC 0x4000      /* demosaic */
+#define IMG_OP_MEDIAN 0x800         /* median filtered with star exclusion */
+#define IMG_OP_SUB_MASK 0x1000      /* subtract mask frame */
+#define IMG_OP_PHOT 0x2000          /* aphot image */
+#define IMG_OP_WCS 0x4000           /* fit wcs */
+#define IMG_OP_DEMOSAIC 0x8000      /* demosaic */
 
 /* state flags */
 #define IMG_STATE_REUSE_WCS 0x01       /* don't refit wcs when aphotting */

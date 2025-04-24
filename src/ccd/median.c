@@ -113,7 +113,7 @@ static inline float fkth_smallest(float a[], int n, int k)
 }
 
 
-/* find median of n double array.
+/* find median of n float array.
  * N.B. array is rearranged IN PLACE.
  */
 float fmedian(float a[], int n)

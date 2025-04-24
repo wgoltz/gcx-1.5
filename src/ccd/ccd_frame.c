@@ -1451,9 +1451,9 @@ int write_fits_frame_unzipped(struct ccd_frame *fr, char *filename)
 //			     "UTC OF INTEGRATION START");
 //	}
 
-    bscale = (fr->stats.max - fr->stats.min) / 32768.0;
-    bzero = (fr->stats.max + fr->stats.min) / 2.0;
-/*
+//    bscale = (fr->stats.max - fr->stats.min) / 32768.0;
+//    bzero = (fr->stats.max + fr->stats.min) / 2.0;
+
 	if ( ((fr->stats.max - fr->stats.min) < 32767.0)
 	     && (fr->stats.max < 32767)) {// we use positive, scaled by 1 format
         bscale = 1.0;
@@ -1462,7 +1462,7 @@ int write_fits_frame_unzipped(struct ccd_frame *fr, char *filename)
         bscale = 1.0;
 		bzero = 32768.0;
 	}
-*/
+
     i++; fprintf(fp, "%-8s= %20.7f   %-40s       ", "BSCALE", bscale, "");
     i++; fprintf(fp, "%-8s= %20.7f   %-40s       ", "BZERO", bzero, "");
 

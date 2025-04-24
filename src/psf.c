@@ -232,6 +232,7 @@ void aperture_stats(struct ccd_frame *fr, struct psf *psf, double x, double y, s
 
     int nvals = 0;
     int ix, iy;
+int rs_all_zero = 0;
     for (iy = ys; iy < ye; iy++) {
 		for (ix = xs; ix < xe; ix++) {            
             float d = get_pixel_luminence(fr, w_offset + ix, h_offset + iy);
@@ -247,12 +248,12 @@ void aperture_stats(struct ccd_frame *fr, struct psf *psf, double x, double y, s
 			}
 
             rs->sum += d * psf->d [ix][iy];
-// int v = d * psf->d [ix][iy] * 10;
-// printf("%4d ", v);
             rs->sumsq += sqr(d) * psf->d [ix][iy];
             rs->all += psf->d [ix][iy];
+            if (rs->all == 0) {
+                rs_all_zero++;
+            }
         }
-// printf("\n"); fflush(NULL);
 	}
 
     rs->median = fmedian (vals, nvals);
@@ -755,27 +756,29 @@ double get_sky(struct ccd_frame *fr, double x, double y, struct ap_params *p,
 
     double s = 0.0, e = BIG_ERR;
 
-	switch(p->sky_method) {
-	case PAR_SKY_METHOD_AVERAGE:
-        s = stats->avg;
-        e = stats->sigma / sqrt(stats->all);
-		break;
-	case PAR_SKY_METHOD_MEDIAN:
-        s = stats->median;
-        e = stats->sigma / sqrt(stats->all) / 0.65;
-		break;
-	case PAR_SKY_METHOD_KAPPA_SIGMA:
-        s = stats->avg;
-        e = stats->sigma / sqrt(stats->all);
-		break;
-	case PAR_SKY_METHOD_SYNTHETIC_MODE:
-        s = 3 * stats->median - 2 * stats->avg;
-        e = stats->sigma / sqrt(stats->all);
-		break;
-	default:
-		err_printf("get_sky: unknown method %d\n", p->sky_method);
-		break;
-	}
+    if (stats->all != 0) {
+        switch(p->sky_method) {
+        case PAR_SKY_METHOD_AVERAGE:
+            s = stats->avg;
+            e = stats->sigma / sqrt(stats->all);
+            break;
+        case PAR_SKY_METHOD_MEDIAN:
+            s = stats->median;
+            e = stats->sigma / sqrt(stats->all) / 0.65;
+            break;
+        case PAR_SKY_METHOD_KAPPA_SIGMA:
+            s = stats->avg;
+            e = stats->sigma / sqrt(stats->all);
+            break;
+        case PAR_SKY_METHOD_SYNTHETIC_MODE:
+            s = 3 * stats->median - 2 * stats->avg;
+            e = stats->sigma / sqrt(stats->all);
+            break;
+        default:
+            err_printf("get_sky: unknown method %d\n", p->sky_method);
+            break;
+        }
+    }
 
     if (apert) *apert = psf;
     else psf_release(psf);
@@ -845,7 +848,12 @@ int aphot_star(struct ccd_frame *fr, struct star *s, struct ap_params *p, struct
     s->aph.pshot_noise = sqrt(phnsq);
     s->aph.rd_noise = sqrt(rdnsq);
 
-    s->aph.star_err = sqrt(flux_err_sq + sqr(star_stats.all * sky_err));
+    if (sky_stats.all == 0) {
+        s->aph.flags |= AP_SKY_ERROR;
+        return -1;
+    }
+
+    s->aph.star_err = sqrt(flux_err_sq + sqr(star_stats.all * s->aph.sky_err));
 
     d4_printf(">>>>peak: %.1f sat_limit: %.1f\n", s->aph.star_max, p->sat_limit);
 

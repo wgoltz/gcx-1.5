@@ -143,6 +143,7 @@ extern void act_stars_rm_pairs_selected(GtkAction *action, gpointer window);
 extern void act_selected_to_target (GtkAction *action, gpointer window);
 extern void act_selected_to_std (GtkAction *action, gpointer window);
 extern void act_selected_to_field (GtkAction *action, gpointer window);
+extern void act_selected_to_cat (GtkAction *action, gpointer window);
 
 /* from sourcesdraw.c */
 extern void act_stars_show_target (GtkAction *action, gpointer window);

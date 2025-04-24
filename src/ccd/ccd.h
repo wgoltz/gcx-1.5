@@ -165,9 +165,10 @@ struct im_stats {
 #define WCS_HAVE_POS 0x20  // have xref and yref
 #define WCS_HAVE_SCALE 0x40 // have xinc and yinc
 #define WCS_EDITED 0x80 // updated values in wcsedit
+#define WCS_HAVE_SCALE_POS (WCS_HAVE_SCALE | WCS_HAVE_POS)
 
 #define WCS_HAVE_INITIAL(wcs) \
-    (((wcs)->flags & (WCS_HAVE_SCALE | WCS_HAVE_POS)) == (WCS_HAVE_SCALE | WCS_HAVE_POS))
+    (((wcs)->flags & WCS_HAVE_SCALE_POS) == WCS_HAVE_SCALE_POS)
 
 
 struct wcs{
@@ -416,6 +417,7 @@ struct ph_star {
 #define AP_STAR_SKIP 256 // pixels were skipped in the star region
 #define AP_STD_STAR 512 // use as reference star
 #define AP_STD_SKIPPED 1024 // this std star was used for the mag the solution
+#define AP_SKY_ERROR 2048 // bad sky value (stats->all == 0) for sky region
 #define AP_MEASURED 0x10000 /* this star's values have been measured from the frame */
 #define MIN_STAR 1.0	// minimum star flux (to protect the logarithms)
 
@@ -451,7 +453,7 @@ struct star {
 	double starr;	// apparent radius of star image
     double fwhm;	// estimated fwhm
 	double fwhm_ec;	// eccentricity of fwhm (major/minor)
-	double fwhm_pa;	// position angle of fwhm ellipse (0=horisontal)
+    double fwhm_pa;	// position angle of fwhm ellipse (0=horizontal)
 };
 
 // aperture photometry parameters

@@ -25,6 +25,8 @@ typedef enum {
 // use gui_star type if the cats has a gui_star
 #define CATS_TYPE(cats) ( (cats)->gs ? STAR_TYPE((cats)->gs) : (cats)->type )
 
+#define CATS_TYPE_APHOT (CATS_TYPE_APSTD | CATS_TYPE_APSTAR | CATS_TYPE_CAT)
+
 /* flags for catalogs and stars */
 
 #define CATS_FLAG_MASK 0xf0
@@ -76,6 +78,8 @@ typedef enum{
 	POS_YERR,
 	POS_DX,
 	POS_DY,
+    CD_FRAC_X,
+    CD_FRAC_Y,
 	POS_LAST
 } ScrPosition;
 
