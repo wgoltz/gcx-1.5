@@ -154,10 +154,12 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
     struct wcs *imf_wcs = (fr->imf && fr->imf->fim) ? fr->imf->fim : NULL;
 
     if (imf_wcs) {
-        if (imf_wcs->wcsset > fr_wcs->wcsset)
+        if (imf_wcs->wcsset > fr_wcs->wcsset) {
             wcs_clone(fr_wcs, imf_wcs);
-        else if (imf_wcs->wcsset == WCS_INVALID) // reload from window_wcs
+        } else if (imf_wcs->wcsset == WCS_INVALID) {// reload from window_wcs
             wcs_clone(fr_wcs, window_wcs);
+            fr_wcs->wcsset = WCS_INITIAL;
+        }
     }
 
     if (fr_wcs->wcsset < WCS_VALID) {

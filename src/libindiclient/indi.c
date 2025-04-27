@@ -195,21 +195,19 @@ struct indi_elem_t *indi_prop_set_string(struct indi_prop_t *iprop, const char *
 }
 
 int indi_prop_get_switch(struct indi_prop_t *iprop, const char *elemname) {
-	struct indi_elem_t *ielem;
-	ielem = indi_find_elem(iprop, elemname);
-	if(! ielem) {
-		return 0;
-	}
+    struct indi_elem_t *ielem = indi_find_elem(iprop, elemname);
+
+    if(ielem == NULL) return 0;
+
 	return ielem->value.set;
 }
 
 struct indi_elem_t *indi_prop_set_switch(struct indi_prop_t *iprop, const char *elemname, int state)
 {
-	struct indi_elem_t *ielem;
-	ielem = indi_find_elem(iprop, elemname);
-	if(! ielem) {
-		return NULL;
-	}
+    struct indi_elem_t *ielem = indi_find_elem(iprop, elemname);
+
+    if(ielem == NULL) return 0;
+
 	ielem->value.set = state;
 	return ielem;
 }
@@ -218,8 +216,8 @@ struct indi_elem_t *indi_find_first_elem(struct indi_prop_t *iprop)
 {
     struct indi_elem_t *ielem = NULL;
 
-    if (iprop->elems)
-        ielem = (struct indi_elem_t *)il_first(iprop->elems);
+    if (iprop->elems) ielem = (struct indi_elem_t *)il_first(iprop->elems);
+
     return ielem;
 }
 

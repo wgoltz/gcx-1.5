@@ -34,12 +34,17 @@
 
 void INDI_connect_cb(struct indi_prop_t *iprop, struct INDI_common_t *device)
 {
-    device->is_connected = 0;
+//    device->is_connected = 0;
     if (iprop->state == INDI_STATE_IDLE || iprop->state == INDI_STATE_OK) {
-        device->is_connected = indi_prop_get_switch(iprop, "CONNECT");
+        struct indi_elem_t *ielem = indi_find_elem(iprop, "CONNECT");
+        if (! ielem) ielem = indi_find_elem(iprop, "CONNECTED");
+
+        device->is_connected = (ielem) ? ielem->value.set : 0;
 
         if (device->is_connected)
             device->check_state(device);
+    } else {
+        printf("INDI_connect: bad iprop state %s for %s\n", iprop->name, device->name); fflush(NULL);
     }
 }
 
@@ -113,8 +118,12 @@ void INDI_try_dev_connect(struct indi_prop_t *iprop, struct INDI_common_t *devic
 {
 	if (strcmp(iprop->name, "CONNECTION") == 0) {
 printf("Found CONNECTION for %s: %s\n", device->name, iprop->idev->name); fflush(NULL);
-        indi_send(iprop, indi_prop_set_switch(iprop, "CONNECT", TRUE));
-        indi_prop_add_cb(iprop, (IndiPropCB)INDI_connect_cb, device);
+        struct indi_elem_t *ielem = indi_prop_set_switch(iprop, "CONNECTED", TRUE);
+        if (! ielem) ielem = indi_prop_set_switch(iprop, "CONNECT", TRUE);
+        if (ielem) {
+            indi_send(iprop, ielem);
+            indi_prop_add_cb(iprop, (IndiPropCB)INDI_connect_cb, device);
+        }
 	}
 	else if (strcmp(iprop->name, "DEVICE_PORT") == 0 && portname && strlen(portname)) {
 		indi_send(iprop, indi_prop_set_string(iprop, "PORT", portname));

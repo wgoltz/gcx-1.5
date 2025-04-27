@@ -39,6 +39,7 @@
 
 static void tele_check_state(struct tele_t *tele)
 {
+    printf("tele_check_state: telescope %s connected\n", tele->is_connected ? "is" : "is not"); fflush(NULL);
 	if (tele->is_connected &&
 		((tele->move_ns_prop && tele->move_ew_prop) ||
 		(tele->timed_guide_ns_prop && tele->timed_guide_ew_prop)))
@@ -52,7 +53,7 @@ static void tele_check_state(struct tele_t *tele)
 
 static void tele_check_state_for_tele_find(struct tele_t *tele)
 {
-
+    printf("tele_check_state_for_tele_find: telescope %s connected", tele->is_connected ? "is" : "is not"); fflush(NULL);
     if (tele->is_connected &&
         ((tele->move_ns_prop && tele->move_ew_prop) ||
         (tele->timed_guide_ns_prop && tele->timed_guide_ew_prop)))
@@ -202,30 +203,36 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 //		tele->coord_set_prop = iprop;
 //	}
 //	else
-    if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
+    if ((strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) ||
+            (strcmp(iprop->name, "MOUNT_EQUATORIAL_COORDINATES") == 0)) {
         tele->coord_prop = iprop;
         tele->coord_set_prop = iprop; // try this
         indi_prop_add_cb(iprop, (IndiPropCB)tele_get_coords_cb, tele);
 	}
-	else if (strcmp(iprop->name, "ON_COORD_SET") == 0) {
+    else if ((strcmp(iprop->name, "ON_COORD_SET") == 0) ||
+             (strcmp(iprop->name, "MOUNT_ON_COORDINATES_SET") == 0)) {
 		tele->coord_set_type_prop = iprop;
 	}
-    else if (strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) { // tracking or stopped
+    else if ((strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) ||
+             (strcmp(iprop->name, "MOUNT_TRACKING") == 0)) { // tracking or stopped
         tele->track_state_prop = iprop;
 //        indi_prop_add_cb(iprop, (IndiPropCB)tele_track_state_cb, tele);
     }
-	else if (strcmp(iprop->name, "TELESCOPE_ABORT_MOTION") == 0) {
+    else if ((strcmp(iprop->name, "TELESCOPE_ABORT_MOTION") == 0) ||
+             (strcmp(iprop->name, "MOUNT_ABORT_MOTION") == 0)) {
 		tele->abort_prop = iprop;
 	}
-	else if (strcmp(iprop->name, "TELESCOPE_MOTION_NS") == 0) {
+    else if ((strcmp(iprop->name, "TELESCOPE_MOTION_NS") == 0) ||
+             (strcmp(iprop->name, "MOUNT_MOTION_DEC") == 0)) {
 		tele->move_ns_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
-	else if (strcmp(iprop->name, "TELESCOPE_MOTION_WE") == 0) {
+    else if ((strcmp(iprop->name, "TELESCOPE_MOTION_WE") == 0) ||
+             (strcmp(iprop->name, "MOUNT_MOTION_RA") == 0)) {
 		tele->move_ew_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
-	else if (strcmp(iprop->name, "TELESCOPE_TIMED_GUIDE_NS") == 0) {
+    else if (strcmp(iprop->name, "TELESCOPE_TIMED_GUIDE_NS") == 0) {
 		tele->timed_guide_ns_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
@@ -233,7 +240,8 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 		tele->timed_guide_ew_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
-    else if (strcmp(iprop->name, "TELESCOPE_SLEW_RATE") == 0) {
+    else if ((strcmp(iprop->name, "TELESCOPE_SLEW_RATE") == 0) ||
+             (strcmp(iprop->name, "MOUNT_SLEW_RATE") == 0)) {
 		tele->speed_prop = iprop;
 	}
 	else

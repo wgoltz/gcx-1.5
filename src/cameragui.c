@@ -149,44 +149,53 @@ static int tele_alert_cb(gpointer cam_control_dialog)
 
 
 /* Monitor telescope tracking */
+
 static int tele_coords_indi_cb(gpointer cam_control_dialog)
 {
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct tele_t *tele = tele_find(main_window);
 
-    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
-
-//    char *msg = NULL; asprintf(&msg, "Slewing to %s", obs->objname);
-//    if (msg) status_message(cam_control_dialog, msg), free(msg);
-
     if (tele) {
-
-// if (iprop->state == INDI_STATE_ALERT) do something here (telescope parked?)
-
         double ra, dec;
+
         int state = tele_get_coords(tele, &ra, &dec); // set ra and dec to last read by tele
         char *msg = NULL;
 
-        char *ras = degrees_to_hms(ra);
-        char *decs = degrees_to_dms(dec);
+        if (state == INDI_STATE_ALERT) { // disconnected, parked ?
+            str_join_varg(&msg, "Telescope not ready !!!\n");
 
-        if (state == INDI_STATE_BUSY) { // use obs_object_entry as destination
-            str_join_varg(&msg, "Slewing to %s, %s", ras, decs);
-            if (obs) str_join_varg(&msg, " ( %s )", obs->objname);
-            str_join_str(&msg, "%s", "\n");
+        } else {
+            struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
+
+            char *ras = degrees_to_hms(ra);
+            char *decs = degrees_to_dms(dec);
+
+            if (state == INDI_STATE_BUSY) { // could also be stopped ?
+                str_join_varg(&msg, "Slewing (%s, %s)", ras, decs);
+                if (obs) str_join_varg(&msg, " to %s", obs->objname);
+                str_join_str(&msg, "%s", "\n");
+
+            } else if (state <= INDI_STATE_OK && tele->change_state) {
+                if (obs == NULL || (sqr(ra - obs->ra) + sqr(dec - obs->dec)) > 1) {
+                    if (obs) g_object_set_data(G_OBJECT(cam_control_dialog), "obs_data", NULL); // free old obs
+                    obs = obs_data_new();
+                    if (obs) {
+                        obs->ra = ra;
+                        obs->dec = dec;
+                        asprintf(&obs->objname, "Unknown Object");
+                    }
+                }
+                str_join_varg(&msg, "Tracking (%s, %s)", ras, decs);
+                if (obs) str_join_varg(&msg, " %s", obs->objname);
+                str_join_str(&msg, "%s", "\n");
+
+            }
+
+            if (ras) free(ras);
+            if (decs) free(decs);
         }
 
-// todo: remember and restore last object
-        if (msg == NULL && tele->change_state) {
-            str_join_varg(&msg, "Tracking  %s, %s", ras, decs);
-            if (obs) str_join_varg(&msg, " ( %s )", obs->objname);
-            str_join_str(&msg, "%s", "\n");
-        }
-
-        if (ras) free(ras);
-        if (decs) free(decs);
-
-        if (msg) {
+        if (msg) { // only write message if tele page active ?
             status_message(cam_control_dialog, msg);
             printf("%s\n", msg); fflush(NULL);
             free(msg);
@@ -756,6 +765,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         fits_keyword_add(fr, P_STR(FN_EXPTIME), "%20.5f / EXPTIME", exptime);
 
         // add observer info
+        // need check obs is correct (check tele ra,dec to obs ra,dec)
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
         ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
 
@@ -1321,11 +1331,11 @@ static int scope_goto_cb( GtkWidget *widget, gpointer cam_control_dialog )
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
     struct tele_t *tele = tele_find(main_window);
-	if (! tele) {
-        char *msg = NULL; asprintf(&msg, "Telescope not connected");
+    if (! (tele && tele->ready)) {
+        char *msg = NULL; asprintf(&msg, "Telescope is not ready");
         if (msg) status_message(cam_control_dialog, msg), free(msg);
 
-		err_printf("No telescope found\n");
+        err_printf("telescope is not ready\n");
 		return -1;
 	}
 
@@ -1632,7 +1642,11 @@ void act_control_camera (GtkAction *action, gpointer window)
         struct tele_t *tele = tele_find(window); // could be multiple mount drivers
         if (tele) {
             tele_set_ready_callback(window, tele_ready_indi_cb, window, "tele_ready_indi_cb");
-            enable_telescope_widgets(cam_control_dialog, tele->ready);
+
+//            enable_telescope_widgets(cam_control_dialog, tele->ready);
+
+            if (tele->ready) // try this instead
+                enable_telescope_widgets(cam_control_dialog, TRUE);
 		}
         if (fwheel_find(window) != NULL) {
             gtk_widget_set_sensitive(GTK_WIDGET(g_object_get_data(G_OBJECT(cam_control_dialog), "obs_filter_combo")), FALSE);

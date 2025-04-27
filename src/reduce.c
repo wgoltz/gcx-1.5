@@ -630,7 +630,7 @@ static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, 
     g_return_val_if_fail(imf != NULL, -1);
     g_return_val_if_fail(imf->fr != NULL, -1);
 
-    if ( ccdr->op_flags & IMG_OP_SUB_MASK && ~(imf->op_flags & IMG_OP_SUB_MASK) ) {
+    if ( ccdr->op_flags & IMG_OP_SUB_MASK && ! (imf->op_flags & IMG_OP_SUB_MASK) ) {
         if (imf->op_flags & (IMG_OP_BLUR | IMG_OP_MEDIAN)) { // redo processing up to where mask(s) applied
             // reload frame
             if (!(imf->state_flags & IMG_STATE_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
@@ -790,7 +790,8 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if (! imf->fr->stats.statsok) frame_stats(imf->fr);
 
-        if ( (ccdr->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) != (imf->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) ) {
+//        if ( (ccdr->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) != (imf->op_flags & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD)) ) {
+        if ( (ccdr->op_flags ^ imf->op_flags) & (IMG_OP_BG_ALIGN_MUL | IMG_OP_BG_ALIGN_ADD) ) {
 
             if ( (ccdr->op_flags & IMG_OP_BG_ALIGN_MUL) && (imf->fr->stats.median < P_DBL(MIN_BG_SIGMAS) * imf->fr->stats.csigma) ) {
 
