@@ -1017,7 +1017,7 @@ int fprint_star_list (FILE *fp, GList *rsl, int level)
 			stf_linebreak(fp, level+1);
 			col = fprint_cat_star(fp, cats, level+1);
 		}
-	}
+    }
 	for (sl = rsl; sl != NULL; sl = g_list_next(sl)) {
 		cats = CAT_STAR(sl->data);
 		if (CATS_TYPE(cats) == CATS_TYPE_APSTAR) {

@@ -156,7 +156,7 @@ void draw_stars_of_type(struct gui_star_list *gsl, int type_mask, draw_type d)
 }
 
 /* call remove_stars_of_type on the gsl of window */
-void remove_stars_of_type_window(GtkWidget *window, int type_mask, int flag_mask)
+void window_remove_stars_of_type(GtkWidget *window, int type_mask, int flag_mask)
 {
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL) return;
@@ -166,7 +166,7 @@ void remove_stars_of_type_window(GtkWidget *window, int type_mask, int flag_mask
 
 
 /* call draw_stars_of_type on the gsl of window */
-void draw_stars_of_type_window(GtkWidget *window, int type_mask, draw_type d)
+void window_draw_stars_of_type(GtkWidget *window, int type_mask, draw_type d)
 {
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL) return;

@@ -11,35 +11,32 @@
 
 #define CATS_TYPE_MASK 0x0f
 
-// gui_star types same as cat star types
+// gui star types extend cat star types
 typedef enum {
     CATS_TYPE_SREF = 1,
     CATS_TYPE_APSTD,
     CATS_TYPE_APSTAR,
     CATS_TYPE_CAT,
-    CATS_TYPE_ALIGN,
-    CATS_TYPE_MOVING,
+//    CATS_TYPE_ALIGN,
+//    CATS_TYPE_MOVING,
     CATS_TYPES
 } cats_type;
 
 // use gui_star type if the cats has a gui_star
-#define CATS_TYPE(cats) ( (cats)->gs ? STAR_TYPE((cats)->gs) : (cats)->type )
+#define CATS_TYPE(cats) ( ((cats)->gs ? STAR_TYPE((cats)->gs) : (cats)->type) & CATS_TYPE_MASK )
 
 #define CATS_TYPE_APHOT (CATS_TYPE_APSTD | CATS_TYPE_APSTAR | CATS_TYPE_CAT)
 
 /* flags for catalogs and stars */
 
-#define CATS_FLAG_MASK 0xf0
-
-//#define CATS_FLAG_FIELD_STAR 0x010 /* catalog contains 'field stars' which should be the first ones to be trimmed from lists */
-#define CATS_FLAG_ASTROMET 0x020 /* catalog contains 'precise' astrometry data */
-//#define CATS_FLAG_PHOTOMET 0x040 /* catalog contains 'precise' photometry data */
-#define CATS_FLAG_VARIABLE 0x080 /* star is variable */
-
-
-/* flags for photometric reductions */
+#define CATS_FLAG_MASK 0xffff00
 
 #define CPHOT_MASK 0x7ff00 /* mask for reduction flags */
+
+#define CATS_FLAG_FIELD_STAR 0x010 /* catalog contains 'field stars' which should be the first ones to be trimmed from lists */
+#define CATS_FLAG_ASTROMET 0x020 /* catalog contains 'precise' astrometry data */
+#define CATS_FLAG_PHOTOMET 0x040 /* catalog contains 'precise' photometry data */
+#define CATS_FLAG_VARIABLE 0x080 /* star is variable */
 
 #define CPHOT_CENTERED 0x100     /* star has been successfully centered */
 #define CPHOT_FAINT 0x200        /* centered but faint */

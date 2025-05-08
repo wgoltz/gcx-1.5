@@ -1813,7 +1813,7 @@ GList *query_catalog_body(char *cmd, int (* progress)(char *msg, void *data), vo
 	if (progress) {
 		(* progress)("\n", data);
 	}
-	pclose(vq);
+    pclose(vq); // can wait forever here when no response
 	free(line);
 	return cat;
 }

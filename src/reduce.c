@@ -655,7 +655,9 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         ccdr->state_flags |= IMG_STATE_BG_VAL_SET;
     }
 
-    if ( ccdr->op_flags & IMG_OP_BIAS ) {
+    int abort = check_user_abort(ccdr->window);
+
+    if ( ! abort && (ccdr->op_flags & IMG_OP_BIAS) ) {
 //        g_return_val_if_fail(ccdr->bias->fr != NULL, -1);
 
         REPORT( " bias" )
@@ -671,10 +673,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_DARK ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_DARK) ) {
 //        g_return_val_if_fail(ccdr->dark->fr != NULL, -1);
 
         REPORT( " dark" )
@@ -690,10 +694,13 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
+
     }
 
-    if ( ccdr->op_flags & IMG_OP_FLAT ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_FLAT) ) {
 //        g_return_val_if_fail(ccdr->flat->fr != NULL, -1);
 
         REPORT( " flat" )
@@ -709,10 +716,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_BADPIX ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_BADPIX) ) {
 //        g_return_val_if_fail(ccdr->bad_pix_map != NULL, -1);
 
         REPORT( " badpix" )
@@ -727,10 +736,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 REPORT( " (FAILED)" )
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD) ) {
+    if ( ! abort && (ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) ) {
 
         if ( (ccdr->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) != (imf->op_flags & (IMG_OP_MUL | IMG_OP_ADD)) ) {
 
@@ -775,10 +786,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
             if (op) REPORT( op )
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " mul/add(already done)" )
     }
 
-    if ( ccdr->op_flags & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL) ) {
+    if ( ! abort && (ccdr->op_flags & (IMG_OP_BG_ALIGN_ADD | IMG_OP_BG_ALIGN_MUL)) ) {
         if ( ccdr->op_flags & IMG_OP_BG_ALIGN_ADD )
         {
             REPORT( " bg_align" )
@@ -816,10 +829,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 if (! isnan(a)) imf->op_flags |= IMG_OP_BG_ALIGN_ADD;
             }
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_DEMOSAIC ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_DEMOSAIC) ) {
         REPORT( " demosaic" )
 
         if ( ! (imf->op_flags & IMG_OP_DEMOSAIC) ) {
@@ -828,6 +843,8 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
             imf->state_flags |= IMG_STATE_DIRTY;
             imf->op_flags |= IMG_OP_DEMOSAIC;
+
+            abort = check_user_abort(ccdr->window);
 
         } else REPORT( " (already done)" )
     }
@@ -838,11 +855,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         get_frame(mask_frame, NULL);
     }
 
-    if ( ccdr->op_flags & IMG_OP_MEDIAN ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_MEDIAN) ) {
         REPORT( " median" )
 
-        remove_bayer_info(imf->fr);
         if ( ! (imf->op_flags & IMG_OP_MEDIAN) ) {
+            remove_bayer_info(imf->fr);
+
             if (! erase_stars(imf->fr)) // median filter with star exclusion
                 REPORT( " (FAILED)" )
             else {
@@ -853,14 +871,17 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 imf->op_flags |= IMG_OP_MEDIAN;
             }
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_BLUR ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_BLUR) ) {
         REPORT( " blur" )
 
-        remove_bayer_info(imf->fr);
         if ( ! (imf->op_flags & IMG_OP_BLUR) ) {
+            remove_bayer_info(imf->fr);
+
             int res = 0;
             if (ccdr->blurv < 2) {
                 ccdr->blur = new_blur_kern(ccdr->blur, 7, ccdr->blurv);
@@ -878,10 +899,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 imf->op_flags |= IMG_OP_BLUR;
             }
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_SUB_MASK ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_SUB_MASK) ) {
         REPORT( " sub_mask" )
 
         if ( ! (imf->op_flags & IMG_OP_SUB_MASK) ) {
@@ -897,13 +920,15 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 imf->state_flags |= IMG_STATE_DIRTY;
                 imf->op_flags |= IMG_OP_SUB_MASK;
 
+                abort = check_user_abort(ccdr->window);
+
             } else
                 REPORT( " (FAILED)" )
 
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_ALIGN ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_ALIGN) ) {
         REPORT( " align" )
 
         // after alignment, it is no longer possible to use the raw frame
@@ -924,10 +949,13 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 REPORT( " (FAILED)" )
                 imf->state_flags |= IMG_STATE_SKIP; // | IMG_STATE_DIRTY ?
             }
+
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( ccdr->op_flags & IMG_OP_WCS ) {
+    if ( ! abort && (ccdr->op_flags & IMG_OP_WCS) ) {
         REPORT( " wcs" )
 
         if ( ! (imf->op_flags & IMG_OP_WCS) ) {
@@ -938,10 +966,12 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             } else
                 imf->op_flags |= IMG_OP_WCS;
 
+            abort = check_user_abort(ccdr->window);
+
         } else REPORT( " (already done)" )
     }
 
-    if ( (ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP) ) {
+    if ( ! abort && ((ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP)) ) {
 
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
@@ -950,6 +980,9 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
                 REPORT( " (FAILED)" )
                 imf->state_flags |= IMG_STATE_SKIP;
             }
+
+            abort = check_user_abort(ccdr->window);
+
         }
 
         // else REPORT( " (already done)" )
@@ -958,13 +991,13 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
     REPORT( "\n" )
 
-    noise_to_fits_header(imf->fr);
+    if (! abort) noise_to_fits_header(imf->fr);
 
 //	d4_printf("\nrdnoise: %.3f\n", imf->fr->exp.rdnoise);
 //	d4_printf("scale: %.3f\n", imf->fr->exp.scale);
 //	d4_printf("flnoise: %.3f\n", imf->fr->exp.flat_noise);
 //printf("reduce.ccd_reduce_imf: return 0\n");
-    return 0;
+    return (abort) ? -1 : 0;
 }
 
 
@@ -1024,8 +1057,9 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progres
 
         load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 
+        int abort = 0;
         while (gl != NULL) {
-            if (user_abort(ccdr->window)) break;
+            if ((abort = check_user_abort(ccdr->window))) break;
 
             struct image_file *imf = gl->data;
             gl = g_list_next(gl);
@@ -1034,6 +1068,9 @@ int reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, progres
 
             ret = ccd_reduce_imf (imf, ccdr, progress, processing_dialog);
             if (ret < 0) break;
+        }
+        if (abort) {
+            clear_user_abort(ccdr->window);
         }
     }
 	return ret;
@@ -1170,6 +1207,7 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
     lb = NULL; asprintf(&lb, "'AVERAGE STACK %d FRAMES'", i);
     if (lb) fits_add_history(fr, lb), free(lb);
 
+    int abort = 0;
     while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
         for (i = 0; i < n; i++) {
             dp[i] = get_color_plane(frames[i], plane_iter);
@@ -1177,7 +1215,7 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
         odp = get_color_plane(fr, plane_iter);
         for (y = 0; y < h; y++) {
 
-            if (user_abort(fr->window)) break;
+            if ((abort = check_user_abort(fr->window))) break;
 
             for (x = 0; x < w; x++) {
                 *odp = pix_average(dp, n, 0, 1);
@@ -1189,8 +1227,9 @@ static int do_stack_avg(struct image_file_list *imfl, struct ccd_frame *fr,
                 dp[i] += rs[i];
             }
         }
+        if (abort) break;
     }
-    return 0;
+    return (abort) ? -1 : 0;
 }
 
 /* the real work of median-stacking frames
@@ -1229,6 +1268,7 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
     char *lb = NULL; asprintf(&lb, "'MEDIAN STACK of %d FRAMES'", i);
     if (lb) fits_add_history(fr, lb), free(lb);
 
+    int abort = 0;
     int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
         int i;
@@ -1240,7 +1280,7 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
         int y;
 		for (y = 0; y < h; y++) {
 
-            if (user_abort(fr->window)) break;
+            if ((abort = check_user_abort(fr->window))) break;
 
             int x;
 			for (x = 0; x < w; x++) {
@@ -1254,8 +1294,9 @@ static int do_stack_median(struct image_file_list *imfl, struct ccd_frame *fr,
 				dp[i] += rs[i];
 			}
 		}
+        if (abort) break;
 	}
-	return 0;
+    return (abort) ? -1 : 0;
 }
 
 /* the real work of k-s-stacking frames
@@ -1307,6 +1348,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
     char *lb = NULL; asprintf(&lb, "'KAPPA-SIGMA STACK (s=%.1f) of %d FRAMES'", P_DBL(CCDRED_SIGMAS), i);
     if (lb) fits_add_history(fr, lb), free(lb);
 
+    int abort = 0;
     int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
         int i;
@@ -1320,7 +1362,7 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
         int y;
 		for (y = 0; y < h; y++) {
 
-            if (user_abort(fr->window)) break;
+            if ((abort = check_user_abort(fr->window))) break;
 
 			if (t-- == 0 && progress) {
                 int ret = (* progress)(".", processing_dialog);
@@ -1340,12 +1382,13 @@ static int do_stack_ks(struct image_file_list *imfl, struct ccd_frame *fr,
 				dp[i] += rs[i];
 			}
 		}
+        if (abort) break;
 	}
 	if (progress) {
         (* progress)("\n", processing_dialog);
 	}
 
-	return 0;
+    return (abort) ? -1 : 0;
 }
 
 /* the real work of mean-median-stacking frames
@@ -1394,6 +1437,7 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
     asprintf(&lb, "'MEAN_MEDIAN STACK (s=%.1f) of %d FRAMES'", P_DBL(CCDRED_SIGMAS), i);
     if (lb) fits_add_history(fr, lb), free(lb);
 
+    int abort = 0;
     int plane_iter = 0;
 	while ((plane_iter = color_plane_iter(frames[0], plane_iter))) {
         int i;
@@ -1407,7 +1451,7 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
         int y;
 		for (y = 0; y < h; y++) {
 
-            if (user_abort(fr->window)) break;
+            if ((abort = check_user_abort(fr->window))) break;
 
             if ((t-- == 0) && progress) {
                 int ret = (* progress)(".", processing_dialog);
@@ -1426,11 +1470,12 @@ static int do_stack_mm(struct image_file_list *imfl, struct ccd_frame *fr,
 				dp[i] += rs[i];
 			}
 		}
+        if (abort) break;
 	}
 	if (progress) {
         (* progress)("\n", processing_dialog);
 	}
-	return 0;
+    return (abort) ? -1 : 0;
 }
 
 /* add to output frame the equivalent integration time, frame time and median airmass */
@@ -1611,6 +1656,7 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
             asprintf(&msg, "Frame stack: output size %d x %d\n", ow, oh);
             if (msg) (*progress)(msg, processing_dialog), free(msg);
         }
+        fr->window = ccdr->window; // try this
 
         /* do the actual stack */
         gboolean err = TRUE;
@@ -2201,7 +2247,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
             break;
         }
 
-        struct stf *stf = run_phot (window, wcs, gsl, imf->fr);
+        struct stf *stf = run_phot (window, wcs, gsl, imf->fr); // draws stars to fitted wcs
         result_ok = (stf != NULL);
         if ( ! result_ok ) {
             REPORT( " run_phot failed" )
@@ -2254,7 +2300,7 @@ int aphot_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
             mband_dataset_release (mbds);
         }
         REPORT( " ok" )
-        break;
+        break; // updates display here with spurious stars
     }
 
 //    imf_release_frame(imf, "aphot_imf"); // apparently not

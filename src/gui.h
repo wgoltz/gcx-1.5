@@ -83,8 +83,8 @@ void get_screen_center(gpointer im_window, double *xc, double *yc);
 struct ccd_frame *window_get_current_frame(gpointer window);
 void window_get_current_frame_size(gpointer window, int *w, int *h);
 
-int user_abort(void *window); // control-c polling using window flag
-
+int check_user_abort(gpointer window); // control-c polling using window flag
+void clear_user_abort(gpointer window);
 
 /* function prototypes */
 /* from showimage.c */

@@ -318,24 +318,25 @@ void act_user_quit(GtkAction *action, gpointer window)
 void act_user_abort(GtkAction *action, gpointer window)
 {
     printf("!!! ABORT ABORT ABORT !!!\n"); fflush(NULL);
-    g_object_set_data(G_OBJECT(window), "abort", (void *)1); // set abort flag
+    g_object_set_data(G_OBJECT(window), "abort", GINT_TO_POINTER(1)); // set abort flag
 }
 
-int user_abort(void *window)
+int check_user_abort(gpointer window)
 {
     while (gtk_events_pending()) gtk_main_iteration();
     if (window == NULL) return 0;
 
-    gpointer abort = g_object_get_data(G_OBJECT(window), "abort"); // check abort flag
-    if (abort == (void *) 1) {
-        g_object_set_data(G_OBJECT(window), "abort", (void *)0); // clear abort flag
-        return 1;
-    }
-    return 0;
+    int abort = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(window), "abort")); // check abort flag
+printf("check user abort %s\n", (abort == 1) ? "TRUE" : "FALSE"); fflush(NULL);
+    return abort;
 }
 
-// add abort button to main window
-// check for abort button pressed in places likely to hang (find stars)
+void clear_user_abort(gpointer window)
+{
+    if (window == NULL) return;
+
+    g_object_set_data(G_OBJECT(window), "abort", GINT_TO_POINTER(0)); // clear abort flag
+}
 
 void act_frame_new (GtkAction *action, gpointer window)
 {
@@ -1435,22 +1436,22 @@ void act_selected_to_cat (GtkAction *action, gpointer window)
 
 void act_stars_toggle_detected (GtkAction *action, gpointer window)
 {
-    draw_stars_of_type_window(window, TYPE_MASK(STAR_TYPE_SIMPLE), toggle_draw);
+    window_draw_stars_of_type(window, TYPE_MASK(STAR_TYPE_SIMPLE), toggle_draw);
 }
 
 void act_stars_toggle_user (GtkAction *action, gpointer window)
 {
-    draw_stars_of_type_window(window, TYPE_MASK(STAR_TYPE_USEL), toggle_draw);
+    window_draw_stars_of_type(window, TYPE_MASK(STAR_TYPE_USEL), toggle_draw);
 }
 
 void act_stars_toggle_field (GtkAction *action, gpointer window)
 {
-    draw_stars_of_type_window(window, TYPE_MASK(STAR_TYPE_SREF), toggle_draw);
+    window_draw_stars_of_type(window, TYPE_MASK(STAR_TYPE_SREF), toggle_draw);
 }
 
 void act_stars_toggle_catalog (GtkAction *action, gpointer window)
 {
-    draw_stars_of_type_window(window, TYPE_CATREF, toggle_draw);
+    window_draw_stars_of_type(window, TYPE_CATREF, toggle_draw);
 }
 
 void act_stars_rm_detected (GtkAction *action, gpointer window)

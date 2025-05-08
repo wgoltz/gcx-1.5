@@ -669,7 +669,7 @@ static int insert_star(struct sources *src, struct star *s)
 
 // find the src->maxn brightest 'stars' in the supplied region;
 // if region is NULL, search the whole frame 
-// returns the actual number of stars found, a negative number for errors.
+// returns the actual number of stars found, -1 if user aborted.
 // the star centroided positions, estimated fluxes and sizes are updated in
 // the result table
 
@@ -694,12 +694,14 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *
 //	d3_printf("extract_stars: frame pixel format is %d [%d]\n", fr->pix_format, fr->pix_size);
 
     double minpk = fr->stats.cavg + 2 * sigmas * fr->stats.csigma;
+    int abort;
 
     int y;
     if (first_last_y && (*first_last_y > ys && *first_last_y < ye)) ys = *first_last_y;
     for (y = ys; y < ye; y++) {
 
-        if (user_abort(fr->window)) break; // check for user abort
+        abort = check_user_abort(fr->window);
+        if (abort) break; // check for user abort
 
         int x;
         for (x = xs; x < xe; x++) {
@@ -736,6 +738,8 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *
     }
 
 finished:
+    if (abort) return -1;
+
     if (first_last_y) *first_last_y = (y == ye) ? fr->h : y;
 
     check_multiple(src);
@@ -971,6 +975,7 @@ int erase_stars_from_extracted(struct ccd_frame *fr)
     struct ccd_frame *copy_fr = clone_frame(fr);
     int first_last_y = 0;
     int ns = 0;
+    int abort = 0;
     do {
         struct sources *src = new_sources(1000);
         if (src == NULL) {
@@ -990,13 +995,16 @@ int erase_stars_from_extracted(struct ccd_frame *fr)
 
         release_sources(src);
 
+        abort = (extracted == -1);
+        if (abort) break; // user_abort
+
     } while (first_last_y < fr->h);
 
     release_frame(copy_fr, "erase_stars");
 
     fr->stats.statsok = 0;
 
-    return ns > 0;
+    return (abort) ? -1 : ns; // number of stars extracted or -1 user abort
 }
 
 int erase_stars(struct ccd_frame *fr)

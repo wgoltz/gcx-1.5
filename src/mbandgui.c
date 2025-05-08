@@ -151,9 +151,7 @@ static int fit_progress(char *msg, void *window)
     mbds_printf(window, "%s", msg);
 
 //    while (gtk_events_pending ()) gtk_main_iteration ();
-    return user_abort(window);
-
-    return 0;
+    return check_user_abort(window);
 }
 
 

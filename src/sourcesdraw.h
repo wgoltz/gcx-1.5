@@ -18,13 +18,24 @@ struct label {
 	char *label;	/* label of marker. freed when gui_star is deleted */
 };
 
+//typedef enum {
+//    CATS_TYPE_SREF = 1,
+//    CATS_TYPE_APSTD,
+//    CATS_TYPE_APSTAR,
+//    CATS_TYPE_CAT,
+//    CATS_TYPE_ALIGN,
+//    CATS_TYPE_MOVING,
+//    CATS_TYPES
+//} cats_type;
+
 /* gui_star types */
+// extends CATS_TYPE adding SIMPLE and USEL for additional drawing related functions
 typedef enum {
     STAR_TYPE_SIMPLE, /* simple star, with no additional info */
-    STAR_TYPE_SREF, /* field star (cat star) */
-    STAR_TYPE_APSTD, /* photometry standard star (cat star) */
-    STAR_TYPE_APSTAR, /* a photometry target star (cat star) */
-    STAR_TYPE_CAT, /* a catalog object */
+    STAR_TYPE_SREF, /* field star not measured photometrically */
+    STAR_TYPE_APSTD, /* photometry standard star (used in photomery solution) */
+    STAR_TYPE_APSTAR, /* photometry target star */
+    STAR_TYPE_CAT, /* other photometry star */
     STAR_TYPE_ALIGN, /* a star used for frame alignment */
     STAR_TYPE_MOVING, /* its moving between frames */
     STAR_TYPE_USEL, /* simple star, marked by the user */
@@ -164,8 +175,8 @@ int add_star_from_frame_header(struct ccd_frame *fr, struct gui_star_list *gsl, 
 void remove_pair_from(struct gui_star *gs);
 void remove_star(struct gui_star_list *gsl, struct gui_star *gs);
 int remove_off_frame_stars(gpointer window);
-void remove_stars_of_type_window(GtkWidget *window, int type_mask, int flag_mask);
-void draw_stars_of_type_window(GtkWidget *window, int type_mask, draw_type d);
+void window_remove_stars_of_type(GtkWidget *window, int type_mask, int flag_mask);
+void window_draw_stars_of_type(GtkWidget *window, int type_mask, draw_type d);
 int merge_cat_stars(struct cat_star **catsl, int n, struct gui_star_list *gsl, struct wcs *wcs);
 int merge_cat_star_list_to_window(gpointer window, GList *addsl);
 struct gui_star *window_find_gs_by_cats_name(GtkWidget *window, char *name);

@@ -709,7 +709,6 @@ char *fits_pos_type[] = { "telescope", "object", "center" };
 void fits_set_pos(struct ccd_frame *fr, int type, double ra, double dec, double equinox)
 {
     char *equinox_str;
-    char *line;
 
     char *ras = degrees_to_hms_pr(ra, 2);
     char *decs = degrees_to_dms_pr(dec, 1);

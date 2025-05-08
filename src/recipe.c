@@ -77,7 +77,6 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
             (gs->x < 0 || gs->x > w || gs->y < 0 || gs->y > h) ) continue;
 
 		if (flags & MKRCP_DET) {
-//            if (GSTAR_IS_TYPE(gs, STAR_TYPE_SIMPLE)) {
             if (gs->type == STAR_TYPE_SIMPLE) {
                 double ra, dec;
 				wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
@@ -91,13 +90,13 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                 cats->mag = NAN;
                 cats->type = CATS_TYPE_SREF;
 				cats->comments = NULL;
+
                 if (flags & MKRCP_DET_TO_TGT) cats->type = CATS_TYPE_APSTAR;
 
 				tsl = g_list_prepend(tsl, cats);
 			}
 		}
 		if (flags & MKRCP_USER) {			
-// if (GSTAR_IS_TYPE(gs, STAR_TYPE_USEL)) {
             if (gs->type == STAR_TYPE_USEL) {
                 double ra, dec;
 				wcs_worldpos(wcs, gs->x, gs->y, &ra, &dec);
@@ -111,6 +110,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                 cats->mag = NAN;
                 cats->type = CATS_TYPE_SREF;
 				cats->comments = NULL;
+
                 if (flags & MKRCP_USER_TO_TGT) cats->type = CATS_TYPE_APSTAR;
 
 				tsl = g_list_prepend(tsl, cats);
@@ -122,6 +122,8 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe field");
+
+                    cats->type = (cats_type) gs->type;
                     if (flags & MKRCP_FIELD_TO_TGT) cats->type = CATS_TYPE_APSTAR;
 
                     tsl = g_list_prepend(tsl, cats);
@@ -132,6 +134,8 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
 
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe cat");
+
+                    cats->type = (cats_type) gs->type;
                     if (flags & MKRCP_CAT_TO_STD) cats->type = CATS_TYPE_APSTD;
 
                     tsl = g_list_prepend(tsl, cats);
@@ -143,6 +147,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                     struct cat_star *cats = CAT_STAR(gs->s);
                     cat_star_ref(cats, "create_recipe std");
 
+                    cats->type = (cats_type) gs->type;
                     tsl = g_list_prepend(tsl, cats);
                 }
             }
@@ -153,6 +158,7 @@ struct stf *create_recipe(GSList *gsl, struct wcs *wcs, int flags, char *comment
                     if (target == NULL) target = cats->name;
                     cat_star_ref(cats, "create_recipe target");
 
+                    cats->type = (cats_type) gs->type;
                     tsl = g_list_prepend(tsl, cats);
                 }
             }
@@ -1396,18 +1402,18 @@ static GList * merge_star(GList *csl, struct cat_star *new_star)
                 cat_star_release(cats, "merge_star 1&2");
                 cat_star_ref(new_star, "merge_star 1&2");
                 sl->data = new_star;
-            } else if (cats->type == CATS_TYPE_ALIGN) {
-                if (new_star->type != CATS_TYPE_SREF) {
-                    cat_star_release(cats, "merge_star 3&4");
-                    cat_star_ref(new_star, "merge_star 3&4");
-                    sl->data = new_star;
-				}
-            } else if (cats->type == CATS_TYPE_CAT) {
-                if (new_star->type != CATS_TYPE_SREF && new_star->type != CATS_TYPE_ALIGN) {
-                    cat_star_release(cats, "merge_star 5&6");
-                    cat_star_ref(new_star, "merge_star 5&6");
-                    sl->data = new_star;
-				}
+//            } else if (cats->type == CATS_TYPE_ALIGN) {
+//                if (new_star->type != CATS_TYPE_SREF) {
+//                    cat_star_release(cats, "merge_star 3&4");
+//                    cat_star_ref(new_star, "merge_star 3&4");
+//                    sl->data = new_star;
+//				}
+//            } else if (cats->type == CATS_TYPE_CAT) {
+//                if (new_star->type != CATS_TYPE_SREF && new_star->type != CATS_TYPE_ALIGN) {
+//                    cat_star_release(cats, "merge_star 5&6");
+//                    cat_star_ref(new_star, "merge_star 5&6");
+//                    sl->data = new_star;
+//				}
 //            } else if (cats->type == CATS_TYPE_APSTD || cats->type == CATS_TYPE_APSTAR) {
 //                if (new_star->type == CATS_TYPE_APSTD || new_star->type == CATS_TYPE_APSTAR) {
 

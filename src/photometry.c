@@ -243,6 +243,11 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 
 //        if ( sqr (x - fr->w / 2) + sqr (y - fr->h / 2) > sqr (P_DBL(AP_MAX_STD_RADIUS)) * (sqr (fr->w / 2) + sqr (fr->h / 2)) ) return 0;
 
+        if (strcmp(cats->name, "Gaia DR3 6760236540624481536") == 0) {
+
+            int a = 1;
+        }
+
         if (! star_in_frame (fr, x, y, rm)) {
 			cats->flags |= CPHOT_INVALID;
 			continue;
@@ -271,7 +276,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 //		ret = aperture_photometry(fr, &s, ap, NULL);
 		fr->active_plane = PLANE_NULL;
 
-        if (aphot_star(fr, &s, ap, NULL)) { // only need position, can do this without smags
+        if (aphot_star(fr, &s, ap, NULL)) {
             cats->flags |= CPHOT_INVALID;
 
             continue;
@@ -501,8 +506,8 @@ static void stf_keep_good_phot(struct stf *stf)
 
         if (cats == NULL) continue;
 
-// keep field stars
-//        if (CATS_TYPE (cats) != CATS_TYPE_APSTAR && CATS_TYPE (cats) != CATS_TYPE_APSTD) {
+// drop field stars
+//        if (! (CATS_TYPE (cats) & CATS_TYPE_APHOT)) {
 //            cat_star_release(cats, "");
 //            continue;
 //        }

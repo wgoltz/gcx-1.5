@@ -1243,12 +1243,10 @@ static int match_from_a_b(struct gui_star *fa, struct gui_star *fb, GSList *fiel
                 int ret = more_pairs (fa, fb, ca, cb, fc_list, cat, &fm, &cm);
 
                 if (ret + 3 > max) max = ret + 3;
-
 				if (ret + 3 < MIN_PAIRS) {
                     g_slist_free(fm);
-                    g_slist_free(cm);
 
-//                    d3_printf("found only %d pairs, trying for more\n", ret+3);
+                    printf("found only %d pairs, trying for more\n", ret+3); fflush(NULL);
 
                 } else { /* we have a match! */
 //                    d3_printf("matched %d ;-)\n", ret+3);

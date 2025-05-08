@@ -1556,7 +1556,16 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
 
             dialog_update_from_imfl (processing_dialog, imfl);
             imf_display_cb (NULL, processing_dialog);
+
+        } else {
+            // aborted
+            ret = -1;
+            progress_pr("user aborted", processing_dialog);
         }
+    }
+
+    if (ret < 0) {
+        clear_user_abort(ccdr->window);
     }
 
     update_mband_status_labels (processing_dialog);
@@ -1675,7 +1684,7 @@ static void show_align_cb(GtkAction *action, gpointer processing_dialog)
 
     if (!(ccdr->state_flags & IMG_STATE_ALIGN_STARS)) load_alignment_stars (ccdr);
 
-    remove_stars_of_type_window (im_window, TYPE_MASK(STAR_TYPE_ALIGN), 0);
+    window_remove_stars_of_type (im_window, TYPE_MASK(STAR_TYPE_ALIGN), 0);
     add_gui_stars_to_window (im_window, ccdr->align_stars);
     redraw_cat_stars(im_window);
 
