@@ -138,6 +138,8 @@ void update_star_edit(GtkWidget *dialog)
     buf = NULL;
     if (isnan(cats->mag)) {
         asprintf(&buf, "-");
+    } else if (cats->mag == 0) {
+
     } else {
         asprintf(&buf, "%.2f", cats->mag);
     }
@@ -649,32 +651,34 @@ void star_edit_star(GtkWidget *window, struct cat_star *cats)
 //		gdk_window_raise(dialog->window);
 
         gtk_widget_show(dialog);
-        gtk_widget_set_visible(dialog, FALSE);
+//        gtk_widget_set_visible(dialog, FALSE);
 	}
 
     star_edit_set_star(dialog, cats);
     update_star_edit(dialog);
 
-    if (! gtk_widget_get_visible(dialog)) {
-//        int x, y; // set these on close then restore?
-//        gtk_window_get_position(GTK_WINDOW(dialog), &x, &y);
-
-//        gint width, height;
-//        gtk_window_get_size(GTK_WINDOW(dialog), &width, &height);
-
-//        int screen_width = gdk_window_get_width(dialog->window);
-//        int screen_height = gdk_window_get_height(dialog->window);
-
-//        int xoffset = (x + width > screen_width) ? - 200 : 200;
-//        int yoffset = (y + height > screen_height) ? - 200 : 200;
-
-//        gtk_window_move(GTK_WINDOW(dialog), x + xoffset, y + yoffset);
-
-        gtk_widget_set_visible(dialog, TRUE);
-
-        gdk_window_raise(dialog->window);
-    }
+    gdk_window_raise(dialog->window);
 }
+
+//gint screen_width;
+//gint screen_height;
+//gint width = 100; /* wire the menu sizes; ugly,
+//             but we have no way of knowing the size until
+//             the menu is shown */
+//gint height = 150;
+//gdk_window_get_pointer (NULL, x, y, NULL);
+
+//screen_width = gdk_screen_width ();
+//screen_height = gdk_screen_height ();
+
+//int xoffset = (*x + 2 * width > screen_width) ? - 200 : 50;
+//int yoffset = (*y + 2 * height > screen_height) ? - 200 : 50;
+
+////    *x = CLAMP (*x - 2, 0, MAX (0, screen_width - width));
+//*x = CLAMP (*x + xoffset, 0, MAX (0, screen_width - width)); // get it out of the way
+//*y = CLAMP (*y + yoffset, 0, MAX (0, screen_height - height));
+
+//*push_in = TRUE;
 
 /* do the actual work for star_edit_dialog and star_edit_make_std */
 // handle all stars in found?

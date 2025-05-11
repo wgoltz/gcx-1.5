@@ -682,7 +682,7 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer w
 
         if ( menu ) {
             // d4_printf("menu=%p\n", menu);
-            gtk_menu_popup(menu, NULL, NULL, NULL, NULL,
+            gtk_menu_popup(menu, NULL, NULL, popup_position, NULL,
                        event->button, event->time);
         }
         break;
@@ -1383,8 +1383,10 @@ int window_auto_pairs(gpointer window)
 	remove_pairs(window, 0);
     // check initial wcs and ignore stars in gsl that are too far away
     int ret = auto_pairs(gsl);
-	if (ret < 1) {
-		info_printf_sb2(window, "%s\n", last_err());
+    if (ret == -1) {
+        info_printf_sb2(window, "user abort\n");
+    } else if (ret == 0) {
+        info_printf_sb2(window, "%s\n", last_err());
 	} else {
 		info_printf_sb2(window, "Found %d Matching Pairs", ret);
 	}

@@ -134,6 +134,7 @@ int cats_gs_compare(struct cat_star *a, struct cat_star *b)
 
 void attach_star_list(struct gui_star_list *gsl, GtkWidget *window)
 {
+    gsl->window = window; // to catch user abort
     gsl->sl = g_slist_sort(gsl->sl, (GCompareFunc)gs_compare);
     g_object_set_data_full(G_OBJECT(window), "gui_star_list", gsl, (GDestroyNotify)gui_star_list_release);
 }
@@ -702,6 +703,8 @@ void find_stars_cb(gpointer window, guint action)
 		break;
 	}
 
+    if (check_user_abort(window)) clear_user_abort(window);
+
 	gtk_widget_queue_draw(window);
 }
 
@@ -914,8 +917,8 @@ static void ignore_distant_stars(GSList *sl, int w, int h, double kw, double kh)
     for (; sl != NULL; sl = g_slist_next(sl)) {
         struct gui_star *gs = GUI_STAR(sl->data);
 
-        gboolean ignore = (kw >= 1 && fabs(gs->x / w - kw + 1) > kw - 1);
-        ignore = ! ignore && (kh >= 1 && fabs(gs->y / h - kh + 1) > kh - 1);
+        gboolean ignore = ((kw >= 1) && (fabs(gs->x / w - kw + 1) > kw - 1));
+        ignore = ! ignore && ((kh >= 1) && (fabs(gs->y / h - kh + 1) > kh - 1));
         if (ignore)
             gs->flags |= STAR_IGNORE;
         else
@@ -936,7 +939,7 @@ void redraw_cat_stars(GtkWidget *window)
 
     int w, h;
     window_get_current_frame_size(window, &w, &h);
-    ignore_distant_stars(gsl->sl, w, h, 1.5, 1.5);
+//    ignore_distant_stars(gsl->sl, w, h, 1.5, 1.5); // this clips stars if wcs is way off
 
     star_list_update_editstar(window);
 	star_list_update_size(window);
@@ -1236,6 +1239,8 @@ static void star_popup_cb(guint action, GtkWidget *window)
 	switch(action) {
 	case STARP_EDIT_AP:
 		star_edit_dialog(window, found);
+        GtkWidget *dialog = g_object_get_data(G_OBJECT(window), "star_edit_dialog");
+        gtk_widget_set_visible(dialog, TRUE);
 		break;
 	case STARP_UNMARK_STAR:
 		try_unmark_star(window, found);
@@ -1319,7 +1324,7 @@ void act_stars_popup_fit_psf (GtkAction *action, gpointer window)
  * get a good position for the given itemfactory menu
  * (near the pointer, but visible if at the edge of screen)
  */
-static void popup_position (GtkMenu *popup, gint *x, gint *y, gboolean *push_in, gpointer data)
+void popup_position (GtkMenu *popup, gint *x, gint *y, gboolean *push_in, gpointer data)
 {
 	gint screen_width;
 	gint screen_height;

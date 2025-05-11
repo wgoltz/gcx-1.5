@@ -156,9 +156,10 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
     if (imf_wcs) {
         if (imf_wcs->wcsset > fr_wcs->wcsset) {
             wcs_clone(fr_wcs, imf_wcs);
-        } else if (imf_wcs->wcsset == WCS_INVALID) {// reload from window_wcs
+        } else if (imf_wcs->wcsset < window_wcs->wcsset) {// reload from window_wcs
             wcs_clone(fr_wcs, window_wcs);
             fr_wcs->wcsset = WCS_INITIAL;
+            fr_wcs->flags |= WCS_HINTED;
         }
     }
 
@@ -501,7 +502,7 @@ static void pairs_change_wcs(GSList *pairs, struct wcs *wcs)
 			return;
 		}
         if (gs->s) {
-			cats = CAT_STAR(gs->s);
+            cats = CAT_STAR(gs->s); // bad cats
         } else { // not a cat star - do we care?
 //			err_printf("No cat star found!\n");
 			return;
@@ -1015,7 +1016,7 @@ int auto_pairs(struct gui_star_list *gsl)
 		return 0;
 	}
 
-	ret = fastmatch(field, cat);
+    ret = fastmatch(gsl->window, field, cat);
 	g_slist_free(field);
 	g_slist_free(cat);
 	return ret;
@@ -1181,7 +1182,7 @@ static void make_pairs_from_list(GSList *cm, GSList *fm)
 }
 
 
-static int match_from_a_b(struct gui_star *fa, struct gui_star *fb, GSList *field, GSList *cat)
+static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star *fb, GSList *field, GSList *cat)
 {
 //    GSList *sl;
 //    for (sl = field; sl != NULL; sl = sl->next)
@@ -1246,7 +1247,7 @@ static int match_from_a_b(struct gui_star *fa, struct gui_star *fb, GSList *fiel
 				if (ret + 3 < MIN_PAIRS) {
                     g_slist_free(fm);
 
-                    printf("found only %d pairs, trying for more\n", ret+3); fflush(NULL);
+//                    printf("found only %d pairs, trying for more\n", ret+3); fflush(NULL);
 
                 } else { /* we have a match! */
 //                    d3_printf("matched %d ;-)\n", ret+3);
@@ -1271,14 +1272,14 @@ static int match_from_a_b(struct gui_star *fa, struct gui_star *fb, GSList *fiel
         ca_list = g_slist_next(ca_list);
 	}
 //    d3_printf("no match ;-(\n");
-	return max;
+    return (abort) ? -1 : max;
 }
 
 
 /* try to match starting with the first two stars in field
  * return number of stars matched
  */
-static int match_from(GSList *field, GSList *cat)
+static int match_from(gpointer window, GSList *field, GSList *cat)
 {
 
 //printf("wcs.match_from\n");
@@ -1300,10 +1301,10 @@ static int match_from(GSList *field, GSList *cat)
 
     } while ( field != NULL);
 // fc_list is field less fa and fb
-    return match_from_a_b (fa, fb, fc_list, cat);
+    return match_from_a_b (window, fa, fb, fc_list, cat);
 }
 
-static int short_match(GSList *field, GSList *cat)
+static int short_match(gpointer window, GSList *field, GSList *cat)
 {
 
 //printf("wcs.match_from\n");
@@ -1319,7 +1320,7 @@ static int short_match(GSList *field, GSList *cat)
     }
 
 // fc_list is field less fa and fb
-    return match_from_a_b (fa, fb, (field->next) ? field->next->next : NULL, cat);
+    return match_from_a_b (window, fa, fb, (field->next) ? field->next->next : NULL, cat);
 }
 
 /*
@@ -1328,19 +1329,20 @@ static int short_match(GSList *field, GSList *cat)
  * for best performance, the field list should be sorted by flux, so the first
  * stars are likely to be in the catalog.
  */
-int fastmatch(GSList *field, GSList *cat)
+int fastmatch(gpointer window, GSList *field, GSList *cat)
 {
 	int ret = 0;
 	int max = 0;
     if (g_slist_length(field) <= 2) {
-        ret = short_match(field, cat);
+        ret = short_match(window, field, cat);
+        if (ret == -1) return -1; // user abort
 
     } else {        
         while (g_slist_length(field) >= 2) { /* loop dropping the first star in the list */
             while (gtk_events_pending ()) gtk_main_iteration ();
+            ret = match_from(window, field, cat);
 
-            ret = match_from(field, cat);
-
+            if (ret == -1) return -1; // user abort
             if (ret > max) max = ret;
             if (ret >= MIN_PAIRS) break;
 

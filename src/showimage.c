@@ -1126,12 +1126,12 @@ d2_printf("frame to channel\n");
 	}
 
 	gtk_window_set_title (GTK_WINDOW (window), fr->name);
-    remove_stars(window, TYPE_FRSTAR, 0);
+    remove_stars(GTK_WIDGET(window), TYPE_FRSTAR, 0);
 
-    redraw_cat_stars(window);
+    redraw_cat_stars(GTK_WIDGET(window));
 
 	stats_cb(window, 0);
-	show_zoom_cuts(window);
+    show_zoom_cuts(GTK_WIDGET(window));
 
     update_fits_header_display(window);
 

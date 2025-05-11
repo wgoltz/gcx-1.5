@@ -848,41 +848,26 @@ int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng, double *alt)
 
     if (! isnan(lng_local) && endp) { // look for east/west in endp
         char *p;
-        for (p = endp; *p && *p != '(' && *p != '['; p++)
+        for (p = endp; *p && *p != '(' && *p != '[' && *p != '/'; p++) // assume well formed comment
             ;
 
-        int west = -1;
+        int east_or_west = 0;
 
-        if (*p == '(' || *p == '[') {
+        if (*p == '(' || *p == '[' || *p == '/') { // have comment
             p++;
-            west = (strncasecmp(p, "WEST", 4) == 0) ? 1 : -1;
 
-            if (west == 1 && lng_local < 0) {
-                lng_local = - lng_local;
-                west = 0;
-            } else if (strncasecmp(p, "EAST", 4) == 0) {
-                west = 0;
-            }
+            for (; *p && *p == ' '; p++) // skip spaces
+                ;
+
+            if (strncasecmp(p, "WEST", 4) == 0) { // find EAST or WEST
+                east_or_west = -1;
+                lng_local = -lng_local;
+            } else if (strncasecmp(p, "EAST", 4) == 0)
+                east_or_west = 1;
         }
 
-        if (P_INT(FILE_WESTERN_LONGITUDES))
+        if (east_or_west == 0 && P_INT(FILE_WESTERN_LONGITUDES))
             lng_local = -lng_local;
-
-//        if (west == -1) { // no EAST/WEST found
-//            west = P_INT(FILE_WESTERN_LONGITUDES);
-
-//            if (west && lng_local < 0) { // overide western if it makes lng negative
-//                lng_local = - lng_local;
-//                west = 0;
-//            }
-//        }
-
-//        char *east_west_str = (west) ? "WEST" : "EAST";
-
-//        char *lng_str = degrees_to_dms_pr(lng_local, 1);
-// also add lat and alt so they are all grouped together ?
-//        char *line = NULL; if (lng_str) asprintf(&line, "'%20s' / observing site longitude (%s)", lng_str, east_west_str), free(lng_str);
-//        if (line) fits_add_keyword(fr, P_STR(FN_LONGITUDE), line), free(line);
     }
 
     double lat_local = NAN;

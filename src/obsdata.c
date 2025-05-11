@@ -696,28 +696,23 @@ double calculate_airmass(double ra, double dec, double ast, double lat, double l
  * return 0.0 if airmass couldn't be calculated */
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) 
 {
-    double v = NAN;
-    fits_get_double(fr, P_STR(FN_AIRMASS), &v);
-    if (! isnan(v)) return v;
-
-    double zd = NAN;
-    fits_get_dms(fr, P_STR(FN_ZD), &zd);
-    if (! isnan(zd)) return airmass(90.0 - zd);
-
     double lat = NAN, lng = NAN, alt = NAN;
     fits_get_loc(fr, &lat, &lng, &alt);
 
-//    if (isnan(lat)) lat = P_DBL(OBS_LATITUDE); // use default
-//    if (isnan(lng)) {
-//        lng = P_DBL(OBS_LONGITUDE); // use default
-
-//        if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
-//    }
-
     double jd = frame_jdate(fr);
-    if (jd == 0) return 0;
 
-    return calculate_airmass(ra, dec, get_apparent_sidereal_time(jd), lat, lng);
+    if (! (jd == 0 || isnan(lat) || isnan(lng) || isnan(ra) || isnan(dec)))
+        return calculate_airmass(ra, dec, get_apparent_sidereal_time(jd), lat, lng);
+
+    double zd = NAN;
+    fits_get_dms(fr, P_STR(FN_ZD), &zd);
+
+    if (! isnan(zd)) return airmass(90.0 - zd);
+
+    double am_fr = NAN;
+    fits_get_double(fr, P_STR(FN_AIRMASS), &am_fr);
+
+    return (isnan(am_fr) || am_fr < 1 || am_fr > 13.33) ? 0 : am_fr;
 }
 
 double timeval_to_jdate(struct timeval *tv)
@@ -851,6 +846,8 @@ void wcs_to_fits_header(struct ccd_frame *fr)
 //    line = NULL; asprintf(&line, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
 //    if (line) fits_add_keyword(fr, P_STR(FN_AIRMASS), line), free(line);
 
-    fits_keyword_add(fr,  P_STR(FN_AIRMASS), "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
+    double airmass = frame_airmass(fr, fr->fim.xref, fr->fim.yref);
+    if (airmass)
+        fits_keyword_add(fr,  P_STR(FN_AIRMASS), "%20.3f", airmass);
 // .. to here
 }

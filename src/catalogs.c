@@ -493,7 +493,7 @@ int edb_get(struct cat_star *cst[], struct catalog *cat,
 	      char *name, int n)
 {
 	struct cat_star *cats;
-	double ra, dec, mag;
+    double ra = NAN, dec = NAN, mag = NAN;
 
 	if (strcasecmp(cat->name, catalogs[EDB_NAME]))
 		return -1;
@@ -515,8 +515,9 @@ int edb_get(struct cat_star *cst[], struct catalog *cat,
 		return -1;
 
 	cats->ra = ra;
-	cats->dec = dec;
-	cats->mag = mag;
+    cats->dec = dec;
+    cats->mag = mag;
+
 	cats->equinox = 2000.0;
     cats->name = strdup(name);
     cats->type = CATS_TYPE_CAT;

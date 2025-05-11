@@ -1886,7 +1886,7 @@ int align_imf_new(struct image_file *imf, struct ccd_reduce *ccdr, progress_prin
     fsl = detect_frame_stars(fr);
 
     if ((return_ok = (fsl != NULL))) {
-        int n = fastmatch(fsl, ccdr->align_stars);
+        int n = fastmatch(ccdr->window, fsl, ccdr->align_stars);
         if ((return_ok = (n > 0))) {
 
             PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );
@@ -2078,9 +2078,9 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 
             return_ok = (fsl != NULL);
             if (return_ok) {
-                int n = fastmatch(fsl, ccdr->align_stars);
+                int n = fastmatch(ccdr->window, fsl, ccdr->align_stars);
 
-                return_ok = (n != 0);
+                return_ok = (n > 0);
                 if (return_ok) {
 
                     PROGRESS_MESSAGE( " %d/%d[%d]", n, g_slist_length(fsl), g_slist_length(ccdr->align_stars) );

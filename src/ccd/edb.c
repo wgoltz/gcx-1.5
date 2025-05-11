@@ -562,8 +562,12 @@ int locate_edb(char name[], double *ra, double *dec, double *mag, char *edbdir)
 
 	CATALOG_ENTRY ce;
 
-	if (!locate_by_name(name, &ce, edbdir))
-		return 0;
+    ce.ra = NAN;
+    ce.dec = NAN;
+    ce.mag = NAN;
+
+    if (!locate_by_name(name, &ce, edbdir))	return 0;
+
 	*ra = ce.ra;
 	*dec = ce.dec;
 	*mag = ce.mag;

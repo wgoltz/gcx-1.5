@@ -694,7 +694,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *
 //	d3_printf("extract_stars: frame pixel format is %d [%d]\n", fr->pix_format, fr->pix_size);
 
     double minpk = fr->stats.cavg + 2 * sigmas * fr->stats.csigma;
-    int abort;
+    int abort = 0;
 
     int y;
     if (first_last_y && (*first_last_y > ys && *first_last_y < ye)) ys = *first_last_y;

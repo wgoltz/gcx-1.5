@@ -92,6 +92,7 @@ struct gui_star_list {
 		       * and check closely for selection */
 	GSList *sl;	/* the star list. When gui_star_list is deleted, all elements of
 			 * sl are unref's and the list is freed */
+    gpointer window; // to catch user abort
 };
 
 #define STAR_SHAPE_CIRCLE 0
@@ -161,6 +162,7 @@ void draw_stars_of_type(struct gui_star_list *gsl, int type_mask, draw_type d);
 int gs_compare(struct gui_star *a, struct gui_star *b);
 int cats_gs_compare(struct cat_star *a, struct cat_star *b);
 struct star_obs *sob_from_current_frame(gpointer main_window, struct cat_star *cats);
+void popup_position (GtkMenu *popup, gint *x, gint *y, gboolean *push_in, gpointer data);
 
 // from staredit.c
 void update_star_edit(GtkWidget *dialog);

@@ -243,11 +243,6 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 
 //        if ( sqr (x - fr->w / 2) + sqr (y - fr->h / 2) > sqr (P_DBL(AP_MAX_STD_RADIUS)) * (sqr (fr->w / 2) + sqr (fr->h / 2)) ) return 0;
 
-        if (strcmp(cats->name, "Gaia DR3 6760236540624481536") == 0) {
-
-            int a = 1;
-        }
-
         if (! star_in_frame (fr, x, y, rm)) {
 			cats->flags |= CPHOT_INVALID;
 			continue;
@@ -397,37 +392,41 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
     fits_get_double (fr, P_STR(FN_SNSTEMP), &v);
     if (! isnan(v)) stf_append_double (stf, SYM_SNS_TEMP, v);
 
-	gboolean got_location = (wcs->flags & WCS_LOC_VALID);
+    double lat = NAN, lng = NAN, alt = NAN;
+    fits_get_loc(fr, &lat, &lng, &alt);
 
-	double lat, lng;
-	if (got_location) {
-		lat = wcs->lat;
-		lng = wcs->lng;
-	} else {
-		lat = P_DBL(OBS_LATITUDE);
-        lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
-	}
+//	gboolean got_location = (wcs->flags & WCS_LOC_VALID);
+//	double lat, lng;
+//	if (got_location) {
+//		lat = wcs->lat;
+//		lng = wcs->lng;
+//	} else {
+//		lat = P_DBL(OBS_LATITUDE);
+//        lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
+//	}
 
-    s = degrees_to_dms_pr (lat, 0);
-    if (s) stf_append_string (stf, SYM_LATITUDE, s), free(s);
+    if (! isnan(lat)) {
+        s = degrees_to_dms_pr (lat, 0);
+        if (s) stf_append_string (stf, SYM_LATITUDE, s), free(s);
+    }
 
-    s = degrees_to_dms_pr (lng, 0);
-    if (s) stf_append_string (stf, SYM_LONGITUDE, s), free(s);
+    if (! isnan(lng)) {
+        s = degrees_to_dms_pr (lng, 0);
+        if (s) stf_append_string (stf, SYM_LONGITUDE, s), free(s);
+    }
 
-    fits_get_double (fr, P_STR(FN_ALTITUDE), &v);
-    if (!isnan(v)) stf_append_double (stf, SYM_ALTITUDE, v);
+    if (!isnan(alt)) stf_append_double (stf, SYM_ALTITUDE, alt);
 
     fits_get_double (fr, P_STR(FN_AIRMASS), &v);
 
-    if (isnan(v)) {
-        fits_get_double(fr, P_STR(FN_ZD), &v);
-        if (! isnan(v)) v = airmass(90.0 - v);
-    }
-    if (isnan(v) && got_location && ! isnan(jd))
-        v = calculate_airmass (wcs->xref, wcs->yref, get_apparent_sidereal_time(jd), lat, lng);
+//    if (isnan(v)) {
+//        fits_get_double(fr, P_STR(FN_ZD), &v);
+//        if (! isnan(v)) v = airmass(90.0 - v);
+//    }
+//    if (isnan(v) && got_location && ! isnan(jd))
+//        v = calculate_airmass (wcs->xref, wcs->yref, get_apparent_sidereal_time(jd), lat, lng);
 
     if (! isnan(v)) stf_append_double (stf, SYM_AIRMASS, v);
-
 
     char *observer; fits_get_string (fr, P_STR(FN_OBSERVER), &observer);
     if (observer) {
@@ -610,6 +609,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
         for (asl = stf_find_glist (stf, 0, SYM_STARS); asl != NULL; asl = asl->next) {
             struct cat_star *cats = CAT_STAR (asl->data);
             struct gui_star *gs = window_find_gs_by_cats_name (window, cats->name);
+
             if (gs != NULL && (cats->flags & INFO_POS)) {
                 gs->x = cats->pos [POS_X];
                 gs->y = cats->pos [POS_Y];
