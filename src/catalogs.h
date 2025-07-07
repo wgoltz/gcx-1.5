@@ -130,6 +130,7 @@ struct cat_star {
     char *phot_band;
     struct gui_star *gs; /* point to gui_star */
     void *data;
+    void *ost; /* o_star: list of observations for this star */
 };
 
 #define CATALOG(x) ((struct catalog *)(x))

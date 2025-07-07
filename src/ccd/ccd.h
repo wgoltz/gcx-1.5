@@ -728,6 +728,7 @@ extern int follow_star(struct ccd_frame *fr, double r, struct star *old_star, st
 
 extern int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *first_last_y, struct sources *src);
 extern int erase_stars(struct ccd_frame *fr);
+extern int median_with_star_exclusion(struct ccd_frame *fr, int medw);
 
 extern void release_sources(struct sources *src);
 extern void ref_sources(struct sources *src);

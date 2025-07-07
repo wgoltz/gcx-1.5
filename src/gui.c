@@ -323,11 +323,11 @@ void act_user_abort(GtkAction *action, gpointer window)
 
 int check_user_abort(gpointer window)
 {
-    while (gtk_events_pending()) gtk_main_iteration();
     if (window == NULL) return 0;
 
+//    while (gtk_events_pending()) gtk_main_iteration();
     int abort = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(window), "abort")); // check abort flag
-printf("check user abort %s\n", (abort == 1) ? "TRUE" : "FALSE"); fflush(NULL);
+
     return abort;
 }
 
@@ -589,6 +589,8 @@ void check_resize_cb (GtkWindow* window, gpointer scw)
 
     GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment (scw);
     GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment (scw);
+
+    if (! darea->window) return;
 
     double zw = gdk_window_get_width (darea->window);
     double zh = gdk_window_get_height (darea->window);
@@ -1382,7 +1384,7 @@ int window_auto_pairs(gpointer window)
 
 	remove_pairs(window, 0);
     // check initial wcs and ignore stars in gsl that are too far away
-    int ret = auto_pairs(gsl);
+    int ret = auto_pairs(window, gsl); // no frame stars
     if (ret == -1) {
         info_printf_sb2(window, "user abort\n");
     } else if (ret == 0) {

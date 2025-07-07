@@ -326,8 +326,6 @@ typedef enum {
 //	AP_SBAND_NAME ,
 //	AP_COLOR_NAME ,
     AP_STD_DEFAULT_ERROR ,
-    AP_STD_BRIGHT_LIMIT ,
-    AP_STD_FAINT_LIMIT ,
 //    AP_STD_SOURCE ,
     AP_LMAG_FROM_ZP ,
     AP_ALPHA ,

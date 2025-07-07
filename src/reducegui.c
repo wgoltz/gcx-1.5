@@ -443,6 +443,10 @@ static void update_dialog_from_ccdr(GtkWidget *processing_dialog, struct ccd_red
         named_spin_set(processing_dialog, "blur_spin", ccdr->blurv);
         set_named_checkb_val(processing_dialog, "blur_checkb", 1);
     }
+    if ((ccdr->op_flags & IMG_OP_MEDIAN)) {
+        named_spin_set(processing_dialog, "median_spin", ccdr->medw);
+        set_named_checkb_val(processing_dialog, "median_spin", 1);
+    }
     if ((ccdr->op_flags & IMG_OP_ADD)) {
         named_spin_set(processing_dialog, "add_spin", ccdr->addv);
         set_named_checkb_val(processing_dialog, "add_checkb", 1);
@@ -1225,13 +1229,14 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
     } else {
         ccdr->op_flags &= ~IMG_OP_MEDIAN;
     }
+    ccdr->medw = named_spin_get_value(processing_dialog, "median_spin");
 
     if (get_named_checkb_val(processing_dialog, "blur_checkb")) {
         ccdr->op_flags |= IMG_OP_BLUR;
 	} else {
         ccdr->op_flags &= ~IMG_OP_BLUR;
 	}
-    ccdr->blurv = named_spin_get_value(processing_dialog, "blur_spin");  // set blur anyway
+    ccdr->blurv = named_spin_get_value(processing_dialog, "blur_spin");
 
     if (get_named_checkb_val(processing_dialog, "sub_mask_checkb")) {
         ccdr->op_flags |= IMG_OP_SUB_MASK;

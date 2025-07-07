@@ -65,6 +65,7 @@ struct ccd_reduce {
 	double addv; /* a bias we add to the frames */
 	double mulv; /* a value we multiply the frames by */
     int mul_before_add; /* 0 mul/div before add */
+    double medw; /* median filter width */
     double blurv; /* gaussian blur fwhm */
     struct blur_kern *blur; /* gaussian blur kernel */
 	double bg; /* target background value */

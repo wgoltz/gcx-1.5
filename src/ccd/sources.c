@@ -753,7 +753,7 @@ finished:
 typedef struct _point {
     float value;
     gboolean exclude;
-    int id; // offset into frame (-edge_left to +edge_right)
+    int id; // offset into frame (-edge_lo to +edge_hi)
 } Point;
 
 gint sort_points(gconstpointer pa, gconstpointer pb)
@@ -772,14 +772,16 @@ void array_insert(GPtrArray *array, int b, Point *v)
     g_ptr_array_insert(array, b, v);
 }
 
-float array_median_exclude(GPtrArray *array, Point *points)
+float array_median_exclude(GPtrArray *array, Point *points, int medw)
 {
     g_ptr_array_sort(array, sort_points);
 
-    int n = MED_SIZE;
+    if (medw % 2 == 0) medw++;
+
+    int n = medw;
     Point *v;
     double sum = 0, sum2 = 0;
-    for (v = points; v < points + MED_SIZE; v++) {
+    for (v = points; v < points + medw; v++) {
         sum += v->value;
         sum2 += v->value * v->value;
     }
@@ -787,7 +789,7 @@ float array_median_exclude(GPtrArray *array, Point *points)
     double mean = sum / n;
     double stddev = sqrt(sum2 / n - mean * mean);
 
-    long int median_ix = MEDIAN_IX;
+    long int median_ix = medw / 2;
     double k = 1.3;
 
     Point **vptr = (Point **)array->pdata;
@@ -820,11 +822,13 @@ float array_median_exclude(GPtrArray *array, Point *points)
 }
 
 // median filter row and column with star exclusion
-int median_with_star_exclusion(struct ccd_frame *fr)
+int median_with_star_exclusion(struct ccd_frame *fr, int medw)
 {
     // find avg, std dev, exclude points more than k * (std dev) above avg, iterate
     // interpolate excluded values
-    Point *points = calloc(MED_SIZE, sizeof(Point));
+    if (medw % 2 == 0) medw++;
+
+    Point *points = calloc(medw, sizeof(Point));
     if (points == NULL) return 0;
 
     int plane_iter = 0;
@@ -841,13 +845,13 @@ int median_with_star_exclusion(struct ccd_frame *fr)
             return 0;
         }
 
-        int edge_bit, do_edges, edge_left, edge_right;
+        int edge_bit, do_edges, edge_lo, edge_hi;
 
-        edge_bit = fr->w % MED_SIZE;
+        edge_bit = fr->w % medw;
         do_edges = (edge_bit != 0);
 
-        edge_left = edge_bit / 2;
-        edge_right = (do_edges) ? MED_SIZE - edge_left - 1: 0;
+        edge_lo = edge_bit / 2;
+        edge_hi = (do_edges) ? medw - edge_lo - 1 : 0;
 
         int yi; float *row; // filter rows
         for (yi = 0, row = dpi; yi < fr->h; yi++, row += fr->w) {
@@ -859,12 +863,12 @@ int median_with_star_exclusion(struct ccd_frame *fr)
 
             Point *v = points;
             int b;
-            for (b = -edge_left; b < fr->w + edge_right; b++) {
+            for (b = -edge_lo; b < fr->w + edge_hi; b++) {
                 v->value = *in;
                 v->exclude = FALSE;
                 v->id = b;
 
-                if (array == NULL) array = g_ptr_array_sized_new(MED_SIZE);
+                if (array == NULL) array = g_ptr_array_sized_new(medw);
 
                 if (array == NULL) break;
 
@@ -873,10 +877,10 @@ int median_with_star_exclusion(struct ccd_frame *fr)
                 if (b >= 0 && b < fr->w - 1) in++;
                 v++;
 
-                if (v == points + MED_SIZE) { // calculate median for sample
-                    float median = array_median_exclude(array, points);
+                if (v == points + medw || b == fr->w + edge_hi - 1) { // calculate median for sample
+                    float median = array_median_exclude(array, points, medw);
 
-                    for (v = points; v < points + MED_SIZE; v++) { // output sample
+                    for (v = points; v < points + medw; v++) { // output sample
                         if (v->id >= 0) {
                             if (v->id >= fr->w) break;
 
@@ -893,11 +897,11 @@ int median_with_star_exclusion(struct ccd_frame *fr)
             }
         }
 
-        edge_bit = fr->h % MED_SIZE;
+        edge_bit = fr->h % medw;
         do_edges = (edge_bit != 0);
 
-        edge_left = edge_bit / 2;
-        edge_right = (do_edges) ? MED_SIZE - edge_left - 1: 0;
+        edge_lo = edge_bit / 2;
+        edge_hi = (do_edges) ? medw - edge_lo - 1: 0;
 
         int xi; float *column; // filter columns
 
@@ -918,12 +922,12 @@ int median_with_star_exclusion(struct ccd_frame *fr)
             Point *v = points;
 
             int b;
-            for (b = -edge_left; b < fr->h + edge_right; b++) {
+            for (b = -edge_lo; b < fr->h + edge_hi; b++) {
                 v->value = *in;
                 v->exclude = FALSE;
                 v->id = b;
 
-                if (array == NULL) array = g_ptr_array_sized_new(MED_SIZE);
+                if (array == NULL) array = g_ptr_array_sized_new(medw);
 
                 if (array == NULL) break;
 
@@ -932,10 +936,10 @@ int median_with_star_exclusion(struct ccd_frame *fr)
                 if (b >= 0 && b < fr->h - 1) in += fr->w;
                 v++;
 
-                if (v == points + MED_SIZE) { // calculate median for sample
-                    float median = array_median_exclude(array, points);
+                if (v == points + medw || b == fr->h + edge_hi - 1) { // calculate median for sample
+                    float median = array_median_exclude(array, points, medw);
 
-                    for (v = points; v < points + MED_SIZE; v++) { // output sample
+                    for (v = points; v < points + medw; v++) { // output sample
                         if (v->id >= 0) {
                             if (v->id >= fr->h) break;
 
@@ -1011,7 +1015,6 @@ int erase_stars(struct ccd_frame *fr)
 {
 //    return erase_stars_median_separated(fr);
 //    return erase_stars_median_unseparated(fr);
-    return median_with_star_exclusion(fr);
     return erase_stars_from_extracted(fr);
 }
 

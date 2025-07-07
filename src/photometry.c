@@ -200,18 +200,21 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 		return -1;
 	}
 
-    double lat, lng, jd;
+    double lat = NAN, lng = NAN, jd = NAN;
+    gboolean dodiffam = (stf_am_pars (stf, &lat, &lng, &jd) == 0);
+    if (! dodiffam) {
+        if (! isnan(wcs->jd)) jd = wcs->jd;
+        if (! isnan(wcs->lat)) lat = wcs->lat;
+        if (! isnan(wcs->lng)) lng = wcs->lng;
 
-    gboolean dodiffam = (! stf_am_pars (stf, &lat, &lng, &jd));
-    if (! dodiffam)	{
-        d1_printf("cannot calculate differential AM. lat, long or time unknown\n");
-        return -1;
+        if (isnan(jd) || isnan(lat) || isnan(lng)) {
+            err_printf("stf_aphot: lat, long or time unknown\n");
+            return -1;
+        }
     }
 
     double ast = get_apparent_sidereal_time(jd);
-
-    double fam;
-    dodiffam = dodiffam && ((fam = calculate_airmass (wcs->xref, wcs->yref, ast, lat, lng)) > 0.99);
+    double fam = calculate_airmass (wcs->xref, wcs->yref, ast, lat, lng);
 
     double scint = stf_scint (stf);
     double rm = ceil (ap->r3) + 1;
@@ -219,9 +222,9 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
     GList *sl;
     int i = 0;
     for (sl = asl; sl != NULL; sl = g_list_next(sl)) {
-        if (! (++i % 100)) {
-            while (gtk_events_pending()) gtk_main_iteration();
-        }
+//        if (! (++i % 50)) {
+//            while (gtk_events_pending()) gtk_main_iteration();
+//        }
 
         struct cat_star *cats = CAT_STAR(sl->data);
 
@@ -248,10 +251,10 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 			continue;
 		}
 
-		if (dodiffam) {
+        if (dodiffam) {
             cats->diffam = calculate_airmass (cats->ra, cats->dec, ast, lat, lng) - fam;
 			cats->flags |= INFO_DIFFAM;
-		}
+        }
 
         struct star s = { 0 };
 		s.x = x;
@@ -553,7 +556,7 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
 
         // ref cats or gs ?
 
-        if (cats->gs == NULL)
+        if (cats->gs == NULL) // link cats to gs
             cats->gs = gs;
         else if (gs != cats->gs) {
             printf("gui_stars dont match!\n");

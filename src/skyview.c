@@ -288,8 +288,7 @@ static int logw_print(char *msg, void *data)
 	g_return_val_if_fail(text != NULL, 0);
 	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW (text), GTK_WRAP_CHAR);
 
-	gtk_text_buffer_insert_at_cursor(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)),
-					 msg, -1);
+    gtk_text_buffer_insert_at_cursor(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)), msg, -1);
 
     while (gtk_events_pending()) gtk_main_iteration();
 

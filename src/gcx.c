@@ -534,7 +534,7 @@ int extract_bad_pixels(char *badpix, char *outf)
     struct image_file *imf = image_file_new(NULL, badpix);
 
 d3_printf("gcx.extract_bad_pixels %s\n", badpix);
-    if (imf_load_frame(imf) == 0) {
+    if (imf_load_frame(imf) >= 0) {
 //        map = calloc(1, sizeof(struct bad_pix_map));
         map = bad_pix_map_new(outf);
         if (map) {

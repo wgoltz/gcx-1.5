@@ -118,7 +118,9 @@ struct mband_dataset {
 	int ref_count;
 	GList *sobs;		/* a list of all the individual observations */
 	GList *ofrs;		/* a list of observation frames */
-	GList *ostars;		/* a list of observed objects */
+// GList *cats /* list of cats observed rather than ostars ? */
+    GList *ostars;		/* a list of observed objects */
+// objhash not needed ?
 	GHashTable *objhash;	/* a hash table used to speed up object lookup */
     int nbands;		    /* how many bands we care about */
     int mag_source;     /* using cmags or smags */

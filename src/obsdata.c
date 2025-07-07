@@ -231,16 +231,16 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
     fits_keyword_add(fr, P_STR(FN_FOCUS), "'%20s' / FOCUS NAME", P_STR(OBS_FOCUS));
 
     char *observer; fits_get_string(fr, P_STR(FN_OBSERVER), &observer);
-    if (observer == NULL || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+    if (observer == NULL) {
         fits_keyword_add(fr, P_STR(FN_OBSERVER), "'%20s' / OBSERVER", P_STR(OBS_OBSERVER));
     }
 
     double lat, lng, alt;
     fits_get_loc(fr, &lat, &lng, &alt);
 
-    if (isnan(lat) || P_INT(OBS_OVERRIDE_FILE_VALUES)) lat = P_DBL(OBS_LATITUDE); // use default
-    if (isnan(alt) || P_INT(OBS_OVERRIDE_FILE_VALUES)) alt = P_DBL(OBS_ALTITUDE); // use default
-    if (isnan(lng) || P_INT(OBS_OVERRIDE_FILE_VALUES)) { // use default
+    if (isnan(lat)) lat = P_DBL(OBS_LATITUDE); // use default
+    if (isnan(alt)) alt = P_DBL(OBS_ALTITUDE); // use default
+    if (isnan(lng)) { // use default
         lng = P_DBL(OBS_LONGITUDE);
         if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
     }
@@ -698,6 +698,11 @@ double frame_airmass(struct ccd_frame *fr, double ra, double dec)
 {
     double lat = NAN, lng = NAN, alt = NAN;
     fits_get_loc(fr, &lat, &lng, &alt);
+    if (isnan(lat) || isnan(lng)) { // probably not the right place for this
+        // pickup from fr->fim
+        lat = fr->fim.lat;
+        lng = fr->fim.lng;
+    }
 
     double jd = frame_jdate(fr);
 

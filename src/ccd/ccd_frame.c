@@ -93,7 +93,7 @@ struct ccd_frame *clone_frame(struct ccd_frame *fr)
 
     new_fr->ref_count = 1;
     new_fr->imf = NULL;
-    new_fr->name = NULL;
+    new_fr->name = (fr->name) ? strdup(fr->name) : NULL; // keep name
     return new_fr;
 }
 

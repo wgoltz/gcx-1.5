@@ -1101,8 +1101,8 @@ static int read_gcvs_table(struct cat_star *csl[], FILE *fp, int n, double *cra,
 		cats->dec = dec;
 		cats->mag = mmax;
 		cats->equinox = 2000.0;
-        cats->type = CATS_TYPE_CAT;
-        cats->flags = CATS_FLAG_VARIABLE;
+        cats->type = CATS_TYPE_APSTAR;
+        cats->flags |= CATS_FLAG_VARIABLE;
 		if (spec[0] != 0 && !amp) {
 			ret = asprintf(&cats->comments, "p=V t=%s s=%s m(%s)=%.2f/%.2f",
 				 type, spec, phot, mmax, mmin);
@@ -1243,8 +1243,8 @@ static int read_gcvs_pos_table(struct cat_star *csl[], FILE *fp, int n, double *
 		cats->dec = dec;
         cats->mag = NAN;
 		cats->equinox = 2000.0;
-        cats->type = CATS_TYPE_CAT;
-        cats->flags = CATS_FLAG_VARIABLE;
+        cats->type = CATS_TYPE_APSTAR;
+        cats->flags |= CATS_FLAG_VARIABLE;
 		cst[sn]=cats;
 		sn ++;
 		d4_printf("got %s\n", cats->name);

@@ -60,7 +60,7 @@ static void star_edit_update_flags(GtkWidget *dialog, struct cat_star *cats)
 
     widget = g_object_get_data(G_OBJECT(dialog), "pstar_variable_check_button");
 	if (widget != NULL)
-        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), ((cats->flags & CATS_FLAG_VARIABLE) != 0));
+        gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), (cats->flags & CATS_FLAG_VARIABLE));
 
     widget = g_object_get_data(G_OBJECT(dialog), "pstar_type_combo");
     switch(CATS_TYPE(cats)) {
@@ -298,7 +298,7 @@ static void flags_changed_cb( GtkWidget *widget, gpointer dialog)
 		if (state) {
 			cats->flags |= CATS_FLAG_VARIABLE;
 		} else {
-			cats->flags &= ~(CATS_FLAG_VARIABLE);
+            cats->flags &= ~CATS_FLAG_VARIABLE;
 		}
 	}
     if (widget == g_object_get_data(G_OBJECT(dialog), "pstar_astrometric_check_button")) {

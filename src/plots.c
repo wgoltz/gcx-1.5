@@ -154,12 +154,13 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 	while (osl != NULL) {
 		ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band < 0) 
-			continue;
+
+        if (ofr->band < 0) continue;
+        if (ofr->skip) continue;
+
 		if (g_list_find(bsl, (gpointer)ofr->band) == NULL) {
 			bsl = g_list_append(bsl, (gpointer)ofr->band);
-			if (i > 0)
-				fprintf(dfp, ", ");
+            if (i > 0) fprintf(dfp, ", ");
 			fprintf(dfp, "'-' title '%s'", ofr->trans->bname);
 			i++;
 		}
@@ -172,7 +173,9 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 		while (osl != NULL) {
 			ofr = O_FRAME(osl->data);
 			osl = g_list_next(osl);
+
             if (ofr->band != band) continue;
+            if (ofr->skip) continue;
 
 			sl = ofr->sobs;
 			while(sl != NULL) {
@@ -181,16 +184,11 @@ int ofrs_plot_residual_vs_mag(FILE *dfp, GList *ofrs, int weighted)
 
                 if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
-        //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-                if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-                if (sob->cats->gs->flags & STAR_DELETED) continue;
+                if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+                if (CATS_DELETED(sob->cats)) continue;
                 if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
                 if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
-
                 if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-                if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-                if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
-
                 if (sob->weight <= 0.0001) continue;
 
 				n++;
@@ -244,8 +242,9 @@ static int get_mjd_bounds_from_oframes(GList *ofrs, double *min, double *max)
     while (sl != NULL) {
         struct o_frame *ofr = O_FRAME(sl->data);
         sl = g_list_next(sl);
-        if (ofr->band < 0)
-            continue;
+
+        if (ofr->band < 0) continue;
+        if (ofr->skip) continue;
 
         mjd = ofr->mjd;
         if (n == 0) {
@@ -275,8 +274,9 @@ static int get_mjd_bounds_from_sobs(GList *sobs, double *min, double *max)
     while (sl != NULL) {
         struct o_frame *ofr = STAR_OBS(sl->data)->ofr;
         sl = g_list_next(sl);
-        if (ofr->band < 0)
-            continue;
+
+        if (ofr->band < 0) continue;
+        if (ofr->skip) continue;
 
         mjd = ofr->mjd;
         if (n == 0) {
@@ -330,7 +330,9 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 	while (osl != NULL) {
         struct o_frame *ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
+
         if (ofr->band < 0) continue;
+        if (ofr->skip) continue;
 
 //		d3_printf("*%d\n", ZPSTATE(ofr));
 		if (ZPSTATE(ofr) == ZP_ALL_SKY) {
@@ -359,6 +361,7 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 			osl = g_list_next(osl);
 
             if (ofr->band != band) continue;
+            if (ofr->skip) continue;
             if (ofr->zpointerr >= BIG_ERR) continue;
             if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
 
@@ -377,6 +380,7 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
 				osl = g_list_next(osl);
 
                 if (ofr->band != band) continue;
+                if (ofr->skip) continue;
                 if (ofr->zpointerr >= BIG_ERR) continue;
 
 				n++;
@@ -416,6 +420,7 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 		osl = g_list_next(osl);
 
         if (ofr->band < 0) continue;
+        if (ofr->skip) continue;
 
 //		d3_printf("*%d\n", ZPSTATE(ofr));
 		if (ZPSTATE(ofr) == ZP_ALL_SKY) {
@@ -444,6 +449,8 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 			osl = g_list_next(osl);
 
             if (ofr->band != band) continue;
+            if (ofr->skip) continue;
+
             if (ofr->zpointerr >= BIG_ERR) continue;
             if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
 
@@ -461,6 +468,7 @@ int ofrs_plot_zp_vs_am(FILE *dfp, GList *ofrs)
 				osl = g_list_next(osl);
 
                 if (ofr->band != band) continue;
+                if (ofr->skip) continue;
                 if (ofr->zpointerr >= BIG_ERR) continue;
 
 				n++;
@@ -516,10 +524,11 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 	while (osl != NULL) {
 		ofr = O_FRAME(osl->data);
 		osl = g_list_next(osl);
-		if (ofr->band != band) 
-			continue;
-		if (i > 0)
-			fprintf(dfp, ", ");
+
+        if (ofr->band != band) continue;
+        if (ofr->skip) continue;
+
+        if (i > 0) fprintf(dfp, ", ");
 //		fprintf(dfp, "'-' title '%s(%s)'", 
 //			ofr->obs->objname, ofr->xfilter);
 		fprintf(dfp, "'-' notitle ");
@@ -533,6 +542,7 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 		osl = g_list_next(osl);
 
         if (ofr->band != band) continue;
+        if (ofr->skip) continue;
         if (ofr->tweight < 0.0000000001) continue;
 
 		sl = ofr->sobs;
@@ -542,16 +552,11 @@ int ofrs_plot_residual_vs_col(struct mband_dataset *mbds, FILE *dfp,
 
             if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
-    //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-            if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-            if (sob->cats->gs->flags & STAR_DELETED) continue;
+            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            if (CATS_DELETED(sob->cats)) continue;
             if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
             if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
-
             if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-            if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-            if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
-
             if (sob->weight <= 0.00001) continue;
 
 			n++;
@@ -675,7 +680,7 @@ static int plot_sol_obs(struct plot_sol_data *data, GList *sol)
 
             struct cat_star *cats = sob->cats;
 
-            if (GUI_STAR(cats->gs)->flags & STAR_DELETED) continue;
+            if (CATS_DELETED(cats)) continue;
 
             double m = MAG_UNSET;
             double me = BIG_ERR;

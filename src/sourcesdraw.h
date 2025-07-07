@@ -76,6 +76,7 @@ struct gui_star {
 #define STAR_DELETED 0x1000 /* discard star */
 #define STAR_IGNORE 0x2000 /* skip this star */
 
+#define CATS_DELETED(cats) ((cats)->gs && (cats)->gs->flags & STAR_DELETED)
 
 #define DEFAULT_MAX_SIZE 100
 /* structure holding the gui_star list and general parameters for their display */
@@ -92,7 +93,6 @@ struct gui_star_list {
 		       * and check closely for selection */
 	GSList *sl;	/* the star list. When gui_star_list is deleted, all elements of
 			 * sl are unref's and the list is freed */
-    gpointer window; // to catch user abort
 };
 
 #define STAR_SHAPE_CIRCLE 0

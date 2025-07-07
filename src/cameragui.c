@@ -698,6 +698,7 @@ static int exposure_failed_cb(gpointer cam_control_dialog)
 }
 
 // called when a new image is ready for processing (not streaming)
+// how to add params for streamed files ?
 static int expose_indi_cb(gpointer cam_control_dialog)
 {
 // todo: stop crash in lilxml - dont't allow new exposure start before last blob decode is finished

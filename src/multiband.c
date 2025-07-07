@@ -246,7 +246,7 @@ void mband_dataset_release(struct mband_dataset *mbds)
 void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, struct o_frame *ofr)
 {
 	g_return_if_fail(ofr != NULL);
-
+// ost belongs to cats, don't need hashtable ?
     struct o_star *ost = g_hash_table_lookup(mbds->objhash, cats->name);
 
     if (ost == NULL) { /* we just enter a std star into the table */
@@ -258,24 +258,42 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
             ost->smag[i] = MAG_UNSET;
             ost->smagerr[i] = BIG_ERR;
         }
-
+// find gs_by_cats_name
+// insert gs into obhash
         g_hash_table_insert(mbds->objhash, cats->name, ost);
 
         o_star_ref(ost);
         mbds->ostars = g_list_prepend(mbds->ostars, ost);
 
-        ost->cats = cats;
+        ost->cats = cats; // should be a gs in gsl that points to this cats
     }
+
+// don't use reffing, alloc and free when non-null with cats ?
+//    if (cats->ost == NULL) { /* we just enter a std star into the table */
+//        struct o_star *ost = calloc(sizeof(struct o_star), 1);
+//        g_return_if_fail (cats->ost != NULL);
+//        cats->ost = ost;
+
+//        int i;
+//        for (i = 0; i < MAX_MBANDS; i++) {
+//            ost->smag[i] = MAG_UNSET;
+//            ost->smagerr[i] = BIG_ERR;
+//        }
+
+//        mbds->ostars = g_list_prepend(mbds->ostars, ost);
+//    }
+
 
     struct star_obs *sob = star_obs_new();
 	g_return_if_fail(sob != NULL);
 
-	sob->ost = ost;
+    sob->ost = ost; // just extended part of cats
 	sob->ofr = ofr;
-    sob->cats = cats;
+
+    sob->cats = cats; // gs->s = cats
 
 	star_obs_ref(sob);
-    ost->sobs = g_list_prepend(ost->sobs, sob);
+    ost->sobs = g_list_prepend(ost->sobs, sob); // does it get used ?
 
     star_obs_ref(sob);
     ofr->sobs = g_list_prepend(ofr->sobs, sob);
@@ -288,7 +306,7 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
     sob->imag = m;
     sob->imagerr = me;
     if (isnan(sob->imagerr)) {
-        sob->imagerr = BIG_ERR;
+        sob->imagerr = BIG_ERR; // doesn't happen ?
     }
 }
 
@@ -328,7 +346,6 @@ int mband_dataset_search_add_band(struct mband_dataset *mbds, char *band)
 }
 
 /* add all sobs from ofr->stf to ofr */
-//int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr, int mag_source)
 int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *ofr)
 {
     GList *ssl = stf_find_glist(ofr->stf, 0, SYM_STARS);
@@ -336,12 +353,11 @@ int mband_dataset_add_sobs_to_ofr(struct mband_dataset *mbds, struct o_frame *of
     for (; ssl != NULL; ssl = ssl->next) {
         struct cat_star *cats = CAT_STAR(ssl->data);
 
-//        if (CATS_TYPE(cats) != CATS_TYPE_APSTD && CATS_TYPE(cats) != CATS_TYPE_APSTAR) continue;
-//        if (cats->gs->flags & STAR_DELETED) continue;
+        mband_dataset_add_sob(mbds, cats, ofr); // create sob for cats in this ofr
 
-        mband_dataset_add_sob(mbds, cats, ofr); // adds sob to ofr->sobs
         ns ++;
     }
+
 //printf("mband_dataset_add_sobs_to_ofr ns %d\n", ns); fflush(NULL);
     return ns;
 }
@@ -361,6 +377,8 @@ int mband_dataset_set_mag_source(struct mband_dataset *mbds, int ms)
     for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
         struct o_frame *ofr = O_FRAME(gl->data);
 
+        // list of cats observed in this ofr, mostly the same for each frame
+        // make cats list for mbds then set ost for each cats
         GList *ssl = stf_find_glist(ofr->stf, 0, SYM_STARS);
         int ns = 0;
         for (; ssl != NULL; ssl = ssl->next) {
@@ -368,7 +386,7 @@ int mband_dataset_set_mag_source(struct mband_dataset *mbds, int ms)
 //            if (CATS_TYPE(cats) != CATS_TYPE_APSTD) continue;
 
             char *mag_source[] = { cats->smags, cats->cmags };
-
+// hashtable of cats not ost ?
             struct o_star *ost = g_hash_table_lookup(mbds->objhash, cats->name); // bad cats after stf_free_cats
 
             if (ost) {
@@ -446,15 +464,11 @@ static void ofr_sob_initial_weights(struct o_frame *ofr, struct transform *trans
         if (ofr->band < 0) continue;
         if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-        if (sob->cats->gs->flags & STAR_DELETED) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (CATS_DELETED(sob->cats)) continue;
         if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
         if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
-
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-//        if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-//        if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
         double trsqe = 0;
 		if (trans != NULL) {
@@ -494,21 +508,16 @@ static double ofr_sob_residuals(struct o_frame *ofr, struct transform *trans)
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (ofr->band < 0) continue;
+//        if (ofr->band < 0) continue;
         if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
         if (sob->imag == MAG_UNSET || sob->imagerr == BIG_ERR) continue;
 
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-        if (sob->cats->gs->flags & STAR_DELETED) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (CATS_DELETED(sob->cats)) continue;
         if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
         if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
-
         if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-//        if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-//        if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
-
         if (sob->weight < 0.000000001) continue;
 
         double zpoint = ofr->zpoint;
@@ -574,8 +583,7 @@ static void ofr_sob_reweight(struct o_frame *ofr, struct transform *trans, doubl
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         if (sob->nweight == 0.0) continue;
 
@@ -605,8 +613,7 @@ static double ofr_sob_stats(struct o_frame *ofr,
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         if (sob->nweight == 0.0) continue;
 
@@ -636,8 +643,7 @@ static double ofr_sob_stats(struct o_frame *ofr,
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         if (sob->nweight == 0.0) continue;
 
@@ -682,8 +688,7 @@ static double ofr_median_residual(struct o_frame *ofr)
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         if (sob->nweight == 0.0) continue;
 
@@ -699,9 +704,7 @@ static double ofr_median_residual(struct o_frame *ofr)
         struct star_obs *sob = STAR_OBS(sl->data);
 		sl = g_list_next(sl);
 
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-
-//        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
         if (sob->nweight == 0.0) continue;
 
 		a[n] = sob->residual;
@@ -716,54 +719,22 @@ static double ofr_median_residual(struct o_frame *ofr)
 /* fit the zeropoint of the given frame; return the me1; if w_res = 1, the weights are reset */
 double ofr_fit_zpoint(struct o_frame *ofr, double alpha, double beta, int w_res, int init_coeffs)
 {
-// moved from mband_dataset_add_stf
-
-//    char *stf_filter = stf_find_string(ofr->stf, 1, SYM_OBSERVATION, SYM_FILTER);
-//    char *def_filter = P_STR(AP_IBAND_NAME);
-
-//    if (def_filter[0] == 0 && P_INT(AP_FORCE_IBAND)) return BIG_ERR;
-
-//    if (stf_filter == NULL) {
-//        err_printf("no filter in stf, aborting add\n");
-//        return BIG_ERR;
-//    }
-
-//    struct mband_dataset *mbds = ofr->mbds;
-//    int band;
-//    if (P_INT(AP_FORCE_IBAND))
-//        band = mband_dataset_search_add_band(mbds, def_filter);
-//    else
-//        band = mband_dataset_search_add_band(mbds, stf_filter);
-
-//    if (band < 0) {
-//        err_printf("cannot use band %s (too many?) aborting add\n", stf_filter);
-//        return BIG_ERR;
-//    }
-
-//    ofr->band = band;
-//    ofr->trans = &mbds->trans[band];
-//    ofr->ltrans = mbds->trans[band];
-//    ofr->zpoint = MAG_UNSET;
-//    ofr->lmag = MAG_UNSET;
-//    ofr->zpointerr = BIG_ERR;
-//    ofr->zpstate = ZP_NOT_FITTED;
-
     struct transform *trans = ofr->trans;
     struct mband_dataset *mbds = ofr->mbds;
 
     GList *sl = ofr->sobs;
-    while (sl != NULL) {
+    while (sl != NULL) {// use sob->ofr->cats instead of sob->cats
         struct star_obs *sob = STAR_OBS(sl->data);
         struct cat_star *cats = sob->cats;
         sl = sl->next;
-
+// if hashtable of cats not ost, cats already has reference to ost so lookup not needed ?
         struct o_star *ost = g_hash_table_lookup(mbds->objhash, cats->name);
         if (ost == NULL) {
             printf("%s not found in mbds\n", cats->name); // cats edited and original cats deleted
             continue;
         }
 
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         char *mag_source[] = { cats->smags, cats->cmags };
         int i;
@@ -1074,15 +1045,11 @@ void mbds_smags_from_cmag_avgs(GList *ofrs)
             if (ofr->band < 0) continue;
             if (sob->flags & (CPHOT_BURNED | CPHOT_NOT_FOUND | CPHOT_INVALID)) continue;
 
-    //        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
-            if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
-            if (sob->cats->gs->flags & STAR_DELETED) continue;
+            if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
+            if (CATS_DELETED(sob->cats)) continue;
             if (sob->cats->pos[CD_FRAC_X] > P_DBL(AP_MAX_STD_RADIUS)) continue;
             if (sob->cats->pos[CD_FRAC_Y] > P_DBL(AP_MAX_STD_RADIUS)) continue;
-
             if (sob->ost->smag[ofr->band] == MAG_UNSET) continue;
-//            if (sob->ost->smag[ofr->band] < P_DBL(AP_STD_BRIGHT_LIMIT)) continue;
-//            if (sob->ost->smag[ofr->band] > P_DBL(AP_STD_FAINT_LIMIT)) continue;
 
             struct accum *acc = sob->ost->acc[ofr->band];
             if (acc == NULL) {
@@ -1974,7 +1941,7 @@ void ofr_to_stf_cats(struct o_frame *ofr)
         double m = sob->mag;
         double me = sob->err;
 
-        if (sob->cats->gs->type != STAR_TYPE_APSTD) continue;
+        if (CATS_TYPE(sob->cats) != CATS_TYPE_APSTD) continue;
 
         if (sob->nweight == 0) {
             m = sob->imag + ofr->zpoint;

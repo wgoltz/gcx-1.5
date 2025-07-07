@@ -57,13 +57,14 @@ struct wcs *window_get_wcs(gpointer window)
 
 /* try to get an inital (frame) wcs from frame data and local params
  * TODO: add read pc */
+// only need this if not all info is in frame
 void fits_frame_params_to_fim(struct ccd_frame *fr)
 {
     struct wcs *wcs = & fr->fim;
 
     // if hinted flag set we have already done this
-    // clear hinted flag if there are updates in params
-    if (wcs->flags & WCS_HINTED) return;
+    // need to clear hinted flag if there are updates in params
+//    if (wcs->flags & WCS_HINTED) return;
 
     double eq; fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
     if (isnan(eq)) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
@@ -98,12 +99,29 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
     double lat, lng, alt;
 
-    if (fits_get_loc(fr, &lat, &lng, &alt)) {
-        // otherwise use obs loc ?
-        wcs->lng = lng;
-        wcs->lat = lat;
-        wcs->flags |= WCS_LOC_VALID;
+    int try_loc = TRUE;
+    int loc_ok = FALSE;
+    while (! loc_ok) {
+        loc_ok = fits_get_loc(fr, &lat, &lng, &alt);
+        if (loc_ok) {
+            wcs->lng = lng;
+            wcs->lat = lat;
+            wcs->flags |= WCS_LOC_VALID;
+            printf("%s loc ok\n", fr->name);
+            break;
+        }
+
+        if (! try_loc) break;
+
+        if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+            printf("$s setting observataory location from PAR\n", fr->name);
+            ccd_frame_add_obs_info(fr, NULL);
+        } else {
+            printf("%s no observatory location\n", fr->name);
+        }
+        try_loc = FALSE;
     }
+    fflush(NULL);
 
     wcs->xrefpix = fr->w / 2.0;
     wcs->yrefpix = fr->h / 2.0;
@@ -133,7 +151,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
     // use hinted flag to indicate we have called this function already
     // TODO need to clear flag if there are changes to relevant params
-    wcs->flags |= WCS_HINTED;
+//    wcs->flags |= WCS_HINTED;
 }
 
 
@@ -180,9 +198,9 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
 
 //        if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
 //        if (fr_wcs->wcsset == WCS_INVALID)
-            fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
+        fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
 
-        if (! (fr_wcs->flags & WCS_HINTED)) {
+//        if (! (fr_wcs->flags & WCS_HINTED)) {
             if ( ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
                 if (window_wcs->flags & WCS_HAVE_SCALE) {
                     fr_wcs->xinc = window_wcs->xinc;
@@ -206,7 +224,7 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
                 }
             }
         }
-    }
+//    }
 
     if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) {
         fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
@@ -955,7 +973,7 @@ void print_list(GSList *gsl) {
  * using starmatch and mark them in the gui_star_list
  * return number of matches found
  */
-int auto_pairs(struct gui_star_list *gsl)
+int auto_pairs(gpointer window, struct gui_star_list *gsl)
 {
     GSList *cat = NULL, *field = NULL;
     GSList *sl;
@@ -985,7 +1003,7 @@ int auto_pairs(struct gui_star_list *gsl)
 //        printf("auto_pairs: %d TYPE_MASK_GSTAR(gs) %08x %s\n", gs->sort, TYPE_MASK_GSTAR(gs), cats->name);
 //        fflush(NULL);
 
-        if (STAR_OF_TYPE(gs, TYPE_CATREF)) { // skips field stars?
+        if (STAR_OF_TYPE(gs, TYPE_CATREF)) {
 
             if (P_INT(AP_MOVE_TARGETS) && (cats->flags & CATS_FLAG_ASTROMET) == 0) continue;
 
@@ -1001,7 +1019,7 @@ int auto_pairs(struct gui_star_list *gsl)
 //    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
 //}
 
-    field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
+    field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0); // remove FRSTAR's
     field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
 //printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
@@ -1016,7 +1034,7 @@ int auto_pairs(struct gui_star_list *gsl)
 		return 0;
 	}
 
-    ret = fastmatch(gsl->window, field, cat);
+    ret = fastmatch(window, field, cat);
 	g_slist_free(field);
 	g_slist_free(cat);
 	return ret;
@@ -1195,8 +1213,9 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 
 //    d3_printf("wcs.match_from_a_b fa: %.1f %.1f, fb: %.1f. %.1f\n", fa->x, fa->y, fb->x, fb->y);
 
-    while (ca_list != NULL) {
-        while (gtk_events_pending ()) gtk_main_iteration ();
+    int abort = 0;
+    while (ca_list != NULL && ! abort) {
+//        while (gtk_events_pending()) gtk_main_iteration();
 
         struct gui_star *ca = GUI_STAR(ca_list->data);
 
@@ -1210,7 +1229,8 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 //            d3_printf("found %d likely cb\n", n);
 //        else
 //            d3_printf("found NO likely cb\n");
-        while (cb_list != NULL) {
+        while (cb_list != NULL && ! abort) {
+
             struct gui_star *cb = GUI_STAR(cb_list->data);
 
 //            d3_printf("... trying cb: %.1f %.1f\n", cb->x, cb->y);
@@ -1219,7 +1239,8 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
             struct gui_star *cc = NULL;
             int cskips = MAX_F_SKIP; /* max number of skips until we find c */
 
-            while (fc_list != NULL && cskips > 0) {
+            while (fc_list != NULL && cskips > 0 && ! abort) {
+
                 struct gui_star *fc = GUI_STAR(fc_list->data);
 
 //                d3_printf("looking for cc to match fc: %.1f %.1f ...\n", fc->x, fc->y);
@@ -1230,11 +1251,13 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 
                 fc_list = fc_list->next;
                 cskips --;
+
+                abort = check_user_abort(window);
 			}
 
             cb_list = g_slist_next(cb_list);
 
-			if (cc != NULL) {
+            if (cc != NULL && ! abort) {
 //                d3_printf("found cc: %.1f %.1f\n", cc->x, cc->y);
 
                 struct gui_star *fc = GUI_STAR(fc_list->data);
@@ -1339,7 +1362,6 @@ int fastmatch(gpointer window, GSList *field, GSList *cat)
 
     } else {        
         while (g_slist_length(field) >= 2) { /* loop dropping the first star in the list */
-            while (gtk_events_pending ()) gtk_main_iteration ();
             ret = match_from(window, field, cat);
 
             if (ret == -1) return -1; // user abort

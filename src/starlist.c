@@ -239,7 +239,7 @@ int add_cat_stars(struct cat_star **catsl, int n,
 //            gs->type = STAR_TYPE_CAT;
         gs->type = (star_type)catsl[i]->type;
 
-		gs->s = catsl[i];
+        gs->s = catsl[i];
 
         gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
 		gsl->sl = g_slist_prepend(gsl->sl, gs);
@@ -382,7 +382,7 @@ int merge_cat_star_list(GList *addsl, struct gui_star_list *gsl, struct wcs *wcs
     GSList *sl;
     for (sl = newsl; sl != NULL; sl = sl->next) { // only new stars will be refd
         struct cat_star *cats = CAT_STAR(sl->data);
-        struct gui_star *gs = gui_star_new();
+        struct gui_star *gs = gui_star_new(); // gs created here
 
 //		wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
 		cats_xypix(wcs, cats, &(gs->x), &(gs->y));
@@ -926,15 +926,18 @@ void gui_star_release(struct gui_star *gs, char *msg)
         case STAR_TYPE_APSTAR:
         case STAR_TYPE_CAT:
         case STAR_TYPE_SREF:
-            cat_star_release(CAT_STAR(gs->s), (new_msg) ? new_msg : msg);
-            if (new_msg) free(new_msg);
+            cat_star_release(CAT_STAR(gs->s), (new_msg) ? new_msg : (msg) ? msg : NULL);
             break;
         default:
             printf("gui_star_release: release star\n"); fflush(NULL);
 //            release_star(STAR(gs->s), msg);
             break;
         }
+    } else {
+//        printf("no cats->s : %s\n", (new_msg) ? new_msg : (msg) ? msg : NULL);
     }
+
+    if (new_msg) free(new_msg);
 
     free(gs);
 
@@ -963,7 +966,7 @@ void gui_star_list_ref(struct gui_star_list *gsl)
 
 static void release_gui_star_from_list(gpointer gs, gpointer user_data)
 {
-    gui_star_release(GUI_STAR(gs), "");
+    gui_star_release(GUI_STAR(gs), "release_gui_star_from_list");
 }
 
 static void print_gs(gpointer p, gpointer user_data)
@@ -987,8 +990,8 @@ void gui_star_list_release(struct gui_star_list *gsl)
 {
     if (gsl == NULL) return;
 
-	if (gsl->ref_count < 1)
-		g_warning("gui_star_list has ref_count of %d\n", gsl->ref_count);
+    if (gsl->ref_count < 1)	g_warning("gui_star_list has ref_count of %d\n", gsl->ref_count);
+
 	if (gsl->ref_count == 1) {
 //		d3_printf("releasing gsl stars\n");
 

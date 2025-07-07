@@ -26,7 +26,7 @@ int window_fit_wcs(GtkWidget *window);
 int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double *ypos);
 int wcs_xypix(struct wcs *wcs, double xpos, double ypos, double *xpix, double *ypix);
 void cat_change_wcs(GSList *sl, struct wcs *wcs);
-int auto_pairs(struct gui_star_list *gsl);
+int auto_pairs(gpointer window, struct gui_star_list *gsl);
 int fastmatch(gpointer window, GSList *field, GSList *cat);
 void pairs_fit_errxy(GSList *pairs, struct wcs *wcs, double *ra_err, double *de_err);
 void cats_xypix (struct wcs *wcs, struct cat_star *cats, double *xpix, double *ypix);

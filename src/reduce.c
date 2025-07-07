@@ -65,7 +65,8 @@
 int progress_print(char *msg, gpointer processing_dialog)
 {
 	info_printf(msg);
-	return 0;
+//    while (gtk_events_pending()) gtk_main_iteration();
+    return 0;
 }
 
 /* pixel combination methods
@@ -439,6 +440,7 @@ int imf_load_frame(struct image_file *imf)
 
     get_frame(fr, "imf_load_frame");
 
+    // rescan
 // try this
 //    rescan_fits_exp(fr, &(fr->exp));
 
@@ -636,8 +638,7 @@ static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, 
             if (!(imf->state_flags & IMG_STATE_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
                 imf_release_frame(imf, "imf_reload_cb");
 
-                struct ccd_frame *fr = imf->fr;
-                if (fr) fr->imf = NULL;
+                if (imf->fr) imf->fr->imf = NULL; // clear the imf so it wont reload
 
                 imf->fr = NULL;
 
@@ -849,10 +850,15 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         } else REPORT( " (already done)" )
     }
 
-    struct ccd_frame *mask_frame = NULL;
-    if ( ccdr->op_flags & IMG_OP_SUB_MASK ) {
-        mask_frame = clone_frame(imf->fr);
-        get_frame(mask_frame, NULL);
+    struct ccd_frame *imf_fr = NULL;
+    if ( ccdr->op_flags & IMG_OP_SUB_MASK && ! (imf->op_flags & IMG_OP_SUB_MASK) ) {
+        imf_fr = imf->fr;
+        get_frame(imf_fr, NULL);
+
+        imf->fr = clone_frame(imf->fr);
+
+        frame_to_channel(imf->fr, ccdr->window, NULL);
+        release_frame(imf->fr, NULL);
     }
 
     if ( ! abort && (ccdr->op_flags & IMG_OP_MEDIAN) ) {
@@ -861,7 +867,7 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
         if ( ! (imf->op_flags & IMG_OP_MEDIAN) ) {
             remove_bayer_info(imf->fr);
 
-            if (! erase_stars(imf->fr)) // median filter with star exclusion
+            if (! median_with_star_exclusion(imf->fr, ccdr->medw)) // median filter with star exclusion
                 REPORT( " (FAILED)" )
             else {
                 lb = NULL; asprintf(&lb, "'MEDIAN FILTER'");
@@ -872,6 +878,14 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
             }
 
             abort = check_user_abort(ccdr->window);
+
+            if (abort && imf_fr) { // restore original imf_fr
+                release_frame(imf->fr, NULL);
+
+                imf->fr = imf_fr;
+                frame_to_channel(imf->fr, ccdr->window, NULL);
+                release_frame(imf->fr, NULL);
+            }
 
         } else REPORT( " (already done)" )
     }
@@ -901,6 +915,14 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
             abort = check_user_abort(ccdr->window);
 
+            if (abort && imf_fr) { // restore original imf_fr
+                release_frame(imf->fr, NULL);
+
+                imf->fr = imf_fr;
+                frame_to_channel(imf->fr, ccdr->window, NULL);
+                release_frame(imf->fr, NULL);
+            }
+
         } else REPORT( " (already done)" )
     }
 
@@ -909,10 +931,13 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->op_flags & IMG_OP_SUB_MASK) ) {
 
-            if ( mask_frame && (sub_frames(mask_frame, imf->fr) == 0) ) {
+            if ( imf_fr && (sub_frames(imf_fr, imf->fr) == 0) ) {
 
                 release_frame(imf->fr, NULL);
-                imf->fr = mask_frame;
+
+                imf->fr = imf_fr;
+                frame_to_channel(imf->fr, ccdr->window, NULL);
+                release_frame(imf->fr, NULL);
 
                 lb = NULL; asprintf(&lb, "'SUB_MASK'");
                 if (lb) fits_add_history(imf->fr, lb), free(lb);
@@ -972,7 +997,9 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     }
 
     if ( ! abort && ((ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP)) ) {
-
+// if save mem set (maybe) :
+// unset dirty flag if phot is the end result, dumping dirty files
+// then would need to reprocess individually any reloaded frame
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
             REPORT( " phot" )
@@ -1034,7 +1061,7 @@ int reduce_one_frame(struct image_file *imf, struct ccd_reduce *ccdr, progress_p
     if (ret) return ret;
 
     if (imf->state_flags & IMG_STATE_SKIP) return 1;
-
+// this redraws stars even if toggle draw is off
     load_rcp_to_window (ccdr->window, ccdr->recipe, NULL);
 
     return ccd_reduce_imf (imf, ccdr, progress, processing_dialog);

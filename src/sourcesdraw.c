@@ -134,7 +134,6 @@ int cats_gs_compare(struct cat_star *a, struct cat_star *b)
 
 void attach_star_list(struct gui_star_list *gsl, GtkWidget *window)
 {
-    gsl->window = window; // to catch user abort
     gsl->sl = g_slist_sort(gsl->sl, (GCompareFunc)gs_compare);
     g_object_set_data_full(G_OBJECT(window), "gui_star_list", gsl, (GDestroyNotify)gui_star_list_release);
 }
@@ -549,7 +548,7 @@ void find_stars_cb(gpointer window, guint action)
 	struct wcs *wcs;
 	int nstars;
 
-    struct ccd_frame *fr = window_get_current_frame(window);
+    struct ccd_frame *fr = window_get_current_frame(window); // currently displayed frame (not necessarily current imf->fr)
     if (fr == NULL && action != ADD_FROM_CATALOG) return;
 
 //	d3_printf("find_stars_cb action %d\n", action);
@@ -981,9 +980,8 @@ static void try_remove_pair(GtkWidget *window, GSList *found)
 {
 	GSList *sl;
 	struct gui_star *gs;
-	struct gui_star_list *gsl;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		g_warning("try_remove_pair: window really should have a star list\n");
 		return;
@@ -1007,9 +1005,8 @@ static void try_unmark_star(GtkWidget *window, GSList *found)
 {
 	GSList *sl;
 	struct gui_star *gs;
-	struct gui_star_list *gsl;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		g_warning("try_unmark_star: window really should have a star list\n");
 		return;
@@ -1040,9 +1037,8 @@ static void try_attach_pair(GtkWidget *window, GSList *found)
 {
 	GSList *selection = NULL, *pair = NULL, *sl;
 	struct gui_star *gs = NULL, *cat_gs;
-	struct gui_star_list *gsl;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		g_warning("try_attach_pair: window really should have a star list\n");
 		return;
@@ -1107,10 +1103,10 @@ static void move_star(GtkWidget *window, GSList *found)
 {
 	GSList *selection = NULL, *sl;
 	struct gui_star *gs = NULL, *cat_gs;
-	struct gui_star_list *gsl;
+
 	struct wcs *wcs;
 
-	gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		g_warning("try_attach_pair: window really should have a star list\n");
 		return;
@@ -1636,7 +1632,7 @@ static char *sprint_star(struct gui_star *gs, struct wcs *wcs)
 {
     char *buf = NULL;
 
-    if (gs->s) { // gs->s has been freed
+    if (gs->s) {
         struct cat_star *cats = CAT_STAR(gs->s);
 
         if (STAR_OF_TYPE(gs, TYPE_CATREF)) {

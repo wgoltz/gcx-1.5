@@ -1518,10 +1518,11 @@ static struct cat_star * parse_cat_line_gaia(char *line)
 //    Source, _RAJ2000, _DEJ2000,  Gmag, e_Gmag, BPmag, e_BPmag, RPmag, e_RPmag, BP-RP, VarFlag, pmRA, pmDE
     struct cat_star * cats;
     int cols[32];
-    char buf[256];
+    char *buf = NULL;
 
     char *endp, *p;
     int n;
+    static int a = 0;
 
     int nc = detabify(line, cols, 13);
 
@@ -1552,7 +1553,7 @@ static struct cat_star * parse_cat_line_gaia(char *line)
     double bp_rp = strtod(line + cols[9], &endp);
 
     char *varflag = line + cols[10];
-    gboolean var = strcmp(varflag, "NOT_AVAILABLE") != 0;
+    gboolean var = strstr(varflag, "VARIABLE") != NULL;
 
     /* GAIA DR3 transformations to Johnson-Cousins
                     GBP−GRP  (GBP−GRP)2  (GBP−GRP)3  (GBP−GRP)4  σ
@@ -1581,10 +1582,10 @@ static struct cat_star * parse_cat_line_gaia(char *line)
 
 #define BUF_PRINT_MAG(s, m, me) if ((m) > 0) { \
     if ((me) > 0) \
-       n += snprintf(buf+n, 255-n, "%s=%.3f/%.3f ", (s), (m), (me)); \
+       str_join_varg(&buf, "%s=%.3f/%.3f ", (s), (m), (me)); \
     else \
-       n += snprintf(buf+n, 255-n, "%s=%.3f ", (s), (m)); \
-}
+       str_join_varg(&buf, "%s=%.3f ", (s), (m)); \
+    }
 
     BUF_PRINT_MAG("B", b, b_e);
     BUF_PRINT_MAG("V", v, v_e);
@@ -1593,17 +1594,18 @@ static struct cat_star * parse_cat_line_gaia(char *line)
 
 #undef BUF_PRINT_MAG
 
-    if (n) {
+    if (buf != NULL) {
         cats->cmags = strdup(buf);
+        free(buf);
     }
 
     p = line + cols[11];
     double pmRA = strtod(p, &endp);
-    if  (p == endp) return cats;
+    if  (p == endp) pmRA = NAN;
 
     p = line + cols[12];
     double pmDE = strtod(p, &endp);
-    if  (p == endp) return cats;
+    if  (p == endp) pmDE = NAN;
 
     cats->astro = calloc(1, sizeof(struct cats_astro));
     g_return_val_if_fail(cats->astro != NULL, cats);
@@ -1614,13 +1616,15 @@ static struct cat_star * parse_cat_line_gaia(char *line)
     cats->astro->ra_err = BIG_ERR;
     cats->astro->dec_err = BIG_ERR;
 
-    cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
-    cats->astro->dec_pm = pmDE;
-    cats->astro->flags = ASTRO_HAS_PM;
+    if (! isnan(pmRA) && ! isnan(pmDE)) {
+        cats->astro->ra_pm = pmRA * cos(degrad(cats->dec));
+        cats->astro->dec_pm = pmDE;
+        cats->astro->flags = ASTRO_HAS_PM;
+    }
 
     if (var) {
         cats->comments = strdup(varflag);
-        cats->flags = CATS_FLAG_VARIABLE;
+        cats->flags |= CATS_FLAG_VARIABLE;
     }
 
     cats->mag = v;
@@ -1935,8 +1939,7 @@ static int logw_print(char *msg, void *data)
 	g_return_val_if_fail(text != NULL, 0);
 	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW (text), GTK_WRAP_CHAR);
 
-	gtk_text_buffer_insert_at_cursor(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)),
-					 msg, -1);
+    gtk_text_buffer_insert_at_cursor(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)), msg, -1);
 
     while (gtk_events_pending()) gtk_main_iteration();
 

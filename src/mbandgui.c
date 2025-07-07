@@ -33,6 +33,7 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
+#include <ctype.h>
 #include <libgen.h>
 
 #include "gcx.h"
@@ -170,7 +171,6 @@ struct mband_dataset *dialog_get_mbds(gpointer mband_dialog)
 }
 
 gint sort_func(GtkTreeModel *model, GtkTreeIter *a, GtkTreeIter *b, gpointer data) {
-    float va = 0, vb = 0;
     gchar *pa, *pb;
 
     GtkTreeViewColumn *column = data;
@@ -188,12 +188,15 @@ gint sort_func(GtkTreeModel *model, GtkTreeIter *a, GtkTreeIter *b, gpointer dat
         char *pa2 = pa;
         char *pb2 = pb;
 
-        while ((*pa2 == *pb2) && (*pa2 != 0) && (*pa2 != '-')) {
+        while (*pa2 == *pb2) {
+            if (*pa2 == 0) break;
+            if (*pa2 == '-' || *pa2 == '+' || *pa2 == '.') break; // start of number
+            if (isdigit(*pa2)) break;
             pa2++; pb2++;
         }
 
-        va = strtof(pa2, &tail); ra = (tail != pa2);
-        vb = strtof(pb2, &tail); rb = (tail != pb2);
+        double va = strtod(pa2, &tail); ra = (tail != pa2);
+        double vb = strtod(pb2, &tail); rb = (tail != pb2);
 
         if (ra && rb) {
             if (va > vb) {
@@ -237,7 +240,7 @@ struct {
     { "Fitted", sort_func },
     { "Outliers", sort_func },
     { "MEU", sort_func },
-    { "Airmass", NULL },
+    { "Airmass", sort_func },
     { "JD", sort_func },
     { "File Name", NULL },
 };
@@ -783,6 +786,8 @@ static void sob_list_update_vals(GtkWidget *sob_list)
 // selected_gui_stars sorted by gs->sort, highest first
 static gboolean gui_star_in_selection(GList *selected_gui_stars, struct gui_star *gs)
 {
+    if (gs == NULL) return TRUE;
+
     GList *gl = g_list_first(selected_gui_stars);
     int sort = gs->sort;
     for (; gl != NULL; gl = g_list_next(gl)) {
@@ -1141,10 +1146,11 @@ static void ofr_selection_cb(GtkWidget *ofr_selection, gpointer mband_dialog)
                         gtk_tree_model_get (sob_store, &iter, 0, &sob, -1);
                         if ( sob == NULL ) continue;
 
-                        struct cat_star *cat_s = sob->cats;
-                        g_return_if_fail(cat_s != NULL);
+                        struct cat_star *cats = sob->cats;
+                        g_return_if_fail(cats != NULL);
 
-                        struct gui_star *gs = cat_s->gs;
+                        struct gui_star *gs = cats->gs;
+                        if (gs->s != cats) { printf("ofr_selection_cb: gs->s doesn't = cats\n"); fflush(NULL); }
 
                         if ( gui_star_in_selection (selected_gui_stars, gs) )
                             gtk_tree_selection_select_iter (sob_selection, &iter); // calls sob_selection_cb for each sob
@@ -1192,10 +1198,13 @@ static void sob_selection_cb(GtkWidget *sob_selection, gpointer mband_dialog)
         gtk_tree_model_get(sob_store, &iter, 0, &sob, -1);
         g_return_if_fail(sob != NULL);
 
-        struct cat_star *cat_s = sob->cats;
-        g_return_if_fail(cat_s != NULL);
+        struct cat_star *cats = sob->cats;
+        g_return_if_fail(cats != NULL);
 
-        selected_gui_stars = g_list_insert_sorted(selected_gui_stars, cat_s->gs, (GCompareFunc)gs_compare);
+        struct gui_star *gs = cats->gs;
+        if (gs->s != cats) { printf("sob_selection_cb: gs->s doesn't = cats\n"); fflush(NULL); }
+
+        if (gs) selected_gui_stars = g_list_insert_sorted(selected_gui_stars, gs, (GCompareFunc)gs_compare);
     }
 
     // this could be somewhere else maybe
@@ -1208,37 +1217,49 @@ static void sob_selection_cb(GtkWidget *sob_selection, gpointer mband_dialog)
     g_list_foreach (selected_sob, (GFunc) gtk_tree_path_free, NULL);
     g_list_free (selected_sob);
 
-    GList *old_selected = g_object_get_data(G_OBJECT(sob_selection), "last_selected");
-    GList *new_selected = selected_gui_stars;
-    while (old_selected || new_selected) {
-        while (old_selected && new_selected) {
-            struct gui_star *gs_old = GUI_STAR(old_selected->data);
-            struct gui_star *gs_new = GUI_STAR(new_selected->data);
+    if (selected_gui_stars) {
+        GList *old_selected = g_object_get_data(G_OBJECT(sob_selection), "last_selected");
+        GList *new_selected = selected_gui_stars;
+        while (old_selected || new_selected) {
+            while (old_selected && new_selected) {
+                struct gui_star *gs_old = GUI_STAR(old_selected->data);
+                struct gui_star *gs_new = GUI_STAR(new_selected->data);
 
-            if (gs_old->sort > gs_new->sort) {
-                gs_old->flags &= ~STAR_SELECTED;
-                old_selected = g_list_next(old_selected);
-            } else if (gs_old->sort < gs_new->sort) {
-                gs_new->flags |= STAR_SELECTED;
-                new_selected = g_list_next(new_selected);
-            } else {
-                if (selection_control == REFRESH_SELECTED)
-                    gs_new->flags |= STAR_SELECTED;
-                new_selected = g_list_next(new_selected);
-                old_selected = g_list_next(old_selected);
+                if (! (gs_old || gs_new)) break;
+
+                if (gs_old && gs_new) {
+                    if (gs_old->sort > gs_new->sort) {
+                        gs_old->flags &= ~STAR_SELECTED;
+                        old_selected = g_list_next(old_selected);
+                    } else if (gs_old->sort < gs_new->sort) {
+                        gs_new->flags |= STAR_SELECTED;
+                        new_selected = g_list_next(new_selected);
+                    } else {
+                        if (selection_control == REFRESH_SELECTED) gs_new->flags |= STAR_SELECTED;
+                        new_selected = g_list_next(new_selected);
+                        old_selected = g_list_next(old_selected);
+                    }
+                } else if (gs_old) {
+                    if (selection_control == REFRESH_SELECTED) gs_old->flags |= STAR_SELECTED;
+                    old_selected = g_list_next(old_selected);
+                } else if (gs_new) {
+                    if (selection_control == REFRESH_SELECTED) gs_new->flags |= STAR_SELECTED;
+                    new_selected = g_list_next(new_selected);
+                }
             }
+
+            if (old_selected && old_selected->data && ! new_selected) {
+                GUI_STAR(old_selected->data)->flags &= ~STAR_SELECTED;
+                old_selected = g_list_next(old_selected);
+            } else if (new_selected && new_selected->data && ! old_selected) {
+                GUI_STAR(new_selected->data)->flags |= STAR_SELECTED;
+                new_selected = g_list_next(new_selected);
+            } else
+                break;
         }
 
-        if (old_selected && !new_selected) {
-            GUI_STAR(old_selected->data)->flags &= ~STAR_SELECTED;
-            old_selected = g_list_next(old_selected);
-        } else if (!old_selected && new_selected) {
-            GUI_STAR(new_selected->data)->flags |= STAR_SELECTED;
-            new_selected = g_list_next(new_selected);
-        }
+        g_object_set_data_full(G_OBJECT(sob_selection), "last_selected", selected_gui_stars, (GDestroyNotify) g_list_free); // neeed to free gui stars
     }
-
-    g_object_set_data_full(G_OBJECT(sob_selection), "last_selected", selected_gui_stars, (GDestroyNotify) g_list_free);
 
     GtkWidget *window = g_object_get_data(G_OBJECT(mband_dialog), "im_window");
     g_return_if_fail( window != NULL );
@@ -1413,39 +1434,39 @@ static void plot_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
     g_list_free(ofrs);
 }
 
-void act_mband_plot_resmag (GtkAction *action, gpointer data)
+void act_mband_plot_resmag (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_RES_SM, NULL);
+    plot_cb (mband_dialog, PLOT_RES_SM, NULL);
 }
 
-void act_mband_plot_rescol (GtkAction *action, gpointer data)
+void act_mband_plot_rescol (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_RES_COL, NULL);
+    plot_cb (mband_dialog, PLOT_RES_COL, NULL);
 }
 
-void act_mband_plot_errmag (GtkAction *action, gpointer data)
+void act_mband_plot_errmag (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_RES_SM | PLOT_WEIGHTED, NULL);
+    plot_cb (mband_dialog, PLOT_RES_SM | PLOT_WEIGHTED, NULL);
 }
 
-void act_mband_plot_errcol (GtkAction *action, gpointer data)
+void act_mband_plot_errcol (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_RES_COL | PLOT_WEIGHTED, NULL);
+    plot_cb (mband_dialog, PLOT_RES_COL | PLOT_WEIGHTED, NULL);
 }
 
-void act_mband_plot_zpairmass (GtkAction *action, gpointer data)
+void act_mband_plot_zpairmass (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_ZP_AIRMASS, NULL);
+    plot_cb (mband_dialog, PLOT_ZP_AIRMASS, NULL);
 }
 
-void act_mband_plot_zptime (GtkAction *action, gpointer data)
+void act_mband_plot_zptime (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_ZP_TIME, NULL);
+    plot_cb (mband_dialog, PLOT_ZP_TIME, NULL);
 }
 
-void act_mband_plot_magtime (GtkAction *action, gpointer data)
+void act_mband_plot_magtime (GtkAction *action, gpointer mband_dialog)
 {
-	plot_cb (data, PLOT_STAR, NULL);
+    plot_cb (mband_dialog, PLOT_STAR, NULL);
 }
 
 
@@ -1642,6 +1663,52 @@ void act_mband_dataset_avgs_to_smags (GtkAction *action, gpointer mband_dialog)
     fit_cb (mband_dialog, FIT_SET_AVS, NULL);
 }
 
+
+
+static void link_ostars_to_gui_stars(gpointer mband_dialog)
+{
+    gpointer window = g_object_get_data(G_OBJECT(mband_dialog), "im_window");
+
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl == NULL) {
+        GtkWidget *processing_dialog = NULL;
+        struct ccd_reduce *ccdr = NULL;
+
+        processing_dialog = g_object_get_data (G_OBJECT(window), "processing");
+        if (processing_dialog) ccdr = g_object_get_data(G_OBJECT(processing_dialog), "ccdred");
+        if (! ccdr || ccdr->recipe == NULL) {
+            mbds_printf(mband_dialog, "specify the appropriate recipe file first\n");
+            return;
+        }
+
+        if (load_rcp_to_window(window, ccdr->recipe, NULL) < 0) { // ccdr->recipe is recipe file name
+            printf("loading recipe file failed\n");
+            return;
+        }
+
+        gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+        if (gsl == NULL) {
+            printf("no gui star list\n");
+            return;
+        }
+    }
+
+    struct mband_dataset *mbds = dialog_get_mbds(mband_dialog);
+
+    GList *sl;
+    for (sl = mbds->ostars; sl != NULL; sl = sl->next) {
+        struct o_star *ost = (struct o_star *)(sl->data);
+
+        if (ost) {
+            struct cat_star *cats = ost->cats;
+            if (cats && cats->gs == NULL) {
+                struct gui_star *gs = find_gs_by_cats_name(gsl, cats->name);
+                cats->gs = gs;
+            }
+        }
+    }
+}
+
 // build mband dialog from stf file
 void add_to_mband(gpointer mband_dialog, char *fn)
 {
@@ -1665,12 +1732,12 @@ void add_to_mband(gpointer mband_dialog, char *fn)
 //        stf_fprint(stdout, stf, 0, 0); fflush(stdout);
         struct o_frame *ofr = NULL;
         if ((ofr = mband_dataset_add_stf (mbds, stf))) {
-//            mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));
-            mband_dataset_add_sobs_to_ofr(mbds, ofr);
+            mband_dataset_add_sobs_to_ofr(mbds, ofr); // link to recipe stars
             n++;
         }
     }
 
+    link_ostars_to_gui_stars(mband_dialog); // link mbds->ostars to gui_star_list
 
     mbds_printf(mband_dialog, "%d frames read", n);
 

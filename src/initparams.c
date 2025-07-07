@@ -932,23 +932,7 @@ void init_ptable(void)
 	set_par_description(AP_STD_DEFAULT_ERROR,
 			    "Default standard magnitude error used "
 			    "when a value is not available.");
-//    AP_STD_BRIGHT_LIMIT ,
-//    AP_STD_FAINT_LIMIT ,
-    add_par_double(AP_STD_BRIGHT_LIMIT, PAR_APHOT, 0, "std_bright_limit",
-               "Std star bright limit", 7.0);
-    set_par_description(AP_STD_BRIGHT_LIMIT,
-               "Standard star brightest magnitude.");
-    add_par_double(AP_STD_FAINT_LIMIT, PAR_APHOT, 0, "std_faint_limit",
-               "Std star faint limit", 13.2);
-    set_par_description(AP_STD_FAINT_LIMIT,
-               "Standard star faintest magnitude.");
-//    add_par_int(AP_STD_SOURCE, PAR_APHOT, 0, "std_source",
-//               "Std source", PAR_STD_SOURCE_SMAGS);
-//    set_par_choices(AP_STD_SOURCE, std_source_options);
-//    set_par_description(AP_STD_SOURCE,
-//               "cmags: sourced directly from catalog."
-//               "smags: derived from fit to local observations"
-//               "(which should have less internal scatter).");
+
     add_par_double(AP_LMAG_FROM_ZP, PAR_APHOT, 0, "lmag_from_zp",
                "Limiting magnitude from zeropoint ", 7.0);
     set_par_description(AP_LMAG_FROM_ZP,
