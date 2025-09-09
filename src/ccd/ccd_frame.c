@@ -1599,10 +1599,6 @@ int flat_frame(struct ccd_frame *fr, struct ccd_frame *fr1)
         err_printf("flat failed: large frame bias (%.f)\n", fr->exp.bias);
 		return -1;
 	}
-	if (fabs(fr1->exp.bias) > 2.0) {
-        err_printf("flat failed: large flat bias (%.f)\n", fr1->exp.bias);
-		return -1;
-	}
 
 	ll = mu / MAX_FLAT_GAIN;
 

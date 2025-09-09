@@ -137,6 +137,7 @@ extern void act_stars_toggle_user(GtkAction *action, gpointer window);
 extern void act_stars_toggle_field(GtkAction *action, gpointer window);
 extern void act_stars_toggle_catalog(GtkAction *action, gpointer window);
 extern void act_stars_toggle_off_frame(GtkAction *action, gpointer window);
+extern void act_stars_toggle_reticle(GtkAction *action, gpointer window);
 extern void act_stars_rm_all(GtkAction *action, gpointer window);
 extern void act_stars_rm_pairs_all(GtkAction *action, gpointer window);
 extern void act_stars_rm_pairs_selected(GtkAction *action, gpointer window);

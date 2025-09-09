@@ -39,6 +39,7 @@ typedef enum {
     STAR_TYPE_ALIGN, /* a star used for frame alignment */
     STAR_TYPE_MOVING, /* its moving between frames */
     STAR_TYPE_USEL, /* simple star, marked by the user */
+    STAR_TYPE_RETICLE, /* not really a star type */
     STAR_TYPES // 8
 } star_type;
 
@@ -95,13 +96,24 @@ struct gui_star_list {
 			 * sl are unref's and the list is freed */
 };
 
-#define STAR_SHAPE_CIRCLE 0
-#define STAR_SHAPE_SQUARE 1
-#define STAR_SHAPE_BLOB 2
-#define STAR_SHAPE_APHOT 3
-#define STAR_SHAPE_DIAMOND 4
-#define STAR_SHAPE_CROSS 5
-#define STAR_SHAPE_STAR 6
+typedef enum {
+    STAR_SHAPE_CIRCLE,
+    STAR_SHAPE_SQUARE,
+    STAR_SHAPE_BLOB,
+    STAR_SHAPE_APHOT,
+    STAR_SHAPE_DIAMOND,
+    STAR_SHAPE_CROSS,
+    STAR_SHAPE_STAR,
+    STAR_SHAPE_RETICLE
+} star_shape;
+
+//#define STAR_SHAPE_CIRCLE 0
+//#define STAR_SHAPE_SQUARE 1
+//#define STAR_SHAPE_BLOB 2
+//#define STAR_SHAPE_APHOT 3
+//#define STAR_SHAPE_DIAMOND 4
+//#define STAR_SHAPE_CROSS 5
+//#define STAR_SHAPE_STAR 6
 
 #define STAR_OF_TYPE(gs, select) ((TYPE_MASK((gs)->type) & (select)) != 0)
 #define STAR_TYPE(gs) ((gs)->type)

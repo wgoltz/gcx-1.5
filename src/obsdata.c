@@ -679,15 +679,15 @@ char *date_time_from_jdate(double jd)
 }
 
 
-double calculate_airmass(double ra, double dec, double ast, double lat, double lng)
+double calculate_airmass(double ra, double dec, double ast_as_degrees, double lat, double lng)
 {
     double alt, az;
 //printf("obsdata.calculate_airmass\n");
-    get_hrz_from_equ_sidereal_time (ra, dec, lng, lat, ast,	&alt, &az);
+    get_hrz_from_equ_sidereal_time (ra, dec, lng, lat, ast_as_degrees,	&alt, &az);
 
     double airm = airmass(alt);
     airm = 0.001 * floor(airm * 1000);
-    d1_printf("obsdata.calculate_airmass alt=%.4f az=%.4f sidereal=%.4f airmass=%.4f\n", alt, az, ast, airmass(alt));
+    d1_printf("obsdata.calculate_airmass alt=%.4f az=%.4f sidereal=%.4f airmass=%.4f\n", alt, az, ast_as_degrees, airmass(alt));
 
     return airm;
 }
@@ -707,7 +707,7 @@ double frame_airmass(struct ccd_frame *fr, double ra, double dec)
     double jd = frame_jdate(fr);
 
     if (! (jd == 0 || isnan(lat) || isnan(lng) || isnan(ra) || isnan(dec)))
-        return calculate_airmass(ra, dec, get_apparent_sidereal_time(jd), lat, lng);
+        return calculate_airmass(ra, dec, get_apparent_sidereal_time_as_degrees(jd), lat, lng);
 
     double zd = NAN;
     fits_get_dms(fr, P_STR(FN_ZD), &zd);
@@ -739,7 +739,7 @@ double timeval_to_jdate(struct timeval *tv)
 
 /* return the hour angle for the given obs coordinates, 
  * uses the parameter geo location values and current time */
-double obs_current_hour_angle(struct obs_data *obs)
+double obs_current_hour_angle_as_degrees(struct obs_data *obs)
 {
 	double jd, ha;
 	struct timeval tv;
@@ -749,13 +749,13 @@ double obs_current_hour_angle(struct obs_data *obs)
 
     double lng = P_DBL(OBS_LONGITUDE); if (P_INT(FILE_WESTERN_LONGITUDES)) lng = -lng;
 
-    ha = get_apparent_sidereal_time(jd) + (lng - obs->ra) / 15.0;
-    if (ha > 12)
-        ha -= 24;
-    else if (ha < -12)
-        ha += 24;
+    ha = get_apparent_sidereal_time_as_degrees(jd) + lng - obs->ra;
+    if (ha > 180)
+        ha -= 360;
+    else if (ha < -180)
+        ha += 360;
 
-	d3_printf("current ha = %f\n", ha);
+    d3_printf("current (in degrees) ha = %f\n", ha);
 	return ha;
 }
 
@@ -774,9 +774,9 @@ double obs_current_airmass(struct obs_data *obs)
 
     double lat = P_DBL(OBS_LATITUDE);
 
-    double ast = get_apparent_sidereal_time(jd);
+    double ast_as_degrees = get_apparent_sidereal_time_as_degrees(jd);
 
-    get_hrz_from_equ_sidereal_time (obs->ra, obs->dec, lng, lat, ast, &alt, &az);
+    get_hrz_from_equ_sidereal_time (obs->ra, obs->dec, lng, lat, ast_as_degrees, &alt, &az);
 
 	airm = airmass(alt);
 	d3_printf("current airmass = %f\n", airm);

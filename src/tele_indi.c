@@ -68,31 +68,30 @@ static void tele_check_state_for_tele_find(struct tele_t *tele)
     }
 }
 
-/* read coords, save to ra and dec, return 0
+/* read coords as J2000 degrees, save to ra and dec and rot, return 0
  * return -1 if don't have tele->coord_prop or
  * ra and/or dec args provided but have bad values when read
  * */
-int tele_read_coords(struct tele_t *tele, double *ra, double *dec)
+int tele_get_coords(struct tele_t *tele, double *ra, double *dec, double *rot)
 {
     if (! tele->ready) return -1;
 
     if (! tele->coord_prop) return -1;
 
-    if (ra) {
-        *ra = indi_prop_get_number(tele->coord_prop, "RA"); // these appear to be equinox 2000
-        *ra *= 15; // hms to degrees
-    }
-    if (dec) {
-        *dec = indi_prop_get_number(tele->coord_prop, "DEC");
-    }
+    // these appear to be equinox 2000 ?
+    if (ra) *ra = indi_prop_get_number(tele->coord_prop, "RA") * 15; // hours to degrees
+    if (dec) *dec = indi_prop_get_number(tele->coord_prop, "DEC");
+    if (rot) *rot = tele->sync_rot;
+
+    if (tele->coords_are_eod) precess_hiprec(CURRENT_EPOCH, 2000, ra, dec);
 
     return 0;
 }
 
 /* return last read coords from tele structure
- * coords are eod
+ * returned coords are J2000 degrees
  */
-int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
+int tele_last_coords(struct tele_t *tele, double *ra, double *dec)
 {
     if (! tele->ready) {
         err_printf("tele_get_tracking: Tele isn't ready.  Can't get tracking\n");
@@ -102,6 +101,8 @@ int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
     *ra = tele->right_ascension;
     *dec = tele->declination;
 
+    if (tele->coords_are_eod) precess_hiprec(CURRENT_EPOCH, 2000, ra, dec);
+
     int state = tele->coord_prop->state;
 
     return tele->coord_prop->state;
@@ -109,13 +110,11 @@ int tele_get_coords(struct tele_t *tele, double *ra, double *dec)
 
 /* read coords into tele stucture
  */
-static void tele_get_coords_cb(struct indi_prop_t *iprop, void *data)
+static void tele_get_coords_cb(struct indi_prop_t *iprop, struct tele_t* tele)
 {
-	struct tele_t *tele = data;
-
     if (!tele->ready) return;
 
-    int result = tele_read_coords(tele, &tele->right_ascension, &tele->declination);
+    int result = tele_get_coords(tele, &tele->right_ascension, &tele->declination, NULL);
     if (result == -1) return;
 
     tele->change_state = (tele->state != iprop->state);
@@ -145,10 +144,8 @@ static void tele_track_state_cb(struct indi_prop_t *iprop, void *data)
     }
 }
 
-static void tele_move_cb(struct indi_prop_t *iprop, void *data)
+static void tele_move_cb(struct indi_prop_t *iprop, struct tele_t *tele)
 {
-	struct tele_t *tele = data;
-
 	if (tele->move_ns_prop &&
             (tele->move_ns_prop->state != INDI_STATE_IDLE ||
 	     tele->move_ew_prop->state != INDI_STATE_IDLE))
@@ -199,36 +196,43 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 {
 	struct tele_t *tele = (struct tele_t *)callback_data;
 
-//    if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD_REQUEST") == 0) { // no
-//		tele->coord_set_prop = iprop;
-//	}
-//	else
-    if ((strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) ||
-            (strcmp(iprop->name, "MOUNT_EQUATORIAL_COORDINATES") == 0)) {
+// if (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0) {
+// read MOUNT_EPOCH ?
+//        tele->coords_are_eod = (strcmp(iprop->name, "EQUATORIAL_EOD_COORD") == 0);
+// }
+    if (strcmp(iprop->name, "MOUNT_EQUATORIAL_COORDINATES") == 0) {
         tele->coord_prop = iprop;
-        tele->coord_set_prop = iprop; // try this
         indi_prop_add_cb(iprop, (IndiPropCB)tele_get_coords_cb, tele);
 	}
-    else if ((strcmp(iprop->name, "ON_COORD_SET") == 0) ||
-             (strcmp(iprop->name, "MOUNT_ON_COORDINATES_SET") == 0)) {
+// else if (strcmp(iprop->name, "ON_COORD_SET") {
+// }
+    else if (strcmp(iprop->name, "MOUNT_ON_COORDINATES_SET") == 0) {
 		tele->coord_set_type_prop = iprop;
 	}
-    else if ((strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) ||
-             (strcmp(iprop->name, "MOUNT_TRACKING") == 0)) { // tracking or stopped
+// else if (strcmp(iprop->name, "TELESCOPE_TRACK_STATE") == 0) {
+// }
+    else if (strcmp(iprop->name, "MOUNT_TRACKING") == 0) { // tracking or stopped
         tele->track_state_prop = iprop;
 //        indi_prop_add_cb(iprop, (IndiPropCB)tele_track_state_cb, tele);
     }
-    else if ((strcmp(iprop->name, "TELESCOPE_ABORT_MOTION") == 0) ||
-             (strcmp(iprop->name, "MOUNT_ABORT_MOTION") == 0)) {
+    else if (strcmp(iprop->name, "GEOGRAPHIC_COORDINATES") == 0) { // tracking or stopped
+        tele->location_prop = iprop;
+//        indi_prop_add_cb(iprop, (IndiPropCB)tele_track_state_cb, tele);
+    }
+// else if (strcmp(iprop->name, "TELESCOPE_ABORT_MOTION") == 0) {
+// }
+    else if (strcmp(iprop->name, "MOUNT_ABORT_MOTION") == 0) {
 		tele->abort_prop = iprop;
 	}
-    else if ((strcmp(iprop->name, "TELESCOPE_MOTION_NS") == 0) ||
-             (strcmp(iprop->name, "MOUNT_MOTION_DEC") == 0)) {
+// else if (strcmp(iprop->name, "TELESCOPE_MOTION_NS") == 0) {
+// }
+    else if (strcmp(iprop->name, "MOUNT_MOTION_DEC") == 0) {
 		tele->move_ns_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
-    else if ((strcmp(iprop->name, "TELESCOPE_MOTION_WE") == 0) ||
-             (strcmp(iprop->name, "MOUNT_MOTION_RA") == 0)) {
+// else if (strcmp(iprop->name, "TELESCOPE_MOTION_WE") == 0) {
+// }
+    else if (strcmp(iprop->name, "MOUNT_MOTION_RA") == 0) {
 		tele->move_ew_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
@@ -240,14 +244,28 @@ static void tele_connect(struct indi_prop_t *iprop, void *callback_data)
 		tele->timed_guide_ew_prop = iprop;
 		indi_prop_add_cb(iprop, (IndiPropCB)tele_move_cb, tele);
 	}
-    else if ((strcmp(iprop->name, "TELESCOPE_SLEW_RATE") == 0) ||
-             (strcmp(iprop->name, "MOUNT_SLEW_RATE") == 0)) {
+// else if (strcmp(iprop->name, "TELESCOPE_SLEW_RATE") == 0) {
+// }
+    else if (strcmp(iprop->name, "MOUNT_SLEW_RATE") == 0) {
 		tele->speed_prop = iprop;
 	}
 	else
 		INDI_try_dev_connect(iprop, INDI_COMMON (tele), P_STR(INDI_SCOPE_PORT));
 
 	tele_check_state(tele);
+}
+
+// get latitude, longitude, altitude
+void tele_get_location(struct tele_t *tele, double *lat, double *lng, double *alt)
+{
+    if (! tele->ready) {
+//        err_printf("camera_get_secpix: Camera isn't ready.  Can't get secpix\n");
+        return;
+    }
+
+    *lng = indi_prop_get_number(tele->location_prop, "LONGITUDE");
+    *lat = indi_prop_get_number(tele->location_prop, "LATITUDE");
+    *alt = indi_prop_get_number(tele->location_prop, "ELEVATION");
 }
 
 void tele_set_speed(struct tele_t *tele, int type)
@@ -283,9 +301,8 @@ void tele_timed_move(struct tele_t *tele, int dx_msec, int dy_msec, int type)
 		err_printf("Telescope isn't connected.  Aborting timed move\n");
 		return;
 	}
-	if (type == TELE_MOVE_GUIDE && tele->timed_guide_ns_prop) {
-		// We can submit a timed guide, and let the mount take care of it
-		if (dx_msec != 0) {
+    if (type == TELE_MOVE_GUIDE) {
+        if (tele->timed_guide_ew_prop && (dx_msec != 0)) { // We can submit a timed guide, and let the mount take care of it
 			if (dx_msec > 0) {
 				elem = indi_prop_set_number(tele->timed_guide_ew_prop, "TIMED_GUIDE_E", dx_msec / 1000.0);
 			} else {
@@ -293,7 +310,7 @@ void tele_timed_move(struct tele_t *tele, int dx_msec, int dy_msec, int type)
 			}
 			indi_send(tele->timed_guide_ew_prop, elem);
 		}
-		if (dy_msec != 0) {
+        if (tele->timed_guide_ns_prop && (dy_msec != 0)) {
 			if (dy_msec > 0) {
 				elem = indi_prop_set_number(tele->timed_guide_ns_prop, "TIMED_GUIDE_N", dy_msec / 1000.0);
 			} else {
@@ -304,7 +321,7 @@ void tele_timed_move(struct tele_t *tele, int dx_msec, int dy_msec, int type)
 		return;
 	}
 	// Use timer to do move
-	tele_set_speed(tele, type);
+    tele_set_speed(tele, type);
 	if (dx_msec != 0) {
 		if (dx_msec > 0) {
 			elem = indi_prop_set_switch(tele->move_ew_prop, "MOTION_EAST", TRUE);
@@ -333,30 +350,19 @@ void tele_guide_move(struct tele_t *tele, int dx_msec, int dy_msec)
 }
 
 
-void tele_center_move(struct tele_t *tele, float dra, float ddec)
+void tele_center_move(struct tele_t *tele, float dra, float ddec) // ? this doesn't work
 {
-    double ra = tele_get_ra(tele);
-    double dec = tele_get_dec(tele);
-    if (! isnan(ra) && ! isnan(dec)) {
-        ra += dra;
-        dec += ddec;
-        tele_set_speed(tele, TELE_MOVE_CENTERING);
-        tele_set_coords(tele, TELE_COORDS_SLEW, ra / 15.0, dec, NAN);
-    }
-}
+    if (! tele->coord_prop) return;
 
-double tele_get_ra(struct tele_t *tele)
-{
-    if (! tele->coord_prop) return NAN; // 0.0;
-    return indi_prop_get_number(tele->coord_prop, "RA") * 15; // hours to degrees
-}
+    double ra = indi_prop_get_number(tele->coord_prop, "RA") * 15; // hours to degree
+    double dec = indi_prop_get_number(tele->coord_prop, "DEC");
 
-double tele_get_dec(struct tele_t *tele)
-{
-    if (! tele->coord_prop) return NAN; // 0.0;
-	return indi_prop_get_number(tele->coord_prop, "DEC");
-}
+    ra += dra;
+    dec += ddec;
 
+    tele_set_speed(tele, TELE_MOVE_CENTERING);
+    tele_set_coords(tele, TELE_COORDS_SLEW, ra, dec, NAN);
+}
 
 void tele_abort(struct tele_t *tele)
 {
@@ -377,6 +383,19 @@ void tele_abort(struct tele_t *tele)
 		indi_send(tele->abort_prop, elem);
 }
 
+int tele_sync_coords(struct tele_t *tele, double ra, double dec, double rot, double equinox)
+{
+    int ret = tele_set_coords(tele, TELE_COORDS_SYNC, ra, dec, equinox);
+    if (ret == 0) {
+        tele->synced = TRUE;
+        tele->sync_ra = ra;
+        tele->sync_dec = dec;
+        tele->sync_rot = rot;
+    }
+    return ret;
+}
+
+// set coords and start move
 // if equinox is NAN don't precess (a move relative to current position)
 int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox)
 {
@@ -390,7 +409,7 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
 		err_printf("Telescope isn't ready\n");
 		return -1;
 	}
-	if (! tele->coord_set_prop) {
+    if (! tele->coord_prop) {
 		d4_printf("Telescope doesn't support coordinates\n");
 		return -1;
 	}
@@ -411,31 +430,28 @@ int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double
             elem = indi_prop_set_switch(tele->coord_set_type_prop, "TRACK", 1);
 			break;
 		}
-// elem returns as null
-        if (elem) {
-//            indi_send(tele->abort_prop, elem); // stop any previous active move?
-        } else {
+
+        if (elem == NULL) {
             err_printf("Telescope failed to change mode\n");
             return -1;
         }
-        // try this
+
+//        indi_send(tele->abort_prop, elem); // stop any previous active move?
+
         indi_send(tele->coord_set_type_prop, elem);
 	}
 
     // precess coords to current equinox
-    double pra = ra * 15; // hrs to degrees
-    double pdc = dec;
-
-    if (P_INT(TELE_PRECESS_TO_EOD) && !isnan(equinox)) precess_hiprec(equinox, CURRENT_EPOCH, &pra, &pdc);
+    if (tele->coords_are_eod && ! isnan(equinox)) precess_hiprec(equinox, CURRENT_EPOCH, &ra, &dec);
 
     // set entries in indi dialog
-    indi_prop_set_number(tele->coord_set_prop, "RA", pra / 15); // degrees to hours
-    iprop_param_update_entry(tele->coord_set_prop, "RA");
+    indi_prop_set_number(tele->coord_prop, "RA", ra / 15.0); // degrees to hours
+    iprop_param_update_entry(tele->coord_prop, "RA");
 
-    indi_prop_set_number(tele->coord_set_prop, "DEC", pdc);
-    iprop_param_update_entry(tele->coord_set_prop, "DEC");
+    indi_prop_set_number(tele->coord_prop, "DEC", dec);
+    iprop_param_update_entry(tele->coord_prop, "DEC");
 
-    indi_send(tele->coord_set_prop, NULL);
+    indi_send(tele->coord_prop, NULL);
 
     tele->slewing = 1; // will this work if already there?
 

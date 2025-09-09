@@ -172,7 +172,7 @@ double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert
         err_printf("camera_get_secpix: Camera doesn't have info prop, using default pixsiz\n");
         pixsiz = P_DBL(OBS_PIXSZ);
     } else {
-        if ((elem = indi_find_elem(camera->info_prop, "CCD_PIXEL_SIZE"))) pixsiz = elem->value.num.value;
+        if ((elem = indi_find_elem(camera->info_prop, "PIXEL_SIZE"))) pixsiz = elem->value.num.value;
     }
 
     if (! isnan(pixsiz) && ! isnan(flen)) secpix = secpix_from_pixsize_on_flen(pixsiz, flen / 100.0);
@@ -183,6 +183,7 @@ double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert
 
     return secpix;
 }
+
 
 void camera_get_binning(struct camera_t *camera, int *x, int *y)
 {
@@ -327,7 +328,7 @@ void camera_get_exposure_settings(struct camera_t *camera, float *value, float *
 		return;
 	}
     if (camera->expose_prop) {
-        if ((elem = indi_find_elem(camera->expose_prop, "CCD_EXPOSURE_VALUE"))) {
+        if ((elem = indi_find_elem(camera->expose_prop, "EXPOSURE"))) {
             *value = elem->value.num.value;
             *min = elem->value.num.min;
             *max = elem->value.num.max;
@@ -352,6 +353,8 @@ void camera_upload_mode(struct camera_t *camera, int mode)
 
     int i;
     if (mode < 0 || mode >= CAMERA_UPLOAD_MODE_COUNT) return;
+
+    if (camera->upload_mode_prop == NULL) return;
 
     indi_prop_set_comboswitch(camera->upload_mode_prop, name[mode]);
 
@@ -391,7 +394,7 @@ void camera_expose(struct camera_t *camera, double time)
 		return;
 	}
 	indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
-	indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", time);
+    indi_prop_set_number(camera->expose_prop, "EXPOSURE", time);
 	indi_send(camera->expose_prop, NULL);
 }
 

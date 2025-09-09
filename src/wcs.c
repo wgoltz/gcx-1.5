@@ -64,7 +64,9 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
     // if hinted flag set we have already done this
     // need to clear hinted flag if there are updates in params
-//    if (wcs->flags & WCS_HINTED) return;
+    if (wcs->flags & WCS_HINTED) return;
+
+    wcs->flags = 0; // try this
 
     double eq; fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
     if (isnan(eq)) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
@@ -89,8 +91,8 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     if (have_pos) { // set wcs ra, dec precessed to eq
         if (! isnan(equinox) && equinox != wcs->equinox)
             precess_hiprec(equinox, wcs->equinox, &ra, &dec);
-        else // ? assume they are EOD coords
-            precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
+ //       else // ? assume they are EOD coords
+ //           precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
 
         wcs->xref = ra;
         wcs->yref = dec;
@@ -107,7 +109,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
             wcs->lng = lng;
             wcs->lat = lat;
             wcs->flags |= WCS_LOC_VALID;
-            printf("%s loc ok\n", fr->name);
+//            printf("%s loc ok\n", fr->name);
             break;
         }
 
@@ -140,7 +142,10 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
         wcs->flags |= WCS_HAVE_SCALE;
 
-        if (P_INT(OBS_FLIPPED))	wcs->yinc = -wcs->yinc;
+        if (P_INT(OBS_FIELD_REFLECTED) && !(wcs->flags & WCS_REFLECTED)) {
+            wcs->yinc = -wcs->yinc;
+            wcs->flags |= WCS_REFLECTED;
+        }
     } else {
         // secpix from focal length and pixel size
     }
@@ -151,69 +156,35 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 
     // use hinted flag to indicate we have called this function already
     // TODO need to clear flag if there are changes to relevant params
-//    wcs->flags |= WCS_HINTED;
+    wcs->flags |= WCS_HINTED;
 }
 
 
-void refresh_wcs(gpointer window) {
-    struct wcs *wcs = window_get_wcs(window);
-    if (wcs == NULL) return;
+struct wcs *refresh_wcs(gpointer window) {
 
     struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr) wcs_from_frame(fr, wcs);
+    if (fr == NULL) return NULL;
 
-    wcsedit_refresh(window);
-}
+    struct wcs *window_wcs = window_get_wcs(window);
+    if (window_wcs == NULL) return NULL;
 
-/* adjust the window wcs when a new frame is loaded */
-void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
-{
+    if (window_wcs->wcsset == WCS_INVALID) // initially unset
+        fits_frame_params_to_fim(fr);
+
     struct wcs *fr_wcs = & fr->fim;
+
     struct wcs *imf_wcs = (fr->imf && fr->imf->fim) ? fr->imf->fim : NULL;
 
-    if (imf_wcs) {
-        if (imf_wcs->wcsset > fr_wcs->wcsset) {
-            wcs_clone(fr_wcs, imf_wcs);
-        } else if (imf_wcs->wcsset < window_wcs->wcsset) {// reload from window_wcs
-            wcs_clone(fr_wcs, window_wcs);
-            fr_wcs->wcsset = WCS_INITIAL;
-            fr_wcs->flags |= WCS_HINTED;
-        }
-    }
+    if (imf_wcs && (imf_wcs->wcsset > fr_wcs->wcsset)) { // reload from imf : load fr_wcs from imf or window if they have greater wcsset
+        wcs_clone(fr_wcs, imf_wcs);
 
-    if (fr_wcs->wcsset < WCS_VALID) {
-
-//        if (fr_wcs->wcsset == WCS_INVALID) {
-//            fr_wcs->xrefpix = fr->w / 2.0;
-//            fr_wcs->yrefpix = fr->h / 2.0;
-
-//            if (fr_wcs->equinox == WCS_INVALID)
-//                fr_wcs->equinox = 2000;
-
-//            fr_wcs->jd = JD_NOW;
-//            err_printf("using JD_NOW for frame jdate !\n");
-
-//            fr_wcs->flags |= WCS_JD_VALID;
-//        }
-
-//        if ((window_wcs->wcsset == WCS_INVALID) || (fr_wcs->wcsset == WCS_INVALID))
-//        if (fr_wcs->wcsset == WCS_INVALID)
-        fits_frame_params_to_fim(fr); // initialize frame wcs from fits settings
-
-//        if (! (fr_wcs->flags & WCS_HINTED)) {
-            if ( ! (fr_wcs->flags & WCS_HAVE_SCALE)) {
+        if (fr_wcs->wcsset < WCS_VALID && window_wcs->wcsset > WCS_INVALID) {
+            if ( ! (fr_wcs->flags & WCS_HAVE_SCALE)) { // likely better values from window_wcs ?
                 if (window_wcs->flags & WCS_HAVE_SCALE) {
                     fr_wcs->xinc = window_wcs->xinc;
                     fr_wcs->yinc = window_wcs->yinc;
                     fr_wcs->rot = window_wcs->rot;
                     fr_wcs->flags |= WCS_HAVE_SCALE;
-                }
-            }
-            if ( ! (fr_wcs->flags & WCS_LOC_VALID)) {
-                if (window_wcs->flags & WCS_LOC_VALID) {
-                    fr_wcs->lat = window_wcs->lat;
-                    fr_wcs->lng = window_wcs->lng;
-                    fr_wcs->flags |= WCS_LOC_VALID;
                 }
             }
             if ( ! (fr_wcs->flags & WCS_HAVE_POS)) {
@@ -223,23 +194,33 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
                     fr_wcs->flags |= WCS_HAVE_POS;
                 }
             }
+            if ( ! (fr_wcs->flags & WCS_LOC_VALID)) {
+                if (window_wcs->flags & WCS_LOC_VALID) {
+                    fr_wcs->lat = window_wcs->lat;
+                    fr_wcs->lng = window_wcs->lng;
+                    fr_wcs->flags |= WCS_LOC_VALID;
+                }
+            }
         }
-//    }
+    } else if (window_wcs->wcsset > fr_wcs->wcsset) { // reload from window_wcs
+        wcs_clone(fr_wcs, window_wcs);
+        fr_wcs->wcsset = WCS_INITIAL;
+        fr_wcs->flags |= WCS_HINTED;
 
-    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) {
-        fr_wcs->wcsset = WCS_INITIAL; // frame has initial wcs
+    } else if (window_wcs->flags & WCS_HINTED) { // clear hinted if scope moved or new file loaded?
+        fr_wcs->xref = window_wcs->xref;
+        fr_wcs->yref = window_wcs->yref;
+        fr_wcs->rot = window_wcs->rot;
     }
 
-    if (fr_wcs->wcsset > WCS_INVALID) { // && window_wcs->flags & WCS_HINTED) {
-//        if (window_wcs->wcsset > WCS_INVALID) {
-//            if (fr_wcs->wcsset != WCS_VALID) {
-//                wcs_clone(fr_wcs, window_wcs);
-//                fr_wcs->wcsset = WCS_INITIAL;
-//                fr_wcs->flags |= WCS_HINTED;
-//            }
+    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) { // frame has initial wcs
+        fr_wcs->wcsset = WCS_INITIAL;
+    }
 
-            if (imf_wcs) wcs_clone(imf_wcs, fr_wcs);
-//        }
+    if (fr_wcs->wcsset > WCS_INVALID) {
+
+        if (imf_wcs) wcs_clone(imf_wcs, fr_wcs); // set imf_wcs from fr_wcs
+
         wcs_clone(window_wcs, fr_wcs);
 
     } else {
@@ -247,11 +228,12 @@ void wcs_from_frame(struct ccd_frame *fr, struct wcs *window_wcs)
         window_wcs->yrefpix = fr_wcs->yrefpix;
     }
 
-//    if (fr_wcs->wcsset == WCS_INITIAL) // ?
-//    window_wcs->flags |= WCS_HINTED;
-
     wcs_to_fits_header(fr);
+    wcsedit_refresh(window);
+
+    return window_wcs;
 }
+
 
 /* creation/deletion of wcs
  */
@@ -327,15 +309,14 @@ int wcs_xypix(struct wcs *wcs, double xpos, double ypos, double *xpix, double *y
 /* refract coordinates in-place */
 void refracted_from_true(double *ra, double *dec, double jd, double lat, double lng)
 {
-	double gast;
 	double alt, az, R;
 
-	gast = get_apparent_sidereal_time (jd);
-	get_hrz_from_equ_sidereal_time (*ra, *dec, lng, lat, gast, &alt, &az);
+    double gast_as_degrees = get_apparent_sidereal_time_as_degrees (jd);
+    get_hrz_from_equ_sidereal_time (*ra, *dec, lng, lat, gast_as_degrees, &alt, &az);
 	R = get_refraction_adj_true (alt, 1010, 10.0);
 //	d3_printf("alt:%.3f az:%.3f R:%.3f\n", alt, az, R);
 	alt += R ;
-	get_equ_from_hrz_sidereal_time (alt, az, lng, lat, gast, ra, dec);
+    get_equ_from_hrz_sidereal_time (alt, az, lng, lat, gast_as_degrees, ra, dec);
 }
 
 
@@ -366,13 +347,12 @@ void cats_apparent_pos(struct cat_star *cats, double *raa, double *deca, double 
 /* un-refract coordinates in-place */
 void true_from_refracted(double *ra, double *dec, double jd, double lat, double lng)
 {
-	double gast;
 	double alt, az, R;
 	double aalt;
 	int i;
 
-	gast = get_apparent_sidereal_time (jd);
-	get_hrz_from_equ_sidereal_time (*ra, *dec, lng, lat, gast, &alt, &az);
+    double gast_as_degrees = get_apparent_sidereal_time_as_degrees (jd);
+    get_hrz_from_equ_sidereal_time (*ra, *dec, lng, lat, gast_as_degrees, &alt, &az);
 	aalt = alt;
 	for (i = 0; i < 40; i++) { 	/* iterate to reverse refraction */
 		R = get_refraction_adj_true (alt, 1010, 10.0);
@@ -382,7 +362,7 @@ void true_from_refracted(double *ra, double *dec, double jd, double lat, double 
 		alt = aalt - R;
 	}
 //	d3_printf("alt:%.3f R:%.5f i=%d\n", alt, R, i);
-	get_equ_from_hrz_sidereal_time (alt, az, lng, lat, gast, ra, dec);
+    get_equ_from_hrz_sidereal_time (alt, az, lng, lat, gast_as_degrees, ra, dec);
 }
 
 

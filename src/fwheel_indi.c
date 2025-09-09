@@ -49,7 +49,7 @@ void camera_expose(struct camera_t *camera, double time)
 		return;
 	}
 	indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
-	indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", time);
+    indi_prop_set_number(camera->expose_prop, "EXPOSURE", time);
 	indi_send(camera->expose_prop, NULL);
 }
 #endif

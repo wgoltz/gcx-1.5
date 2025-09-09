@@ -20,32 +20,26 @@ Copyright (C) 2000 Liam Girdwood <liam@nova-ioe.org>
 #include "nutation.h"
 #include "sidereal_time.h"
 
-#ifndef PI
-#define PI 3.141592653589793
-#endif
+//#ifndef PI
+//#define PI 3.141592653589793
+//#endif
 
-#define degrad(x) ((x) * PI / 180)
-#define raddeg(x) ((x) * 180 / PI)
+#define degrad(x) ((x) * M_PI / 180)
+#define raddeg(x) ((x) * 180 / M_PI)
 
 
 /* puts a large angle in the correct range 0 - 360 degrees */
 double range_degrees (double angle)
-{
-    double temp;
-    double range;
-    
-    
-    if (angle >= 0.0 && angle < 360.0)
-    	return(angle);
+{   
+    if (angle >= 0.0 && angle < 360.0) return angle;
  
-	temp = (int)(angle / 360);
+    double temp = (int)(angle / 360);
 	
-	if ( angle < 0.0 )
-	   	temp --;
+    if ( angle < 0.0 ) temp --;
 
     temp *= 360;
-	range = angle - temp;
-    return (range);
+
+    return angle - temp;
 }
 
 
@@ -58,24 +52,18 @@ double range_degrees (double angle)
 /* Formula 11.1, 11.4 pg 83 
 */
 
-double get_mean_sidereal_time (double JD)
-{
-    double sidereal;
-    double T;
-    
-    T = (JD - JD2000) / 36525.0;
+double get_mean_sidereal_time_as_degrees (double JD)
+{    
+    double T = (JD - JD2000) / 36525.0;
         
     /* calc mean angle */
-    sidereal = 280.46061837 + (360.98564736629 * (JD - JD2000)) +
+    double sidereal = 280.46061837 + (360.98564736629 * (JD - JD2000)) +
 	    (0.000387933 * T * T) - (T * T * T / 38710000.0);
     
     /* add a convenient multiple of 360 degrees */
     sidereal = range_degrees(sidereal);
-    
-    /* change to hours */
-    sidereal *= 24.0 / 360.0;
         
-    return(sidereal);
+    return sidereal;
 } 
 
 /*! fn double get_apparent_sidereal_time (double JD)
@@ -87,26 +75,19 @@ double get_mean_sidereal_time (double JD)
 /* Formula 11.1, 11.4 pg 83 
 */
 
-double get_apparent_sidereal_time(double JD)
+double get_apparent_sidereal_time_as_degrees(double JD)
 {
-   double correction, hours, sidereal;
-   struct ln_nutation nutation;  
+   struct ln_nutation nutation;
+
+   /* add corrections for nutation in longitude and for the true obliquity of the ecliptic */
+   get_nutation (JD, &nutation);
    
    /* get the mean sidereal time */
-   sidereal = get_mean_sidereal_time (JD);
-        
-   /* add corrections for nutation in longitude and for the true obliquity of 
-   the ecliptic */   
-   get_nutation (JD, &nutation); 
+   double sidereal = get_mean_sidereal_time_as_degrees (JD);
     
-   correction = (nutation.longitude / 15.0 * cos (degrad(nutation.obliquity)));
-  
-   /* value is in degrees so change it to hours and add to mean sidereal time */
-   hours = (24.0 / 360.0) * correction;
-
-   sidereal += hours;
+   double correction = nutation.longitude * cos (degrad(nutation.obliquity));
    
-   return sidereal;
+   return range_degrees(sidereal + correction);
 }    
 
 /* these functions have been hacked by rcorlan to change the parameter types
@@ -114,12 +95,12 @@ double get_apparent_sidereal_time(double JD)
     
 void get_hrz_from_equ_sidereal_time (double objra, double objdec, 
 				     double lng, double lat, 
-				     double sidereal, double *alt, double *az)
+                     double sidereal_as_degrees, double *alt, double *az)
 {
 	double H, ra, latitude, declination, A, Ac, As, h, Z, Zs;
 
-	/* change sidereal_time from hours to radians*/
-	sidereal *= 2.0 * PI / 24.0;
+    /* change sidereal_time radians*/
+    double sidereal = degrad(sidereal_as_degrees);
 
 	/* calculate hour angle of object at observers position */
 	ra = degrad (objra);
@@ -185,7 +166,7 @@ void get_hrz_from_equ_sidereal_time (double objra, double objdec,
 * for the given GAST and observers position.
 */
 void get_equ_from_hrz_sidereal_time (double alt, double az, 
-				     double lng, double lat, double sidereal, 
+                     double lng, double lat, double sidereal_as_degrees,
 				     double *rao, double *deco)
 {
 	double H, longitude, declination, latitude, A, h;
@@ -206,7 +187,7 @@ void get_equ_from_hrz_sidereal_time (double alt, double az,
 	declination = asin (declination);
 
 	/* get ra = sidereal - longitude + H and change sidereal to radians */
-	sidereal *= 2.0 * M_PI / 24.0;
+    double sidereal = degrad(sidereal_as_degrees);
 
 	*rao = raddeg (sidereal - H - longitude);
 	*deco = raddeg (declination);

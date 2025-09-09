@@ -36,7 +36,7 @@ struct tele_t {
 	COMMON_INDI_VARS
 
     struct indi_prop_t *coord_prop;          // property to use to get coordinates     (sex number)
-    struct indi_prop_t *coord_set_prop;      // property to use to set coordinates     (sex number)
+//    struct indi_prop_t *coord_set_prop;      // property to use to set coordinates     (sex number)
 	struct indi_prop_t *coord_set_type_prop; // property to define whether to sync or goto coords (switch)
 	struct indi_prop_t *abort_prop;          // property to use to abort all motion    (switch)
 	struct indi_prop_t *move_ns_prop;        // property for North/South motion        (switch)
@@ -45,16 +45,22 @@ struct tele_t {
 	struct indi_prop_t *timed_guide_ew_prop; // property for East/West timed guiding   (number)
 	struct indi_prop_t *speed_prop;          // property for controlling movement rate (switch)
     struct indi_prop_t *track_state_prop;    // property to monitor tracking/slewing/stopped (switch)
+    struct indi_prop_t *location_prop;       // property to read location
 
-	double right_ascension;
-	double declination;
+    double right_ascension; // degrees
+    double declination; // degrees
+    int coords_are_eod; // eod coords or J2000
+    int synced; // tele has just been synced
+    double sync_ra; // synced coords (EOD if coords_are_eod)
+    double sync_dec;
+    double sync_rot; // set from wcs on sync
     int state;
     int slewing;
     int change_state;
     void *window;
 };
 
-extern int tele_get_coords(struct tele_t *tele, double *ra, double *dec);
+extern int tele_last_coords(struct tele_t *tele, double *ra, double *dec);
 
 extern void tele_cancel_movement(struct tele_t *tele);
 
@@ -65,11 +71,11 @@ extern void tele_guide_move(struct tele_t *tele, int dx_msec, int dy_msec);
 extern void tele_center_move(struct tele_t *tele, float dra, float ddec);
 
 extern void tele_abort(struct tele_t *tele);
+extern int tele_sync_coords(struct tele_t *tele, double ra, double dec, double rot, double equinox);
 extern int tele_set_coords(struct tele_t *tele, int type, double ra, double dec, double equinox);
+extern void tele_get_location(struct tele_t *tele, double *lat, double *lng, double *alt);
 
-extern int tele_read_coords(struct tele_t *tele, double *ra, double *dec);
-extern double tele_get_ra(struct tele_t *tele);
-extern double tele_get_dec(struct tele_t *tele);
+extern int tele_get_coords(struct tele_t *tele, double *ra, double *dec, double *rot);
 extern void tele_set_ready_callback(void *window, void *func, void *data, char *msg);
 extern struct tele_t *tele_find(void *window);
 #endif

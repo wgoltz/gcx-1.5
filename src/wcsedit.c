@@ -244,19 +244,19 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
 
     struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
     struct ccd_frame *fr = i_chan->fr;
-    struct wcs *frame_wcs = &(fr->fim);
+    struct wcs *wcs = & fr->fim;
 
-    flip_frame(fr);
+    flip_frame(fr); // just negate yinc, read from parms that field is flipped?
 
     i_chan->channel_changed = 1;
 
-    struct wcs *window_wcs = window_get_wcs(window);
-
-    wcs_from_frame(fr, window_wcs);
+    refresh_wcs(window);
+//    struct wcs *window_wcs = window_get_wcs(window);
+//    wcs_from_frame(fr, window_wcs);
 
     // refresh gui stars
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl != NULL) cat_change_wcs(gsl->sl, window_wcs);
+    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
 
     gtk_widget_queue_draw(window);
 }
@@ -581,10 +581,11 @@ void act_wcs_reload (GtkAction *action, gpointer window)
     struct wcs *wcs = window_get_wcs(window);
     if (wcs == NULL) return;
 
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) return;
+//    struct ccd_frame *fr = window_get_current_frame(window);
+//    if (fr == NULL) return;
 
-    wcs_from_frame(fr, wcs);
+//    wcs_from_frame(fr, wcs);
+    refresh_wcs(window);
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);

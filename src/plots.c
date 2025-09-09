@@ -263,29 +263,36 @@ static int get_mjd_bounds_from_oframes(GList *ofrs, double *min, double *max)
     return n;
 }
 
-// find min and max mjd of observations GList
+// find min and max mjd of sob list
 static int get_mjd_bounds_from_sobs(GList *sobs, double *min, double *max)
-{
+{   
     int n = 0;
-    struct o_star *ost = STAR_OBS(sobs->data)->ost;
-    GList *sl = ost->sobs;
+
+    GList *gl = sobs;
     double mjd, mjdmin, mjdmax;
 
-    while (sl != NULL) {
-        struct o_frame *ofr = STAR_OBS(sl->data)->ofr;
-        sl = g_list_next(sl);
+    while (gl != NULL) {
+        struct o_star *ost = STAR_OBS(gl->data)->ost;
+        gl = g_list_next(gl);
 
-        if (ofr->band < 0) continue;
-        if (ofr->skip) continue;
+        GList *sl = ost->sobs;
 
-        mjd = ofr->mjd;
-        if (n == 0) {
-            mjdmin = mjdmax = mjd;
-        } else {
-            if (mjd < mjdmin) mjdmin = mjd;
-            if (mjd > mjdmax) mjdmax = mjd;
+        while (sl != NULL) {
+            struct o_frame *ofr = STAR_OBS(sl->data)->ofr;
+            sl = g_list_next(sl);
+
+            if (ofr->band < 0) continue;
+            if (ofr->skip) continue;
+
+            mjd = ofr->mjd;
+            if (n == 0) {
+                mjdmin = mjdmax = mjd;
+            } else {
+                if (mjd < mjdmin) mjdmin = mjd;
+                if (mjd > mjdmax) mjdmax = mjd;
+            }
+            n++;
         }
-        n++;
     }
     if (n) {
         if (min) *min = mjdmin;
@@ -814,7 +821,7 @@ int plot_star_mag_vs_time(GList *sobs)
     if (sobs == NULL) return -1;
 
     double mjdmin, mjdmax;
-    if (get_mjd_bounds_from_sobs(sobs, &mjdmin, &mjdmax) <= 0) return -1;
+    if (get_mjd_bounds_from_sobs(sobs, &mjdmin, &mjdmax) <= 0) return -1; // only looks at first sob
 
     double jdmin = mjd_to_jd(mjdmin), jdmax = mjd_to_jd(mjdmax);    
 

@@ -641,8 +641,8 @@ void init_ptable(void)
     set_par_description(OBS_BINNING,
                 "Default binning" );
 
-    add_par_int(OBS_FLIPPED, PAR_OBS_DEFAULTS, FMT_BOOL, "flipped", "Flipped field", 0);
-	set_par_description(OBS_FLIPPED,
+    add_par_int(OBS_FIELD_REFLECTED, PAR_OBS_DEFAULTS, FMT_BOOL, "flipped", "Flipped field", 0);
+	set_par_description(OBS_FIELD_REFLECTED,
 			    "Set the inital wcs as flipped (CDELT1 and CDELT2 "
 			    "having opposite signs). The star matching algorithm "
 			    "does not handle flips, so this has to be set right. "
@@ -1103,8 +1103,6 @@ void init_ptable(void)
 		       "Mount speed when guiding (times sidereal rate)", 0.5);
 	add_par_int(TELE_USE_CENTERING, PAR_TELE, FMT_BOOL, "use_centering",
 		       "Use timed centering moves for small slews", 1);
-	add_par_int(TELE_PRECESS_TO_EOD, PAR_TELE, FMT_BOOL, "precess_eod",
-               "Scope coords are precessed to the epoch of the current day", 1);
 	add_par_double(TELE_GEAR_PLAY, PAR_TELE, PREC_2, "gear_play",
 		       "Amount of gear play we take out at the end of slews (degrees)", 0.1);
 	add_par_int(TELE_STABILISATION_DELAY, PAR_TELE, 0, "stabilisation_delay",

@@ -931,7 +931,8 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
         if ( ! (imf->op_flags & IMG_OP_SUB_MASK) ) {
 
-            if ( imf_fr && (sub_frames(imf_fr, imf->fr) == 0) ) {
+//            if ( imf_fr && (sub_frames(imf_fr, imf->fr) == 0) ) {
+           if ( imf_fr && (flat_frame(imf_fr, imf->fr) == 0) ) {
 
                 release_frame(imf->fr, NULL);
 

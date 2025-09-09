@@ -27,7 +27,7 @@ Copyright (C) 2000 Liam Girdwood <liam@nova-ioe.org>
 #define CURRENT_EPOCH (2000.0 + (JD_NOW - JD2000) / 365.25)
 #define JD_EPOCH(jd) (2000.0 + ((jd) - JD2000) / 365.25)
 
-double get_apparent_sidereal_time (double JD);
+double get_apparent_sidereal_time_as_degrees (double JD);
 double get_mean_sidereal_time (double JD);
 double range_degrees (double angle);
 void get_hrz_from_equ_sidereal_time (double objra, double objdec, 

@@ -154,7 +154,7 @@ static int star_near_area(int x, int y, GdkRectangle *area, int margin)
 }
 
 /* draw the star shape on screen */
-static void draw_a_star(cairo_t *cr, double x, double y, double size, int shape,
+static void draw_a_star(cairo_t *cr, double x, double y, double size, star_shape shape,
             char *label, double ox, double oy)
 {
     double xl, yl;
@@ -267,6 +267,10 @@ static void draw_a_star(cairo_t *cr, double x, double y, double size, int shape,
 		yl = y + oy - 2;
 		break;
 
+    case STAR_SHAPE_RETICLE:
+        cairo_arc (cr, x, y, 2 * size, 0, 2 * M_PI); // x, y center of screen
+        cairo_stroke (cr);
+
 	default:
 		cairo_arc (cr, x, y, 2 * size, 0, 2 * M_PI);
 		cairo_stroke (cr);
@@ -347,7 +351,7 @@ static void draw_star_helper(struct gui_star *gs, cairo_t *cr, struct gui_star_l
 
     draw_a_star(cr, ix, iy, isz, gsl->shape[type], gs->label.label, gs->label.ox, gs->label.oy);
 
-	if ((gs->pair != NULL) && (gs->pair->flags & STAR_HAS_PAIR)) {
+    if ((gs->pair != NULL) && (gs->pair->flags & STAR_HAS_PAIR)) {
 		int pix, piy;
 		double dash_list[] = { 1.0, 1.0 };
 

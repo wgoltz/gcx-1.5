@@ -42,7 +42,7 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs);
 void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp);
 int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *fim);
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) ;
-double obs_current_hour_angle(struct obs_data *obs);
+double obs_current_hour_angle_as_degrees(struct obs_data *obs);
 double obs_current_airmass(struct obs_data *obs);
 void noise_to_fits_header(struct ccd_frame *fr);
 char *extract_catname(char *text, char **oname);
@@ -52,7 +52,7 @@ void wcs_to_fits_header(struct ccd_frame *fr);
 double timeval_to_jdate(struct timeval *tv);
 double frame_jdate(struct ccd_frame *fr);
 char *date_time_from_jdate(double jd);
-double calculate_airmass(double ra, double dec, double ast, double lat, double lng);
+double calculate_airmass(double ra, double dec, double ast_as_degrees, double lat, double lng);
 
 
 #endif

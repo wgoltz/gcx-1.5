@@ -158,7 +158,7 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
     if (tele) {
         double ra, dec;
 
-        int state = tele_get_coords(tele, &ra, &dec); // set ra and dec to last read by tele
+        int state = tele_last_coords(tele, &ra, &dec); // set ra and dec to last read by tele
         char *msg = NULL;
 
         if (state == INDI_STATE_ALERT) { // disconnected, parked ?
@@ -171,8 +171,8 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
             char *decs = degrees_to_dms(dec);
 
             if (state == INDI_STATE_BUSY) { // could also be stopped ?
-                str_join_varg(&msg, "Slewing (%s, %s)", ras, decs);
-                if (obs) str_join_varg(&msg, " to %s", obs->objname);
+                str_join_varg(&msg, "%s, %s [%s] slewing to ", ras, decs, tele->coords_are_eod ? "EOD" : "J2000");
+                if (obs) str_join_varg(&msg, "%s", obs->objname);
                 str_join_str(&msg, "%s", "\n");
 
             } else if (state <= INDI_STATE_OK && tele->change_state) {
@@ -185,8 +185,8 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
                         asprintf(&obs->objname, "Unknown Object");
                     }
                 }
-                str_join_varg(&msg, "Tracking (%s, %s)", ras, decs);
-                if (obs) str_join_varg(&msg, " %s", obs->objname);
+                str_join_varg(&msg, "%s, %s [%s] tracking ", ras, decs, tele->coords_are_eod ? "EOD" : "J2000");
+                if (obs) str_join_varg(&msg, "%s", obs->objname);
                 str_join_str(&msg, "%s", "\n");
 
             }
@@ -214,8 +214,8 @@ static int exposure_change_cb(gpointer cam_control_dialog)
     int ret = FALSE;
 
     if (camera->expose_prop) {
-        struct indi_elem_t *elem = indi_find_elem(camera->expose_prop, "CCD_EXPOSURE_VALUE");
-        d3_printf("expose_prop %s", "CCD_EXPOSURE_VALUE ");
+        struct indi_elem_t *elem = indi_find_elem(camera->expose_prop, "EXPOSURE");
+        d3_printf("expose_prop %s", "EXPOSURE");
         if (elem) {
             double v = elem->value.num.value;
             d3_printf("%f\n", v);
@@ -663,27 +663,29 @@ gint delete_event( GtkWidget *widget, GdkEvent  *event, gpointer data )
 // change aptdia, focallen (mm) to aperture, flen (cm)
 static void adjust_some_fits_parms(struct ccd_frame *fr)
 {
-    double apert; fits_get_double(fr, P_STR(FN_APERTURE), &apert);
-    if (isnan(apert)) {
-        double aptdia; fits_get_double(fr, "APTDIA", &aptdia);
-        if (! isnan(aptdia)) apert = aptdia / 10.0; // mm to cm
-        // delete APTDIA
+    double apert;
+    fits_get_double(fr, P_STR(FN_APERTURE), &apert);
 
-        if (isnan(apert)) apert = P_DBL(OBS_APERTURE); // default
-
-        fits_keyword_add(fr, P_STR(FN_APERTURE), "%20.1f / telescope aperture (cm)", apert);
+    double aptdia;
+    if (fits_get_double(fr, "APTDIA", &aptdia)) {
+        apert = aptdia / 10.0; // mm to cm
+        fits_delete_keyword(fr, "APTDIA");
     }
 
-    double flen; fits_get_double(fr, P_STR(FN_FLEN), &flen);
-    if (isnan(flen)) {
-        double focallen; fits_get_double(fr, "FOCALLEN", &focallen);
-        if (! isnan(focallen)) flen = focallen / 10.0; // mm to cm
-        // delete FOCALLEN
+    if (isnan(apert)) apert = P_DBL(OBS_APERTURE); // default
+    fits_keyword_add(fr, P_STR(FN_APERTURE), "%20.1f / telescope aperture (cm)", apert);
 
-        if (isnan(flen)) flen = P_DBL(OBS_FLEN); // default
+    double flen;
+    fits_get_double(fr, P_STR(FN_FLEN), &flen);
 
-        fits_keyword_add(fr, P_STR(FN_FLEN), "%20.1f / telescope focal length (cm)", flen);
+    double focallen;
+    if (fits_get_double(fr, "FOCALLEN", &focallen)) {
+        flen = focallen / 10.0; // mm to cm
+        fits_delete_keyword(fr, "FOCALLEN");
     }
+
+    if (isnan(flen)) flen = P_DBL(OBS_FLEN); // default
+    fits_keyword_add(fr, P_STR(FN_FLEN), "%20.1f / telescope focal length (cm)", flen);
 }
 
 static int exposure_failed_cb(gpointer cam_control_dialog)
@@ -704,6 +706,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 // todo: stop crash in lilxml - dont't allow new exposure start before last blob decode is finished
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
+
+    if (camera == NULL) return FALSE;
 
     int running = (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0);
 // if (iprop->state == INDI_STATE_ALERT) do something here (exposure fail)
@@ -760,6 +764,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
             return FALSE;
         }
 
+        struct wcs *fr_wcs = & fr->fim;
+
 // add fits parms from indi params using camera_indi and tele_indi functions
 // here ..
 
@@ -770,28 +776,63 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
         ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
 
-        adjust_some_fits_parms(fr);
+        adjust_some_fits_parms(fr); // change aperture and focal length from mm to cm
 
-        // get pixel size
-        struct camera_t *cam = camera_find(main_window, CAMERA_MAIN);
+        int binx, biny;
+
+        camera_get_binning(camera, &binx, &biny);
+
+        fr->exp.bin_x = binx;
+        fr->exp.bin_x = biny;
+
         double flen, apert, pixsz;
 
-        double secpix = camera_get_secpix(cam, &flen, &apert, &pixsz); // unbinned secpix
+        double secpix = camera_get_secpix(camera, &flen, &apert, &pixsz); // unbinned secpix
 
         if (isnan(pixsz) || P_INT(OBS_OVERRIDE_FILE_VALUES)) pixsz = P_DBL(OBS_PIXSZ);
-        fits_set_binned_parms(fr, pixsz, "binned pixel size (micron)",
-                              P_STR(FN_PIXSZ), P_STR(FN_XPIXSZ), P_STR(FN_YPIXSZ));
 
-        if (isnan(secpix) || P_INT(OBS_OVERRIDE_FILE_VALUES)) secpix = P_DBL(OBS_SECPIX);
         fits_set_binned_parms(fr, secpix, "binned image scale (arcsec/pixel)",
                               P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
 
-        // read scope position
         struct tele_t *tele = tele_find(main_window);
-        double ra, dec;
+        if (tele) {
+            double ra, dec, rot;
 
-        // ra and dec in degrees
-        if (tele_read_coords(tele, &ra, &dec) == 0) fits_set_pos(fr, pos_telescope, ra, dec, CURRENT_EPOCH);
+            if (tele_get_coords(tele, &ra, &dec, &rot) == 0)
+                fits_set_pos(fr, pos_telescope, ra, dec, tele->coords_are_eod ? CURRENT_EPOCH : 2000);
+
+            fr_wcs->xinc = -secpix * binx / 3600.0;
+            fr_wcs->yinc = -secpix * biny / 3600.0;
+
+            if (P_INT(OBS_FIELD_REFLECTED)) {
+                fr_wcs->yinc = -fr_wcs->yinc;
+                fr_wcs->flags |= WCS_REFLECTED;
+            }
+
+            fr_wcs->flags |= WCS_HAVE_SCALE_POS;
+
+            double lng, lat, alt;
+
+            tele_get_location(tele, &lat, &lng, &alt);
+            fits_set_loc(fr, lat, lng, alt);
+
+            fr_wcs->lat = lat;
+            fr_wcs->lng = lng;
+
+            fr_wcs->flags |= WCS_LOC_VALID;
+
+            if (tele->synced) {
+                fr_wcs->rot = tele->sync_rot;
+                fr_wcs->xref = tele->sync_ra;
+                fr_wcs->yref = tele->sync_dec;
+                fr_wcs->wcsset = WCS_VALID; // ?
+            }
+
+            tele->synced = FALSE;
+
+        } else {
+            fits_frame_params_to_fim(fr);
+        }
 
         rescan_fits_exp(fr, &(fr->exp));
 
@@ -803,10 +844,6 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         update_fits_header_display(main_window);
 
         frame_to_channel(fr, main_window, "i_channel");
-
-        // update wcs
-        fits_frame_params_to_fim(fr);
-        refresh_wcs(main_window);
 
         if (gtk_combo_box_get_active (GTK_COMBO_BOX (mode_combo)) == GET_OPTION_SAVE) {
 // field matching
@@ -974,7 +1011,7 @@ int capture_image(gpointer cam_control_dialog)
 
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
         indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
-        indi_prop_set_number(camera->expose_prop, "CCD_EXPOSURE_VALUE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+        indi_prop_set_number(camera->expose_prop, "EXPOSURE", named_spin_get_value(cam_control_dialog, "exp_spin"));
         camera->exposure_in_progress = 1;
 
         indi_send(camera->expose_prop, NULL);
@@ -1020,10 +1057,10 @@ static void update_obs_entries( gpointer cam_control_dialog, struct obs_data *ob
 	if (obs->filter != NULL)
         named_combo_text_entry_set(cam_control_dialog, "obs_filter_combo", obs->filter);
 
-    double ha = obs_current_hour_angle(obs);
+    double ha = obs_current_hour_angle_as_degrees(obs);
     double airm = obs_current_airmass(obs); // handle below horizon
 
-    char *has = degrees_to_hms(ha * 15 /* ha to degrees */);
+    char *has = degrees_to_hms(ha);
     if (has) {
         buf = NULL; asprintf(&buf, "HA: %s, Airmass: %.2f", has, airm);
         if (buf) named_label_set(cam_control_dialog, "obj_comment_label", buf), free(buf);
@@ -1347,7 +1384,7 @@ static int scope_goto_cb( GtkWidget *widget, gpointer cam_control_dialog )
         char *msg = NULL; asprintf(&msg, "Object %s (ha=%.2f dec=%.2f)\n"
 			 "is outside slew limits\n"
 			 "%s\nStart slew?", obs->objname,
-			 obs_current_hour_angle(obs), obs->dec, last_err());
+             obs_current_hour_angle_as_degrees(obs) / 15.0, obs->dec, last_err());
 
         if (msg) {
             int ret = (modal_yes_no(msg, NULL) != 1);
@@ -1357,7 +1394,7 @@ static int scope_goto_cb( GtkWidget *widget, gpointer cam_control_dialog )
         }
 	}
 
-    if (tele_set_coords(tele, TELE_COORDS_SLEW, obs->ra / 15.0, obs->dec, obs->equinox)) {
+    if (tele_set_coords(tele, TELE_COORDS_SLEW, obs->ra, obs->dec, obs->equinox)) {
         char *msg = NULL; asprintf(&msg, "Failed to slew to %s", obs->objname);
         if (msg) status_message(cam_control_dialog, msg), free(msg);
 
@@ -1371,39 +1408,87 @@ static int scope_goto_cb( GtkWidget *widget, gpointer cam_control_dialog )
 	return 0;
 }
 
-/* sync to the current obs coordinates */
+/* sync with wcs center coords and recenter to tele coords */
 static void scope_sync_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
-	struct obs_data *obs;
-	int ret;
-	struct tele_t *tele;
     GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 
-	tele = tele_find(main_window);
+    struct tele_t *tele = tele_find(main_window);
 
-	if (! tele) {
-		err_printf("No telescope found\n");
-		return;
-	}
+    if (! tele) {
+        err_printf("No telescope found\n");
+        return;
+    }
 
-//    obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
-//	if (obs == NULL) {
-//		error_beep();
+//    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
+//    if (obs == NULL) {
+//        error_beep();
 //        status_message(cam_control_dialog, "Set obs first");
-//		return;
-//	}
+//        return;
+//    }
 
-//    ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
+    //    ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
+
+//    double tele_ra, tele_dec;
+//    if (tele_get_coords(tele, &tele_ra, &tele_dec) < 0) { // current position (eod)
+//        err_printf("couldn't read tele coods\n");
+//        return;
+//    }
+//    char *str_ra = degrees_to_hms(tele_ra);
+//    char *str_dec = degrees_to_dms(tele_dec);
+
+//    if (str_ra && str_dec)
+//        printf("scope initial coords %s %s (%.1f)\n", str_ra, str_dec, CURRENT_EPOCH);
+
+//    if (str_ra) free(str_ra);
+//    if (str_dec) free(str_dec);
 
     // use wcs coords instead of object
     struct wcs *wcs = window_get_wcs(main_window);
     if (wcs->wcsset > WCS_INVALID) {
-        ret = tele_set_coords(tele, TELE_COORDS_SYNC, wcs->xref, wcs->yref, wcs->equinox);
-        if (!ret) {
-            status_message(cam_control_dialog, "Synchronised to wcs");
-        } else {
+//        double wcs_ra = wcs->xref;
+//        double wcs_dec = wcs->yref;
+
+//        str_ra = degrees_to_hms(wcs_ra);
+//        str_dec = degrees_to_dms(wcs_dec);
+
+//        if (str_ra && str_dec)
+//            printf("wcs coords %s %s (%.1f) ", str_ra, str_dec, wcs->equinox);
+
+//        if (str_ra) free(str_ra);
+//        if (str_dec) free(str_dec);
+
+//        precess_hiprec(wcs->equinox, CURRENT_EPOCH, &wcs_ra, &wcs_dec); // wcs precessed to eod
+
+//        str_ra = degrees_to_hms(wcs_ra);
+//        str_dec = degrees_to_dms(wcs_dec);
+
+//        if (str_ra && str_dec)
+//            printf("wcs coords %s %s (%.1f) ", str_ra, str_dec, CURRENT_EPOCH);
+
+//        if (str_ra) free(str_ra);
+//        if (str_dec) free(str_dec);
+
+//        double err_ra = pra - ra;
+//        double err_dec = pdc - dec;
+
+//        ret = tele_set_coords(tele, TELE_COORDS_SLEW, ra + err_ra, dec + err_dec, NAN); // corrected position
+//        if (!ret) {
+//            status_message(cam_control_dialog, "Recentering");
+//        } else {
+//            err_printf("Failed to recenter\n");
+//        }
+
+        int ret = tele_sync_coords(tele, wcs->xref, wcs->yref, wcs->rot, wcs->equinox); // sync to object
+        if (ret) {
             err_printf("Failed to synchronize\n");
+        } else {
+            status_message(cam_control_dialog, "Synchronised to object");
         }
+
+//        tele_get_coords(tele, &ra, &dec);
+//        printf("Tracking %s %s (%.1f)\n", degrees_to_hms(ra), degrees_to_dms(dec), CURRENT_EPOCH);
+        fflush(NULL);
     }
 }
 
@@ -1433,24 +1518,40 @@ static int scope_auto_cb( GtkWidget *widget, gpointer cam_control_dialog )
 	g_return_val_if_fail(wcs != NULL, -1);
 	g_return_val_if_fail(wcs->wcsset != WCS_INVALID, -1);
 
-    double obs_ra = obs->ra;
-    double obs_dec = obs->dec;
+    double wcs_ra = wcs->xref;
+    double wcs_dec = wcs->yref;
 
-    // precess obs coords to wcs coords
-    if (obs->equinox != wcs->equinox)
-        precess_hiprec(obs->equinox, wcs->equinox, &obs_ra, &obs_dec);
+    char *str_ra = degrees_to_hms(wcs_ra);
+    char *str_dec = degrees_to_dms(wcs_dec);
+
+    printf("wcs: [%s %s]\n", str_ra, str_dec);
+
+    if (str_ra) free(str_ra);
+    if (str_dec) free(str_dec);
 
     // wcs validate a frame
     // sync on frame center
 
-    double ra = tele->right_ascension;
-    double dec = tele->declination;
+    double ra = obs->ra;
+    double dec = obs->dec;
 
-    // precess (ra, dec) from eod to wcs equinox (J2000)
-    if (P_INT(TELE_PRECESS_TO_EOD))
-        precess_hiprec(CURRENT_EPOCH, wcs->equinox, &ra, &dec);
+    // match obs and wcs equinox
+    if (obs->equinox != wcs->equinox)
+        precess_hiprec(obs->equinox, wcs->equinox, &ra, &dec);
 
-    tele_center_move(tele, obs_ra - ra, obs_dec - dec);
+    str_ra = degrees_to_hms(ra);
+    str_dec = degrees_to_dms(dec);
+
+    printf("obs: [%s %s]\n", str_ra, str_dec);
+
+    if (str_ra) free(str_ra);
+    if (str_dec) free(str_dec);
+
+    printf("center tele: [%0.4f %0.4f]\n", wcs_ra - ra, wcs_dec - dec);
+    fflush(NULL);
+
+    tele_center_move(tele, wcs_ra - ra, wcs_dec - dec); // try replace with sync and goto
+
 	return 0;
 }
 

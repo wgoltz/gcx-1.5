@@ -213,8 +213,8 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
         }
     }
 
-    double ast = get_apparent_sidereal_time(jd);
-    double fam = calculate_airmass (wcs->xref, wcs->yref, ast, lat, lng);
+    double ast_as_degrees = get_apparent_sidereal_time_as_degrees(jd);
+    double fam = calculate_airmass (wcs->xref, wcs->yref, ast_as_degrees, lat, lng);
 
     double scint = stf_scint (stf);
     double rm = ceil (ap->r3) + 1;
@@ -252,7 +252,7 @@ static int stf_aphot(struct stf *stf, struct ccd_frame *fr, struct wcs *wcs, str
 		}
 
         if (dodiffam) {
-            cats->diffam = calculate_airmass (cats->ra, cats->dec, ast, lat, lng) - fam;
+            cats->diffam = calculate_airmass (cats->ra, cats->dec, ast_as_degrees, lat, lng) - fam;
 			cats->flags |= INFO_DIFFAM;
         }
 

@@ -150,7 +150,7 @@ struct im_stats {
 /* wcs states */
 #define WCS_INVALID 0x00 /* values are invalid */
 #define WCS_INITIAL 0x01 /* initial values for wcs are set */
-// #define WCS_FITTED 0x02 /* values are fitted to field - not used */
+//#define WCS_FITTED 0x02 /* values are fitted to field - not used */
 #define WCS_VALID 0x02 /* wcs is valid */
 
 /* wcs flags */
@@ -165,6 +165,7 @@ struct im_stats {
 #define WCS_HAVE_POS 0x20  // have xref and yref
 #define WCS_HAVE_SCALE 0x40 // have xinc and yinc
 #define WCS_EDITED 0x80 // updated values in wcsedit
+#define WCS_REFLECTED 0x100 // if reflection has been applied to yinc
 #define WCS_HAVE_SCALE_POS (WCS_HAVE_SCALE | WCS_HAVE_POS)
 
 #define WCS_HAVE_INITIAL(wcs) \
@@ -193,6 +194,7 @@ struct wcs{
 	double lng;	/* observer location (used for apparent pos calculation) */
 //	char type[5];	/* projection code, see worldpos() */
 	double fit_err; /* error of fit (pixels) */
+    int synced; // telescope has been synced with this wcs
 };
 
 // a region in a frame

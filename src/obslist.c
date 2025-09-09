@@ -103,15 +103,14 @@ static int do_exp_cmd (char *args, GtkWidget *cam_control_dialog);
 // listen for http obslist commands to append to list
 
 static int do_mphot_cmd (char *args, GtkWidget *dialog);
-static int do_mphot_cmd (char *args, GtkWidget *dialog);
 
 
 static struct command cmd_table[] = {
 	{"get", do_get_cmd}, /* get and display an image without saving */
 	{"dark", do_dark_cmd}, /* get and display a dark frame without saving */
-	{"goto", do_goto_cmd}, /* goto <obj_name> [<recipe>] set
-				* obs and slew telescope to coordinates; load
-				* recipe file if present */
+    {"goto", do_goto_cmd}, /* goto <obj_name> [<recipe>]
+                * set obs, load recipe file if present or lookup up ref stars from cds
+                * initial slew telescope to coordinates */
 	{"match", do_match_cmd}, /* match wcs and repoint telescope to center */
 	{"phot", do_phot_cmd}, /* run photometry on the frame */
 	{"qmatch", do_qmatch_cmd}, /* quietly match image wcs (don't move telescope) */
@@ -260,7 +259,7 @@ static int do_get_cmd (char *args, GtkWidget *cam_control_dialog)
 	}
 
     set_named_checkb_val(cam_control_dialog, "exp_run_button", 0);
-    set_named_checkb_val(cam_control_dialog, "img_dark_checkb", 0);
+//    set_named_checkb_val(cam_control_dialog, "img_dark_checkb", 0);
     if (capture_image(cam_control_dialog)) {
 		err_printf("Failed to capture frame\n");
 		return OBS_CMD_ERROR;
@@ -346,32 +345,30 @@ static int do_dark_cmd (char *args, GtkWidget *cam_control_dialog)
  * return 0 if it is, do an err_printf and retun -1 if it isn't */
 int obs_check_limits(struct obs_data *obs, gpointer cam_control_dialog) // fix limits to work on visible horizon
 {
-	double lim, ha;
-	ha = obs_current_hour_angle(obs);
-
+    double ha = obs_current_hour_angle_as_degrees(obs) / 15.0; // degrees to hrs
     if (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "e_limit_checkb")) {
-        lim = named_spin_get_value(cam_control_dialog, "e_limit_spin");
-		if (ha < lim) {
-			err_printf("E limit reached (%.1f < %.1f)\n", ha, lim);
+        double lim = named_spin_get_value(cam_control_dialog, "e_limit_spin");
+        if (ha < lim) {
+            err_printf("E limit reached (%.1f < %.1f)\n", ha, lim);
 			return -1;
 		}
 	}
     if (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "w_limit_checkb")) {
-        lim = named_spin_get_value(cam_control_dialog, "w_limit_spin");
-		if (ha > lim) {
-			err_printf("W limit reached (%.1f > %.1f)\n", ha, lim);
+        double lim = named_spin_get_value(cam_control_dialog, "w_limit_spin");
+        if (ha > lim) {
+            err_printf("W limit reached (%.1f > %.1f)\n", ha, lim);
 			return -1;
 		}
 	}
     if (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "n_limit_checkb")) {
-        lim = named_spin_get_value(cam_control_dialog, "n_limit_spin");
+        double lim = named_spin_get_value(cam_control_dialog, "n_limit_spin");
 		if (obs->dec > lim) {
 			err_printf("N limit reached (%.1f > %.1f)\n", obs->dec, lim);
 			return -1;
 		}
 	}
     if (get_named_checkb_val(GTK_WIDGET(cam_control_dialog), "s_limit_checkb")) {
-        lim = named_spin_get_value(cam_control_dialog, "s_limit_spin");
+        double lim = named_spin_get_value(cam_control_dialog, "s_limit_spin");
 		if (obs->dec < lim) {
 			err_printf("S limit reached (%.1f < %.1f)\n", obs->dec, lim);
 			return -1;
@@ -392,7 +389,7 @@ static int do_goto_cmd (char *args, GtkWidget *cam_control_dialog)
 
     char *text = args;
 	next_token(NULL, NULL, NULL);
-    int token = next_token(&text, &start, &end);
+    int token = next_token(&text, &start, &end); // read object namw
 	if (token != TOK_WORD && token != TOK_STRING) {
 		err_printf("No object\n");
 		return OBS_CMD_ERROR;
@@ -415,27 +412,31 @@ static int do_goto_cmd (char *args, GtkWidget *cam_control_dialog)
 
     ret = obs_check_limits(obs, cam_control_dialog);
 	obs_data_release(obs);
-	if (ret)
-		return OBS_SKIP_OBJECT;
+    if (ret) return OBS_SKIP_OBJECT;
 
+    ret = 0;
     set_obs_object(cam_control_dialog, start);
-	if (token == TOK_WORD || token == TOK_STRING) {
+    if (token == TOK_WORD || token == TOK_STRING) { // load recipe if recipe name supplied
 		*(end2) = 0;
 
 		ret = load_rcp_to_window(window, start2, NULL);
-		if (ret < 0) {
+		if (ret < 0) {          
 			err_printf("error loading rcp file\n");
-			return OBS_CMD_ERROR;
+//			return OBS_CMD_ERROR;
 		}
 	}
-    if ( goto_dialog_obs(cam_control_dialog))
-		return OBS_CMD_ERROR;
+    if (ret < 0) { // try load from cds
+    }
+    if (ret < 0) return OBS_CMD_ERROR; // do we need to fail ?
 
     struct tele_t *tele = tele_find(window);
-    if(! tele) {
+    if (! tele) {
         err_printf("no telescope connected\n");
         return OBS_CMD_ERROR;
     }
+
+    if ( goto_dialog_obs(cam_control_dialog)) // initial tele slew
+		return OBS_CMD_ERROR;
 
     INDI_set_callback(INDI_COMMON (tele), TELE_CALLBACK_STOP, obs_list_cmd_done, cam_control_dialog, "obs_list_cmd_done");
     return OBS_CMD_RUNNING;
@@ -488,7 +489,7 @@ static int do_mget_cmd (char *args, GtkWidget *cam_control_dialog)
         named_spin_set(cam_control_dialog, "exp_number_spin", 1.0 * n);
 	}
     set_named_checkb_val(cam_control_dialog, "exp_run_button", 1);
-    set_named_checkb_val(cam_control_dialog, "img_dark_checkb", 0);
+//    set_named_checkb_val(cam_control_dialog, "img_dark_checkb", 0);
     if (capture_image(cam_control_dialog)) {
 		err_printf("Failed to capture frame\n");
 		return OBS_CMD_ERROR;
@@ -635,22 +636,19 @@ static int do_qmatch_cmd (char *args, GtkWidget *cam_control_dialog)
 
 /* tell the scope it's pointing at the object in obs */
 static int lx_sync_to_obs(gpointer cam_control_dialog)
-{
-	struct obs_data *obs;
-	struct tele_t *tele;
-	int ret;
+{	
     GtkWidget *main_window = g_object_get_data(G_OBJECT (cam_control_dialog), "image_window");
 
-    obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
+    struct obs_data *obs = g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
 	if (obs == NULL) {
 		err_printf("No obs data for syncing\n");
 		return -1;
 	}
-	tele = tele_find(main_window);
-	if (! tele)
-		return -1;
-    ret = tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra / 15.0, obs->dec, obs->equinox);
-	return ret;
+
+    struct tele_t *tele = tele_find(main_window);
+    if (! tele)	return -1;
+
+    return tele_set_coords(tele, TELE_COORDS_SYNC, obs->ra, obs->dec, obs->equinox);
 }
 
 /* center item at index in window */

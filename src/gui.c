@@ -849,6 +849,7 @@ static GtkActionEntry image_actions[] = {
     { "stars-toggle-user",     NULL, "Toggle _User Stars",     "<shift>U",   NULL, G_CALLBACK (act_stars_toggle_user) },
     { "stars-toggle-field",    NULL, "Toggle _Field Stars",    "<shift>F",   NULL, G_CALLBACK (act_stars_toggle_field) },
     { "stars-toggle-cat",      NULL, "Toggle Catalo_g Objects","<shift>G",   NULL, G_CALLBACK (act_stars_toggle_catalog) },
+    { "stars-toggle-reticle",  NULL, "Toggle Retic_le",        "<shift>L",   NULL, G_CALLBACK (act_stars_toggle_reticle) },
     { "stars-rm-off",      NULL, "Remove _Off-Frame",      "<shift>O",   NULL, G_CALLBACK (act_stars_rm_off_frame) },
 	{ "stars-rm-all",      NULL, "Remove _All",            "<shift>A",   NULL, G_CALLBACK (act_stars_rm_all) },
     { "stars-rm-pairs-all",NULL, "Remove All Pa_irs",      NULL,         NULL, G_CALLBACK (act_stars_rm_pairs_all)},
@@ -1441,6 +1442,11 @@ void act_selected_to_cat (GtkAction *action, gpointer window)
 void act_stars_toggle_detected (GtkAction *action, gpointer window)
 {
     window_draw_stars_of_type(window, TYPE_MASK(STAR_TYPE_SIMPLE), toggle_draw);
+}
+
+void act_stars_toggle_reticle (GtkAction *action, gpointer window)
+{
+    window_draw_stars_of_type(window, TYPE_MASK(STAR_TYPE_RETICLE), toggle_draw);
 }
 
 void act_stars_toggle_user (GtkAction *action, gpointer window)

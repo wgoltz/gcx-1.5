@@ -831,7 +831,7 @@ printf("add_star_from_catalog wcsset = WCS_INITIAL\n"); fflush(NULL);
 //        ysecpix = secpix_from_pixsize_on_flen(ypixsz, flen);
 //        wcs->xinc = - xsecpix / 3600.0 ;
 //        wcs->xinc = - ysecpix / 3600.0 ;
-//        if (P_INT(OBS_FLIPPED))	wcs->yinc = - wcs->yinc;
+//        if (P_INT(OBS_FIELD_REFLECTED))	wcs->yinc = - wcs->yinc;
     }
 
     if (newframe) {
