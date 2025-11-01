@@ -876,6 +876,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 
 
 // return malloced string containing full dir path of filename
+// currently returns name tacked on to cwd
 static char *dir_path(char *filename) {
 
     if (!filename || filename[0] == 0) return NULL;
@@ -890,7 +891,7 @@ static char *dir_path(char *filename) {
 
     char *dirpath = NULL;
 
-    if (cwd)
+    if (cwd) // fix this for when dir is full path
         asprintf(&dirpath, "%s/%s", cwd, dir);
     else
         dirpath = strdup(dir);
@@ -905,7 +906,12 @@ static char *dir_path(char *filename) {
 static char *postfix_XXX(char *filename) {
     char *name = NULL;
     char *file_part = basename(filename);
-    asprintf(&name, "%s_XXX", file_part);
+    char *c = file_part;
+    if (*c) {
+        while (*(c + 1) != 0) c++;
+        int has_underscore = (*c == '_');
+        asprintf(&name, "%s%s", file_part, has_underscore ? "XXX" : "_XXX");
+    }
     return name;
 }
 
@@ -920,6 +926,7 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
 // use home_path
 //        gpointer main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
 //        dirpath = g_object_get_data(G_OBJECT(main_window), "home_path");
+// if dirpath starts with home_path drop that
         dirpath = dir_path(full_name);
     } else {
         // construct path
@@ -932,7 +939,7 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
     if (full_name) free(full_name);
 
     double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
-    if (exptime > 4) { // INDI clips exptime < 4 s
+    if (exptime > 4) { // exptime clips to 4 s when streaming with ZWO
         exptime = 4;
         named_spin_set(cam_control_dialog, "exp_spin", exptime);
     }
@@ -954,11 +961,13 @@ static int stream_indi_cb(gpointer cam_control_dialog)
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     int stream_count = indi_prop_get_number(camera->streaming_prop, "COUNT");
-
+// use upload_settings_prop object, dir and prefix
+// no filepath_prop
     if (stream_count >= 0) { // echo file name
-        struct indi_elem_t *elem = indi_find_elem(camera->filepath_prop, "FILE_PATH");
-
-        char *mb = NULL; asprintf(&mb, "Streamed: %s", elem->value.str);
+//        struct indi_elem_t *elem = indi_find_elem(camera->filepath_prop, "FILE_PATH");
+        struct indi_elem_t *dir = indi_find_elem(camera->upload_settings_prop, "DIR"); // indigo appends "/"
+        struct indi_elem_t *prefix = indi_find_elem(camera->upload_settings_prop, "PREFIX"); // indigo appends "XXX"
+        char *mb = NULL; asprintf(&mb, "Streamed: %s%s", dir->value.str, prefix->value.str);
         if (mb) status_message(cam_control_dialog, mb), free(mb);
     }
 
@@ -978,7 +987,7 @@ static int stream_indi_cb(gpointer cam_control_dialog)
     char *mb = NULL; asprintf(&mb, "%d", stream_count);
     if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
 
-//    indi_send(camera->streaming_prop, NULL);
+    indi_send(camera->streaming_prop, NULL);
 
     return running; // remain active
 }

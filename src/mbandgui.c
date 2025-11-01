@@ -338,7 +338,7 @@ static void mbds_to_ofr_list(GtkWidget *mband_dialog, GtkWidget *ofr_list)
     for (gl = mbds->ofrs; gl != NULL; gl = g_list_next(gl)) {
         struct o_frame *ofr = O_FRAME(gl->data);        
 
-        if (ofr->skip) continue;
+        if (ofr == NULL || ofr->skip) continue;
 
         GtkTreeIter iter;
         gtk_list_store_prepend(GTK_LIST_STORE(ofr_store), &iter);
@@ -883,8 +883,7 @@ static void rep_file_cb(char *fn, gpointer data, unsigned action)
              ofr = O_FRAME(gl->data);
         }
 
-        if (ofr->sobs == NULL) continue;
-        if (ofr->skip) continue;
+        if (ofr == NULL || ofr->skip) continue;
 
         if (((action & REP_FMT_MASK) != REP_FMT_DATASET) && (ZPSTATE(ofr) <= ZP_FIT_ERR)) continue;
 
@@ -1505,8 +1504,7 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
 //        } else
             ofr = O_FRAME(gl->data);
 
-        if (ofr->sobs == NULL) continue;
-        if (ofr->skip) continue;
+        if (ofr == NULL || ofr->skip) continue;
 
         ofr->as_zp_valid = 0; // clear all-sky zero point
 
@@ -1617,7 +1615,7 @@ static void fit_cb(gpointer mband_dialog, guint action, GtkWidget *menu_item)
 //        } else {
         {
             ofr = O_FRAME(gl->data);
-            if (ofr->skip) continue;
+            if (ofr == NULL || ofr->skip) continue;
 
             gtk_list_store_prepend(GTK_LIST_STORE(ofr_store), &iter);
         }
