@@ -229,6 +229,8 @@ g_object_ref(idev_name);
 
 void indigui_prop_add_signal(struct indi_prop_t *iprop, void *object, unsigned long signal)
 {
+//    printf("indigui_prop_add_signal %s %lx\n", iprop->name, signal);  fflush(NULL);
+
 	struct indi_signals_t *sig = (struct indi_signals_t *)calloc(1, sizeof(struct indi_signals_t));
 	sig->object = object;
 	sig->signal = signal;
@@ -237,10 +239,11 @@ void indigui_prop_add_signal(struct indi_prop_t *iprop, void *object, unsigned l
 
 void indigui_prop_set_signals(struct indi_prop_t *iprop, int active)
 {
-	indi_list *isl;
-
+    indi_list *isl;
+// printf("indigui_prop_set_signals %s ", (active) ? "BLOCK" : "UNBLOCK");
     for (isl = il_iter(iprop->signals); ! il_is_last(isl); isl = il_next(isl))
     {
+// printf(".");
         struct indi_signals_t *sig = (struct indi_signals_t *)il_item(isl);
 		if(active) {
 			g_signal_handler_unblock(G_OBJECT (sig->object), sig->signal);
@@ -248,6 +251,7 @@ void indigui_prop_set_signals(struct indi_prop_t *iprop, int active)
 			g_signal_handler_block(G_OBJECT (sig->object), sig->signal);
 		}
 	}
+// printf("\n"); fflush(NULL);
 }
 
 static void indigui_set_state(GtkWidget *led, int state)
@@ -295,9 +299,11 @@ static void label_set_text(GtkLabel *label, char *markup, char *text)
     gtk_label_set_text(label, text);
 }
 
-void indigui_update_widget(struct indi_prop_t *iprop)
+void indigui_update_widget(struct indi_prop_t *iprop) // iprop values are wrong
 {
 	indigui_prop_set_signals(iprop, 0);
+
+// printf("indigui_update_widget %s\n", iprop->name); fflush(NULL);
 
     indi_list *isl;
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
@@ -310,6 +316,7 @@ void indigui_update_widget(struct indi_prop_t *iprop)
         case INDI_PROP_TEXT:
 
             value = (GtkWidget *)g_object_get_data(G_OBJECT (element), "value");
+// printf("%s, old text %s, new text %s\n", elem->name, gtk_label_get_text(GTK_LABEL(value)), elem->value.str); fflush(NULL);
 
             if (value) label_set_text(GTK_LABEL(value), "<b>%s</b>", elem->value.str);
 
@@ -326,7 +333,7 @@ void indigui_update_widget(struct indi_prop_t *iprop)
             if (value) {
                 char *val = numberFormat(elem->value.num.fmt, elem->value.num.value);
                 if (val) {
-
+// printf("%s, old num %s, new num %s\n", elem->name, gtk_label_get_text(GTK_LABEL(value)), val); fflush(NULL);
 // bold format does not work for value with history?
                     if (iprop->permission != INDI_RO) {
 
@@ -392,12 +399,18 @@ void indigui_update_widget(struct indi_prop_t *iprop)
 
 	//Display any message
     if (iprop->message && *(iprop->message)) {
-printf("indigui_update_widget iprop->message: %s %d %s\n", iprop->name, iprop->state, iprop->message); fflush(NULL);
+// printf("msg: %s %d %s\n", iprop->name, iprop->state, iprop->message); fflush(NULL);
         indigui_show_message(iprop->idev->indi, iprop->message);
         iprop->message[0] = 0;
     }
 
 	indigui_prop_set_signals(iprop, 1);
+}
+
+void indigui_set_widget_state(struct indi_prop_t *iprop)
+{
+    GtkWidget *state_label = (GtkWidget *)g_object_get_data(G_OBJECT (iprop->widget), "_state");
+    indigui_set_state(state_label, iprop->state);
 }
 
 
@@ -427,7 +440,7 @@ void indigui_show_message(struct indi_t *indi, char *message)
 static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
 {
 	indi_list *isl;
-
+printf("indigui_send_cb: %s\n", iprop->name);
 	for (isl = il_iter(iprop->elems); ! il_is_last(isl); isl = il_next(isl)) {
 		struct indi_elem_t *elem = (struct indi_elem_t *)il_item(isl);
 
@@ -440,7 +453,7 @@ static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
 
             switch (iprop->type) {
             case INDI_PROP_TEXT:
-
+printf("%s, old text %s, new text %s\n", elem->name, elem->value.str, valstr); fflush(NULL);
                 elem->value.str = strdup(valstr);
                 set_combo_text_with_history(ctwh, elem->value.str);
 
@@ -448,6 +461,7 @@ static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
 
             case INDI_PROP_NUMBER:
 //check elem for range and convert if necessary
+printf("%s, old num %f, new num %s\n", elem->name, elem->value.num.value, valstr); fflush(NULL);
                 f_scansexa(valstr, &elem->value.num.value);
                 set_combo_text_with_history(ctwh, valstr);
                 break;
@@ -455,7 +469,7 @@ static void indigui_send_cb( GtkWidget *widget, struct indi_prop_t *iprop )
             }
         }
     }
-	indi_send(iprop, NULL);
+    indi_send(iprop, NULL);
 }
 
 
@@ -547,12 +561,11 @@ static void indigui_create_combo_text_with_history_widget(struct indi_prop_t *ip
     }
 
     x++;
-    if (iprop->permission != INDI_RO) {
+    if (iprop->permission != INDI_RO) { // clicked signal callback being called 3 times for text, 2 times for number ?
         GtkWidget *button = gtk_button_new_with_label("Set");
         unsigned long signal = g_signal_connect(G_OBJECT (button), "clicked", G_CALLBACK (indigui_send_cb), iprop);
         indigui_prop_add_signal(iprop, button, signal);
-        gtk_table_attach(GTK_TABLE (iprop->widget), button,	x, x + 1, 0, num_props,
-            (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
+        gtk_table_attach(GTK_TABLE (iprop->widget), button,	x, x + 1, 0, num_props, (GtkAttachOptions)(GTK_FILL | GTK_EXPAND), GTK_FILL, 0, 0);
     }
 }
 
@@ -687,7 +700,7 @@ static void indigui_build_prop_widget(struct indi_prop_t *iprop)
 
 	switch (iprop->type) {
 	case INDI_PROP_TEXT:
-		indigui_create_text_widget(iprop, num_props);
+        indigui_create_text_widget(iprop, num_props);
 		break;
 	case INDI_PROP_SWITCH:
 		indigui_create_switch_widget(iprop, num_props);
@@ -703,7 +716,7 @@ static void indigui_build_prop_widget(struct indi_prop_t *iprop)
 		break;
 	}
 // update set values
-    indigui_update_widget(iprop); // try this
+    indigui_update_widget(iprop);
 }
 
 

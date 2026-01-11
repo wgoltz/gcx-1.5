@@ -117,7 +117,7 @@ int INDI_update_elem_if_changed(struct indi_prop_t *iprop, const char *elemname,
 void INDI_try_dev_connect(struct indi_prop_t *iprop, struct INDI_common_t *device, const char *portname)
 {
 	if (strcmp(iprop->name, "CONNECTION") == 0) {
-printf("Found CONNECTION for %s: %s\n", device->name, iprop->idev->name); fflush(NULL);
+// printf("Found CONNECTION for %s: %s\n", device->name, iprop->idev->name); fflush(NULL);
         struct indi_elem_t *ielem = indi_prop_set_switch(iprop, "CONNECTED", TRUE);
         if (! ielem) ielem = indi_prop_set_switch(iprop, "CONNECT", TRUE);
         if (ielem) {

@@ -469,7 +469,7 @@ void save_frame_auto_name(struct ccd_frame *fr, gpointer cam_control_dialog)
     char *text = named_entry_text(cam_control_dialog, "exp_file_entry");
     if (text == NULL) {
         text = strdup(DEFAULT_FRAME_NAME);
-        named_entry_set(cam_control_dialog, "exp_file_entry", text);
+        named_entry_set(cam_control_dialog, "exp_file_entry", text); // change to set from indi
 	}
 
     wcs_to_fits_header(fr); // ?
@@ -700,7 +700,6 @@ static int exposure_failed_cb(gpointer cam_control_dialog)
 }
 
 // called when a new image is ready for processing (not streaming)
-// how to add params for streamed files ?
 static int expose_indi_cb(gpointer cam_control_dialog)
 {
 // todo: stop crash in lilxml - dont't allow new exposure start before last blob decode is finished
@@ -884,14 +883,23 @@ static char *dir_path(char *filename) {
     char *dir = strdup(filename);
 
     char *prefix = basename(filename);
-    char *p = strstr(dir, prefix);
-    if (p != NULL) *p = '\0'; // truncate dir
 
-    char *cwd = getcwd(NULL, 0);
+    // get directory part of filename by dropping file part
+    char *pd = strstr(dir, prefix); // start of file part in dir
+    if (pd) *pd = '\0'; // dir now has file part dropped
 
+    char *cwd = getcwd(NULL, 0);    
+
+    char *cd = cwd; // check if dir begins with cwd
+    pd = dir;
+    for (; *pd != '0' && *cd != '0';) {
+        if (*pd != *cd) break;
+        pd++; cd++;
+    }
+
+    // if dir doesn't start with cwd, tack on cwd to dir at the star
     char *dirpath = NULL;
-
-    if (cwd) // fix this for when dir is full path
+    if (pd == dir)
         asprintf(&dirpath, "%s/%s", cwd, dir);
     else
         dirpath = strdup(dir);
@@ -921,25 +929,21 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
     char *full_name = named_entry_text(cam_control_dialog, "exp_file_entry");
     char *filename = NULL;
     char *dirpath = NULL;
-    if (full_name) {
+    if (full_name) { // do this better
         filename = postfix_XXX(full_name);
-// use home_path
-//        gpointer main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
-//        dirpath = g_object_get_data(G_OBJECT(main_window), "home_path");
-// if dirpath starts with home_path drop that
         dirpath = dir_path(full_name);
     } else {
         // construct path
     }
     printf("setup_streaming %s %s\n", dirpath, filename); fflush(NULL);
-    camera_upload_settings(camera, dirpath, filename);
+    camera_upload_settings(camera, dirpath, filename, NULL);
 
     if (dirpath) free(dirpath);
     if (filename) free(filename);
     if (full_name) free(full_name);
 
     double exptime = named_spin_get_value(cam_control_dialog, "exp_spin");
-    if (exptime > 4) { // exptime clips to 4 s when streaming with ZWO
+    if (exptime > 4) { // exptime clips to 4s when streaming with ZWO, 0.5s streaming with ccd simulator
         exptime = 4;
         named_spin_set(cam_control_dialog, "exp_spin", exptime);
     }
@@ -949,9 +953,7 @@ static void setup_streaming(struct camera_t *camera, gpointer cam_control_dialog
     char *buf = NULL; asprintf(&buf, "%d", count);
     if (buf) named_entry_set(cam_control_dialog, "exp_frame_entry", buf), free(buf);
 
-    indi_dev_enable_blob(camera->streaming_prop->idev, FALSE);
     indi_prop_set_number(camera->streaming_prop, "COUNT", count);
-    indi_prop_set_number(camera->streaming_prop, "EXPOSURE", exptime);
 }
 
 // called at start exposure in stream/preview
@@ -961,17 +963,19 @@ static int stream_indi_cb(gpointer cam_control_dialog)
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     int stream_count = indi_prop_get_number(camera->streaming_prop, "COUNT");
-// use upload_settings_prop object, dir and prefix
-// no filepath_prop
-    if (stream_count >= 0) { // echo file name
-//        struct indi_elem_t *elem = indi_find_elem(camera->filepath_prop, "FILE_PATH");
-        struct indi_elem_t *dir = indi_find_elem(camera->upload_settings_prop, "DIR"); // indigo appends "/"
-        struct indi_elem_t *prefix = indi_find_elem(camera->upload_settings_prop, "PREFIX"); // indigo appends "XXX"
-        char *mb = NULL; asprintf(&mb, "Streamed: %s%s", dir->value.str, prefix->value.str);
-        if (mb) status_message(cam_control_dialog, mb), free(mb);
+    indi_dev_enable_blob(camera->expose_prop->idev, TRUE); //try this
+
+    if (camera->exposure_in_progress) { // status message, exclude first image
+        if (stream_count >= 0) {
+            struct indi_prop_t *iprop = indi_find_prop(camera->streaming_prop->idev, "CCD_IMAGE_FILE");
+            char *imagefile = indi_prop_get_string(iprop, "FILE");
+
+            char *mb = NULL; asprintf(&mb, "Streamed: %s", imagefile);
+            if (mb) status_message(cam_control_dialog, mb), free(mb);
+        }
     }
 
-    int running = get_named_checkb_val(cam_control_dialog, "exp_run_button");
+    int running = (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0);
 
     if (running) {
         if (stream_count == 0) { // revert to preview
@@ -980,16 +984,19 @@ static int stream_indi_cb(gpointer cam_control_dialog)
 
             camera->exposure_in_progress = 0;
 
-            capture_image(cam_control_dialog);
+            capture_image(cam_control_dialog); // continue in preview
+
+            status_message(cam_control_dialog, "preview");
+
+        } else { // stream
+            camera->exposure_in_progress = 1;
+
+            char *mb = NULL; asprintf(&mb, "%d", stream_count);
+            if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
         }
     }
 
-    char *mb = NULL; asprintf(&mb, "%d", stream_count);
-    if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
-
-    indi_send(camera->streaming_prop, NULL);
-
-    return running; // remain active
+    return running; // remain active while run button set
 }
 
 int capture_image(gpointer cam_control_dialog)
@@ -998,7 +1005,7 @@ int capture_image(gpointer cam_control_dialog)
     struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
 
     if (! (camera && camera->ready)) {
-        err_printf("Camera isn't ready.  Aborting exposure\n");
+        err_printf("Camera isn't ready in capture_image. Aborting exposure\n");
         if (camera) camera->exposure_in_progress = 0;
         return TRUE;
     }
@@ -1007,21 +1014,24 @@ int capture_image(gpointer cam_control_dialog)
     if (gtk_combo_box_get_active(GTK_COMBO_BOX(mode_combo)) == GET_OPTION_STREAM) {
         setup_streaming(camera, cam_control_dialog);
 
-        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM, stream_indi_cb, cam_control_dialog,  "stream_indi_cb");
-
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_LOCAL);
         indi_dev_enable_blob(camera->expose_prop->idev, FALSE);
+        indi_prop_set_number(camera->expose_prop, "EXPOSURE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+
         camera->exposure_in_progress = 0;
+
+        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_STREAM, stream_indi_cb, cam_control_dialog, "stream_indi_cb");
 
         indi_send(camera->streaming_prop, NULL);
 
     } else if (! camera->exposure_in_progress) {
-        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog,  "expose_indi_cb");
-
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
         indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
         indi_prop_set_number(camera->expose_prop, "EXPOSURE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+
         camera->exposure_in_progress = 1;
+
+        INDI_set_callback(INDI_COMMON (camera), CAMERA_CALLBACK_EXPOSE, expose_indi_cb, cam_control_dialog, "expose_indi_cb");
 
         indi_send(camera->expose_prop, NULL);
     }
@@ -1127,7 +1137,7 @@ static void get_local_object_names(gpointer cam_control_dialog)
 {
 
 }
-// replace obsdata_cb to "local" get the the active text in object combo
+// replace obsdata_cb to "local" get the active text in object combo
 
 /* called when the object on the obs page is changed */
 static void obsdata_cb( GtkWidget *widget, gpointer cam_control_dialog )

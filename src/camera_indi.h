@@ -34,16 +34,14 @@ struct camera_t {
 	const unsigned char *image;
 	int image_size;
     const char *image_format;
-    int exposure_in_progress; // 0: no
+    int exposure_in_progress; // 0/1 : no/yes
 
 	struct indi_prop_t *expose_prop;
     struct indi_prop_t *streaming_prop;
+    struct indi_prop_t *upload_settings_prop;  // CCD_LOCAL_MODE dir prefix object
     struct indi_prop_t *upload_mode_prop;
-    struct indi_prop_t *upload_settings_prop;
     struct indi_prop_t *abort_prop;
 	struct indi_prop_t *frame_prop;
-	struct indi_prop_t *frame_type_prop;
-    struct indi_prop_t *filepath_prop;
     struct indi_prop_t *binning_prop;
     struct indi_prop_t *lens_prop;
     struct indi_prop_t *info_prop;
@@ -54,7 +52,7 @@ struct camera_t {
 enum CAMERA_UPLOAD_MODES { CAMERA_UPLOAD_MODE_LOCAL, CAMERA_UPLOAD_MODE_CLIENT, CAMERA_UPLOAD_MODE_BOTH, CAMERA_UPLOAD_MODE_COUNT };
 
 void camera_upload_mode(struct camera_t *camera, int mode);
-void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix);
+void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix, char *object);
 void camera_abort_exposure(struct camera_t *camera);
 void camera_get_binning(struct camera_t *camera, int *x, int *y);
 void camera_set_binning(struct camera_t *camera, int x, int y);

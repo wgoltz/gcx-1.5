@@ -156,6 +156,7 @@ extern void indi_prop_set_comboswitch(struct indi_prop_t *iprop, char *elemname)
 extern double indi_prop_get_number(struct indi_prop_t *iprop, const char *elemname);
 extern struct indi_elem_t *indi_prop_set_number(struct indi_prop_t *iprop, const char *elemname, double value);
 extern struct indi_elem_t *indi_prop_set_string(struct indi_prop_t *iprop, const char *elemname, const char *value);
+extern char *indi_prop_get_string(struct indi_prop_t *iprop, const char *elemname);
 
 extern struct indi_elem_t *indi_dev_set_string(struct indi_device_t *idev, const char *propname, const char *elemname, const char *value);
 extern struct indi_elem_t *indi_dev_set_switch(struct indi_device_t *idev, const char *propname, const char *elemname, int state);

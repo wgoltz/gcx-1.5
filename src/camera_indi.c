@@ -344,7 +344,7 @@ void camera_get_exposure_settings(struct camera_t *camera, float *value, float *
 
 void camera_upload_mode(struct camera_t *camera, int mode)
 {
-    char *name[CAMERA_UPLOAD_MODE_COUNT] = { "UPLOAD_LOCAL", "UPLOAD_CLIENT", "UPLOAD_BOTH" };
+    char *name[CAMERA_UPLOAD_MODE_COUNT] = { "LOCAL", "CLIENT", "BOTH" };
 
     if (! camera->ready) {
 //        err_printf("Camera isn't ready.  Abort set upload mode\n");
@@ -359,9 +359,10 @@ void camera_upload_mode(struct camera_t *camera, int mode)
     indi_prop_set_comboswitch(camera->upload_mode_prop, name[mode]);
 
     indi_send(camera->upload_mode_prop, NULL);
+
 }
 
-void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix)
+void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix, char *object)
 {
     if (! camera->ready) {
 //        err_printf("Camera isn't ready.  Abort set upload settings\n");
@@ -370,6 +371,7 @@ void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix)
 //    indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
     if (dir) indi_prop_set_string(camera->upload_settings_prop, "DIR", dir);
     if (prefix) indi_prop_set_string(camera->upload_settings_prop, "PREFIX", prefix);
+    indi_prop_set_string(camera->upload_settings_prop, "OBJECT", object ? object : "");
     indi_send(camera->upload_settings_prop, NULL);
 }
 
@@ -390,7 +392,7 @@ void camera_abort_exposure(struct camera_t *camera)
 void camera_expose(struct camera_t *camera, double time)
 {
 	if (! camera->ready) {
-        err_printf("Camera isn't ready.  Aborting exposure\n");
+        err_printf("Camera isn't ready in camera_expose.  Aborting exposure\n");
 		return;
 	}
 	indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
@@ -399,7 +401,7 @@ void camera_expose(struct camera_t *camera, double time)
 }
 
 // start INDI stream (with bugs)
-void camera_stream(struct camera_t *camera, double time, int number)
+void camera_stream(struct camera_t *camera, double time, int number) // never called
 {
     if (number <= 0) return;
     if (! camera->ready) {
@@ -411,6 +413,7 @@ void camera_stream(struct camera_t *camera, double time, int number)
 //        indi_dev_enable_blob(camera->filepath_prop->idev, TRUE);
         indi_prop_set_number(camera->streaming_prop, "EXPOSURE", time);
         indi_prop_set_number(camera->streaming_prop, "COUNT", number);
+
         indi_send(camera->streaming_prop, NULL);
     }
 }
@@ -424,7 +427,7 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
 //    camera_check_state(camera);
 
 	/* property to set exposure */
-	if (iprop->type == INDI_PROP_BLOB) {
+    if (iprop->type == INDI_PROP_BLOB) { // CCD_IMAGE
         d3_printf("Found BLOB property for camera %s\n", iprop->idev->name);
         camera->has_blob = 1; // is this equivalent to exposure_in_process ?
         indi_prop_add_cb(iprop, (IndiPropCB)camera_capture_cb, camera);
@@ -437,18 +440,14 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
     else if (strcmp(iprop->name, "CCD_STREAMING") == 0) {
         d3_printf("Found CCD_STREAMING for camera %s\n", iprop->idev->name);
         camera->streaming_prop = iprop;
-        indi_dev_enable_blob(camera->streaming_prop->idev, FALSE);
+//        indi_dev_enable_blob(camera->streaming_prop->idev, FALSE);
         indi_prop_add_cb(iprop, (IndiPropCB)camera_stream_cb, camera);
     }
     else if (strcmp(iprop->name, "CCD_UPLOAD_MODE") == 0) {
-        d3_printf("Found CCD_UPLOAD_MODE for camera %s\n", iprop->idev->name);
-        camera->upload_mode_prop = iprop;
+       d3_printf("Found CCD_UPLOAD_MODE for camera %s\n", iprop->idev->name);
+       camera->upload_mode_prop = iprop;
     }
-//    else if (strcmp(iprop->name, "UPLOAD_SETTINGS") == 0) {
-//        d3_printf("Found UPLOAD_SETTINGS for camera %s\n", iprop->idev->name);
-//        camera->upload_settings_prop = iprop;
-//    }
-    else if (strcmp(iprop->name, "CCD_LOCAL_MODE") == 0) {
+    else if (strcmp(iprop->name, "CCD_LOCAL_MODE") == 0) { // file specs for saving on server
         d3_printf("Found CCD_LOCAL_MODE for camera %s\n", iprop->idev->name);
         camera->upload_settings_prop = iprop;
     }
@@ -473,11 +472,11 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
         d3_printf("Found CCD_LENS for camera %s\n", iprop->idev->name);
         camera->lens_prop = iprop;
     }
-    else if (strcmp(iprop->name, "CCD_INFO") == 0) { // there is also INFO
+    else if (strcmp(iprop->name, "CCD_INFO") == 0) {
         d3_printf("Found CCD_INFO for camera %s\n", iprop->idev->name);
         camera->info_prop = iprop;
     }
-	else if (strcmp(iprop->name, "CCD_TEMPERATURE") == 0) {
+    else if (strcmp(iprop->name, "CCD_TEMPERATURE") == 0) {
 printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL);
         camera->temp_prop = iprop;
         indi_prop_add_cb(iprop, (IndiPropCB)camera_temp_change_cb, camera);
@@ -486,13 +485,7 @@ printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL)
         INDI_try_dev_connect(iprop, INDI_COMMON (camera), camera->portname);
 //        camera->exposure_in_progress = 0;
     }
-// PIXEL_FORMAT, ASI_PRESETS
-// CCD_INFO, CCD_LENS, CCD_IMAGE_FILE
-// CCD_IMAGE_FILE file, CCD_MODE mode_id, CCD_FRAME left, top, width, height, bpp
-// CCD_OFFSET offset, CCD_GAIN gain, CCD_EGAIN e_gain
-// CCD_FRAME_TYPE light, bias, dark, flat, darkflat
-// CCD_IMAGE_FORMAT raw, fits, xisf, jpeg
-// CCD_PREVIEW enabled, disabled
+
     camera_check_state(camera);
 }
 
