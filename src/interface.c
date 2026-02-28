@@ -396,6 +396,26 @@ GtkWidget* create_pstar (void)
   return pstar;
 }
 
+enum cam_control_tabs { cam_frame_tab,
+                       cam_obs_tab,
+                       cam_obslist_tab,
+                       cam_exposure_tab,
+                       cam_camera_tab,
+                       cam_tele_tab,
+                       cam_control_tabs_count };
+
+typedef char **message_buffer;
+
+static void free_messages(message_buffer messages)
+{
+    int i;
+    for (i = 0; i < cam_control_tabs_count; i++) {
+        char *msg = messages[i];
+        if (msg) free(msg);
+    }
+    free(messages);
+}
+
 GtkWidget* create_camera_control (void)
 {
   GtkWidget *label27;
@@ -455,14 +475,22 @@ GtkWidget* create_camera_control (void)
   GtkWidget *table;
   GtkWidget *label;
 
+
   GtkWidget *camera_control = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_object_set_data (G_OBJECT (camera_control), "camera_control", camera_control);
   gtk_window_set_title (GTK_WINDOW (camera_control), "Camera and Telescope Control");
+
+  message_buffer messages = calloc(cam_control_tabs_count, sizeof(char *));
+  g_object_set_data_full (G_OBJECT (camera_control), "messages", messages, (GDestroyNotify) free_messages);
+// when tabs change restore status message
 
   vbox = gtk_vbox_new (FALSE, 0);
   gtk_container_add (GTK_CONTAINER (camera_control), vbox);
 
   GtkWidget *notebook = gtk_notebook_new ();
+  g_object_ref(notebook);
+  g_object_set_data_full (G_OBJECT (camera_control), "notebook", notebook, (GDestroyNotify) g_object_unref);
+
   gtk_box_pack_start (GTK_BOX (vbox), notebook, TRUE, TRUE, 0);
 
   GtkWidget *item = gtk_label_new ("");
@@ -478,7 +506,7 @@ GtkWidget* create_camera_control (void)
   gtk_container_add (GTK_CONTAINER (notebook), vbox);
 
   label = gtk_label_new ("Frame");
-  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), 0), label);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), cam_frame_tab), label);
 
   table = gtk_table_new (8, 2, FALSE);
   gtk_box_pack_start (GTK_BOX (vbox), table, TRUE, TRUE, 0);
@@ -587,7 +615,7 @@ GtkWidget* create_camera_control (void)
   gtk_container_add (GTK_CONTAINER (notebook), vbox);
 
   label = gtk_label_new ("Obs");
-  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), 1), label);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), cam_obs_tab), label);
 
   table = gtk_table_new (6, 3, FALSE);
   gtk_box_pack_start (GTK_BOX (vbox), table, TRUE, TRUE, 0);
@@ -695,7 +723,7 @@ GtkWidget* create_camera_control (void)
   gtk_container_add (GTK_CONTAINER (notebook), vbox);
 
   label = gtk_label_new ("Obslist");
-  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), 2), label);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), cam_obslist_tab), label);
 
   item = gtk_scrolled_window_new (NULL, NULL);
   g_object_ref (item);
@@ -784,7 +812,7 @@ GtkWidget* create_camera_control (void)
   gtk_container_add (GTK_CONTAINER (notebook), vbox);
 
   label = gtk_label_new ("Exposure");
-  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), 3), label);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), cam_exposure_tab), label);
 
   label = gtk_label_new ("Filename for image saves");
   gtk_box_pack_start (GTK_BOX (vbox), label, FALSE, TRUE, 0);
@@ -895,7 +923,7 @@ GtkWidget* create_camera_control (void)
   gtk_container_add (GTK_CONTAINER (notebook), camera_vbox);
 
   label = gtk_label_new ("Camera");
-  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), 4), label);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), cam_camera_tab), label);
 
   GtkWidget *camera_table = gtk_table_new (2, 2, FALSE);
   gtk_box_pack_start (GTK_BOX (camera_vbox), camera_table, FALSE, TRUE, 0);
@@ -964,7 +992,7 @@ GtkWidget* create_camera_control (void)
   g_object_set_data_full (G_OBJECT (camera_control), "label86", label86,
                             (GDestroyNotify) g_object_unref);
   gtk_widget_show (label86);
-  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), 5), label86);
+  gtk_notebook_set_tab_label (GTK_NOTEBOOK (notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (notebook), cam_tele_tab), label86);
 
 
   table22 = gtk_table_new (10, 2, FALSE);

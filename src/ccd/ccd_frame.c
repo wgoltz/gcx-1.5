@@ -2006,8 +2006,9 @@ static int fits_delete_str(struct ccd_frame *fr, FITS_str *str)
     fr->nvar --;
 
     // replace current value
-    if (fr->nvar > str - fr->var_str)
-        memmove(str, str + 1, (fr->nvar + 1 - (str - fr->var_str)) * FITS_STRS);
+    int n = str - fr->var_str;
+    if (fr->nvar > n)
+        memmove(str, str + 1, (fr->nvar - n + 1) * FITS_STRS);
 
     str = realloc(fr->var_str, fr->nvar * FITS_STRS);
     if (str == NULL) {

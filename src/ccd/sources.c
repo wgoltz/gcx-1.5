@@ -662,6 +662,7 @@ static int insert_star(struct sources *src, struct star *s)
 //printf("inserted (%.f, %.f) %.f\n", s->x, s->y, s->peak); fflush(NULL);
         src->s[src->ns] = *s;
 		src->ns ++;
+printf("insert_star %d\n", src->ns); fflush(NULL);
 		return 1;
 	}
 	return 0;
@@ -905,7 +906,7 @@ int median_with_star_exclusion(struct ccd_frame *fr, int medw)
 
         int xi; float *column; // filter columns
 
-#define MEDIAN_OF_MEDIANS
+#undef MEDIAN_OF_MEDIANS
 
 #ifdef MEDIAN_OF_MEDIANS
         column = row_median; // column median of row medians

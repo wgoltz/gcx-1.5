@@ -67,7 +67,7 @@ static int expose_indi_cb(gpointer cam_control_dialog);
 static int stream_indi_cb(gpointer cam_control_dialog);
 static int exposure_change_cb(gpointer cam_control_dialog);
 
-void status_message(gpointer cam_control_dialog, char *msg)
+void status_message(gpointer cam_control_dialog, char *msg) // add tab number so message is specific to a tab
 {
 	GtkWidget *label;
 
@@ -195,7 +195,7 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
             if (decs) free(decs);
         }
 
-        if (msg) { // only write message if tele page active ?
+        if (msg) { // only write message if tele page active ?     gtk_notebook_get_current_page(GTK_NOTEBOOK(notebook));
             status_message(cam_control_dialog, msg);
             printf("%s\n", msg); fflush(NULL);
             free(msg);
@@ -977,7 +977,7 @@ static int stream_indi_cb(gpointer cam_control_dialog)
 
     int running = (get_named_checkb_val(cam_control_dialog, "exp_run_button") != 0);
 
-    if (running) {
+//    if (running) {
         if (stream_count == 0) { // revert to preview
             GtkWidget *mode_combo = g_object_get_data(G_OBJECT(cam_control_dialog), "exp_mode_combo");
             gtk_combo_box_set_active(GTK_COMBO_BOX(mode_combo), GET_OPTION_PREVIEW);
@@ -991,12 +991,17 @@ static int stream_indi_cb(gpointer cam_control_dialog)
         } else { // stream
             camera->exposure_in_progress = 1;
 
-            char *mb = NULL; asprintf(&mb, "%d", stream_count);
-            if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
+//            char *mb = NULL; asprintf(&mb, "%d", stream_count);
+//            if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
         }
+//    }
+
+    if (camera->exposure_in_progress) {
+        char *mb = NULL; asprintf(&mb, "%d", stream_count);
+        if (mb) named_entry_set(cam_control_dialog, "exp_frame_entry", mb), free(mb);
     }
 
-    return running; // remain active while run button set
+    return camera->exposure_in_progress; // remain active while run button set
 }
 
 int capture_image(gpointer cam_control_dialog)
@@ -1016,7 +1021,9 @@ int capture_image(gpointer cam_control_dialog)
 
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_LOCAL);
         indi_dev_enable_blob(camera->expose_prop->idev, FALSE);
-        indi_prop_set_number(camera->expose_prop, "EXPOSURE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+
+        double exp_time = named_spin_get_value(cam_control_dialog, "exp_spin");
+        indi_prop_set_number(camera->streaming_prop, "EXPOSURE", exp_time);
 
         camera->exposure_in_progress = 0;
 
@@ -1027,7 +1034,9 @@ int capture_image(gpointer cam_control_dialog)
     } else if (! camera->exposure_in_progress) {
         camera_upload_mode(camera, CAMERA_UPLOAD_MODE_CLIENT);
         indi_dev_enable_blob(camera->expose_prop->idev, TRUE);
-        indi_prop_set_number(camera->expose_prop, "EXPOSURE", named_spin_get_value(cam_control_dialog, "exp_spin"));
+
+        double exp_time = named_spin_get_value(cam_control_dialog, "exp_spin");
+        indi_prop_set_number(camera->expose_prop, "EXPOSURE", exp_time);
 
         camera->exposure_in_progress = 1;
 
@@ -1333,6 +1342,9 @@ int set_obs_object(gpointer cam_control_dialog, char *objname)
 
 static void img_mode_changed_cb( GtkWidget *widget, gpointer cam_control_dialog )
 {
+    GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
+    struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
+
     int nf = named_spin_get_value(cam_control_dialog, "exp_number_spin");
 
     char *buf = NULL; asprintf(&buf, "%d", nf);
@@ -1341,8 +1353,7 @@ static void img_mode_changed_cb( GtkWidget *widget, gpointer cam_control_dialog 
     int running = get_named_checkb_val(cam_control_dialog, "exp_run_button");
 
     if (gtk_combo_box_get_active(GTK_COMBO_BOX(widget)) == GET_OPTION_STREAM && ! running) {
-        GtkWidget *main_window = g_object_get_data(G_OBJECT(cam_control_dialog), "image_window");
-        struct camera_t *camera = camera_find(main_window, CAMERA_MAIN);
+
 
         camera->exposure_in_progress = 0;
     }
