@@ -39,6 +39,7 @@ void obs_data_ref(struct obs_data *obs);
 void obs_data_release(struct obs_data *obs);
 void replace_strval(char **str, char *val);
 void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs);
+void ccd_frame_add_default_info(struct ccd_frame *fr);
 void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp);
 int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *fim);
 double frame_airmass(struct ccd_frame *fr, double ra, double dec) ;

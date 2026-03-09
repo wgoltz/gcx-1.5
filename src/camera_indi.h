@@ -56,7 +56,7 @@ void camera_upload_settings(struct camera_t *camera, char *dir, char *prefix, ch
 void camera_abort_exposure(struct camera_t *camera);
 void camera_get_binning(struct camera_t *camera, int *x, int *y);
 void camera_set_binning(struct camera_t *camera, int x, int y);
-double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert_cm, double *pixsiz_micron);
+double camera_get_secpix(struct camera_t *camera);
 void camera_get_size(struct camera_t *camera, const char *par, int *value, int *min, int *max);
 void camera_set_size(struct camera_t *camera, int width, int height, int x_offset, int y_offset);
 void camera_get_temperature(struct camera_t *camera, float *value, float *min, float *max);

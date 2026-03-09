@@ -398,7 +398,7 @@ static struct stf * create_obs_alist(struct ccd_frame *fr, struct wcs *wcs)
     double lat = NAN, lng = NAN, alt = NAN;
     fits_get_loc(fr, &lat, &lng, &alt);
 
-//	gboolean got_location = (wcs->flags & WCS_LOC_VALID);
+//	gboolean got_location = (wcs->flags & WCS_HAVE_LOC);
 //	double lat, lng;
 //	if (got_location) {
 //		lat = wcs->lat;

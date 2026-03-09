@@ -46,6 +46,7 @@ struct image_file {
 #define IMG_STATE_SKIP 0x40            /* image has been marked to be skipped on processing */
 #define IMG_STATE_QUICKPHOT 0x80	   /* request only "quick" photometry, rather than going to the mbds */
 #define IMG_STATE_IN_MEMORY_ONLY 0x100 /* image is new frame (in memory only) */
+#define IMG_STATE_OVERRIDE_FILE_VALUES 0x200 /* file values have been over-ridden by par values */
 
 #define IMG_BAYER_MASK 0xf000000
 #define IMG_BAYER_SHIFT 24

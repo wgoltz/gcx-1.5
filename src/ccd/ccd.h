@@ -155,21 +155,24 @@ struct im_stats {
 
 /* wcs flags */
 #define WCS_HINTED 0x01 /* we don't actually know that these values are correct */
-#define WCS_JD_VALID 0x02 	/* the jd value is valid for the target frame */
-#define WCS_LOC_VALID 0x04 	/* location is valid (lat and long) */
-#define WCS_USE_LIN 0x08 	/* wcs uses linear transform; in this case rot is set
+#define WCS_USE_LIN 0x02 	/* wcs uses linear transform; in this case rot is set
 				   to a "mean" value, but is _not_ actually used in the
 				   transformation. the xinc/yinc are however, according to the
 				   fits convention. */
-#define WCS_DATA_IS_FLIPPED 0x10 // frame data has been flipped
-#define WCS_HAVE_POS 0x20  // have xref and yref
-#define WCS_HAVE_SCALE 0x40 // have xinc and yinc
-#define WCS_EDITED 0x80 // updated values in wcsedit
-#define WCS_REFLECTED 0x100 // if reflection has been applied to yinc
+
+#define WCS_HAVE_JD 0x04 // have jd
+#define WCS_HAVE_LOC 0x08 // have location (lat and long)
+#define WCS_HAVE_POS 0x10  // have position (xref and yref)
+#define WCS_HAVE_SCALE 0x20 // have frame scale (xinc and yinc)
+
+#define WCS_EDITED 0x40 // updated values in wcsedit
+
+// frame flipping - this needs to be sorted out
+#define WCS_REFLECTED 0x080 // reflection has been applied (yinc -> -yinc)
+
 #define WCS_HAVE_SCALE_POS (WCS_HAVE_SCALE | WCS_HAVE_POS)
 
-#define WCS_HAVE_INITIAL(wcs) \
-    (((wcs)->flags & WCS_HAVE_SCALE_POS) == WCS_HAVE_SCALE_POS)
+#define WCS_HAVE_INITIAL(wcs) (((wcs)->flags & WCS_HAVE_SCALE_POS) != 0)
 
 
 struct wcs{

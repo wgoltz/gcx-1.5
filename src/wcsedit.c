@@ -205,11 +205,11 @@ static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
         if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
     }
 
-    int frame_flipped = (wcs->xinc * wcs->yinc < 0);
+//    int frame_flipped = (wcs->xinc * wcs->yinc < 0);
 
-    g_object_set_data(G_OBJECT(dialog), "ignore_flip", (gpointer) 1);
-    set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
-    g_object_set_data(G_OBJECT(dialog), "ignore_flip", NULL);
+//    g_object_set_data(G_OBJECT(dialog), "ignore_flip", (gpointer) 1);
+//    set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
+//    g_object_set_data(G_OBJECT(dialog), "ignore_flip", NULL);
 
     gtk_widget_queue_draw(dialog);
 
@@ -246,11 +246,13 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
     struct ccd_frame *fr = i_chan->fr;
     struct wcs *wcs = & fr->fim;
 
-    flip_frame(fr); // just negate yinc, read from parms that field is flipped?
+    flip_frame(fr);
 
     i_chan->channel_changed = 1;
 
-    refresh_wcs(window);
+//    refresh_wcs(window);
+//    fits_frame_params_to_fim(fr); // try this
+
 //    struct wcs *window_wcs = window_get_wcs(window);
 //    wcs_from_frame(fr, window_wcs);
 
@@ -585,6 +587,7 @@ void act_wcs_reload (GtkAction *action, gpointer window)
 //    if (fr == NULL) return;
 
 //    wcs_from_frame(fr, wcs);
+    wcs->flags &= ~WCS_HINTED; // ensure reload from frame
     refresh_wcs(window);
 
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");

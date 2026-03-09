@@ -55,9 +55,8 @@ struct wcs *window_get_wcs(gpointer window)
     return window_wcs;
 }
 
-/* try to get an inital (frame) wcs from frame data and local params
- * TODO: add read pc */
-// only need this if not all info is in frame
+/* try to get an inital (frame) wcs from frame data and local params */
+
 void fits_frame_params_to_fim(struct ccd_frame *fr)
 {
     struct wcs *wcs = & fr->fim;
@@ -71,6 +70,58 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     double eq; fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
     if (isnan(eq)) fits_get_double(fr, P_STR(FN_EPOCH), &eq);
     if (isnan(eq)) eq = 2000;
+    wcs->equinox = eq;
+
+    wcs_transform_from_frame(fr, wcs);
+
+    if (! (wcs->flags & WCS_HAVE_POS)) {
+        double ra, dec, equinox;
+        fits_get_pos(fr, &ra, &dec, &equinox);
+
+        gboolean have_pos = (! isnan(ra) && ! isnan(dec));
+
+        if (have_pos) { // set wcs ra, dec precessed to eq
+            if (! isnan(equinox) && equinox != wcs->equinox)
+                precess_hiprec(equinox, wcs->equinox, &ra, &dec);
+            //       else // ? assume they are EOD coords
+            //           precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
+
+            wcs->xref = ra;
+            wcs->yref = dec;
+            wcs->flags |= WCS_HAVE_POS;
+        }
+    }
+
+    if (! (wcs->flags & WCS_HAVE_POS)) {
+        double secpix = NAN;
+        double xsecpix = NAN;
+        double ysecpix = NAN;
+        if (fits_get_binned_parms(fr, P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX), &secpix, &xsecpix, &ysecpix)) {
+            if (! isnan(secpix)) {
+                wcs->xinc = - secpix / 3600.0;
+                wcs->yinc = - secpix / 3600.0;
+            } else if (! isnan(xsecpix) && ! isnan(ysecpix)) {
+                wcs->xinc = - xsecpix / 3600.0;
+                wcs->yinc = - ysecpix / 3600.0;
+            }
+
+            wcs->flags |= WCS_HAVE_SCALE;
+
+//            if (P_INT(OBS_FIELD_REFLECTED) && !(wcs->flags & WCS_REFLECTED)) {
+//                wcs->yinc = -wcs->yinc;
+//                wcs->flags |= WCS_REFLECTED;
+//            }
+            if (P_INT(OBS_FIELD_REFLECTED)) {
+                wcs->yinc = -wcs->yinc;
+            }
+        } else {
+            // secpix from focal length and pixel size
+        }
+
+        double rot; fits_get_double(fr, P_STR(FN_CROTA1), &rot);
+
+        if (! isnan(rot)) wcs->rot = rot;
+    }
 
     double jd = frame_jdate (fr); // frame center jd
     if (jd == 0) {
@@ -78,26 +129,9 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         err_printf("using JD_NOW for frame jdate !\n");
     }
     wcs->jd = jd;
-    wcs->flags |= WCS_JD_VALID;
-
-    wcs->equinox = eq;
+    wcs->flags |= WCS_HAVE_JD;
 
 // FN_RA, FN_DEC are coords at current epoch (jd), FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
-    double ra, dec, equinox;
-    fits_get_pos(fr, &ra, &dec, &equinox);
-
-    gboolean have_pos = (! isnan(ra) && ! isnan(dec));
-
-    if (have_pos) { // set wcs ra, dec precessed to eq
-        if (! isnan(equinox) && equinox != wcs->equinox)
-            precess_hiprec(equinox, wcs->equinox, &ra, &dec);
- //       else // ? assume they are EOD coords
- //           precess_hiprec(JD_EPOCH(jd), wcs->equinox, &ra, &dec);
-
-        wcs->xref = ra;
-        wcs->yref = dec;
-        wcs->flags |= WCS_HAVE_POS;
-    }
 
     double lat, lng, alt;
 
@@ -108,7 +142,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         if (loc_ok) {
             wcs->lng = lng;
             wcs->lat = lat;
-            wcs->flags |= WCS_LOC_VALID;
+            wcs->flags |= WCS_HAVE_LOC;
 //            printf("%s loc ok\n", fr->name);
             break;
         }
@@ -116,8 +150,8 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         if (! try_loc) break;
 
         if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-            printf("$s setting observataory location from PAR\n", fr->name);
-            ccd_frame_add_obs_info(fr, NULL);
+            printf("%s setting observataory location from PAR\n", fr->name);
+            ccd_frame_add_default_info(fr);
         } else {
             printf("%s no observatory location\n", fr->name);
         }
@@ -128,31 +162,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     wcs->xrefpix = fr->w / 2.0;
     wcs->yrefpix = fr->h / 2.0;
 
-    double secpix = NAN;
-    double xsecpix = NAN;
-    double ysecpix = NAN;
-    if (fits_get_binned_parms(fr, P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX), &secpix, &xsecpix, &ysecpix)) {
-        if (! isnan(secpix)) {
-            wcs->xinc = - secpix / 3600.0;
-            wcs->yinc = - secpix / 3600.0;
-        } else if (! isnan(xsecpix) && ! isnan(ysecpix)) {
-            wcs->xinc = - xsecpix / 3600.0;
-            wcs->yinc = - ysecpix / 3600.0;
-        }
 
-        wcs->flags |= WCS_HAVE_SCALE;
-
-        if (P_INT(OBS_FIELD_REFLECTED) && !(wcs->flags & WCS_REFLECTED)) {
-            wcs->yinc = -wcs->yinc;
-            wcs->flags |= WCS_REFLECTED;
-        }
-    } else {
-        // secpix from focal length and pixel size
-    }
-
-    double rot; fits_get_double(fr, P_STR(FN_CROTA1), &rot);
-
-    if (! isnan(rot)) wcs->rot = rot;
 
     // use hinted flag to indicate we have called this function already
     // TODO need to clear flag if there are changes to relevant params
@@ -194,11 +204,11 @@ struct wcs *refresh_wcs(gpointer window) {
                     fr_wcs->flags |= WCS_HAVE_POS;
                 }
             }
-            if ( ! (fr_wcs->flags & WCS_LOC_VALID)) {
-                if (window_wcs->flags & WCS_LOC_VALID) {
+            if ( ! (fr_wcs->flags & WCS_HAVE_LOC)) {
+                if (window_wcs->flags & WCS_HAVE_LOC) {
                     fr_wcs->lat = window_wcs->lat;
                     fr_wcs->lng = window_wcs->lng;
-                    fr_wcs->flags |= WCS_LOC_VALID;
+                    fr_wcs->flags |= WCS_HAVE_LOC;
                 }
             }
         }
@@ -213,7 +223,9 @@ struct wcs *refresh_wcs(gpointer window) {
         fr_wcs->rot = window_wcs->rot;
     }
 
-    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) { // frame has initial wcs
+    gboolean a = WCS_HAVE_INITIAL(fr_wcs);
+
+    if (fr_wcs->wcsset < WCS_INITIAL && a) { // frame has initial wcs
         fr_wcs->wcsset = WCS_INITIAL;
     }
 
@@ -377,7 +389,7 @@ int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double
 	xy_to_XE(wcs, xpix, ypix, &X, &E);
 
 //	d3_printf("pix X:%.4f E:%.4f\n", X, E);
-    if (P_INT(WCS_REFRACTION_EN) && (wcs->flags & (WCS_JD_VALID | WCS_LOC_VALID)) == (WCS_JD_VALID | WCS_LOC_VALID)) {
+    if (P_INT(WCS_REFRACTION_EN) && (wcs->flags & (WCS_HAVE_JD | WCS_HAVE_LOC)) == (WCS_HAVE_JD | WCS_HAVE_LOC)) {
         precess_hiprec(wcs->equinox, epoch, &xref, &yref);
         refracted_from_true(&xref, &yref, wcs->jd, wcs->lat, wcs->lng);
     }
@@ -385,7 +397,7 @@ int wcs_worldpos(struct wcs *wcs, double xpix, double ypix, double *xpos, double
     worldpos(X, E, xref, yref, 0.0, 0.0, 1.0, 1.0, 0.0, "-TAN", &ra, &dec);
 
 //	d3_printf("pix apparent ra:%.4f dec:%.4f\n", ra, dec);
-    if (P_INT(WCS_REFRACTION_EN) && (wcs->flags & (WCS_JD_VALID | WCS_LOC_VALID)) == (WCS_JD_VALID | WCS_LOC_VALID)) {
+    if (P_INT(WCS_REFRACTION_EN) && (wcs->flags & (WCS_HAVE_JD | WCS_HAVE_LOC)) == (WCS_HAVE_JD | WCS_HAVE_LOC)) {
         true_from_refracted(&ra, &dec, wcs->jd, wcs->lat, wcs->lng);
         precess_hiprec(epoch, wcs->equinox, &ra, &dec);
     }
@@ -409,12 +421,12 @@ void cats_to_XE (struct wcs *wcs, struct cat_star *cats, double *X, double *E)
 	double ra, dec;
 
 //	d3_printf("\ninitial ra:%.4f dec:%.4f\n", cats->ra, cats->dec);
-	if (wcs->flags & WCS_JD_VALID) {
+    if (wcs->flags & WCS_HAVE_JD) {
         double epoch = JD_EPOCH(wcs->jd);
 
 		cats_apparent_pos(cats, &ra, &dec, wcs->jd);
         precess_hiprec(wcs->equinox, epoch, &xref, &yref);
-		if ((wcs->flags & WCS_LOC_VALID) && P_INT(WCS_REFRACTION_EN)) {
+        if ((wcs->flags & WCS_HAVE_LOC) && P_INT(WCS_REFRACTION_EN)) {
 			refracted_from_true(&ra, &dec, wcs->jd, wcs->lat, wcs->lng);
 			refracted_from_true(&xref, &yref, wcs->jd, wcs->lat, wcs->lng);
 		}

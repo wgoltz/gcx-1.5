@@ -878,7 +878,7 @@ int fits_get_loc(struct ccd_frame *fr, double *lat, double *lng, double *alt)
 
     if (lng) *lng = lng_local;
     if (lat) *lat = lat_local;
-    if (lat) *alt = lat_local;
+    if (lat) *alt = alt_local;
 
     return (! isnan(lng_local) && ! isnan(lat_local) && ! isnan(alt_local));
 }
@@ -907,7 +907,7 @@ int fits_get_binned_parms(struct ccd_frame *fr, char *name, char *xname, char *y
     return ret;
 }
 
-/* generic method to set 1 or 2 fits binned params */
+/* generic method to set fits parm <NAME> to <NAME>*bin_x or <XNAME>*bin_x, <YNAME>*bin_y */
 void fits_set_binned_parms(struct ccd_frame *fr, double parm_unbinned, char *comment, char *name, char *xname, char *yname)
 {
 //    if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
@@ -1261,7 +1261,7 @@ static struct ccd_frame *read_fits_file_generic(void *fp, char *fn, int force_un
 
     wcs_transform_from_frame (hd, &hd->fim);
 
-    // noise values
+    // read noise values with defaults
     rescan_fits_exp(hd, &hd->exp);
 
 err_exit:

@@ -147,39 +147,19 @@ printf("camera_capture_cb ALERT\n"); fflush(NULL);
 }
 
 // get pixel scale, without binning
-double camera_get_secpix(struct camera_t *camera, double *flen_cm, double *apert_cm, double *pixsiz_micron)
+double camera_get_secpix(struct camera_t *camera)
 {
-    if (! camera->ready) {
-//        err_printf("camera_get_secpix: Camera isn't ready.  Can't get secpix\n");
-        return 0;
-    }
+    if (! camera->ready) return 0;
 
     struct indi_elem_t *elem;
 
-    double flen, apert, pixsiz, secpix;
-    flen = apert = pixsiz = secpix = NAN;
+    double flen, pixsz, secpix;
+    flen = pixsz = secpix = NAN;
 
-    if (! camera->lens_prop || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-        err_printf("camera_get_secpix: Camera doesn't have lens prop, using default flen and aperture\n");
-        flen = P_DBL(OBS_FLEN);
-        apert = P_DBL(OBS_APERTURE);
-    } else {
-        if ((elem = indi_find_elem(camera->lens_prop, "FOCAL_LENGTH"))) flen = elem->value.num.value;
-        if ((elem = indi_find_elem(camera->lens_prop, "APERTURE"))) apert = elem->value.num.value;
-    }
+    if (camera->lens_prop && (elem = indi_find_elem(camera->lens_prop, "FOCAL_LENGTH"))) flen = elem->value.num.value;
+    if (camera->info_prop && (elem = indi_find_elem(camera->info_prop, "PIXEL_SIZE"))) pixsz = elem->value.num.value;
 
-    if (! camera->info_prop || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-        err_printf("camera_get_secpix: Camera doesn't have info prop, using default pixsiz\n");
-        pixsiz = P_DBL(OBS_PIXSZ);
-    } else {
-        if ((elem = indi_find_elem(camera->info_prop, "PIXEL_SIZE"))) pixsiz = elem->value.num.value;
-    }
-
-    if (! isnan(pixsiz) && ! isnan(flen)) secpix = secpix_from_pixsize_on_flen(pixsiz, flen / 100.0);
-
-    if (flen_cm) *flen_cm = flen;
-    if (apert_cm) *apert_cm = apert;
-    if (pixsiz_micron) *pixsiz_micron = pixsiz;
+    if (! isnan(pixsz) && ! isnan(flen)) secpix = secpix_from_pixsize_on_flen(pixsz, flen / 100.0);
 
     return secpix;
 }

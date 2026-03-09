@@ -1032,7 +1032,8 @@ freeString (String *sp)
 {
     if (sp->sm == 0) return;
 
-    if (sp->s) (*myfree) (sp->s);
+//    if (sp->s) (*myfree) (sp->s);
+    (*myfree) (sp->s);
     sp->s = NULL;
     sp->sl = 0;
     sp->sm = 0;

@@ -194,38 +194,37 @@ void obs_data_release(struct obs_data *obs)
 	}
 }
 
-/* Add obs and information to the frame */
-/* If obs is null, only the global obs data (from PAR) is added */
-// do this only if we know the frame was taken locally
+/* Add obs information to the frame */
 
 void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
 {
-//    char *line = NULL;
+    if (! obs) return;
 
- //   if (obs == NULL) return;
+    if (! (isnan(obs->ra) && isnan(obs->dec))) {
+        fr->fim.xref = obs->ra;
+        fr->fim.yref = obs->dec;
+        fr->fim.rot = isnan(obs->rot) ? 0 : obs->rot;
 
-    if (obs) {
-
-        if (! (isnan(obs->ra) && isnan(obs->dec))) {
-            fr->fim.xref = obs->ra;
-            fr->fim.yref = obs->dec;
-            fr->fim.rot = isnan(obs->rot) ? 0 : obs->rot;
-
-            fr->fim.wcsset = WCS_INITIAL;
-        }
-
-        fr->fim.equinox = obs->equinox;
-
-        if (obs->filter) {
-            fits_keyword_add(fr, P_STR(FN_FILTER), "'%20s' / filter name", obs->filter);
-        }
-        if (obs->objname) {
-            fits_keyword_add(fr, P_STR(FN_OBJECT), "'%20s' / object name", obs->objname);
-        }
-
-        fits_set_pos(fr, pos_object, obs->ra, obs->dec, obs->equinox);
+        fr->fim.wcsset = WCS_INITIAL;
     }
 
+    fr->fim.equinox = obs->equinox;
+
+    if (obs->filter) {
+        fits_keyword_add(fr, P_STR(FN_FILTER), "'%20s' / filter name", obs->filter);
+    }
+    if (obs->objname) {
+        fits_keyword_add(fr, P_STR(FN_OBJECT), "'%20s' / object name", obs->objname);
+    }
+
+    fits_set_pos(fr, pos_object, obs->ra, obs->dec, obs->equinox);
+}
+
+/* If obs is null, only the global obs data (from PAR) is added */
+// do this only if we know the frame was taken locally
+
+void ccd_frame_add_default_info(struct ccd_frame *fr)
+{
     fits_keyword_add(fr, P_STR(FN_TELESCOPE), "'%20s' / TELESCOPE NAME", P_STR(OBS_TELESCOPE));
 
     fits_keyword_add(fr, P_STR(FN_FOCUS), "'%20s' / FOCUS NAME", P_STR(OBS_FOCUS));
@@ -438,7 +437,8 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
 }
 
 /* read the exp fields from the fits header lines
- * using parametrised field names */
+ * using parametrised field names
+ * if fit fields dont exist add them from defaults */
 void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 {
 //    int update = FALSE;
@@ -451,20 +451,13 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 
     fits_get_binned_parms(fr, P_STR(FN_BINNING), P_STR(FN_XBINNING), P_STR(FN_YBINNING), &binning, &xbinning, &ybinning);
 
-    if (! P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-        if (! isnan(binning)) {
-            exp->bin_x = exp->bin_y = binning;
-        } else if (! isnan(xbinning) && ! isnan(ybinning)) {
-            exp->bin_x = xbinning;
-            exp->bin_y = ybinning;
-        } else { // default
-            exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
-            fits_set_binned_parms(fr, binning, "default", NULL, P_STR(FN_XBINNING), P_STR(FN_YBINNING));
-        }
-
-    } else {
-        printf("setting BINNING to default %d", P_INT(OBS_BINNING)); fflush(NULL);
-        binning = exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
+    if (! isnan(binning)) {
+        exp->bin_x = exp->bin_y = binning;
+    } else if (! isnan(xbinning) && ! isnan(ybinning)) {
+        exp->bin_x = xbinning;
+        exp->bin_y = ybinning;
+    } else { // default
+        exp->bin_x = exp->bin_y = P_INT(OBS_BINNING);
         fits_set_binned_parms(fr, binning, "default", NULL, P_STR(FN_XBINNING), P_STR(FN_YBINNING));
     }
 
@@ -472,17 +465,19 @@ void rescan_fits_exp(struct ccd_frame *fr, struct exp_data *exp) // fits to exp
 
     fits_get_double(fr, P_STR(FN_ELADU), &v);
 
-    if (isnan(v) || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+    if (isnan(v)) {
         v = P_DBL(OBS_DEFAULT_ELADU) / (exp->bin_x * exp->bin_y);
-//        fits_keyword_add(fr, P_STR(FN_ELADU), "%20.2f / default scale (binned)", v);
+        printf("using default ELADU (binned)\n"); fflush(NULL);
+        fits_keyword_add(fr, P_STR(FN_ELADU), "%20.2f / default scale (binned)", v);
     }
     exp->scale = v;
 
     fits_get_double(fr, P_STR(FN_RDNOISE), &v);
 
-    if (isnan(v) || P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+    if (isnan(v)) {
         v = P_DBL(OBS_DEFAULT_RDNOISE) / sqrt(exp->bin_x * exp->bin_y);
-//        fits_keyword_add(fr, P_STR(FN_RDNOISE), "%20.2f / default rdnoise (binned)", v);
+        printf("using default RDNOISE (binned)\n"); fflush(NULL);
+        fits_keyword_add(fr, P_STR(FN_RDNOISE), "%20.2f / default rdnoise (binned)", v);
     }
     exp->rdnoise = v;
 

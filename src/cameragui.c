@@ -773,7 +773,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         // add observer info
         // need check obs is correct (check tele ra,dec to obs ra,dec)
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
-        ccd_frame_add_obs_info(fr, obs); // fits rows from obs data and defaults
+        ccd_frame_add_obs_info(fr, obs); // fits rows from obs data
+        ccd_frame_add_default_info(fr); // fits rows from defaults
 
         adjust_some_fits_parms(fr); // change aperture and focal length from mm to cm
 
@@ -784,11 +785,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         fr->exp.bin_x = binx;
         fr->exp.bin_x = biny;
 
-        double flen, apert, pixsz;
-
-        double secpix = camera_get_secpix(camera, &flen, &apert, &pixsz); // unbinned secpix
-
-        if (isnan(pixsz) || P_INT(OBS_OVERRIDE_FILE_VALUES)) pixsz = P_DBL(OBS_PIXSZ);
+        double secpix = camera_get_secpix(camera); // unbinned secpix
 
         fits_set_binned_parms(fr, secpix, "binned image scale (arcsec/pixel)",
                               P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
@@ -804,8 +801,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
             fr_wcs->yinc = -secpix * biny / 3600.0;
 
             if (P_INT(OBS_FIELD_REFLECTED)) {
-                fr_wcs->yinc = -fr_wcs->yinc;
-                fr_wcs->flags |= WCS_REFLECTED;
+                fr_wcs->yinc = -fr_wcs->yinc; // opposite sign
+//                fr_wcs->flags |= WCS_REFLECTED; // probably not
             }
 
             fr_wcs->flags |= WCS_HAVE_SCALE_POS;
@@ -818,7 +815,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
             fr_wcs->lat = lat;
             fr_wcs->lng = lng;
 
-            fr_wcs->flags |= WCS_LOC_VALID;
+            fr_wcs->flags |= WCS_HAVE_LOC;
 
             if (tele->synced) {
                 fr_wcs->rot = tele->sync_rot;

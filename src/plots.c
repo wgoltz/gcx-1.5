@@ -370,12 +370,12 @@ int ofrs_plot_zp_vs_time(FILE *dfp, GList *ofrs)
             if (ofr->band != band) continue;
             if (ofr->skip) continue;
             if (ofr->zpointerr >= BIG_ERR) continue;
-            if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
+//            if (ZPSTATE(ofr) < ZP_FIT_NOCOLOR) continue;
+            if (ZPSTATE(ofr) < ZP_DIFF) continue; // why is ZP_DIFF not good enough?
 
 			n++;
-            fprintf(dfp, "%.7f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi,
-				ofr->zpoint, ofr->zpointerr);
-			}	
+            fprintf(dfp, "%.7f %.5f %.5f\n", mjd_to_jd(ofr->mjd) - jdi, ofr->zpoint, ofr->zpointerr);
+        }
 		fprintf(dfp, "e\n");
 	}
 	if (asfl != NULL) 
