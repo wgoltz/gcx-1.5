@@ -260,20 +260,20 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
 
     double v;
 
-    int ret = 0;
-    fits_get_double(fr, "CD1_1", &v); ret = ret || isnan(v); cd[0][0] = v;
-    fits_get_double(fr, "CD2_1", &v); ret = ret || isnan(v); cd[1][0] = v;
+    gboolean ret = TRUE;
+    fits_get_double(fr, "CD1_1", &v); ret = ret && ! isnan(v); cd[0][0] = v;
+    fits_get_double(fr, "CD2_1", &v); ret = ret && ! isnan(v); cd[1][0] = v;
 
-    fits_get_double(fr, "CD1_2", &v); ret = ret || isnan(v); cd[0][1] = v;
-    fits_get_double(fr, "CD2_2", &v); ret = ret || isnan(v); cd[1][1] = v;
+    fits_get_double(fr, "CD1_2", &v); ret = ret && ! isnan(v); cd[0][1] = v;
+    fits_get_double(fr, "CD2_2", &v); ret = ret && ! isnan(v); cd[1][1] = v;
 
-    if (ret == 0) {
+    if (ret) { // CDs ok
 
         double det = cd[0][0] * cd[1][1] - cd[1][0] * cd[0][1];
         d4_printf("CD det=%8g\n", det);
         if (fabs(det) < 1e-30) {
             err_printf("CD matrix is singular!\n");
-            ret = 1;
+            ret = FALSE;
 
         } else {
 
@@ -337,7 +337,7 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
         }
     }
 
-    return ret ? 0 : 1; // valid (xinc, yinc, rot)
+    return ret ? 1 : 0; // valid (xinc, yinc, rot)
 }
 
 /* look for PC_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
@@ -360,14 +360,14 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
 
     double pc[2][2];
 
-    int ret = 0;
-    fits_get_double(fr, "PC1_1", &d); ret = ret || isnan(d); pc[0][0] = d;
-    fits_get_double(fr, "PC1_2", &d); ret = ret || isnan(d); pc[0][1] = d;
+    gboolean ret = TRUE;
+    fits_get_double(fr, "PC1_1", &d); ret = ret && ! isnan(d); pc[0][0] = d;
+    fits_get_double(fr, "PC1_2", &d); ret = ret && ! isnan(d); pc[0][1] = d;
 
-    fits_get_double(fr, "PC2_1", &d); ret = ret || isnan(d); pc[1][0] = d;
-    fits_get_double(fr, "PC2_2", &d); ret = ret || isnan(d); pc[1][1] = d;
+    fits_get_double(fr, "PC2_1", &d); ret = ret && ! isnan(d); pc[1][0] = d;
+    fits_get_double(fr, "PC2_2", &d); ret = ret && ! isnan(d); pc[1][1] = d;
 
-    if (ret == 0) { // have all pcs
+    if (ret) { // PCs ok
         double det = pc[0][0] * pc[1][1] - pc[1][0] * pc[0][1];
         //	d4_printf("PC det=%8g\n",det);
         if (fabs(det) < 1e-30) {
@@ -397,8 +397,6 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
         fim->pc[1][0] = -sr;
         fim->pc[1][1] = cr;
 
-        ret = 0;
-
     } else {
         fim->pc[0][0] = 1;
         fim->pc[0][1] = 0;
@@ -406,7 +404,7 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
         fim->pc[1][1] = 1;
     }
 
-    return ret ? 0 : 1;
+    return ret && have_xinc && have_yinc ? 1 : 0; // 1 success
 }
 
 
@@ -423,13 +421,12 @@ int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
 
     fits_get_double(fr, P_STR(FN_CRPIX1), &d); wcs->xrefpix = (isnan(d)) ? fr->w / 2 : d;
     fits_get_double(fr, P_STR(FN_CRPIX2), &d); wcs->yrefpix = (isnan(d)) ? fr->h / 2 : d;
-    fits_get_double(fr, P_STR(FN_CRVAL1), &d); if (! isnan(d)) wcs->xref = d; // else ok = FALSE;
-    fits_get_double(fr, P_STR(FN_CRVAL2), &d); if (! isnan(d)) wcs->yref = d; // else ok = FALSE;
+    fits_get_double(fr, P_STR(FN_CRVAL1), &d); if (! isnan(d)) wcs->xref = d; else ok = FALSE;
+    fits_get_double(fr, P_STR(FN_CRVAL2), &d); if (! isnan(d)) wcs->yref = d; else ok = FALSE;
     fits_get_double(fr, P_STR(FN_EQUINOX), &d); wcs->equinox = (isnan(d)) ? 2000 : d;
 
-    if (! scan_for_CD(fr, wcs)) // get xinc, yinc, rot, pc from cd
-        if (! scan_for_PC(fr, wcs)) // get xinc, yinc, rot, pc
-            ok = FALSE;
+    ok = (! ok && scan_for_CD(fr, wcs)); // get xinc, yinc, rot, pc from cd
+    ok = (! ok && scan_for_PC(fr, wcs)); // get xinc, yinc, rot, pc
 
     if (ok) wcs->flags |= (WCS_HAVE_POS | WCS_HAVE_SCALE);
 

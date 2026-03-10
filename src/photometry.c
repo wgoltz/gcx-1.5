@@ -707,14 +707,11 @@ int stf_centering_stats(struct stf *stf, struct wcs *wcs, double *rms, double *m
 				maxe = d;
 		}
 	}
-	if (n < 1)
-		return 0;
-	if (rms) {
-		*rms = sqrt(dsq / n);
-	}
-	if (max) {
-		*max = sqrt(maxe);
-	}
+    if (n < 1) return 0;
+
+    if (rms) *rms = sqrt(dsq / n);
+    if (max) *max = sqrt(maxe);
+
 	return n;
 }
 

@@ -223,7 +223,9 @@ struct wcs *refresh_wcs(gpointer window) {
         fr_wcs->rot = window_wcs->rot;
     }
 
-    gboolean a = WCS_HAVE_INITIAL(fr_wcs);
+//    gboolean a = WCS_HAVE_INITIAL(fr_wcs);
+    unsigned int b = WCS_HAVE_SCALE_POS;
+    gboolean a = (fr_wcs->flags & b) == b;
 
     if (fr_wcs->wcsset < WCS_INITIAL && a) { // frame has initial wcs
         fr_wcs->wcsset = WCS_INITIAL;

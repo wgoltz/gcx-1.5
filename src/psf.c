@@ -1142,7 +1142,7 @@ int do_plot_profile(struct ccd_frame *fr, GSList *selection)
     char *preamble = NULL;
 
     str_join_str(&preamble, "%s", "set key below\n");
-    str_join_str(&preamble, "%s", "set term qt size 800,500\n");
+    str_join_varg(&preamble, "%s %s %s", "set term", P_STR(FILE_GNUPLOT_TERM), "size 800,500\n");
     str_join_str(&preamble, "%s", "set mouse\n");
     str_join_str(&preamble, "%s", "set y2tics autofreq\n");
     str_join_str(&preamble, "%s", "set y2label 'encircled flux'\n");

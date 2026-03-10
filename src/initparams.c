@@ -684,7 +684,7 @@ void init_ptable(void)
 
     add_par_string(FILE_GNUPLOT, PAR_FILES, 0, "gnuplot", "Gnuplot command", "/usr/bin/gnuplot");
     set_par_description(FILE_GNUPLOT, "Command used to invoke gnuplot for plotting graphs in a window.");
-    add_par_string(FILE_GNUPLOT_TERM, PAR_FILES, 0, "gnuplot_term", "Gnuplot terminal specification", "qt");
+    add_par_string(FILE_GNUPLOT_TERM, PAR_FILES, 0, "gnuplot_term", "Gnuplot terminal specification", "x11");
     set_par_description(FILE_GNUPLOT_TERM, "the terminal specification for gnuplot plot command.");
     add_par_int(FILE_PLOT_TO_FILE, PAR_FILES, FMT_BOOL, "plot_to_file", "Plot to file", 0);
     set_par_description(FILE_PLOT_TO_FILE, "Create a gnuplot file instead of calling gnuplot directly.");

@@ -172,7 +172,7 @@ struct im_stats {
 
 #define WCS_HAVE_SCALE_POS (WCS_HAVE_SCALE | WCS_HAVE_POS)
 
-#define WCS_HAVE_INITIAL(wcs) (((wcs)->flags & WCS_HAVE_SCALE_POS) != 0)
+#define WCS_HAVE_INITIAL(wcs) (((wcs)->flags & WCS_HAVE_SCALE_POS) == WCS_HAVE_SCALE_POS)
 
 
 struct wcs{
