@@ -773,8 +773,8 @@ static int expose_indi_cb(gpointer cam_control_dialog)
         // add observer info
         // need check obs is correct (check tele ra,dec to obs ra,dec)
         struct obs_data *obs = (struct obs_data *)g_object_get_data(G_OBJECT(cam_control_dialog), "obs_data");
-        ccd_frame_add_obs_info(fr, obs); // fits rows from obs data
-        ccd_frame_add_default_info(fr); // fits rows from defaults
+        ccd_frame_add_observation_info(fr, obs); // fits rows from obs data
+        ccd_frame_add_observatory_info(fr); // fits rows from defaults
 
         adjust_some_fits_parms(fr); // change aperture and focal length from mm to cm
 
@@ -791,7 +791,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
                               P_STR(FN_SECPIX), P_STR(FN_XSECPIX), P_STR(FN_YSECPIX));
 
         struct tele_t *tele = tele_find(main_window);
-        if (tele) {
+        if (tele) { // set wcs from tele information if connected
             double ra, dec, rot;
 
             if (tele_get_coords(tele, &ra, &dec, &rot) == 0)
@@ -802,7 +802,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 
             if (P_INT(OBS_FIELD_REFLECTED)) {
                 fr_wcs->yinc = -fr_wcs->yinc; // opposite sign
-//                fr_wcs->flags |= WCS_REFLECTED; // probably not
+//                fr_wcs->flags |= WCS_REFLECTED; // track reflection ?
             }
 
             fr_wcs->flags |= WCS_HAVE_SCALE_POS;
@@ -826,7 +826,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
 
             tele->synced = FALSE;
 
-        } else {
+        } else { // otherwise set from frame fits parms
             fits_frame_params_to_fim(fr);
         }
 

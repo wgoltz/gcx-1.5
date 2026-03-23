@@ -1443,12 +1443,12 @@ GtkWidget* create_wcs_edit (void)
   gtk_box_pack_start (GTK_BOX (wcs_main_box), wcs_hbuttonbox, TRUE, TRUE, 0);
   gtk_button_box_set_layout(GTK_BUTTON_BOX(wcs_hbuttonbox), GTK_BUTTONBOX_SPREAD);
 
-  GtkWidget *wcs_ok_button = gtk_button_new_with_label ("Update");
-  g_object_ref (wcs_ok_button);
-  g_object_set_data_full (G_OBJECT (wcs_edit), "wcs_ok_button", wcs_ok_button, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (wcs_ok_button);
-  gtk_container_add (GTK_CONTAINER (wcs_hbuttonbox), wcs_ok_button);
-  gtk_widget_set_can_default (wcs_ok_button, TRUE);
+  GtkWidget *wcs_update_button = gtk_button_new_with_label ("Update");
+  g_object_ref (wcs_update_button);
+  g_object_set_data_full (G_OBJECT (wcs_edit), "wcs_update_button", wcs_update_button, (GDestroyNotify) g_object_unref);
+  gtk_widget_show (wcs_update_button);
+  gtk_container_add (GTK_CONTAINER (wcs_hbuttonbox), wcs_update_button);
+  gtk_widget_set_can_default (wcs_update_button, TRUE);
 
   GtkWidget *wcs_close_button = gtk_button_new_with_label ("Close");
   g_object_ref (wcs_close_button);

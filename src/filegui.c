@@ -480,6 +480,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         if (havera && havedec) {
             window_wcs->flags |= WCS_HAVE_POS;
         }
+
         if (WCS_HAVE_INITIAL(window_wcs)) {
             wcs_set_validation(window, WCS_INITIAL);
 // is window_wcs fully setup ?

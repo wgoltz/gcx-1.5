@@ -196,7 +196,7 @@ void obs_data_release(struct obs_data *obs)
 
 /* Add obs information to the frame */
 
-void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
+void ccd_frame_add_observation_info(struct ccd_frame *fr, struct obs_data *obs)
 {
     if (! obs) return;
 
@@ -223,7 +223,7 @@ void ccd_frame_add_obs_info(struct ccd_frame *fr, struct obs_data *obs)
 /* If obs is null, only the global obs data (from PAR) is added */
 // do this only if we know the frame was taken locally
 
-void ccd_frame_add_default_info(struct ccd_frame *fr)
+void ccd_frame_add_observatory_info(struct ccd_frame *fr)
 {
     fits_keyword_add(fr, P_STR(FN_TELESCOPE), "'%20s' / TELESCOPE NAME", P_STR(OBS_TELESCOPE));
 
@@ -247,8 +247,8 @@ void ccd_frame_add_default_info(struct ccd_frame *fr)
     fits_set_loc(fr, lat, lng, alt);
 }
 
-/* look for CD_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
-static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
+/* look for CD_ keywords; return TRUE if found (set xinc, yinc, rot, pc) */
+static gboolean scan_for_CD(struct ccd_frame *fr, struct wcs *wcs)
 {
     /*
      * CD1_1 =  CDELT1 * cos (CROTA2)
@@ -260,20 +260,20 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
 
     double v;
 
-    gboolean ret = TRUE;
-    fits_get_double(fr, "CD1_1", &v); ret = ret && ! isnan(v); cd[0][0] = v;
-    fits_get_double(fr, "CD2_1", &v); ret = ret && ! isnan(v); cd[1][0] = v;
+    gboolean cd_ok = TRUE;
+    fits_get_double(fr, "CD1_1", &v); cd_ok = cd_ok && ! isnan(v); cd[0][0] = v;
+    fits_get_double(fr, "CD2_1", &v); cd_ok = cd_ok && ! isnan(v); cd[1][0] = v;
 
-    fits_get_double(fr, "CD1_2", &v); ret = ret && ! isnan(v); cd[0][1] = v;
-    fits_get_double(fr, "CD2_2", &v); ret = ret && ! isnan(v); cd[1][1] = v;
+    fits_get_double(fr, "CD1_2", &v); cd_ok = cd_ok && ! isnan(v); cd[0][1] = v;
+    fits_get_double(fr, "CD2_2", &v); cd_ok = cd_ok && ! isnan(v); cd[1][1] = v;
 
-    if (ret) { // CDs ok
+    if (cd_ok) {
 
         double det = cd[0][0] * cd[1][1] - cd[1][0] * cd[0][1];
         d4_printf("CD det=%8g\n", det);
         if (fabs(det) < 1e-30) {
             err_printf("CD matrix is singular!\n");
-            ret = FALSE;
+            cd_ok = FALSE;
 
         } else {
 
@@ -303,15 +303,15 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
             if (fabs(cr) < 1e-30) {
 //                err_printf("90.000000 degrees rotation!\n");
 //                ret = 1;
-                fim->xinc = cd[1][0];
-                fim->yinc = -cd[0][1];
-                fim->rot = raddeg(r);
+                wcs->xinc = cd[1][0];
+                wcs->yinc = -cd[0][1];
+                wcs->rot = raddeg(r);
 
-                fim->pc[0][0] = 0;
-                fim->pc[0][1] = -fim->yinc / fim->xinc; // sign ?
+                wcs->pc[0][0] = 0;
+                wcs->pc[0][1] = -wcs->yinc / wcs->xinc; // sign ?
 
-                fim->pc[1][0] = fim->xinc / fim->yinc; // sign ?
-                fim->pc[1][1] = 0;
+                wcs->pc[1][0] = wcs->xinc / wcs->yinc; // sign ?
+                wcs->pc[1][1] = 0;
 
             } else {
                 double norm = sqrt((sqr(cd[0][0]) + sqr(cd[1][1])) / 2); // cr * sqrt((cd1^2 + cd2^2) / 2)
@@ -319,29 +319,29 @@ static int scan_for_CD(struct ccd_frame *fr, struct wcs *fim)
                 // cd2^2 = cd2_2^2 + cd1_2^2
 
                 // xinc and yinc need to be multiplied by scale (if set)
-                fim->xinc = cd[0][0] > 0 ? norm / cr : -norm / cr;
-                fim->yinc = cd[1][1] > 0 ? norm / cr : -norm / cr;
-                fim->rot = raddeg(r);
+                wcs->xinc = cd[0][0] > 0 ? norm / cr : -norm / cr;
+                wcs->yinc = cd[1][1] > 0 ? norm / cr : -norm / cr;
+                wcs->rot = raddeg(r);
 
-                fim->pc[0][0] = cd[0][0] / fim->xinc;
-                fim->pc[0][1] = cd[0][1] / fim->xinc;
+                wcs->pc[0][0] = cd[0][0] / wcs->xinc;
+                wcs->pc[0][1] = cd[0][1] / wcs->xinc;
 
-                fim->pc[1][0] = cd[1][0] / fim->yinc;
-                fim->pc[1][1] = cd[1][1] / fim->yinc;
+                wcs->pc[1][0] = cd[1][0] / wcs->yinc;
+                wcs->pc[1][1] = cd[1][1] / wcs->yinc;
 
-                d4_printf("pc   %.8g %.8g\n", fim->pc[0][0], fim->pc[0][1]);
-                d4_printf("pc   %.8g %.8g\n", fim->pc[1][0], fim->pc[1][1]);
+                d4_printf("pc   %.8g %.8g\n", wcs->pc[0][0], wcs->pc[0][1]);
+                d4_printf("pc   %.8g %.8g\n", wcs->pc[1][0], wcs->pc[1][1]);
 
-                //    fim->flags |= WCS_USE_LIN;
+                //    wcs->flags |= WCS_USE_LIN;
             }
         }
     }
 
-    return ret ? 1 : 0; // valid (xinc, yinc, rot)
+    return cd_ok; // valid (xinc, yinc, rot)
 }
 
-/* look for PC_ keywords; return 1 if found (set xinc, yinc, rot, pc) */
-static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
+/* look for PC_ keywords; return TRUE if found (set xinc, yinc, rot, pc) */
+static gboolean scan_for_PC(struct ccd_frame *fr, struct wcs *wcs)
 {
 
     /*
@@ -354,83 +354,90 @@ static int scan_for_PC(struct ccd_frame *fr, struct wcs *fim)
     double d;
 
 //	d3_printf("scan_for_pc\n");
-    fits_get_double(fr, P_STR(FN_CROTA1), &d); gboolean have_rot = ! isnan(d);  if (have_rot)  fim->rot = d;
-    fits_get_double(fr, P_STR(FN_CDELT1), &d); gboolean have_xinc = ! isnan(d); if (have_xinc) fim->xinc = d;
-    fits_get_double(fr, P_STR(FN_CDELT2), &d); gboolean have_yinc = ! isnan(d); if (have_yinc) fim->yinc = d;
+    fits_get_double(fr, P_STR(FN_CROTA1), &d); gboolean have_rot = ! isnan(d);  if (have_rot)  wcs->rot = d;
+    fits_get_double(fr, P_STR(FN_CDELT1), &d); gboolean have_xinc = ! isnan(d); if (have_xinc) wcs->xinc = d;
+    fits_get_double(fr, P_STR(FN_CDELT2), &d); gboolean have_yinc = ! isnan(d); if (have_yinc) wcs->yinc = d;
 
     double pc[2][2];
 
-    gboolean ret = TRUE;
-    fits_get_double(fr, "PC1_1", &d); ret = ret && ! isnan(d); pc[0][0] = d;
-    fits_get_double(fr, "PC1_2", &d); ret = ret && ! isnan(d); pc[0][1] = d;
+    gboolean pc_ok = TRUE;
+    fits_get_double(fr, "PC1_1", &d); pc_ok = pc_ok && ! isnan(d); pc[0][0] = d;
+    fits_get_double(fr, "PC1_2", &d); pc_ok = pc_ok && ! isnan(d); pc[0][1] = d;
 
-    fits_get_double(fr, "PC2_1", &d); ret = ret && ! isnan(d); pc[1][0] = d;
-    fits_get_double(fr, "PC2_2", &d); ret = ret && ! isnan(d); pc[1][1] = d;
+    fits_get_double(fr, "PC2_1", &d); pc_ok = pc_ok && ! isnan(d); pc[1][0] = d;
+    fits_get_double(fr, "PC2_2", &d); pc_ok = pc_ok && ! isnan(d); pc[1][1] = d;
 
-    if (ret) { // PCs ok
+    if (pc_ok) {
         double det = pc[0][0] * pc[1][1] - pc[1][0] * pc[0][1];
         //	d4_printf("PC det=%8g\n",det);
         if (fabs(det) < 1e-30) {
             err_printf("PC matrix is singular!\n");
-            ret = 1;
+            pc_ok = FALSE;
 
         } else {
 
-            //    fim->flags |= WCS_USE_LIN;
+            //    wcs->flags |= WCS_USE_LIN;
 
-            fim->pc[0][0] = pc[0][0];
-            fim->pc[1][0] = pc[1][0];
-            fim->pc[0][1] = pc[0][1];
-            fim->pc[1][1] = pc[1][1];
+            wcs->pc[0][0] = pc[0][0];
+            wcs->pc[1][0] = pc[1][0];
+            wcs->pc[0][1] = pc[0][1];
+            wcs->pc[1][1] = pc[1][1];
 
-            fim->rot = raddeg(atan2(pc[0][1], pc[0][0]));
+            wcs->rot = raddeg(atan2(pc[0][1], pc[0][0]));
         }
 
     } else if (have_rot) {
         // set pc from rot
         double sr, cr;
 
-        sincos(fim->rot, &sr, &cr);
+        sincos(wcs->rot, &sr, &cr);
 
-        fim->pc[0][0] = cr;
-        fim->pc[0][1] = sr;
-        fim->pc[1][0] = -sr;
-        fim->pc[1][1] = cr;
+        wcs->pc[0][0] = cr;
+        wcs->pc[0][1] = sr;
+        wcs->pc[1][0] = -sr;
+        wcs->pc[1][1] = cr;
 
     } else {
-        fim->pc[0][0] = 1;
-        fim->pc[0][1] = 0;
-        fim->pc[1][0] = 0;
-        fim->pc[1][1] = 1;
+        wcs->pc[0][0] = 1;
+        wcs->pc[0][1] = 0;
+        wcs->pc[1][0] = 0;
+        wcs->pc[1][1] = 1;
     }
 
-    return ret && have_xinc && have_yinc ? 1 : 0; // 1 success
+    return (have_xinc && have_yinc);
 }
 
+// we only need scale when matching to a recipe or to other frames
+static gboolean set_default_scale(struct ccd_frame *fr, struct wcs *wcs)
+{
+    if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+
+    }
+    return ! isnan(wcs->xinc) && ! isnan(wcs->yinc);
+}
 
 /* read the wcs fields from the fits header lines
  * using parametrised field names */
 
-int wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
+void wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
 {
-    g_return_val_if_fail(fr != NULL, -1);
-    g_return_val_if_fail(wcs != NULL, -1);
+    g_return_if_fail(fr != NULL);
+    g_return_if_fail(wcs != NULL);
 
     double d;
-    gboolean ok = TRUE;
 
     fits_get_double(fr, P_STR(FN_CRPIX1), &d); wcs->xrefpix = (isnan(d)) ? fr->w / 2 : d;
     fits_get_double(fr, P_STR(FN_CRPIX2), &d); wcs->yrefpix = (isnan(d)) ? fr->h / 2 : d;
-    fits_get_double(fr, P_STR(FN_CRVAL1), &d); if (! isnan(d)) wcs->xref = d; else ok = FALSE;
-    fits_get_double(fr, P_STR(FN_CRVAL2), &d); if (! isnan(d)) wcs->yref = d; else ok = FALSE;
+    fits_get_double(fr, P_STR(FN_CRVAL1), &d); if (! isnan(d)) wcs->xref = d;
+    fits_get_double(fr, P_STR(FN_CRVAL2), &d); if (! isnan(d)) wcs->yref = d;
     fits_get_double(fr, P_STR(FN_EQUINOX), &d); wcs->equinox = (isnan(d)) ? 2000 : d;
 
-    ok = (! ok && scan_for_CD(fr, wcs)); // get xinc, yinc, rot, pc from cd
-    ok = (! ok && scan_for_PC(fr, wcs)); // get xinc, yinc, rot, pc
+    if (! isnan(wcs->xref) && ! isnan(wcs->yref)) wcs->flags |= WCS_HAVE_POS;
 
-    if (ok) wcs->flags |= (WCS_HAVE_POS | WCS_HAVE_SCALE);
+    gboolean have_scale = scan_for_CD(fr, wcs); // get xinc, yinc, rot from cd
+    have_scale = ! have_scale && scan_for_PC(fr, wcs); // get xinc, yinc, rot from pc
 
-    return ok ? 0 : 1;
+    if (have_scale) wcs->flags |= WCS_HAVE_SCALE;
 }
 
 /* read the exp fields from the fits header lines
@@ -690,11 +697,6 @@ double frame_airmass(struct ccd_frame *fr, double ra, double dec)
 {
     double lat = NAN, lng = NAN, alt = NAN;
     fits_get_loc(fr, &lat, &lng, &alt);
-    if (isnan(lat) || isnan(lng)) { // probably not the right place for this
-        // pickup from fr->fim
-        lat = fr->fim.lat;
-        lng = fr->fim.lng;
-    }
 
     double jd = frame_jdate(fr);
 
@@ -843,8 +845,10 @@ void wcs_to_fits_header(struct ccd_frame *fr)
 //    line = NULL; asprintf(&line, "%20.3f", frame_airmass(fr, fr->fim.xref, fr->fim.yref));
 //    if (line) fits_add_keyword(fr, P_STR(FN_AIRMASS), line), free(line);
 
-    double airmass = frame_airmass(fr, fr->fim.xref, fr->fim.yref);
-    if (airmass)
-        fits_keyword_add(fr,  P_STR(FN_AIRMASS), "%20.3f", airmass);
+    if (fr->fim.flags & WCS_HAVE_LOC) {
+        double airmass = frame_airmass(fr, fr->fim.xref, fr->fim.yref);
+        if (airmass)
+            fits_keyword_add(fr,  P_STR(FN_AIRMASS), "%20.3f", airmass);
+    }
 // .. to here
 }

@@ -413,7 +413,7 @@ void indi_send(struct indi_prop_t *iprop, struct indi_elem_t *ielem )
     MSG_APPEND("</new%sVector>\n", type);
 
     if (msg) {
-printf("indi_send: %s\n", msg); fflush(NULL);
+// printf("indi_send: %s\n", msg); fflush(NULL);
         iprop->state = INDI_STATE_BUSY; // update widget and set to busy awaiting response
         indigui_update_widget(iprop);
         io_indi_sock_write(idev->indi->fh, msg, strlen(msg));

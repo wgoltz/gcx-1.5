@@ -63,11 +63,11 @@ static void wcs_accelerator_cb( GtkWidget *widget, gpointer data );
 //static void wcs_lock_rot_cb( GtkWidget *widget, gpointer data );
 static void wcs_flip_field_cb( GtkWidget *widget, gpointer data );
 
-static int wcs_entry_cb( GtkWidget *widget, gpointer dialog );
+static int wcs_entry_cb( GtkWidget *widget, gpointer wcs_dialog );
 static gboolean wcs_focus_out_cb (GtkWidget *widget, GdkEventFocus *event, gpointer data);
 
-static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs);
-static void wcs_ok_cb( GtkWidget *widget, gpointer data );
+static gboolean window_wcs_to_wcsedit(gpointer window);
+static void wcs_update_cb( GtkWidget *widget, gpointer data );
 
 static void wcsedit_close( GtkWidget *widget, gpointer data )
 {
@@ -76,196 +76,167 @@ static void wcsedit_close( GtkWidget *widget, gpointer data )
     g_object_set_data(G_OBJECT(data), "wcs_dialog", NULL);
 }
 
-static void wcs_close_cb( GtkWidget *widget, gpointer dialog )
+static void wcs_close_cb( GtkWidget *widget, gpointer wcs_dialog )
 {
 //	GtkWidget *im_window = g_object_get_data(G_OBJECT(data), "im_window");
 //	g_return_if_fail(im_window != NULL);
 
-//    GtkWidget *dialog = g_object_get_data(G_OBJECT(im_window), "wcs_dialog");
-    gtk_widget_hide(dialog);
+//    GtkWidget *wcs_dialog = g_object_get_data(G_OBJECT(im_window), "wcs_dialog");
+    gtk_widget_hide(wcs_dialog);
 }
 
 gpointer window_get_wcsedit(gpointer window) {
-    gpointer dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
-    if (dialog) return dialog;
+    gpointer wcs_dialog = g_object_get_data(G_OBJECT(window), "wcs_dialog");
+    if (wcs_dialog) return wcs_dialog;
 
-    dialog = create_wcs_edit();
-    g_object_set_data(G_OBJECT(dialog), "im_window", window);
-    g_object_set_data_full(G_OBJECT(window), "wcs_dialog", dialog, (GDestroyNotify)(gtk_widget_destroy));
-//    g_signal_connect (G_OBJECT (dialog), "destroy", G_CALLBACK (wcsedit_close), window);
-    g_signal_connect (G_OBJECT (dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
-    g_object_set(G_OBJECT (dialog), "destroy-with-parent", TRUE, NULL);
+    wcs_dialog = create_wcs_edit();
+    g_object_set_data(G_OBJECT(wcs_dialog), "im_window", window);
+    g_object_set_data_full(G_OBJECT(window), "wcs_dialog", wcs_dialog, (GDestroyNotify)(gtk_widget_destroy));
+//    g_signal_connect (G_OBJECT (wcs_dialog), "destroy", G_CALLBACK (wcsedit_close), window);
+    g_signal_connect (G_OBJECT (wcs_dialog), "delete-event", G_CALLBACK (gtk_widget_hide_on_delete), NULL);
+    g_object_set(G_OBJECT (wcs_dialog), "destroy-with-parent", TRUE, NULL);
 
-    set_named_callback (G_OBJECT (dialog), "wcs_close_button", "clicked", G_CALLBACK (wcs_close_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_ok_button", "clicked", G_CALLBACK (wcs_ok_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_close_button", "clicked", G_CALLBACK (wcs_close_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_update_button", "clicked", G_CALLBACK (wcs_update_cb));
 
-    set_named_callback (G_OBJECT (dialog), "wcs_up_button", "pressed", G_CALLBACK (wcs_U_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_down_button", "pressed", G_CALLBACK (wcs_D_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_right_button", "pressed", G_CALLBACK (wcs_R_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_left_button", "pressed", G_CALLBACK (wcs_L_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_up_button", "pressed", G_CALLBACK (wcs_U_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_down_button", "pressed", G_CALLBACK (wcs_D_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_right_button", "pressed", G_CALLBACK (wcs_R_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_left_button", "pressed", G_CALLBACK (wcs_L_cb));
 
-    set_named_callback (G_OBJECT (dialog), "wcs_rot_inc_button", "pressed", G_CALLBACK (wcs_rot_inc_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_rot_dec_button", "pressed", G_CALLBACK (wcs_rot_dec_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_scale_up_button", "pressed", G_CALLBACK (wcs_scale_up_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_scale_dn_button", "pressed", G_CALLBACK (wcs_scale_dn_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_rot_inc_button", "pressed", G_CALLBACK (wcs_rot_inc_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_rot_dec_button", "pressed", G_CALLBACK (wcs_rot_dec_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_scale_up_button", "pressed", G_CALLBACK (wcs_scale_up_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_scale_dn_button", "pressed", G_CALLBACK (wcs_scale_dn_cb));
 
-    set_named_callback (G_OBJECT (dialog), "wcs_up_button", "released", G_CALLBACK (stop_autobutton_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_down_button", "released", G_CALLBACK (stop_autobutton_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_right_button", "released", G_CALLBACK (stop_autobutton_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_left_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_up_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_down_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_right_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_left_button", "released", G_CALLBACK (stop_autobutton_cb));
 
-    set_named_callback (G_OBJECT (dialog), "wcs_rot_inc_button", "released", G_CALLBACK (stop_autobutton_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_rot_dec_button", "released", G_CALLBACK (stop_autobutton_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_scale_up_button", "released", G_CALLBACK (stop_autobutton_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_scale_dn_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_rot_inc_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_rot_dec_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_scale_up_button", "released", G_CALLBACK (stop_autobutton_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_scale_dn_button", "released", G_CALLBACK (stop_autobutton_cb));
 
-//    set_named_callback (G_OBJECT (dialog), "wcs_flip_field_checkb", "toggled", G_CALLBACK (wcs_flip_field_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_flip_field_checkb", "clicked", G_CALLBACK (wcs_flip_field_cb));
-    set_named_callback (G_OBJECT (dialog), "wcs_accelerator_button", "clicked", G_CALLBACK (wcs_accelerator_cb));
+//    set_named_callback (G_OBJECT (wcs_dialog), "wcs_flip_field_checkb", "toggled", G_CALLBACK (wcs_flip_field_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_flip_field_checkb", "clicked", G_CALLBACK (wcs_flip_field_cb));
+    set_named_callback (G_OBJECT (wcs_dialog), "wcs_accelerator_button", "clicked", G_CALLBACK (wcs_accelerator_cb));
 
-    set_named_callback(G_OBJECT(dialog), "wcs_ra_entry", "activate", G_CALLBACK (wcs_entry_cb));
-    set_named_callback(dialog, "wcs_ra_entry", "focus-out-event", wcs_focus_out_cb);
+    set_named_callback(G_OBJECT(wcs_dialog), "wcs_ra_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(wcs_dialog, "wcs_ra_entry", "focus-out-event", wcs_focus_out_cb);
 
-    set_named_callback(G_OBJECT(dialog), "wcs_dec_entry", "activate", G_CALLBACK (wcs_entry_cb));
-    set_named_callback(dialog, "wcs_dec_entry", "focus-out-event", wcs_focus_out_cb);
+    set_named_callback(G_OBJECT(wcs_dialog), "wcs_dec_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(wcs_dialog, "wcs_dec_entry", "focus-out-event", wcs_focus_out_cb);
 
-    set_named_callback(G_OBJECT(dialog), "wcs_equinox_entry", "activate", G_CALLBACK (wcs_entry_cb));
-    set_named_callback(dialog, "wcs_equinox_entry", "focus-out-event", wcs_focus_out_cb);
+    set_named_callback(G_OBJECT(wcs_dialog), "wcs_equinox_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(wcs_dialog, "wcs_equinox_entry", "focus-out-event", wcs_focus_out_cb);
 
-    set_named_callback(G_OBJECT(dialog), "wcs_scale_entry", "activate", G_CALLBACK (wcs_entry_cb));
-    set_named_callback(dialog, "wcs_scale_entry", "focus-out-event", wcs_focus_out_cb);
+    set_named_callback(G_OBJECT(wcs_dialog), "wcs_scale_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(wcs_dialog, "wcs_scale_entry", "focus-out-event", wcs_focus_out_cb);
 
-    set_named_callback(G_OBJECT(dialog), "wcs_rot_entry", "activate", G_CALLBACK (wcs_entry_cb));
-    set_named_callback(dialog, "wcs_rot_entry", "focus-out-event", wcs_focus_out_cb);
+    set_named_callback(G_OBJECT(wcs_dialog), "wcs_rot_entry", "activate", G_CALLBACK (wcs_entry_cb));
+    set_named_callback(wcs_dialog, "wcs_rot_entry", "focus-out-event", wcs_focus_out_cb);
 
-    return dialog;
+    return wcs_dialog;
 }
 
 /* set wcs dialog from window wcs */
 void act_control_wcs (GtkAction *action, gpointer window)
 {
-    GtkWidget *dialog = window_get_wcsedit(window);
-    if (dialog == NULL) return;
+    GtkWidget *wcs_dialog = window_get_wcsedit(window);
+    if (wcs_dialog == NULL) return;
 
-    struct wcs *wcs = window_get_wcs(window);
-    if (wcs == NULL) return;
+    window_wcs_to_wcsedit(window);
 
-    wcsedit_from_wcs(dialog, wcs);
-
-    gtk_widget_show(dialog);
-    gdk_window_raise(dialog->window);
+    gtk_widget_show(wcs_dialog);
+    gdk_window_raise(wcs_dialog->window);
 }
 
-static gboolean wcsedit_from_wcs(GtkWidget *dialog, struct wcs *wcs)
+// set wcs validation
+void wcs_set_validation(gpointer window, int valid)
 {
-    g_assert(wcs != NULL);
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
 
-    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    g_return_val_if_fail(window != NULL, 0);
+    struct wcs *frame_wcs = & fr->fim;
+
+    struct wcs *window_wcs = window_get_wcs(window);
+
+    window_wcs->wcsset = valid;
+    wcs_clone(frame_wcs, window_wcs); // copy window_wcs to frame
+
+    if (valid == WCS_INVALID) frame_wcs->flags = 0;
+
+    if (fr->imf) wcs_clone(fr->imf->fim, window_wcs);
+
+    if (valid == WCS_VALID) wcs_to_fits_header(fr); // update frame header
+
+    wcsedit_refresh(window);
+}
+
+static gboolean window_wcs_to_wcsedit(gpointer window)
+{
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL) FALSE;
+
+    GtkWidget *wcs_dialog = window_get_wcsedit(window);
+    if (wcs_dialog == NULL) return FALSE;
 
     char *buf = NULL;
 
     switch(wcs->wcsset) {
 	case WCS_INVALID:
-		set_named_checkb_val(dialog, "wcs_unset_rb", 1);
+        set_named_checkb_val(wcs_dialog, "wcs_unset_rb", 1);
         break;
 	case WCS_INITIAL:
-		set_named_checkb_val(dialog, "wcs_initial_rb", 1);
+        set_named_checkb_val(wcs_dialog, "wcs_initial_rb", 1);
 		break;
 //	case WCS_FITTED: // not used
-//		set_named_checkb_val(dialog, "wcs_fitted_rb", 1);
+//		set_named_checkb_val(wcs_dialog, "wcs_fitted_rb", 1);
 //		break;
 	case WCS_VALID:
-		set_named_checkb_val(dialog, "wcs_valid_rb", 1);
+        set_named_checkb_val(wcs_dialog, "wcs_valid_rb", 1);
 		break;
 	}
 
     if (! isnan(wcs->xref)) {
         char *ras = degrees_to_hms_pr(wcs->xref, 2);
-        if (ras) named_entry_set(dialog, "wcs_ra_entry", ras), free(ras);
+        if (ras) named_entry_set(wcs_dialog, "wcs_ra_entry", ras), free(ras);
     }
 
     if (! isnan(wcs->yref)) {
         char *decs = degrees_to_dms_pr(wcs->yref, 1);
-        if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
+        if (decs) named_entry_set(wcs_dialog, "wcs_dec_entry", decs), free(decs);
     }
 
 //    if (! isnan(wcs->equinox)) {
         buf = NULL; asprintf(&buf, "%.2f", wcs->equinox);
-        if (buf) named_entry_set(dialog, "wcs_equinox_entry", buf), free(buf);
+        if (buf) named_entry_set(wcs_dialog, "wcs_equinox_entry", buf), free(buf);
 //    }
 
 //    if (! isnan(wcs->rot)) {
         buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
-        if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
+        if (buf) named_entry_set(wcs_dialog, "wcs_rot_entry", buf), free(buf);
 //    }
 
     if ((! isnan(wcs->xinc) && ! isnan(wcs->yinc))) {
         buf = NULL; asprintf(&buf, "%.4f", (fabs(wcs->xinc) + fabs(wcs->yinc)) * 1800);
-        if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
+        if (buf) named_entry_set(wcs_dialog, "wcs_scale_entry", buf), free(buf);
     }
 
 //    int frame_flipped = (wcs->xinc * wcs->yinc < 0);
 
-//    g_object_set_data(G_OBJECT(dialog), "ignore_flip", (gpointer) 1);
-//    set_named_checkb_val(dialog, "wcs_flip_field_checkb", frame_flipped);
-//    g_object_set_data(G_OBJECT(dialog), "ignore_flip", NULL);
+//    g_object_set_data(G_OBJECT(wcs_dialog), "ignore_flip", (gpointer) 1);
+//    set_named_checkb_val(wcs_dialog, "wcs_flip_field_checkb", frame_flipped);
+//    g_object_set_data(G_OBJECT(wcs_dialog), "ignore_flip", NULL);
 
-    gtk_widget_queue_draw(dialog);
+    gtk_widget_queue_draw(wcs_dialog);
 
     return 0;
 }
 
-/*
- * set wcsedit dialog from window wcs (and refresh gui stars)
- * as called from showimage, window wcs = copy of frame wcs
- */
-void wcsedit_refresh(gpointer window)
-{
-    GtkWidget *dialog = window_get_wcsedit(window);
-    if (dialog == NULL) return;
-
-    struct wcs *wcs = window_get_wcs(window);
-    if (wcs == NULL) return;
-
-    wcsedit_from_wcs(dialog, wcs);
-
-    // refresh gui stars
-    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs); // cat star is released before this
-
-    gtk_widget_queue_draw(window);
-}
-
-static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
-{
-    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    if (g_object_get_data(G_OBJECT(dialog), "ignore_flip")) return;
-
-    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
-    struct ccd_frame *fr = i_chan->fr;
-    struct wcs *wcs = & fr->fim;
-
-    flip_frame(fr);
-
-    i_chan->channel_changed = 1;
-
-//    refresh_wcs(window);
-//    fits_frame_params_to_fim(fr); // try this
-
-//    struct wcs *window_wcs = window_get_wcs(window);
-//    wcs_from_frame(fr, window_wcs);
-
-    // refresh gui stars
-    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
-
-    gtk_widget_queue_draw(window);
-}
-
-/* called by wcsedit_refresh_parent
- *
- * push values from the dialog back into the window_wcs
+/* push values from the dialog back into the window_wcs
  * if some values are missing, we try to guess them
  *
  * return:
@@ -274,15 +245,17 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer dialog )
  * 2 if there were changes
  * -1 if we didn't have enough data
 */
-static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
+static int wcsedit_to_window_wcs(gpointer window)
 {
-    g_assert(wcs != NULL);
-    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    g_return_val_if_fail(window != NULL, -1);
+    GtkWidget *wcs_dialog = window_get_wcsedit(window);
+    g_return_val_if_fail(wcs_dialog != NULL, -1);
+
+    struct wcs *wcs = window_get_wcs(window);
+    g_return_val_if_fail(wcs != NULL, -1);
 
 /* parse the fields */
     double ra;
-    char *text = named_entry_text(dialog, "wcs_ra_entry");
+    char *text = named_entry_text(wcs_dialog, "wcs_ra_entry");
     gboolean have_ra = (text != NULL);
     if (have_ra) {
         double d, i;
@@ -297,7 +270,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     }
 
     double dec;
-    text = named_entry_text(dialog, "wcs_dec_entry");
+    text = named_entry_text(wcs_dialog, "wcs_dec_entry");
     gboolean have_dec = (text != NULL);
     if (have_dec) {
         double d, i;
@@ -315,7 +288,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     }
 
     double scale;
-    text = named_entry_text(dialog, "wcs_scale_entry");
+    text = named_entry_text(wcs_dialog, "wcs_scale_entry");
     gboolean have_scale = (text != NULL);
     if (have_scale) {
         char *end;
@@ -326,7 +299,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     }
 
     double equ = 2000;
-    text = named_entry_text(dialog, "wcs_equinox_entry");
+    text = named_entry_text(wcs_dialog, "wcs_equinox_entry");
     if (text) {
         char *end;
         double d = strtod(text, &end);
@@ -335,7 +308,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     }
 
     double rot = 0;
-    text = named_entry_text(dialog, "wcs_rot_entry");
+    text = named_entry_text(wcs_dialog, "wcs_rot_entry");
     if (text) {
         char *end;
         double d = strtod(text, &end);
@@ -370,12 +343,12 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
     if (isnan(wcs->rot) || fabs(rot - wcs->rot) > 1.0 / 9900) {
         chg |= 4;
         wcs->rot = rot;
-	}
+    }
 
     if (fabs(equ - wcs->equinox) > 1.0 / 20) {
         chg |= 8;
         wcs->equinox = equ;
-	}
+    }
 
     if (have_scale) {
         if (wcs->flags & WCS_HAVE_SCALE) {
@@ -404,6 +377,9 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
 
             wcs->flags |= WCS_HAVE_SCALE;
         }
+
+        if (wcs->flags & WCS_HAVE_SCALE)
+            if (wcs->xinc * wcs->yinc > 0 && P_INT(OBS_FIELD_REFLECTED)) wcs->yinc = -wcs->yinc;
     }
 
 // catch validation change
@@ -419,7 +395,7 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
         wcsset_rb_name = "wcs_valid_rb";
         break;
     }
-    if (wcsset_rb_name && (get_named_checkb_val(dialog, wcsset_rb_name) == 0)) // check
+    if (wcsset_rb_name && (get_named_checkb_val(wcs_dialog, wcsset_rb_name) == 0)) // check
         chg |= 64;
 
 //    if (ret) return 1;
@@ -445,86 +421,27 @@ static int wcsedit_to_wcs(GtkWidget *dialog, struct wcs *wcs)
         return 2;
     }
 
-	return 0;
+    return 0;
 }
 
-/* set wcs of parent window from dialog and refresh
- * called by wcsedit call backs
+/*
+ * set wcsedit dialog from window wcs (and refresh gui stars)
+ * as called from showimage, window wcs = copy of frame wcs
  */
-static int wcsedit_refresh_parent(gpointer dialog)
+void wcsedit_refresh(gpointer window)
 {
-    if (dialog == NULL) printf("dialog == NULL in wcsedit_refresh_parent\n");
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL) return;
 
-    GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-    g_return_val_if_fail(window != NULL, 0);
+    window_wcs_to_wcsedit(window);
 
-    struct wcs *window_wcs = window_get_wcs(window);
-    g_return_val_if_fail(window_wcs != NULL, 0);
+    // refresh gui stars
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs); // cat star is released before this
 
-    int ret = wcsedit_to_wcs(dialog, window_wcs);
-
-    if (ret > 0) {
-        wcsedit_refresh(window);
-
-    } else if (ret < 0) {
-        error_beep();
-    }
-    return ret;
+    gtk_widget_queue_draw(window);
 }
 
-// set wcs validation
-void wcs_set_validation(gpointer window, int valid)
-{
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) return;
-
-    struct wcs *frame_wcs = & fr->fim;
-
-    struct wcs *window_wcs = window_get_wcs(window);
-
-    window_wcs->wcsset = valid;
-    wcs_clone(frame_wcs, window_wcs); // copy window_wcs to frame
-
-    if (valid == WCS_INVALID) frame_wcs->flags = 0;
-
-    if (fr->imf) wcs_clone(fr->imf->fim, window_wcs);
-
-    if (valid == WCS_VALID) wcs_to_fits_header(fr); // update frame header
-
-    wcsedit_refresh(window);
-}
-
-static void wcs_ok_cb(GtkWidget *wid, gpointer dialog)
-{
-   GtkWidget *window = g_object_get_data(G_OBJECT(dialog), "im_window");
-   if (window == NULL) return;
-
-   struct ccd_frame *fr = window_get_current_frame(window);
-   if (fr == NULL) return;
-
-   struct wcs *frame_wcs = & fr->fim;
-
-   struct wcs *window_wcs = window_get_wcs(window);
-
-    if (WCS_HAVE_INITIAL(window_wcs))
-        wcs_set_validation(window, WCS_INITIAL);
-
-    wcs_clone(frame_wcs, window_wcs); // here
-
-    wcsedit_refresh_parent(dialog);
-}
-
-/* called on entry activate */
-static int wcs_entry_cb(GtkWidget *widget, gpointer dialog)
-{
-    return wcsedit_refresh_parent(dialog);
-}
-
-static gboolean wcs_focus_out_cb (GtkWidget *widget, GdkEventFocus *event, gpointer data)
-{
-    wcs_entry_cb(GTK_WIDGET(widget), data);
-    return FALSE;
-}
 
 void act_wcs_auto (GtkAction *action, gpointer window)
 {
@@ -547,7 +464,6 @@ void act_wcs_quiet_auto (GtkAction *action, gpointer window)
 	act_stars_add_detected(NULL, window);
 	act_stars_add_gsc(NULL, window);
 	act_stars_add_tycho2(NULL, window);
-
     if (window_auto_pairs(window) < 1) return;
     window_fit_wcs(window);
 
@@ -646,9 +562,76 @@ int match_field_in_window_quiet(gpointer window)
 }
 
 
-static double get_zoom(gpointer dialog)
+static void wcs_flip_field_cb( GtkWidget *widget, gpointer wcs_dialog )
 {
-    gpointer window = g_object_get_data(G_OBJECT(dialog), "im_window");
+    GtkWidget *window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
+    if (g_object_get_data(G_OBJECT(wcs_dialog), "ignore_flip")) return;
+
+    struct ccd_frame *fr = window_get_current_frame(window);
+
+    flip_frame(fr);
+
+    struct image_channel *i_chan = g_object_get_data(G_OBJECT(window), "i_channel");
+    i_chan->channel_changed = 1;
+
+//    refresh_wcs(window);
+//    fits_frame_params_to_fim(fr); // try this
+
+//    struct wcs *window_wcs = window_get_wcs(window);
+//    wcs_from_frame(fr, window_wcs);
+
+    // refresh gui stars
+    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+    struct wcs *wcs = & fr->fim;
+
+    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
+
+    gtk_widget_queue_draw(window);
+}
+
+/* update button clicked - update window and frame wcs from wcsedit */
+static void wcs_update_cb(GtkWidget *wid, gpointer wcs_dialog)
+{
+    GtkWidget *window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
+    if (window == NULL) return;
+
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
+    wcsedit_to_window_wcs(window);
+
+    struct wcs *window_wcs = window_get_wcs(window);
+    if (WCS_HAVE_INITIAL(window_wcs)) wcs_set_validation(window, WCS_INITIAL);
+
+    wcsedit_refresh(window);
+
+    struct wcs *frame_wcs = & fr->fim;
+    wcs_clone(frame_wcs, window_wcs);
+}
+
+/* called on entry activate */
+static int wcs_entry_cb(GtkWidget *widget, gpointer wcs_dialog)
+{
+    GtkWidget *window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
+    g_return_val_if_fail(window != NULL, 0);
+
+    wcsedit_to_window_wcs(window);
+
+    wcsedit_refresh(window);
+
+    return 1;
+}
+
+
+static int wcs_focus_out_cb (GtkWidget *widget, GdkEventFocus *event, gpointer wcs_dialog)
+{
+    wcs_entry_cb(GTK_WIDGET(widget), wcs_dialog);
+    return 1;
+}
+
+static double get_zoom(gpointer wcs_dialog)
+{
+    gpointer window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
     if (window == NULL) return 0;
 
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
@@ -658,11 +641,12 @@ static double get_zoom(gpointer dialog)
 }
 
 /* Move WCS centre */
-static void move(int move_x, int move_y, gpointer dialog)
+static void move(int move_x, int move_y, gpointer wcs_dialog)
 {
-    GtkWidget *step_button = g_object_get_data(G_OBJECT(dialog), "wcs_accelerator_button");
+    GtkWidget *step_button = g_object_get_data(G_OBJECT(wcs_dialog), "wcs_accelerator_button");
     if (step_button == NULL) return;
-    gpointer window = g_object_get_data(G_OBJECT(dialog), "im_window");
+
+    gpointer window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
     if (window == NULL) return;
 
     struct wcs *wcs = window_get_wcs(window);
@@ -670,9 +654,9 @@ static void move(int move_x, int move_y, gpointer dialog)
 
     int btnstate = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(step_button));
 
-    double d = (1 + 9.0 * (btnstate > 0)) / get_zoom(dialog);
+    double d = (1 + 9.0 * (btnstate > 0)) / get_zoom(wcs_dialog);
 
-    double dr = wcs->xref - wcs->rot;
+    double dr = wcs->xref - wcs->rot; // 1st order fix for movement near poles
 
     double dx = d * move_x;
     double dy = d * move_y;
@@ -682,80 +666,100 @@ static void move(int move_x, int move_y, gpointer dialog)
     wcs->rot = wcs->xref - dr;
 
     char *ras = degrees_to_hms_pr(wcs->xref, 2);
-    if (ras) named_entry_set(dialog, "wcs_ra_entry", ras), free(ras);
+    if (ras) named_entry_set(wcs_dialog, "wcs_ra_entry", ras), free(ras);
 
     char *decs = degrees_to_dms_pr(wcs->yref, 1);
-    if (decs) named_entry_set(dialog, "wcs_dec_entry", decs), free(decs);
+    if (decs) named_entry_set(wcs_dialog, "wcs_dec_entry", decs), free(decs);
 
     double i; wcs->rot = modf(wcs->rot / 360, &i) * 360;
     if (wcs->rot >= 360) wcs->rot = 0;
 
-    char *buf = NULL; asprintf(&buf, "%.4f", wcs->rot);
-    if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
+    char *rot = NULL; asprintf(&rot, "%.4f", wcs->rot);
+    if (rot) named_entry_set(wcs_dialog, "wcs_rot_entry", rot), free(rot);
 
     wcsedit_refresh(window);
 }
 
 /* Rotate WCS, only the rotation text field is changed and WCS entries updated */
-static void rot(int dir, gpointer dialog)
-{
-    if (g_object_get_data(G_OBJECT(dialog), "im_window") == NULL) return;
-    if (get_named_checkb_val(dialog, "wcs_lock_rot_checkb")) return;
+static void rot(int dir, gpointer wcs_dialog)
+{    
+    if (get_named_checkb_val(wcs_dialog, "wcs_lock_rot_checkb")) return; // rotation is locked
 
-    GtkWidget *button = g_object_get_data(G_OBJECT(dialog), "wcs_accelerator_button");
-    int btnstate = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
+    //    if (g_object_get_data(G_OBJECT(wcs_dialog), "im_window") == NULL) return;
 
-    char *text = named_entry_text(dialog, "wcs_rot_entry");
+    gpointer window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
+    if (window == NULL) return;
+
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL) return;
+
+    GtkWidget *button = g_object_get_data(G_OBJECT(wcs_dialog), "wcs_accelerator_button");
+    int btnstate = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));    
+
+    char *text = named_entry_text(wcs_dialog, "wcs_rot_entry");
 
     char *end;
     double rot = strtod(text, &end);
     if (text != end) {
-        rot += dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
+        rot += dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(wcs_dialog);
 
         double i; rot = modf(rot / 360, &i) * 360;
         if (rot >= 360) rot = 0;
 
         char *buf = NULL; asprintf(&buf, "%.4f", rot);
-        if (buf) named_entry_set(dialog, "wcs_rot_entry", buf), free(buf);
+        if (buf) named_entry_set(wcs_dialog, "wcs_rot_entry", buf), free(buf);
 
-        wcsedit_refresh_parent(dialog);
+        wcs->rot = rot;
+
+        wcsedit_refresh(window); // try this
 	}
     free(text);
 }
 
 
 /* Scale WCS, only the scale text field is changed and WCS entries updated */
-static void scale(int dir, gpointer dialog)
-{
-    if (g_object_get_data(G_OBJECT(dialog), "im_window") == NULL) return;
-    if (get_named_checkb_val(dialog, "wcs_lock_scale_checkb")) return;
+static void scale(int dir, gpointer wcs_dialog)
+{    
+    if (get_named_checkb_val(wcs_dialog, "wcs_lock_scale_checkb")) return; // scale is locked
 
-    GtkWidget *button = g_object_get_data(G_OBJECT(dialog), "wcs_accelerator_button");
+    //    if (g_object_get_data(G_OBJECT(wcs_dialog), "im_window") == NULL) return;
+
+    gpointer window = g_object_get_data(G_OBJECT(wcs_dialog), "im_window");
+    if (window == NULL) return;
+
+    struct wcs *wcs = window_get_wcs(window);
+    if (wcs == NULL) return;
+
+    GtkWidget *button = g_object_get_data(G_OBJECT(wcs_dialog), "wcs_accelerator_button");
     int btnstate = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
 
-    char *text = named_entry_text(dialog, "wcs_scale_entry");
+    char *text = named_entry_text(wcs_dialog, "wcs_scale_entry");
 
     char *end;
     double scale = strtod(text, &end);
     if (text != end) {
-        scale *= 1 + 0.02 * dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(dialog);
+        scale *= 1 + 0.02 * dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(wcs_dialog);
 
         char *buf = NULL; asprintf(&buf, "%.4f", scale);
-        if (buf) named_entry_set(dialog, "wcs_scale_entry", buf), free(buf);
+        if (buf) named_entry_set(wcs_dialog, "wcs_scale_entry", buf), free(buf);
 
-        wcsedit_refresh_parent(dialog);
+        wcs->xinc *= scale;
+        wcs->yinc *= scale;
+
+        wcsedit_refresh(window); // try this
+//        wcsedit_refresh_parent(wcs_dialog); // scale
     }
     free(text);
 }
 
 
 /* button movement accelerator */
-static void wcs_accelerator_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_accelerator_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
 	GtkWidget *button;
 	int btnstate;
 
-    button = g_object_get_data(G_OBJECT(dialog), "wcs_accelerator_button");
+    button = g_object_get_data(G_OBJECT(wcs_dialog), "wcs_accelerator_button");
 	/* label = gtk_label_get_text(GTK_LABEL(GTK_BIN(button)->child)); */
 	btnstate = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
 	if (btnstate > 0)
@@ -770,105 +774,105 @@ static void wcs_accelerator_cb(GtkWidget *wid, gpointer dialog)
 static gboolean timeout_repeat = FALSE;
 static guint timeout_ref = 0;
 
-static gboolean move_U_cb(gpointer dialog) {
-    move(0, +1, dialog);
+static gboolean move_U_cb(gpointer wcs_dialog) {
+    move(0, +1, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean move_D_cb(gpointer dialog) {
-    move(0, -1, dialog);
+static gboolean move_D_cb(gpointer wcs_dialog) {
+    move(0, -1, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean move_L_cb(gpointer dialog) {
-    move(+1, 0, dialog);
+static gboolean move_L_cb(gpointer wcs_dialog) {
+    move(+1, 0, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean move_R_cb(gpointer dialog) {
-    move(-1, 0, dialog);
+static gboolean move_R_cb(gpointer wcs_dialog) {
+    move(-1, 0, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean rot_inc_cb(gpointer dialog) {
-    rot(+1, dialog);
+static gboolean rot_inc_cb(gpointer wcs_dialog) {
+    rot(+1, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean rot_dec_cb(gpointer dialog) {
-    rot(-1, dialog);
+static gboolean rot_dec_cb(gpointer wcs_dialog) {
+    rot(-1, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean scale_up_cb(gpointer dialog) {
-    scale(+1, dialog);
+static gboolean scale_up_cb(gpointer wcs_dialog) {
+    scale(+1, wcs_dialog);
     return timeout_repeat;
 }
 
-static gboolean scale_dn_cb(gpointer dialog) {
-    scale(-1, dialog);
+static gboolean scale_dn_cb(gpointer wcs_dialog) {
+    scale(-1, wcs_dialog);
     return timeout_repeat;
 }
 
 #define REPEAT_TIMEOUT 40
 /* Move WCS field right */
-static void wcs_R_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_R_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_R_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_R_cb, wcs_dialog);
 }
 
 /* Move WCS field up */
-static void wcs_U_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_U_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_U_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_U_cb, wcs_dialog);
 }
 
 /* Move WCS field down */
-static void wcs_D_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_D_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_D_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_D_cb, wcs_dialog);
 }
 
 /* Move WCS field left */
-static void wcs_L_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_L_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_L_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, move_L_cb, wcs_dialog);
 }
 
 /* Rotate WCS clockwise */
-static void wcs_rot_inc_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_rot_inc_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, rot_inc_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, rot_inc_cb, wcs_dialog);
 }
 
 /* Rotate WCS anti-clockwise */
-static void wcs_rot_dec_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_rot_dec_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, rot_dec_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, rot_dec_cb, wcs_dialog);
 }
 
 /* scale up WCS */
-static void wcs_scale_up_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_scale_up_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, scale_up_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, scale_up_cb, wcs_dialog);
 }
 
 /* scale down WCS */
-static void wcs_scale_dn_cb(GtkWidget *wid, gpointer dialog)
+static void wcs_scale_dn_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = TRUE;
-    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, scale_dn_cb, dialog);
+    timeout_ref = g_timeout_add(REPEAT_TIMEOUT, scale_dn_cb, wcs_dialog);
 }
 
 /* stop auto_repeat on a clicked button */
-static void stop_autobutton_cb(GtkWidget *wid, gpointer dialog)
+static void stop_autobutton_cb(GtkWidget *wid, gpointer wcs_dialog)
 {
     timeout_repeat = FALSE;
     g_source_remove(timeout_ref);

@@ -754,9 +754,9 @@ int fits_get_pos(struct ccd_frame *fr, double *ra, double *dec, double *equinox)
     char *endp = fits_get_dms(fr, P_STR(FN_RA), &ra_local); // try h:m:s
 
     if (! isnan(ra_local))
-        ra_local *= 15;
+        ra_local *= 15; // hms to degrees
     else
-        endp = fits_get_double(fr, P_STR(FN_RA), &ra_local); // try degrees
+        endp = fits_get_double(fr, P_STR(FN_RA), &ra_local); // assume degrees
 
     fits_get_dms(fr, P_STR(FN_DEC), &dec_local); // try d:m:s
     if (isnan(dec_local)) fits_get_double(fr, P_STR(FN_DEC), &dec_local); // try degrees

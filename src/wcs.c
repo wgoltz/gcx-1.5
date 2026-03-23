@@ -61,10 +61,6 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 {
     struct wcs *wcs = & fr->fim;
 
-    // if hinted flag set we have already done this
-    // need to clear hinted flag if there are updates in params
-    if (wcs->flags & WCS_HINTED) return;
-
     wcs->flags = 0; // try this
 
     double eq; fits_get_double(fr, P_STR(FN_EQUINOX), &eq);
@@ -92,7 +88,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         }
     }
 
-    if (! (wcs->flags & WCS_HAVE_POS)) {
+    if (! (wcs->flags & WCS_HAVE_SCALE)) {
         double secpix = NAN;
         double xsecpix = NAN;
         double ysecpix = NAN;
@@ -106,16 +102,18 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
             }
 
             wcs->flags |= WCS_HAVE_SCALE;
+        }
 
-//            if (P_INT(OBS_FIELD_REFLECTED) && !(wcs->flags & WCS_REFLECTED)) {
-//                wcs->yinc = -wcs->yinc;
-//                wcs->flags |= WCS_REFLECTED;
-//            }
-            if (P_INT(OBS_FIELD_REFLECTED)) {
-                wcs->yinc = -wcs->yinc;
-            }
-        } else {
-            // secpix from focal length and pixel size
+        if (! (wcs->flags & WCS_HAVE_SCALE)) {
+            // try secpix from focal length and pixel size
+        }
+
+        if (! (wcs->flags & WCS_HAVE_SCALE)) {
+            // try secpix from default parms
+        }
+
+        if (wcs->flags & WCS_HAVE_SCALE) {
+            if (wcs->xinc * wcs->yinc > 0 && P_INT(OBS_FIELD_REFLECTED)) wcs->yinc = -wcs->yinc;
         }
 
         double rot; fits_get_double(fr, P_STR(FN_CROTA1), &rot);
@@ -126,43 +124,44 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
     double jd = frame_jdate (fr); // frame center jd
     if (jd == 0) {
         jd = JD_NOW;
-        err_printf("using JD_NOW for frame jdate !\n");
+        printf("using JD_NOW for frame jdate !\n"); fflush(NULL);
     }
     wcs->jd = jd;
     wcs->flags |= WCS_HAVE_JD;
 
 // FN_RA, FN_DEC are coords at current epoch (jd), FN_OBJRA, FN_OBJDEC are coords at epoch of obsdata
 
-    double lat, lng, alt;
+    if (! (wcs->flags & WCS_HAVE_LOC)) {
 
-    int try_loc = TRUE;
-    int loc_ok = FALSE;
-    while (! loc_ok) {
-        loc_ok = fits_get_loc(fr, &lat, &lng, &alt);
-        if (loc_ok) {
-            wcs->lng = lng;
-            wcs->lat = lat;
-            wcs->flags |= WCS_HAVE_LOC;
-//            printf("%s loc ok\n", fr->name);
-            break;
+        double lat, lng, alt;
+
+        int try_loc = TRUE;
+        int loc_ok = FALSE;
+        while (! loc_ok) {
+            loc_ok = fits_get_loc(fr, &lat, &lng, &alt);
+            if (loc_ok) {
+                wcs->lng = lng;
+                wcs->lat = lat;
+                wcs->flags |= WCS_HAVE_LOC;
+                //            printf("%s loc ok\n", fr->name);
+                break;
+            }
+
+            if (! try_loc) break;
+
+            if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
+                printf("%s setting observataory location from PAR\n", fr->name);
+                ccd_frame_add_observatory_info(fr);
+            } else {
+                printf("%s no observatory location\n", fr->name);
+            }
+            try_loc = FALSE;
         }
-
-        if (! try_loc) break;
-
-        if (P_INT(OBS_OVERRIDE_FILE_VALUES)) {
-            printf("%s setting observataory location from PAR\n", fr->name);
-            ccd_frame_add_default_info(fr);
-        } else {
-            printf("%s no observatory location\n", fr->name);
-        }
-        try_loc = FALSE;
+        fflush(NULL);
     }
-    fflush(NULL);
 
     wcs->xrefpix = fr->w / 2.0;
     wcs->yrefpix = fr->h / 2.0;
-
-
 
     // use hinted flag to indicate we have called this function already
     // TODO need to clear flag if there are changes to relevant params
@@ -178,14 +177,14 @@ struct wcs *refresh_wcs(gpointer window) {
     struct wcs *window_wcs = window_get_wcs(window);
     if (window_wcs == NULL) return NULL;
 
-    if (window_wcs->wcsset == WCS_INVALID) // initially unset
+    if (window_wcs->wcsset == WCS_INVALID || ! (window_wcs->flags & WCS_HINTED))
         fits_frame_params_to_fim(fr);
 
     struct wcs *fr_wcs = & fr->fim;
 
     struct wcs *imf_wcs = (fr->imf && fr->imf->fim) ? fr->imf->fim : NULL;
 
-    if (imf_wcs && (imf_wcs->wcsset > fr_wcs->wcsset)) { // reload from imf : load fr_wcs from imf or window if they have greater wcsset
+    if (imf_wcs && (imf_wcs->flags) && (imf_wcs->wcsset >= fr_wcs->wcsset)) { // reload from imf : load fr_wcs from imf or window if they have greater wcsset
         wcs_clone(fr_wcs, imf_wcs);
 
         if (fr_wcs->wcsset < WCS_VALID && window_wcs->wcsset > WCS_INVALID) {
@@ -224,14 +223,14 @@ struct wcs *refresh_wcs(gpointer window) {
     }
 
 //    gboolean a = WCS_HAVE_INITIAL(fr_wcs);
-    unsigned int b = WCS_HAVE_SCALE_POS;
-    gboolean a = (fr_wcs->flags & b) == b;
+//    unsigned int b = WCS_HAVE_SCALE_POS;
+//    gboolean a = (fr_wcs->flags & b) == b;
 
-    if (fr_wcs->wcsset < WCS_INITIAL && a) { // frame has initial wcs
+    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) { // frame has initial wcs
         fr_wcs->wcsset = WCS_INITIAL;
     }
 
-    if (fr_wcs->wcsset > WCS_INVALID) {
+    if (fr_wcs->flags) { // either frame has some info, or wcs has been copied from imf or window
 
         if (imf_wcs) wcs_clone(imf_wcs, fr_wcs); // set imf_wcs from fr_wcs
 
@@ -1013,8 +1012,8 @@ int auto_pairs(gpointer window, struct gui_star_list *gsl)
 //    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
 //}
 
-    field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0); // remove FRSTAR's
-    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
+    field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
+    if (field == NULL) err_printf("No frame stars in gui star list! Adjust detection threshold.\n");
 
 //printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
 //for (sl = field; sl != NULL; sl = sl->next) {
@@ -1027,6 +1026,8 @@ int auto_pairs(gpointer window, struct gui_star_list *gsl)
         if (field) g_slist_free(field);
 		return 0;
 	}
+
+    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
     ret = fastmatch(window, field, cat);
 	g_slist_free(field);
