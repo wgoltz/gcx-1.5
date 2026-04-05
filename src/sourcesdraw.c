@@ -706,7 +706,8 @@ void find_stars_cb(gpointer window, guint action)
 		break;
 	}
 
-    if (check_user_abort(window)) clear_user_abort(window);
+//    if (check_user_abort(window)) clear_user_abort(window);
+    check_user_abort(window);
 
 	gtk_widget_queue_draw(window);
 }

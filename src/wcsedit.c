@@ -814,7 +814,7 @@ static gboolean scale_dn_cb(gpointer wcs_dialog) {
     return timeout_repeat;
 }
 
-#define REPEAT_TIMEOUT 40
+#define REPEAT_TIMEOUT 20
 /* Move WCS field right */
 static void wcs_R_cb(GtkWidget *wid, gpointer wcs_dialog)
 {

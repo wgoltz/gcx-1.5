@@ -1439,8 +1439,7 @@ void plot_sky_histogram(gpointer window, GSList *found)
 			w = 100;
 		fprintf(dfp, "set key below\n");
 
-		fprintf(dfp, "plot '-' title 'sky:%.0f min:%.0f max:%.0f mean:%.0f "
-			"median:%.0f sigma:%.0f' with boxes\n",
+        fprintf(dfp, "plot '-' title 'sky:%.0f min:%.0f max:%.0f mean:%.0f median:%.0f sigma:%.0f       ' with boxes\n",
 			sky, rs->min, rs->max, rs->avg, 1.0*m, rs->sigma);
 
 		s = floor(sky - w) - H_START;

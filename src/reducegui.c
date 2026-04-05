@@ -909,8 +909,7 @@ d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
             imf_release_frame(imf, "imf_reload_cb");
 
             struct ccd_frame *fr = imf->fr;
-            if (fr)
-                fr->imf = NULL;
+            if (fr) fr->imf = NULL;
             imf->fr = NULL;
 
             imf->state_flags &= IMG_STATE_SKIP; // we keep the skip flag
@@ -1171,7 +1170,7 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
     if (active) {
         char *text = named_entry_text(processing_dialog, "align_entry");
         if (text) {
-            if ((ccdr->op_flags & IMG_OP_ALIGN) && ccdr->alignref && strcmp(text, ccdr->alignref->filename)) {
+            if ((ccdr->op_flags & IMG_OP_ALIGN) && ccdr->alignref) { // && strcmp(text, ccdr->alignref->filename)) {
                 image_file_release(ccdr->alignref);
                 ccdr->alignref = image_file_new(NULL, text);
                 free_alignment_stars(ccdr);
@@ -1570,7 +1569,7 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
     }
 
     if (ret < 0) {
-        clear_user_abort(ccdr->window);
+//        clear_user_abort(ccdr->window);
     }
 
     update_mband_status_labels (processing_dialog);

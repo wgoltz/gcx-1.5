@@ -160,8 +160,8 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         fflush(NULL);
     }
 
-    wcs->xrefpix = fr->w / 2.0;
-    wcs->yrefpix = fr->h / 2.0;
+//    wcs->xrefpix = fr->w / 2.0;
+//    wcs->yrefpix = fr->h / 2.0;
 
     // use hinted flag to indicate we have called this function already
     // TODO need to clear flag if there are changes to relevant params
@@ -177,14 +177,14 @@ struct wcs *refresh_wcs(gpointer window) {
     struct wcs *window_wcs = window_get_wcs(window);
     if (window_wcs == NULL) return NULL;
 
-    if (window_wcs->wcsset == WCS_INVALID || ! (window_wcs->flags & WCS_HINTED))
-        fits_frame_params_to_fim(fr);
-
     struct wcs *fr_wcs = & fr->fim;
 
-    struct wcs *imf_wcs = (fr->imf && fr->imf->fim) ? fr->imf->fim : NULL;
+    struct wcs *imf_wcs = (fr->imf) ? fr->imf->fim : NULL;
 
-    if (imf_wcs && (imf_wcs->flags) && (imf_wcs->wcsset >= fr_wcs->wcsset)) { // reload from imf : load fr_wcs from imf or window if they have greater wcsset
+ //   if (window_wcs->wcsset == WCS_INVALID || (imf_wcs && imf_wcs->flags == 0))
+    if (imf_wcs && (imf_wcs->flags == 0)) fits_frame_params_to_fim(fr); // new frame loaded
+
+    if (imf_wcs && (imf_wcs->flags != 0) && (imf_wcs->wcsset >= fr_wcs->wcsset)) { // reload from imf : load fr_wcs from imf or window if they have greater wcsset
         wcs_clone(fr_wcs, imf_wcs);
 
         if (fr_wcs->wcsset < WCS_VALID && window_wcs->wcsset > WCS_INVALID) {
@@ -216,19 +216,19 @@ struct wcs *refresh_wcs(gpointer window) {
         fr_wcs->wcsset = WCS_INITIAL;
         fr_wcs->flags |= WCS_HINTED;
 
-    } else if (window_wcs->flags & WCS_HINTED) { // clear hinted if scope moved or new file loaded?
-        fr_wcs->xref = window_wcs->xref;
-        fr_wcs->yref = window_wcs->yref;
-        fr_wcs->rot = window_wcs->rot;
+//    } else if (window_wcs->flags & WCS_HINTED) { // clear hinted if scope moved or new file loaded?
+//        fr_wcs->xref = window_wcs->xref;
+//        fr_wcs->yref = window_wcs->yref;
+//        fr_wcs->rot = window_wcs->rot;
     }
 
 //    gboolean a = WCS_HAVE_INITIAL(fr_wcs);
 //    unsigned int b = WCS_HAVE_SCALE_POS;
 //    gboolean a = (fr_wcs->flags & b) == b;
 
-    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) { // frame has initial wcs
-        fr_wcs->wcsset = WCS_INITIAL;
-    }
+//    if (fr_wcs->wcsset < WCS_INITIAL && WCS_HAVE_INITIAL(fr_wcs)) { // frame has initial wcs
+//        fr_wcs->wcsset = WCS_INITIAL;
+//    }
 
     if (fr_wcs->flags) { // either frame has some info, or wcs has been copied from imf or window
 
@@ -300,7 +300,7 @@ void wcs_clone(struct wcs *dst, struct wcs *src)
 {
     if (src == dst) return;
     if (src == NULL || src->wcsset == WCS_INVALID || isnan(src->xinc) || isnan(src->xref) || isnan(src->yinc) || isnan(src->yref)) {
-        printf("wcs_clone: src not initialized\n"); fflush(NULL);
+//        printf("wcs_clone: src not initialized\n"); fflush(NULL);
     }
     int rc = dst->ref_count;
     double jd = dst->jd;
@@ -968,13 +968,12 @@ void print_list(GSList *gsl) {
  */
 int auto_pairs(gpointer window, struct gui_star_list *gsl)
 {
-    GSList *cat = NULL, *field = NULL;
-    GSList *sl;
-	int ret;
+    GSList *cat = NULL;
 
 // TYPE_ALIGN doesn't get used
 //    cat = filter_selection(gsl->sl, (TYPE_CATREF | TYPE_ALIGN), 0, 0);
 
+    GSList *sl;
     for (sl = gsl->sl; sl != NULL; sl = sl->next) {
         struct gui_star *gs = GUI_STAR(sl->data);
         if (gs == NULL) continue;
@@ -1004,34 +1003,39 @@ int auto_pairs(gpointer window, struct gui_star_list *gsl)
         }
     }
 
+    if (cat == NULL) {
+        err_printf("No TYPE_CATREF stars in gui star list.\n");
+        return 0;
+    }
+
     cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare_size);
 
-//printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
-//for (sl = cat; sl != NULL; sl = sl->next) {
-//    struct gui_star *gs = GUI_STAR(sl->data);
-//    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
-//}
+    //printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
+    //for (sl = cat; sl != NULL; sl = sl->next) {
+    //    struct gui_star *gs = GUI_STAR(sl->data);
+    //    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
+    //}
 
-    field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
-    if (field == NULL) err_printf("No frame stars in gui star list! Adjust detection threshold.\n");
+    GSList *field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
+    if (field == NULL) {
+        err_printf("No TYPE_FRSTAR stars in gui star list! Adjust detection threshold.\n");
+        g_slist_free(cat);
+        return 0;
+    }
 
-//printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
-//for (sl = field; sl != NULL; sl = sl->next) {
-//    struct gui_star *gs = GUI_STAR(sl->data);
-//    printf("FIELD: x: %.1f y: %.1f size: %.1f\n", gs->x, gs->y, gs->size);
-//}
+    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);    
 
-    if (cat == NULL || field == NULL) {
-        if (cat) g_slist_free(cat);
-        if (field) g_slist_free(field);
-		return 0;
-	}
+    //printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
+    //for (sl = field; sl != NULL; sl = sl->next) {
+    //    struct gui_star *gs = GUI_STAR(sl->data);
+    //    printf("FIELD: x: %.1f y: %.1f size: %.1f\n", gs->x, gs->y, gs->size);
+    //}
 
-    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
+    int ret = fastmatch(window, field, cat);
 
-    ret = fastmatch(window, field, cat);
 	g_slist_free(field);
 	g_slist_free(cat);
+
 	return ret;
 }
 
@@ -1048,44 +1052,45 @@ static double gui_star_pa(struct gui_star *b, struct gui_star *a)
 	return atan2((b->y - a->y), b->x - a->x);
 }
 
-/* find a catalog star that matches the transformed position of c within
- * MATCH_TOL
+/* find a catalog star that matches the transformed position of c within MATCH_TOL
+ * return 0 : match found
+ * return 1 : no match found
  */
 
-struct gui_star * find_cc(struct gui_star *fa, struct gui_star *fb,
+static int find_cc(gpointer window,
+              struct gui_star *fa, struct gui_star *fb,
 			  struct gui_star *ca, struct gui_star *cb,
-              struct gui_star *fc, GSList *cat)
+              struct gui_star *fc, GSList *cat,
+              struct gui_star **cfound)
 {
-	double d_ccca;
-	double pa_ccca;
-	double xmin, xmax, ymin, ymax;
-	double x, y;
-	struct gui_star *cc;
-
 //	d3_printf("c: %.1f %.1f\n", c->x, c->y);
 
-    d_ccca = gui_star_distance(fa, fc) * gui_star_distance(ca, cb) / gui_star_distance(fa, fb);
-    pa_ccca = (gui_star_pa(fc, fa) - gui_star_pa(fb, fa)) + gui_star_pa(cb, ca);
+    double d_ccca = gui_star_distance(fa, fc) * gui_star_distance(ca, cb) / gui_star_distance(fa, fb);
+    double pa_ccca = (gui_star_pa(fc, fa) - gui_star_pa(fb, fa)) + gui_star_pa(cb, ca);
 
-	x = ca->x + d_ccca * cos(pa_ccca);
-	y = ca->y + d_ccca * sin(pa_ccca);
+    double x = ca->x + d_ccca * cos(pa_ccca);
+    double y = ca->y + d_ccca * sin(pa_ccca);
 
 //	d3_printf("looking around %.1f %.1f\n", x, y);
 
-	xmin = x - MATCH_TOL;
-	xmax = x + MATCH_TOL;
-	ymin = y - MATCH_TOL;
-	ymax = y + MATCH_TOL;
+    double xmin = x - MATCH_TOL;
+    double xmax = x + MATCH_TOL;
+    double ymin = y - MATCH_TOL;
+    double ymax = y + MATCH_TOL;
 
-	while (cat != NULL) {
-        cc = GUI_STAR(cat->data);
+    while (cat != NULL) {
+        struct gui_star *cc = GUI_STAR(cat->data);
 		cat = g_slist_next(cat);
+
 //		d3_printf("----- cc: %.1f %.1f\n", cc->x, cc->y);
-		if (cc->x > xmax || cc->x < xmin || cc->y < ymin || cc->y > ymax)
-			continue;
-		return cc;
+
+        if (cc->x > xmax || cc->x < xmin || cc->y < ymin || cc->y > ymax) continue;
+
+        *cfound = cc;
+
+        return 0;
 	}
-	return NULL;
+    return 1;
 }
 
 
@@ -1093,37 +1098,37 @@ struct gui_star * find_cc(struct gui_star *fa, struct gui_star *fb,
  * tolerances into account) */
 static GSList * find_likely_cb_list (struct gui_star *fa, struct gui_star *fb, struct gui_star *ca, GSList *cat)
 {
-	GSList *ret = NULL;
-	struct gui_star *cb;
-	double d_ba;
-	double pa_ba;
-	double d_cbca;
-	double pa_cbca;
-	double dmin, dmax, pamin, pamax;
+    GSList *match = NULL;
 
-    d_ba = gui_star_distance(fa, fb);
-    pa_ba = gui_star_pa(fb, fa);
-	dmin = d_ba * (1 - SCALE_TOL);
-	dmax = d_ba * (1 + SCALE_TOL);
-	pamin = pa_ba - ROT_TOL * PI / 180;
-	pamax = pa_ba + ROT_TOL * PI / 180;
+    double d_ba = gui_star_distance(fa, fb);
+    double pa_ba = gui_star_pa(fb, fa);
+
+    double dmin = d_ba * (1 - SCALE_TOL);
+    double dmax = d_ba * (1 + SCALE_TOL);
+    double pamin = pa_ba - ROT_TOL * PI / 180;
+    double pamax = pa_ba + ROT_TOL * PI / 180;
 
 	while (cat != NULL) {
-		cb = GUI_STAR(cat->data);
+        struct gui_star *cb = GUI_STAR(cat->data);
 		cat = g_slist_next(cat);
-		d_cbca = gui_star_distance(ca, cb);
-		if (d_cbca > dmax || d_cbca < dmin)
-			continue;
-		pa_cbca = gui_star_pa(cb, ca);
+
+        double d_cbca = gui_star_distance(ca, cb);
+
+        if (d_cbca > dmax || d_cbca < dmin) continue;
+
+        double pa_cbca = gui_star_pa(cb, ca);
 //        d3_printf("distance\n");
 //        d3_printf("------> d_ba: %.1f, pa_ba: %.3f\n", d_ba, pa_ba * 180 / PI);
 //        d3_printf("d_cbca: %.1f pa_cbca=%.3f \n", d_cbca, pa_cbca * 180 / PI);
+
         if (pa_cbca > pamax || pa_cbca < pamin)	continue;
-		ret = g_slist_append(ret, cb);
+
+        match = g_slist_append(match, cb);
 	}
 //    if (g_slist_length(ret))
 //        d3_printf("found %d\n", g_slist_length(ret));
-	return ret;
+
+    return match;
 }
 
 void make_pair(struct gui_star *cs, struct gui_star *s)
@@ -1148,8 +1153,11 @@ void make_pair(struct gui_star *cs, struct gui_star *s)
  *
  * the pairs are appended to the m and cm lists
  * return the number of pairs found
+ *
+ * user abort return -1
  */
-static int more_pairs(struct gui_star *fa, struct gui_star *fb,
+static int more_pairs(gpointer window,
+           struct gui_star *fa, struct gui_star *fb,
 	       struct gui_star *ca, struct gui_star *cb,
            GSList *field, GSList *cat,
            GSList **fm, GSList **cm)
@@ -1161,7 +1169,9 @@ static int more_pairs(struct gui_star *fa, struct gui_star *fb,
 
 	do {
         struct gui_star *fc = GUI_STAR (field->data);
-        struct gui_star *cc = find_cc (fa, fb, ca, cb, fc, cat);
+
+        struct gui_star *cc = NULL;
+        find_cc (window, fa, fb, ca, cb, fc, cat, &cc);
 
 		if (cc != NULL) {
             *fm = g_slist_append(*fm, fc);
@@ -1177,10 +1187,13 @@ static int more_pairs(struct gui_star *fa, struct gui_star *fb,
         if (skipped >= MAX_F_SKIP) break;
         if (pairs >= MAX_PAIRS)	break;
 
-    } while (field != NULL);
+        while (gtk_events_pending()) gtk_main_iteration();
+        if (check_user_abort(window)) break;
+
+    } while (field);
 
 //	d3_printf("more: returning %d\n", pairs);
-	return pairs;
+    return pairs;
 }
 
 /* take the lists of cat and field stars and mark them as pairs
@@ -1194,7 +1207,7 @@ static void make_pairs_from_list(GSList *cm, GSList *fm)
 	}
 }
 
-
+// return number found or -1 (user abort)
 static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star *fb, GSList *field, GSList *cat)
 {
 //    GSList *sl;
@@ -1208,13 +1221,13 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 
 //    d3_printf("wcs.match_from_a_b fa: %.1f %.1f, fb: %.1f. %.1f\n", fa->x, fa->y, fb->x, fb->y);
 
-    int abort = 0;
+    gboolean abort = FALSE;
     while (ca_list != NULL && ! abort) {
-//        while (gtk_events_pending()) gtk_main_iteration();
 
         struct gui_star *ca = GUI_STAR(ca_list->data);
 
         GSList *cb_list_start = find_likely_cb_list (fa, fb, ca, cat);
+
         GSList *cb_list = cb_list_start;
 
 //        d3_printf("... trying ca: %.1f %.1f ", ca->x, ca->y);
@@ -1227,27 +1240,27 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
         while (cb_list != NULL && ! abort) {
 
             struct gui_star *cb = GUI_STAR(cb_list->data);
-
-//            d3_printf("... trying cb: %.1f %.1f\n", cb->x, cb->y);
-
-            GSList *fc_list = field;
             struct gui_star *cc = NULL;
+
             int cskips = MAX_F_SKIP; /* max number of skips until we find c */
 
-            while (fc_list != NULL && cskips > 0 && ! abort) {
+            GSList *fc_list = field;
+            while (fc_list != NULL && cskips > 0 && abort == 0) {
 
                 struct gui_star *fc = GUI_STAR(fc_list->data);
 
 //                d3_printf("looking for cc to match fc: %.1f %.1f ...\n", fc->x, fc->y);
 
-                if ((cc = find_cc (fa, fb, ca, cb, fc, cat)) != NULL) break; // found cc to match fc
+                find_cc (window, fa, fb, ca, cb, fc, cat, &cc); // find cc to match fc
 
 //                d3_printf("no cc found\n");
+                if (cc != NULL) break;
 
-                fc_list = fc_list->next;
+                fc_list = g_slist_next(fc_list);
                 cskips --;
 
-                abort = check_user_abort(window);
+                while (gtk_events_pending()) gtk_main_iteration();
+                if ((abort = (check_user_abort(window) != 0))) break;
 			}
 
             cb_list = g_slist_next(cb_list);
@@ -1259,30 +1272,33 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
                 fc_list = g_slist_next(fc_list);
 
                 GSList *fm = NULL, *cm = NULL;
-                int ret = more_pairs (fa, fb, ca, cb, fc_list, cat, &fm, &cm);
 
-                if (ret + 3 > max) max = ret + 3;
-				if (ret + 3 < MIN_PAIRS) {
-                    g_slist_free(fm);
+                int ret = more_pairs (window, fa, fb, ca, cb, fc_list, cat, &fm, &cm);
 
-//                    printf("found only %d pairs, trying for more\n", ret+3); fflush(NULL);
+                if (ret >= 0) {
+                    int matched = ret + 3;
 
-                } else { /* we have a match! */
-//                    d3_printf("matched %d ;-)\n", ret+3);
+                    if (matched > max) max = matched;
+                    if (matched >= MIN_PAIRS) { /* we have a match! */
+                        //                    d3_printf("matched %d ;-)\n", matched);
 
-                    /* attach pairs */
-                    make_pair (ca, fa);
-                    make_pair (cb, fb);
-                    make_pair (cc, fc);
-                    make_pairs_from_list (cm, fm);
+                        /* attach pairs */
+                        make_pair (ca, fa);
+                        make_pair (cb, fb);
+                        make_pair (cc, fc);
+                        make_pairs_from_list (cm, fm);
 
-                    g_slist_free(cb_list_start);
+                        g_slist_free(cb_list_start);
 
-                    g_slist_free(fm);
-                    g_slist_free(cm);
+                        g_slist_free(fm);
+                        g_slist_free(cm);
 
-                    return ret + 3;
+                        return matched;
+                    }
                 }
+
+                if (fm) g_slist_free(fm);
+                if (cm) g_slist_free(cm);
 			}
 		}
 
@@ -1299,26 +1315,28 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
  */
 static int match_from(gpointer window, GSList *field, GSList *cat)
 {
-
-//printf("wcs.match_from\n");
+    struct gui_star *fa = GUI_STAR(field->data); // first star
 
     struct gui_star *fb = NULL;
     GSList *fc_list = NULL;
 
-// choose fa and fb
-    struct gui_star *fa = GUI_STAR(field->data);
-
+    int abort = 0;
     do {
-        if (field->next) {
-            fb = GUI_STAR(field->next->data);
-            fc_list = field->next->next;
+        GSList *field_next = g_slist_next(field);
+        if (field_next) {
+            fb = GUI_STAR(field_next->data); // second star
+            fc_list = g_slist_next(field_next); // remaining list
         }
-        field = g_slist_next(field);
-        if (fa && fb)
-            if (gui_star_distance (fa, fb) > MIN_AB_DISTANCE) break; // too far apart to match
+        field = field_next;
 
-    } while ( field != NULL);
-// fc_list is field less fa and fb
+        if (fa && fb && gui_star_distance (fa, fb) > MIN_AB_DISTANCE) break; // far enough apart to try a match
+
+        // star is too close for good fit
+        // printf("match_from : field gui_star number %d < %f\n", ++d, MIN_AB_DISTANCE); fflush(NULL);
+
+        abort = check_user_abort(window);
+    } while (field && abort == 0);
+
     return match_from_a_b (window, fa, fb, fc_list, cat);
 }
 
@@ -1332,10 +1350,7 @@ static int short_match(gpointer window, GSList *field, GSList *cat)
 
     struct gui_star *fb = (field->next) ? GUI_STAR(field->next->data) : NULL;
 
-    if (fb == NULL) {
-//        find best match star in cat nearish to fa
-        return 0; // fix this
-    }
+    if (fb == NULL) return 0; // fix this : find best match star in cat nearish to fa
 
 // fc_list is field less fa and fb
     return match_from_a_b (window, fa, fb, (field->next) ? field->next->next : NULL, cat);
@@ -1353,19 +1368,22 @@ int fastmatch(gpointer window, GSList *field, GSList *cat)
 	int max = 0;
     if (g_slist_length(field) <= 2) {
         ret = short_match(window, field, cat);
-        if (ret == -1) return -1; // user abort
 
     } else {        
         while (g_slist_length(field) >= 2) { /* loop dropping the first star in the list */
             ret = match_from(window, field, cat);
 
-            if (ret == -1) return -1; // user abort
-            if (ret > max) max = ret;
+            if (ret == -1) break;
             if (ret >= MIN_PAIRS) break;
+
+            if (ret > max) max = ret;
 
             field = g_slist_next(field);
         }
     }
+
+    if (ret == -1) return -1; // user abort
+
 	if (ret < MIN_PAIRS) {
 		err_printf("Only found %d pairs, need at least %d\n", max, MIN_PAIRS);
 		return 0;

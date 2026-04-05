@@ -321,21 +321,24 @@ void act_user_abort(GtkAction *action, gpointer window)
     g_object_set_data(G_OBJECT(window), "abort", GINT_TO_POINTER(1)); // set abort flag
 }
 
-int check_user_abort(gpointer window)
-{
-    if (window == NULL) return 0;
-
-//    while (gtk_events_pending()) gtk_main_iteration();
-    int abort = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(window), "abort")); // check abort flag
-
-    return abort;
-}
 
 void clear_user_abort(gpointer window)
 {
     if (window == NULL) return;
 
     g_object_set_data(G_OBJECT(window), "abort", GINT_TO_POINTER(0)); // clear abort flag
+}
+
+
+int check_user_abort(gpointer window)
+{
+    if (window == NULL) return 0;
+
+//    while (gtk_events_pending()) gtk_main_iteration();
+    int abort = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(window), "abort")); // check abort flag
+    g_object_set_data(G_OBJECT(window), "abort", GINT_TO_POINTER(0)); // clear abort flag
+
+    return abort;
 }
 
 void act_frame_new (GtkAction *action, gpointer window)

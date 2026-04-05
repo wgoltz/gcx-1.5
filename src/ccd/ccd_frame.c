@@ -2173,6 +2173,28 @@ FITS_str *fits_add_history(struct ccd_frame *fr, char *val)
     return fr->var_str + n * FITS_STRS;
 }
 
+FITS_str *fits_add_history_varg(struct ccd_frame *fr, char *fmt, ...)
+{
+    va_list ap, ap2;
+
+#ifdef __va_copy
+    __va_copy(ap2, ap);
+#else
+    ap2 = ap;
+#endif
+    va_start(ap, fmt);
+    va_start(ap2, fmt);
+
+    char *append = NULL;
+
+    vasprintf(&append, fmt, ap2);
+
+    FITS_str *ret = (append) ? fits_add_history(fr, append) : NULL;
+
+    va_end(ap);
+    return ret;
+}
+
 /* get copy string field from FITS_str, denoted by matching quote symbols
  * if matched quotes found, return pointer to char after trailing quote (in FITS_str)
  * if only start quote found, return pointer to char after start quote (in FITS_str)

@@ -438,6 +438,8 @@ void wcs_transform_from_frame(struct ccd_frame *fr, struct wcs *wcs)
     have_scale = ! have_scale && scan_for_PC(fr, wcs); // get xinc, yinc, rot from pc
 
     if (have_scale) wcs->flags |= WCS_HAVE_SCALE;
+
+    if (WCS_HAVE_INITIAL(wcs)) wcs->wcsset = WCS_INITIAL;
 }
 
 /* read the exp fields from the fits header lines
