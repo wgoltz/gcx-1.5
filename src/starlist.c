@@ -589,25 +589,27 @@ int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
     struct wcs *wcs = window_get_wcs(window);
 	g_return_val_if_fail(wcs != NULL, -2);
 
+    if (cats->gs == NULL) return -1;
+
     struct gui_star *gs = cats->gs;
     if (gs) {
         if (STAR_OF_TYPE(gs, TYPE_CATREF)) {
             gs->size = cat_star_size(cats);
-//			wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
+            //			wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
             cats_xypix(wcs, cats, &(gs->x), &(gs->y));
-//            if (cats->type == CATS_TYPE_APSTAR) {
-//                gs->type = STAR_TYPE_APSTAR;
-//                gui_star_label_from_cats(gs);
-//            } else if (cats->type == CATS_TYPE_APSTD) {
-//                gs->type = STAR_TYPE_APSTD;
-//                gui_star_label_from_cats(gs);
-//            } else if (cats->type == CATS_TYPE_SREF) {
-//                gs->type = STAR_TYPE_SREF;
-//                gui_star_label_from_cats(gs);
-//            } else {
-//                gs->type = STAR_TYPE_CAT;
-//                gui_star_label_from_cats(gs);
-//            }
+            //            if (cats->type == CATS_TYPE_APSTAR) {
+            //                gs->type = STAR_TYPE_APSTAR;
+            //                gui_star_label_from_cats(gs);
+            //            } else if (cats->type == CATS_TYPE_APSTD) {
+            //                gs->type = STAR_TYPE_APSTD;
+            //                gui_star_label_from_cats(gs);
+            //            } else if (cats->type == CATS_TYPE_SREF) {
+            //                gs->type = STAR_TYPE_SREF;
+            //                gui_star_label_from_cats(gs);
+            //            } else {
+            //                gs->type = STAR_TYPE_CAT;
+            //                gui_star_label_from_cats(gs);
+            //            }
             gs->type = (star_type)cats->type;
             gui_star_label_from_cats(gs);
 
@@ -627,28 +629,28 @@ int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
                 gs->size = cat_star_size(CAT_STAR(gs->s));
                 //			wcs_xypix(wcs, cats->ra, cats->dec, &(gs->x), &(gs->y));
                 cats_xypix(wcs, cats, &(gs->x), &(gs->y));
-//                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTAR) {
-//                    gs->type = STAR_TYPE_APSTAR;
-//                    gui_star_label_from_cats(gs);
-//                    continue;
-//                }
-//                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTD) {
-//                    gs->type = STAR_TYPE_APSTD;
-//                    gui_star_label_from_cats(gs);
-//                    continue;
-//                }
-//                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_SREF) {
-//                    gs->type = STAR_TYPE_SREF;
-//                    gui_star_label_from_cats(gs);
-//                    continue;
-//                } else {
-//                    gs->type = STAR_TYPE_CAT;
-//                    gui_star_label_from_cats(gs);
-//                    continue;
-//                }
+                //                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTAR) {
+                //                    gs->type = STAR_TYPE_APSTAR;
+                //                    gui_star_label_from_cats(gs);
+                //                    continue;
+                //                }
+                //                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_APSTD) {
+                //                    gs->type = STAR_TYPE_APSTD;
+                //                    gui_star_label_from_cats(gs);
+                //                    continue;
+                //                }
+                //                if (CATS_TYPE(CAT_STAR(gs->s)) == CATS_TYPE_SREF) {
+                //                    gs->type = STAR_TYPE_SREF;
+                //                    gui_star_label_from_cats(gs);
+                //                    continue;
+                //                } else {
+                //                    gs->type = STAR_TYPE_CAT;
+                //                    gui_star_label_from_cats(gs);
+                //                    continue;
+                //                }
                 gs->type = (star_type)cats->type;
                 gui_star_label_from_cats(gs);
-//                continue;
+                //                continue;
                 break;
 
             }
@@ -659,8 +661,8 @@ int update_gs_from_cats(GtkWidget *window, struct cat_star *cats)
         else
             return -1;
     }
-}
 
+}
 
 /* update the cat sizes according to the current limiting magnitude
  * and mark some as hidden if appropiate */

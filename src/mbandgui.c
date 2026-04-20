@@ -151,7 +151,6 @@ static int fit_progress(char *msg, void *window)
 {
     mbds_printf(window, "%s", msg);
 
-//    while (gtk_events_pending ()) gtk_main_iteration ();
     return check_user_abort(window);
 }
 
@@ -1071,6 +1070,15 @@ void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
         if (window == NULL) return;
 
         struct image_file *imf = ofr->imf;
+        if (imf == NULL) {
+            struct ccd_frame *fr = window_get_current_frame(window);
+            if (fr == NULL) return;
+
+            printf("imf == NULL use copy of current frame\n"); fflush(NULL);
+
+            imf = fr->imf; // do we need allocate new imf?
+            ofr->imf = imf; // try this
+        }
         if (imf_load_frame(imf) < 0) return;
 
 //        get_frame(imf->fr, "act_mband_display_ofr_frame"); // use imf ?
@@ -1148,11 +1156,12 @@ static void ofr_selection_cb(GtkWidget *ofr_selection, gpointer mband_dialog)
                         struct cat_star *cats = sob->cats;
                         g_return_if_fail(cats != NULL);
 
-                        struct gui_star *gs = cats->gs;
-                        if (gs->s != cats) { printf("ofr_selection_cb: gs->s doesn't = cats\n"); fflush(NULL); }
+                        if (cats->gs) {
+                            struct gui_star *gs = cats->gs;
 
-                        if ( gui_star_in_selection (selected_gui_stars, gs) )
-                            gtk_tree_selection_select_iter (sob_selection, &iter); // calls sob_selection_cb for each sob
+                            if ( gui_star_in_selection (selected_gui_stars, gs) )
+                                gtk_tree_selection_select_iter (sob_selection, &iter); // calls sob_selection_cb for each sob
+                        }
 
                      } while (gtk_tree_model_iter_next (sob_store, &iter));
                 }
@@ -1200,10 +1209,17 @@ static void sob_selection_cb(GtkWidget *sob_selection, gpointer mband_dialog)
         struct cat_star *cats = sob->cats;
         g_return_if_fail(cats != NULL);
 
-        struct gui_star *gs = cats->gs;
-        if (gs->s != cats) { printf("sob_selection_cb: gs->s doesn't = cats\n"); fflush(NULL); }
-
-        if (gs) selected_gui_stars = g_list_insert_sorted(selected_gui_stars, gs, (GCompareFunc)gs_compare);
+        if (cats->gs) {
+            struct gui_star *gs = cats->gs;
+            if (gs->s) {
+                struct cat_star *cats2 = CAT_STAR(gs->s);
+// gs->s has photometry after fit, cats has photometry before fit
+                selected_gui_stars = g_list_insert_sorted(selected_gui_stars, gs, (GCompareFunc)gs_compare);
+            } else {
+                printf("gui_star has no cat_star\n");
+                fflush(NULL);
+            }
+        }
     }
 
     // this could be somewhere else maybe
@@ -1694,17 +1710,24 @@ static void link_ostars_to_gui_stars(gpointer mband_dialog)
     struct mband_dataset *mbds = dialog_get_mbds(mband_dialog);
 
     GList *sl;
+    int i = 0;
     for (sl = mbds->ostars; sl != NULL; sl = sl->next) {
         struct o_star *ost = (struct o_star *)(sl->data);
 
         if (ost) {
             struct cat_star *cats = ost->cats;
-            if (cats && cats->gs == NULL) {
-                struct gui_star *gs = find_gs_by_cats_name(gsl, cats->name);
-                cats->gs = gs;
+            i++;
+
+            if (cats == NULL) printf("o_star %d has no link to cat_star\n", i), fflush(NULL);
+
+            else if (cats->gs == NULL) {
+                cats->gs = find_gs_by_cats_name(gsl, cats->name);
+
+                if (cats->gs == NULL) printf("o_star %d cat_star has no link to gui_star\n", i), fflush(NULL);
             }
         }
     }
+    printf("%d o_stars\n", i); fflush(NULL);
 }
 
 // build mband dialog from stf file
@@ -1728,8 +1751,8 @@ void add_to_mband(gpointer mband_dialog, char *fn)
         // add sobs for target and std stars to mbds
 //        fprintf(stdout, "--------------------------------------------- %d \n", n);
 //        stf_fprint(stdout, stf, 0, 0); fflush(stdout);
-        struct o_frame *ofr = NULL;
-        if ((ofr = mband_dataset_add_stf (mbds, stf))) {
+        struct o_frame *ofr = mband_dataset_add_stf (mbds, stf);
+        if (ofr) {
             mband_dataset_add_sobs_to_ofr(mbds, ofr); // link to recipe stars
             n++;
         }

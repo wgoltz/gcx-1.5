@@ -106,31 +106,35 @@ struct cat_star {
 //	void *catt;	/* the catalog */
 	int flags;
     cats_type type;
-	double ra;
-	double dec;
-	double perr;		/* position error in arcsec */
-	double equinox;
-	double mag; 		/* the generic 'magnitude' of the object, with no 
-				 * particular photometric relevance */
-	double sky;		/* sky value */
-	double diffam;		/* differential airmass (from frame center) */
+    struct gui_star *gs; /* point to gui_star */
 
     char *name; /* designation for the star */
-	double residual; /* fitting data, not used by catalog code */
-	double std_err;
-	double noise[NOISE_LAST];
-	double pos[POS_LAST]; 	/* on-frame position info */
-	struct cats_astro *astro; /* astrometry info */
-	char *comments; /* malloced misc info from the catalog */
-    char *cmags; /* catalog magnitudes - initial mags for creating recipe */
-    char *smags; /* recipe standard mags and solved target mags */
-    char *imags; /* solved instrumental magnitudes */
-    double phot_imag;
-    double phot_imagerr;
-    char *phot_band;
-    struct gui_star *gs; /* point to gui_star */
-    void *data;
-    void *ost; /* o_star: list of observations for this star */
+
+    // catalog stuff
+	double ra;
+	double dec;
+	double equinox;
+
+    struct cats_astro *astro; /* astrometry info */
+    double perr;		/* position error in arcsec */
+
+    double mag; 		/* the generic 'magnitude' of the object, with no particular photometric relevance */
+
+    char *comments; /* misc info from the catalog */
+    char *cmags; /* string - catalog magnitudes with errors */
+
+    // last photometry solution ...
+    double std_err;  /* solved value ? */
+    double residual; /* fit residual */
+
+    char *smags; /* string - solved target mags with errors */
+    char *imags; /* string - solved instrumental magnitudes with errors */
+
+    // these are per frame values, should be part of observations ?
+    double noise[NOISE_LAST];
+    double pos[POS_LAST]; 	/* on-frame position info */
+    double sky;		/* sky value */
+    double diffam;	/* differential airmass (from frame center) */
 };
 
 #define CATALOG(x) ((struct catalog *)(x))
@@ -143,7 +147,7 @@ struct catalog {
     int (* cat_get)(struct cat_star *cst[], struct catalog *cat, char *name, int n);
 	int (* cat_add)(struct cat_star *cst, struct catalog *cat);
 	int (* cat_sync)(struct catalog *cat);
-	void *data; 		/* usually hold a list of cat_stars - or nothing */
+    void *cat_stars; 		/* usually hold a list of cat_stars - or nothing */
 	GHashTable *hash; 	/* hash table used to speed searches up */
 };
 

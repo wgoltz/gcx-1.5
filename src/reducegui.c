@@ -810,12 +810,14 @@ d2_printf("reducegui.imf_display_cb load %s ref_count: %d\n", imf->filename, imf
 
     if (imf) { // new frame has been loaded
         if (P_INT(FILE_SAVE_MEM)) {
-            if (!(imf->state_flags & IMG_STATE_DIRTY)) get_frame(imf->fr, "imf_display_cb new frame loaded"); // keep current frame loaded
+            if (imf->state_flags & IMG_STATE_DIRTY) get_frame(imf->fr, "imf_display_cb new frame loaded"); // keep current frame loaded
 
             struct image_file_list *imfl = g_object_get_data (G_OBJECT(processing_dialog), "imfl");
             g_return_if_fail (imfl != NULL);
 
             unload_clean_frames (imfl);
+
+            if (imf->state_flags & IMG_STATE_DIRTY) release_frame(imf->fr, "after unload_clean_frames");
         }
 
         update_mband_status_labels (processing_dialog); // display
@@ -905,12 +907,13 @@ static void imf_reload_cb(GtkAction *action, gpointer processing_dialog)
 
 d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
 
-        if (!(imf->state_flags & IMG_STATE_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
-            imf_release_frame(imf, "imf_reload_cb");
+        imf_release_frame(imf, "imf_reload_cb");
 
-            struct ccd_frame *fr = imf->fr;
-            if (fr) fr->imf = NULL;
-            imf->fr = NULL;
+        struct ccd_frame *fr = imf->fr;
+        if (fr) fr->imf = NULL;
+        imf->fr = NULL;
+
+        if (!(imf->state_flags & IMG_STATE_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
 
             imf->state_flags &= IMG_STATE_SKIP; // we keep the skip flag
             imf->op_flags = 0; // clear the op flags
@@ -1466,10 +1469,6 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
         return;
     }
 
-    if (ccdr->op_flags & IMG_OP_PHOT) {
-
-    }
-
     int nframes = g_list_length(imfl->imlist);
     int seq = 1;
 
@@ -1483,9 +1482,9 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
 
     char *outf = named_entry_text (processing_dialog, "output_file_entry");
 
-    int ret = 0;
+    int abort = 0;
     GList *gl = imfl->imlist;
-    while (gl && ret >= 0) {
+    while (gl) {
         struct image_file *imf = gl->data;
         gl = g_list_next(gl);
 
@@ -1499,9 +1498,12 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
                 ccdr->state_flags |= IMG_STATE_BG_VAL_SET;
             }
 
-            ret = ccd_reduce_imf (imf, ccdr, progress_pr, processing_dialog);
+            int ret = ccd_reduce_imf (imf, ccdr, progress_pr, processing_dialog);
 
-            imf_display_cb (NULL, processing_dialog); // after run
+            imf_display_cb (NULL, processing_dialog); // after run            
+
+            abort = (ret == -1) ? 1 : 0;
+            if (abort != 0) break;
 
             if (ret == 0) {
                 if ( ! (ccdr->op_flags & IMG_OP_STACK) ) { // no stack
@@ -1517,45 +1519,36 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
                                 save_clipped_image_file(imf, outf, 0, &seq, progress_pr, processing_dialog);
                             else
                                 save_image_file (imf, outf, 0, &seq, progress_pr, processing_dialog);
-
                         }
-                        if (P_INT(FILE_SAVE_MEM))
-                            imf->state_flags &= ~IMG_STATE_DIRTY;
 
-//                    } else if ( (ccdr->op_flags & IMG_OP_PHOT) && !(ccdr->op_flags & IMG_OP_ALIGN) ) {
-//                    } else if (ccdr->op_flags & IMG_OP_PHOT && P_INT(FILE_SAVE_MEM)) { // ignore dirty and release if save_mem
-//                        imf->state_flags &= ~IMG_STATE_DIRTY;
-// have to clear link back to frame when frame is deleted
-                        //               imf->state_flags &= ~(IMG_STATE_LOADED); // needs checking
+                        imf->state_flags &= ~IMG_STATE_DIRTY; // clear dirty flag
                     }
+
+                    if ( (ccdr->op_flags & IMG_OP_PHOT) && P_INT(FILE_SAVE_MEM))  // if save_mem ignore dirty and release
+                        imf->state_flags &= ~IMG_STATE_DIRTY; // clear dirty flag
+
                 }
             }
         }
+
         select_imf (processing_dialog, SELECT_PATH_NEXT);
     }
 
 //    imf_display_cb (NULL, processing_dialog); // after all run
 
-    if ( (ccdr->op_flags & IMG_OP_STACK) && ret >= 0 ) { // stack
+    if ( (ccdr->op_flags & IMG_OP_STACK) && abort == 0 ) { // stack
 
         struct ccd_frame *fr = stack_frames (imfl, ccdr, progress_pr, processing_dialog);
         if (fr && fr->imf) {
             struct image_file *imf = fr->imf;
 
             wcs_clone(imf->fim, &fr->fim);
-//            get_frame(imf->fr, "ccdred_run_cb");
 
             if (outf) {
                 if (get_named_checkb_val(processing_dialog, "clip_checkb"))
-//                    save_clipped_image_file(imf, outf, 0, &seq, progress_pr, processing_dialog);
                     save_clipped_image_file(imf, outf, 0, NULL, progress_pr, processing_dialog);
                 else
-//                    save_image_file (imf, outf, 0, &seq, progress_pr, processing_dialog);
                     save_image_file (imf, outf, 0, NULL, progress_pr, processing_dialog);
-
-//                if (fr->name) free(fr->name);
-//                fr->name = strdup(imf->filename);
-
             }
 
             dialog_update_from_imfl (processing_dialog, imfl);
@@ -1563,13 +1556,8 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
 
         } else {
             // aborted
-            ret = -1;
             progress_pr("user aborted", processing_dialog);
         }
-    }
-
-    if (ret < 0) {
-//        clear_user_abort(ccdr->window);
     }
 
     update_mband_status_labels (processing_dialog);

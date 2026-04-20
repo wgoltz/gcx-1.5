@@ -22,7 +22,6 @@ struct o_star {
 	double smagerr[MAX_MBANDS]; /* errors */
     struct accum *acc[MAX_MBANDS]; /* accumulators for calculating avg mags */
     char *bname[MAX_MBANDS]; /* pointers to band names */
-	unsigned int data;	/* user data */
     int ref_count;
     struct cat_star *cats; /* point back to cat_star */
 };

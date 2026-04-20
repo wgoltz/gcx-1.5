@@ -556,9 +556,10 @@ struct stf * run_phot(gpointer window, struct wcs *wcs, struct gui_star_list *gs
 
         // ref cats or gs ?
 
-        if (cats->gs == NULL) // link cats to gs
-            cats->gs = gs;
-        else if (gs != cats->gs) {
+        if (cats->gs == NULL)
+            cats->gs = gs; // link cats to gs
+
+        if (gs != cats->gs) {
             printf("gui_stars dont match!\n");
             fflush(NULL);
         }

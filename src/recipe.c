@@ -1330,7 +1330,7 @@ int output_internal_catalog(FILE *outf, double mag_limit)
 	loc = open_catalog("local");
 	g_return_val_if_fail(loc != NULL, -1);
 
-	lcat = loc->data;
+    lcat = loc->cat_stars;
 
 	st = stf_append_string(NULL, SYM_COMMENTS, "gcx internal catalog output");
 	stf = stf_append_list(NULL, SYM_CATALOG, st);

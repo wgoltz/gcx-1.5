@@ -702,7 +702,7 @@ int extract_stars(struct ccd_frame *fr, struct region *reg, double sigmas, int *
     for (y = ys; y < ye; y++) {
 
         abort = check_user_abort(fr->window);
-        if (abort) break; // check for user abort
+        if (abort != 0) break; // check for user abort
 
         int x;
         for (x = xs; x < xe; x++) {

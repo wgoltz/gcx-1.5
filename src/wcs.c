@@ -1187,7 +1187,6 @@ static int more_pairs(gpointer window,
         if (skipped >= MAX_F_SKIP) break;
         if (pairs >= MAX_PAIRS)	break;
 
-        while (gtk_events_pending()) gtk_main_iteration();
         if (check_user_abort(window)) break;
 
     } while (field);
@@ -1259,7 +1258,6 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
                 fc_list = g_slist_next(fc_list);
                 cskips --;
 
-                while (gtk_events_pending()) gtk_main_iteration();
                 if ((abort = (check_user_abort(window) != 0))) break;
 			}
 
@@ -1337,7 +1335,7 @@ static int match_from(gpointer window, GSList *field, GSList *cat)
         abort = check_user_abort(window);
     } while (field && abort == 0);
 
-    return match_from_a_b (window, fa, fb, fc_list, cat);
+    return (abort == 0) ? match_from_a_b (window, fa, fb, fc_list, cat) : -1;
 }
 
 static int short_match(gpointer window, GSList *field, GSList *cat)

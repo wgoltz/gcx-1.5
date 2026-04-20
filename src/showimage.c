@@ -1057,7 +1057,7 @@ void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
  * it ref's the frame, so the frame should be released after
  * frame_to_channel is called
  */
-int frame_to_channel(struct ccd_frame *fr, GtkWindow *window, char *chname)
+int frame_to_channel(struct ccd_frame *fr, gpointer window, char *chname)
 {
 //printf("showimage.frame_to_channel\n");
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");

@@ -89,7 +89,7 @@ void clear_user_abort(gpointer window);
 /* function prototypes */
 /* from showimage.c */
 extern gboolean image_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer data);
-extern int frame_to_channel(struct ccd_frame *fr, GtkWindow *window, char *chname);
+extern int frame_to_channel(struct ccd_frame *fr, gpointer window, char *chname);
 extern void ref_image_channel(struct image_channel *channel);
 extern void release_image_channel(struct image_channel *channel);
 extern int channel_to_pnm_file(struct image_channel *channel, GtkWidget *window, char *fn, int is_16bit);

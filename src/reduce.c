@@ -988,23 +988,24 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
     }
 
     if ( (abort == 0) && ((ccdr->op_flags & IMG_OP_PHOT) && ! (imf->state_flags & IMG_STATE_SKIP)) ) {
-// if save mem set (maybe) :
-// unset dirty flag if phot is the end result, dumping dirty files
-// then would need to reprocess individually any reloaded frame
+
         if (g_object_get_data(G_OBJECT(ccdr->window), "recipe") || ccdr->recipe) { // recipe is loaded
 
             REPORT( " phot" )
             if ( aphot_imf(imf, ccdr, progress, processing_dialog) ) {
                 REPORT( " (FAILED)" )
                 imf->state_flags |= IMG_STATE_SKIP;
+
+            } else {
+
+                if (P_INT(FILE_SAVE_MEM)) imf->state_flags &= ~IMG_STATE_DIRTY;
+//                imf->state_flags &= IMG_STATE_SKIP; // clear flags but keep skip
+
             }
 
             abort = check_user_abort(ccdr->window);
 
         }
-
-        // else REPORT( " (already done)" )
-//        imf->state_flags |= IMG_STATE_DIRTY; // even though it isnt
     }
 
     REPORT( "\n" )
@@ -2373,11 +2374,21 @@ d2_printf("imf release %d '%s'\n", imf->ref_count, imf->filename);
 		imf->ref_count--;
 		return;
 	}
-printf("imf freed '%s'\n", imf->filename); fflush(NULL);
+
+    printf("imf freed '%s'", imf->filename);
+
     if (imf->filename) free(imf->filename);
     if (imf->fim) wcs_release(imf->fim);
 
-    if (imf->fr) imf->fr->imf = NULL;
+    if (imf->fr) {
+        printf(" frame ref count %d\n", imf->fr->ref_count);
+
+        release_frame(imf->fr, "image_file_release");
+        if (imf->fr) imf->fr->imf = NULL;
+    } else {
+        printf(" frame already freed\n");
+    }
+    fflush(NULL);
 
     free(imf);
 }

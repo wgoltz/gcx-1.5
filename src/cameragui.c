@@ -822,13 +822,16 @@ static int expose_indi_cb(gpointer cam_control_dialog)
                 fr_wcs->xref = tele->sync_ra;
                 fr_wcs->yref = tele->sync_dec;
                 fr_wcs->wcsset = WCS_VALID; // ?
-            }
 
-            tele->synced = FALSE;
+                tele->synced = FALSE;
+            }
 
         } else { // otherwise set from frame fits parms
             fits_frame_params_to_fim(fr);
         }
+
+        struct wcs *window_wcs = window_get_wcs(main_window);
+        if (window_wcs->wcsset == WCS_INITIAL) wcs_clone(fr_wcs, window_wcs);
 
         rescan_fits_exp(fr, &(fr->exp));
 

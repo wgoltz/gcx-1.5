@@ -182,7 +182,7 @@ static struct catalog *cat_open_gsc(struct catalog *cat)
 	if (cat->name == NULL) {
 		cat->name = catalogs[GSC_NAME];
 		cat->ref_count = 0;
-		cat->data = NULL;
+        cat->cat_stars = NULL;
 	}
 	cat->ref_count ++;
 //	d3_printf("open, gsc_search = %08x\n", (unsigned)gsc_search);
@@ -311,7 +311,7 @@ static struct catalog *cat_open_tycho2(struct catalog *cat)
 	if (cat->name == NULL) {
 		cat->name = catalogs[TYCHO2_NAME];
 		cat->ref_count = 0;
-		cat->data = NULL;
+        cat->cat_stars = NULL;
 	}
 	cat->ref_count ++;
 //	d3_printf("open, gsc_search = %08x\n", (unsigned)gsc_search);
@@ -335,7 +335,7 @@ static struct catalog *cat_open_tycho2(struct catalog *cat)
 int local_search(struct cat_star *cst[], struct catalog *cat, 
 	       double ra, double dec, double radius, int n)
 {
-	GList *lcat = cat->data;
+    GList *lcat = cat->cat_stars;
 	struct cat_star *cats;
 	int i = 0;
 	double ramin, ramax, decmin, decmax;
@@ -368,7 +368,7 @@ int local_search(struct cat_star *cst[], struct catalog *cat,
 static int cached_local_get(struct cat_star *cst[], struct catalog *cat, 
 	      char *name, int n)
 {
-	GList *lcat = cat->data;
+    GList *lcat = cat->cat_stars;
 	int i = 0, ret;
 	struct cat_star *cats;
 
@@ -453,7 +453,7 @@ int local_add(struct cat_star *cats, struct catalog *cat)
 		if (cat->hash == NULL) {
 			cat->hash = g_hash_table_new(g_str_hash, g_str_equal);
 		}
-		cat->data = g_list_prepend((GList *)cat->data, cats);
+        cat->cat_stars = g_list_prepend((GList *)cat->cat_stars, cats);
         cat_star_ref(cats, "local_add");
 		g_hash_table_insert(cat->hash, cats->name, cats);
 	} else {
@@ -475,7 +475,7 @@ static struct catalog *cat_open_local(struct catalog *cat)
 	if (cat->name == NULL) {
 		cat->name = catalogs[LOCAL_NAME];
 		cat->ref_count = 0;
-		cat->data = NULL;
+        cat->cat_stars = NULL;
 		if (P_INT(FILE_PRELOAD_LOCAL))
 			local_load_catalogs(P_STR(FILE_CATALOG_PATH));
 	}
@@ -533,7 +533,7 @@ static struct catalog *cat_open_edb(struct catalog *cat)
 	if (cat->name == NULL) {
 		cat->name = catalogs[EDB_NAME];
 		cat->ref_count = 0;
-		cat->data = NULL;
+        cat->cat_stars = NULL;
 	}
 	cat->ref_count ++;
 	cat->cat_search = NULL;

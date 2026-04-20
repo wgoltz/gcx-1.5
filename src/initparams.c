@@ -1162,12 +1162,12 @@ void init_ptable(void)
     set_par_description(SYNTH_FLATNOISE, "Flat noise (from reduced frame we are synthesizing).");
 
     add_par_double(SYNTH_MEAN, PAR_SYNTH, 0, "gauss_mean", "gaussian mean", 0);
-    set_par_description(SYNTH_MEAN, "mean for gaussian component.");
+    set_par_description(SYNTH_MEAN, "mean for sky gaussian component.");
 
     add_par_double(SYNTH_SIGMA, PAR_SYNTH, 0, "gauss_sigma", "gaussian sigma", 0);
-    set_par_description(SYNTH_SIGMA, "sigma for gaussian component.");
+    set_par_description(SYNTH_SIGMA, "sigma for sky gaussian component.");
 
     add_par_int(SYNTH_ADDNOISE, PAR_SYNTH, FMT_BOOL, "add_noise", "Add Noise", FALSE);
-    set_par_description(SYNTH_ADDNOISE, "Add noise to synthesized frame.");
+    set_par_description(SYNTH_ADDNOISE, "Enable adding gaussian sky component to synthesized frame.");
 
 }

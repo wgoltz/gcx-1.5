@@ -246,10 +246,10 @@ void mband_dataset_release(struct mband_dataset *mbds)
 void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, struct o_frame *ofr)
 {
 	g_return_if_fail(ofr != NULL);
-// ost belongs to cats, don't need hashtable ?
+
     struct o_star *ost = g_hash_table_lookup(mbds->objhash, cats->name);
 
-    if (ost == NULL) { /* we just enter a std star into the table */
+    if (ost == NULL) { // hashtable is built from first occurrence of name
         ost = o_star_new();
         g_return_if_fail (ost != NULL);
 
@@ -258,14 +258,13 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
             ost->smag[i] = MAG_UNSET;
             ost->smagerr[i] = BIG_ERR;
         }
-// find gs_by_cats_name
-// insert gs into obhash
+
         g_hash_table_insert(mbds->objhash, cats->name, ost);
 
         o_star_ref(ost);
         mbds->ostars = g_list_prepend(mbds->ostars, ost);
 
-        ost->cats = cats; // should be a gs in gsl that points to this cats
+        ost->cats = cats; // catalog object info for first occurrence of name
     }
 
 // don't use reffing, alloc and free when non-null with cats ?
@@ -287,10 +286,9 @@ void mband_dataset_add_sob(struct mband_dataset *mbds, struct cat_star *cats, st
     struct star_obs *sob = star_obs_new();
 	g_return_if_fail(sob != NULL);
 
-    sob->ost = ost; // just extended part of cats
-	sob->ofr = ofr;
-
-    sob->cats = cats; // gs->s = cats
+    sob->cats = ost->cats; // catalog info for object
+    sob->ofr = ofr; // current frame info
+    sob->ost = ost; // object info for current frame
 
 	star_obs_ref(sob);
     ost->sobs = g_list_prepend(ost->sobs, sob); // does it get used ?

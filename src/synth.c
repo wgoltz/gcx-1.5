@@ -305,7 +305,7 @@ static int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *s
         if (get_band_by_name(cats->smags, P_STR(AP_IBAND_NAME), &mag, NULL)) mag = cats->mag;
 
         double flux = absmag_to_flux(mag - P_DBL(SYNTH_ZP));
-        vv = v = add_psf_to_frame(fr, psf, pw, ph, xc, yc, x - 1.0, y - 1.0, flux / vol, P_INT(SYNTH_OVSAMPLE));
+        vv = v = add_psf_to_frame(fr, psf, pw, ph, xc, yc, x + 0.5, y + 0.5, flux / vol, P_INT(SYNTH_OVSAMPLE));
 
         if (vv == 0) continue;
 /*
@@ -358,9 +358,11 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
         }
     }
 
+    if (ssl) synth_stars_to_frame(dark_fr, wcs, ssl);
+
     if (P_INT(SYNTH_ADDNOISE)) {
 
-// start with a dark frame
+// start with existing dark frame (with noise) + synthesized stars
 // assume largish counts so noise distribution is gaussian
 // monochrome image only
 
@@ -382,16 +384,12 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
         int w = dark_fr->w;
         int h = dark_fr->h;
 
-//        struct ccd_frame *star_fr = new_frame_fr(dark_fr, w, h);
-//        if (ssl) synth_stars_to_frame(star_fr, wcs, ssl);
-        if (ssl) synth_stars_to_frame(dark_fr, wcs, ssl);
-
-        float *dark = dark_fr->dat;
+        float *dark = dark_fr->dat; // dark + synth (with dark noise)
 //        float *star = star_fr->dat;
 
         int i;
         for (i = 0; i < w * h; i++, dark++ /*, star++*/ ) {
-            double poisson_adu = /* dark_adu  + */ sky_adu + *dark /* *star */;
+            double poisson_adu = sky_adu + *dark; // subtract something to account for dark noise ?
 
             // add noise to poisson_adu
             poisson_adu = gauss(poisson_adu, sqrt(poisson_adu + sqr(flat_noise * poisson_adu)));
@@ -399,14 +397,12 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
             double other_noise_adu = gauss(P_DBL(SYNTH_MEAN), P_DBL(SYNTH_SIGMA));
 
 //            *dark = *dark + poisson_adu + other_noise_adu;
-            *dark += poisson_adu + other_noise_adu;
+            *dark = poisson_adu + other_noise_adu;
         }
 
 //        release_frame(star_fr, "act_stars_add_synthetic");
 
     }
-
-    synth_stars_to_frame(dark_fr, wcs, ssl);
 
     frame_stats(dark_fr);
 	i_ch->channel_changed = 1;
