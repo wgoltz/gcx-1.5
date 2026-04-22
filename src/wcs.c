@@ -1010,11 +1010,12 @@ int auto_pairs(gpointer window, struct gui_star_list *gsl)
 
     cat = g_slist_sort(cat, (GCompareFunc)gui_star_compare_size);
 
-    //printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
-    //for (sl = cat; sl != NULL; sl = sl->next) {
-    //    struct gui_star *gs = GUI_STAR(sl->data);
-    //    printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
-    //}
+//    printf("matching to %d cat stars\n", g_slist_length(cat)); fflush(NULL);
+//    for (sl = cat; sl != NULL; sl = sl->next) {
+//        struct gui_star *gs = GUI_STAR(sl->data);
+//        printf("CAT: %s: mag:%.3f x: %.1f y: %.1f size: %.1f\n", CAT_STAR(gs->s)->name, CAT_STAR(gs->s)->mag, gs->x, gs->y, gs->size);
+//        fflush(NULL);
+//    }
 
     GSList *field = filter_selection(gsl->sl, TYPE_FRSTAR, 0, 0);
     if (field == NULL) {
@@ -1023,13 +1024,14 @@ int auto_pairs(gpointer window, struct gui_star_list *gsl)
         return 0;
     }
 
-    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);    
+    field = g_slist_sort(field, (GCompareFunc)gui_star_compare_size);
 
-    //printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
-    //for (sl = field; sl != NULL; sl = sl->next) {
-    //    struct gui_star *gs = GUI_STAR(sl->data);
-    //    printf("FIELD: x: %.1f y: %.1f size: %.1f\n", gs->x, gs->y, gs->size);
-    //}
+//    printf("matching to %d field stars\n", g_slist_length(field)); fflush(NULL);
+//    for (sl = field; sl != NULL; sl = sl->next) {
+//        struct gui_star *gs = GUI_STAR(sl->data);
+//        printf("GS: sort: %d size: %.1f\n", gs->sort, gs->size);
+//        fflush(NULL);
+//    }
 
     int ret = fastmatch(window, field, cat);
 
@@ -1040,11 +1042,11 @@ int auto_pairs(gpointer window, struct gui_star_list *gsl)
 }
 
 #define SCALE_TOL P_DBL(FIT_SCALE_TOL) /*0.1 tolerance of scale */
-#define MATCH_TOL P_DBL(FIT_MATCH_TOL) /* 1max error to accept a match (in pixels) */
+#define MATCH_TOL P_DBL(FIT_MATCH_TOL) /*1 max error to accept a match (in pixels) */
 #define ROT_TOL P_DBL(FIT_ROT_TOL) /*20 max rotation tolerance */
 #define MIN_PAIRS P_INT(FIT_MIN_PAIRS) /*5 minimum number of pairs for a match */
 #define MAX_PAIRS P_INT(FIT_MAX_PAIRS) /*22 we stop when we find this many pairs */
-#define MAX_F_SKIP P_INT(FIT_MAX_SKIP) /* 5max number of field stars we skip as unmatchable */
+#define MAX_F_SKIP P_INT(FIT_MAX_SKIP) /*5 max number of field stars we skip as unmatchable */
 #define MIN_AB_DISTANCE P_DBL(FIT_MIN_AB_DIST)  /* min distance between the first two field star to consider for matching */
 
 static double gui_star_pa(struct gui_star *b, struct gui_star *a)
@@ -1206,6 +1208,7 @@ static void make_pairs_from_list(GSList *cm, GSList *fm)
 	}
 }
 
+#define MAX_DEPTH 20
 // return number found or -1 (user abort)
 static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star *fb, GSList *field, GSList *cat)
 {
@@ -1221,7 +1224,9 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 //    d3_printf("wcs.match_from_a_b fa: %.1f %.1f, fb: %.1f. %.1f\n", fa->x, fa->y, fb->x, fb->y);
 
     gboolean abort = FALSE;
-    while (ca_list != NULL && ! abort) {
+
+    int depth_a;
+    for (depth_a = 0; ca_list != NULL && ! abort && depth_a < MAX_DEPTH; depth_a++) {
 
         struct gui_star *ca = GUI_STAR(ca_list->data);
 
@@ -1236,7 +1241,9 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 //            d3_printf("found %d likely cb\n", n);
 //        else
 //            d3_printf("found NO likely cb\n");
-        while (cb_list != NULL && ! abort) {
+
+        int depth_b;
+        for (depth_b = 0; cb_list != NULL && ! abort && depth_b < MAX_DEPTH; depth_b++) {
 
             struct gui_star *cb = GUI_STAR(cb_list->data);
             struct gui_star *cc = NULL;
@@ -1244,7 +1251,9 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
             int cskips = MAX_F_SKIP; /* max number of skips until we find c */
 
             GSList *fc_list = field;
-            while (fc_list != NULL && cskips > 0 && abort == 0) {
+
+            int depth_c;
+            for (depth_c = 0; fc_list != NULL && cskips > 0 && abort == 0 && depth_c < MAX_DEPTH; depth_c++) {
 
                 struct gui_star *fc = GUI_STAR(fc_list->data);
 
@@ -1253,13 +1262,14 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
                 find_cc (window, fa, fb, ca, cb, fc, cat, &cc); // find cc to match fc
 
 //                d3_printf("no cc found\n");
-                if (cc != NULL) break;
+                if (cc != NULL) break; // found cc
 
                 fc_list = g_slist_next(fc_list);
                 cskips --;
 
-                if ((abort = (check_user_abort(window) != 0))) break;
+                abort = check_user_abort(window);
 			}
+            printf("depth_c %d\n", depth_c); fflush(NULL);
 
             cb_list = g_slist_next(cb_list);
 
@@ -1297,13 +1307,16 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 
                 if (fm) g_slist_free(fm);
                 if (cm) g_slist_free(cm);
-			}
+			}            
 		}
+        printf("depth_b %d\n", depth_b); fflush(NULL);
 
         g_slist_free(cb_list_start);
         ca_list = g_slist_next(ca_list);
 	}
 //    d3_printf("no match ;-(\n");
+    printf("depth_a %d\n", depth_a); fflush(NULL);
+
     return (abort) ? -1 : max;
 }
 
@@ -1319,13 +1332,15 @@ static int match_from(gpointer window, GSList *field, GSList *cat)
     GSList *fc_list = NULL;
 
     int abort = 0;
-    do {
+    int depth;
+    for (depth = 0; depth < MAX_DEPTH && abort == 0; depth++) {
         GSList *field_next = g_slist_next(field);
         if (field_next) {
             fb = GUI_STAR(field_next->data); // second star
             fc_list = g_slist_next(field_next); // remaining list
         }
         field = field_next;
+        if (field == NULL) break;
 
         if (fa && fb && gui_star_distance (fa, fb) > MIN_AB_DISTANCE) break; // far enough apart to try a match
 
@@ -1333,7 +1348,8 @@ static int match_from(gpointer window, GSList *field, GSList *cat)
         // printf("match_from : field gui_star number %d < %f\n", ++d, MIN_AB_DISTANCE); fflush(NULL);
 
         abort = check_user_abort(window);
-    } while (field && abort == 0);
+    }
+    printf("depth %d\n", depth); fflush(NULL);
 
     return (abort == 0) ? match_from_a_b (window, fa, fb, fc_list, cat) : -1;
 }

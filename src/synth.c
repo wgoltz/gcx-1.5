@@ -328,7 +328,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
     struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
     if (i_ch == NULL) return;
 
-// start with current loaded frame
+// start with current loaded frame, a dark frame with master dark subtracted so frame avg ~ 0
     struct ccd_frame *dark_fr = i_ch->fr;
     if (dark_fr == NULL) return;
 
@@ -384,12 +384,12 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
         int w = dark_fr->w;
         int h = dark_fr->h;
 
-        float *dark = dark_fr->dat; // dark + synth (with dark noise)
+        float *dark = dark_fr->dat; // dark + synth
 //        float *star = star_fr->dat;
 
         int i;
         for (i = 0; i < w * h; i++, dark++ /*, star++*/ ) {
-            double poisson_adu = sky_adu + *dark; // subtract something to account for dark noise ?
+            double poisson_adu = sky_adu + *dark;
 
             // add noise to poisson_adu
             poisson_adu = gauss(poisson_adu, sqrt(poisson_adu + sqr(flat_noise * poisson_adu)));
