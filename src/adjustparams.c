@@ -30,8 +30,7 @@
 #include "interface.h"
 #include "gui.h"
 #include "misc.h"
-#include "ccd.h"
-
+#include "ccd/ccd.h"
 
 enum {
     LOCATION_ENTRY,
