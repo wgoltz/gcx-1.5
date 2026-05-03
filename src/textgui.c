@@ -84,6 +84,7 @@ void update_fits_header_display(gpointer window)
         if (fr == NULL) return;
 
         update_fits_header_dialog(dialog, fr);
+        release_frame(fr, "update_fits_header_display");
     }
 }
 

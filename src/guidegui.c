@@ -254,6 +254,7 @@ static gboolean image_clicked_cb(GtkWidget *w, GdkEventButton *event, gpointer w
                 g_slist_free(sl);
             }
 //            show_region_stats(data, event->x, event->y);
+            release_frame(fr, "image_clicked_cb");
         }
 	}
     show_region_stats(window, event->x, event->y);
@@ -363,6 +364,7 @@ static void find_guide_star_cb( GtkWidget *widget, gpointer window)
 
 		gtk_widget_queue_draw(window);
 	}
+    release_frame(fr, "find_guide_star_cb");
 }
 
 static float get_exposure(GtkWidget *window)
@@ -433,8 +435,9 @@ static int expose_cb(GtkWidget *window)
 		 	0,
 			NULL);
 		frame_stats(fr);
-		frame_to_channel(fr, window, "i_channel");
-        release_frame(fr, "expose_cb");
+        frame_to_channel(fr, window, "i_channel");
+
+//        release_frame(fr, "expose_cb");
 		guide_image_update(window);
 	} else {
 		err_printf("Received unsupported image format: %s\n", camera->image_format);
@@ -666,7 +669,9 @@ void guide_image_update(GtkWidget *window)
 		/* No guide-star yet */
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (run_button), 0);
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON (calibrate_button), 0);
-		return;
+        if (fr) release_frame(fr, "guide_image_update failed");
+
+        return;
     }
 
     struct star s;
@@ -680,14 +685,20 @@ void guide_image_update(GtkWidget *window)
 				 guider->xtgt + guider->xbias,
 				 guider->ytgt + guider->ybias,
 				 s.x + dx, s.y + dy, delta_x, delta_y, derr);
+
 			if(GTK_TOGGLE_BUTTON (calibrate_button)->active) {
 				calibrate_sm(window, guider, tele, delta_x, delta_y);
 			} else if(GTK_TOGGLE_BUTTON (run_button)->active) {
 				guide_adjust_mount(window, guider, tele, delta_x, delta_y);
 			}
-			return;
+
+            release_frame(fr, "guide_image_update");
+
+            return;
 		}
 	}
+    release_frame(fr, "guide_image_update before retry");
+
 	err_printf("failed to find guide-star in image\n");
 
 	if (GTK_TOGGLE_BUTTON (run_button)->active) {
@@ -716,6 +727,7 @@ gboolean gbox_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer windo
     struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
     if (i_channel == NULL || i_channel->fr == NULL) return TRUE; /* no channel/frame */
 
+    get_frame(i_channel->fr, "gbox_expose_cb");
     struct guider *guider = g_object_get_data(G_OBJECT(window), "guider");
 
     if (P_INT(GUIDE_BOX_ZOOM) < 1) P_INT(GUIDE_BOX_ZOOM) = 1;
@@ -739,6 +751,8 @@ gboolean gbox_expose_cb(GtkWidget *widget, GdkEventExpose *event, gpointer windo
 		cache->y = cache->x;
 	}
 	paint_from_gray_cache(widget, cache, &(event->area));
+    release_frame(i_channel->fr, "gbox_expose_cb");
+
 	return TRUE;
 }
 

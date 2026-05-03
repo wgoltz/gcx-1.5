@@ -457,7 +457,6 @@ static void camera_connect(struct indi_prop_t *iprop, void *callback_data)
         camera->info_prop = iprop;
     }
     else if (strcmp(iprop->name, "CCD_TEMPERATURE") == 0) {
-printf("Found CCD_TEMPERATURE for camera %s\n", iprop->idev->name); fflush(NULL);
         camera->temp_prop = iprop;
         indi_prop_add_cb(iprop, (IndiPropCB)camera_temp_change_cb, camera);
 	}

@@ -251,7 +251,7 @@ d3_printf("invert is %d\n", channel->invert);
 
 void set_default_channel_cuts(struct image_channel* channel)
 {
-	channel_cuts_action(channel, CUTS_MINMAX);
+    channel_cuts_action(channel, /* CUTS_MINMAX */ CUTS_CONTRAST);
 }
 
 /**********************
@@ -439,6 +439,8 @@ void stats_cb(gpointer window, guint action)
 
     info_printf_sb2(window, "JDcenter %.6f Exp: %.3g Size: %d x %d cavg:%.1f csigma:%.1f min:%.1f max:%.1f",
         frame_jdate(fr), exptime, fr->w, fr->h,	fr->stats.cavg, fr->stats.csigma, fr->stats.min, fr->stats.max );
+
+    release_frame(fr, "stats_cb");
 }
 
 /*
@@ -449,11 +451,11 @@ void show_region_stats(GtkWidget *window, double x, double y) // are x and y eve
 {
     char *buf = NULL;
 
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) return;
-
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
     if (geom == NULL) return;
+
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
 
 	x /= geom->zoom;
 	y /= geom->zoom;
@@ -491,6 +493,8 @@ void show_region_stats(GtkWidget *window, double x, double y) // are x and y eve
         asprintf(&buf, "Pixel [%d,%d] unknown format", xi, yi);
 	}
     if (buf) info_printf_sb2(window, "%s\n", buf), free(buf);
+
+    release_frame(fr, "show_region_stats");
 }
 
 /*

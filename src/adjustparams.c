@@ -30,6 +30,7 @@
 #include "interface.h"
 #include "gui.h"
 #include "misc.h"
+#include "ccd.h"
 
 
 enum {
@@ -109,7 +110,10 @@ GtkWidget *make_adjust_params(gpointer window)
     load_default_params(adjust_params_dialog); // need to update if any params change
 
     struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr) load_frame_params(adjust_params_dialog, fr); // need to reload when frame changes
+    if (fr) {
+        load_frame_params(adjust_params_dialog, fr); // need to reload when frame changes
+        release_frame(fr, "make_adjust_params");
+    }
 
     return adjust_params_dialog;
 }

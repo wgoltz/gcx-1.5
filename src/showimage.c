@@ -1054,12 +1054,10 @@ void image_box_to_cache(struct map_cache *cache, struct image_channel *channel,
 
 /* attach a frame to the given window/channel for display
  * if the requested channel does not exist, it is created;
- * it ref's the frame, so the frame should be released after
- * frame_to_channel is called
+ * (fr is reffed; channel->fr is released when channel is destroyed)
  */
-int frame_to_channel(struct ccd_frame *fr, gpointer window, char *chname)
+void frame_to_channel(struct ccd_frame *fr, gpointer window, char *chname)
 {
-//printf("showimage.frame_to_channel\n");
     struct map_geometry *geom = g_object_get_data(G_OBJECT(window), "geometry");
 
     if (geom == NULL) {
@@ -1068,26 +1066,21 @@ int frame_to_channel(struct ccd_frame *fr, gpointer window, char *chname)
 	}
     struct image_channel *channel = g_object_get_data(G_OBJECT(window), chname);
 
-    if (channel == NULL) {
-d2_printf("showimage.frame_to_channel new channel |%s|\n", chname);
+    gboolean new_channel = (channel == NULL);
+
+    if (new_channel) {
 		channel = new_image_channel();
+        if (channel == NULL) return;
+
         g_object_set_data_full(G_OBJECT(window), chname, channel, (GDestroyNotify)release_image_channel);
+    }
 
-        get_frame(fr, "frame_to_channel");
-        channel->fr = fr;
+    get_frame(fr, "frame_to_channel");
+    channel->fr = fr;
 
-        if (fr->stats.statsok && fr->pix_format != PIX_BYTE) set_default_channel_cuts(channel);
+    if (! fr->stats.statsok) frame_stats(fr);
 
-	} else { /* replace the frame in the current channel */
-d2_printf("frame to channel\n");
-        get_frame(fr, "frame_to_channel");
-        release_frame(channel->fr, "frame_to_channel");
-
-        channel->fr = fr;
-
-        if (! fr->stats.statsok) frame_stats(fr);
-	}
-//printf("showimage.frame_to_channel 1\n");
+    if (new_channel && fr->stats.statsok && fr->pix_format != PIX_BYTE ) set_default_channel_cuts(channel);
 
 	int w, h, x, y, d;
 
@@ -1136,8 +1129,6 @@ d2_printf("frame to channel\n");
     update_fits_header_display(window);
 
 	gtk_widget_queue_draw(GTK_WIDGET(window));
-
-	return 0;
 }
 
 /* write the (float) image as a pnm file */

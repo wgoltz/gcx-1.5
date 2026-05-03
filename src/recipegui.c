@@ -225,10 +225,8 @@ static void mkrcp_ok_cb( GtkWidget *widget, gpointer dialog)
     char *seq = named_entry_text(dialog, "seq_entry");
     int flags = get_recipe_flags(dialog);
 
-    struct ccd_frame *fr = window_get_current_frame(window);
-
-    int w = (fr) ? fr->w : 0;
-    int h = (fr) ? fr->h : 0;
+    int w = 0, h = 0;
+    window_get_current_frame_size(window, &w, &h);
 
     struct stf *rcp = create_recipe(gsl->sl, wcs, flags, comment, target, seq, w, h);
 

@@ -169,13 +169,14 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
 }
 
 
-struct wcs *refresh_wcs(gpointer window) {
-
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) return NULL;
+struct wcs *refresh_wcs(gpointer window)
+{
 
     struct wcs *window_wcs = window_get_wcs(window);
     if (window_wcs == NULL) return NULL;
+
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return NULL;
 
     struct wcs *fr_wcs = & fr->fim;
 
@@ -243,6 +244,8 @@ struct wcs *refresh_wcs(gpointer window) {
 
     wcs_to_fits_header(fr);
     wcsedit_refresh(window);
+
+    release_frame(fr, "refresh_wcs");
 
     return window_wcs;
 }
@@ -866,7 +869,7 @@ int window_fit_wcs(GtkWidget *window)
     GSList *pairs = NULL, *goodpairs = NULL;
 
     GSList *sl = gsl->sl;
-    while (sl) {
+    while (sl) { // this counts pair twice
         struct gui_star *gs = GUI_STAR(sl->data);
 		if ((gs->flags & STAR_HAS_PAIR) && gs->pair != NULL) {
 			pairs = g_slist_append(pairs, gs);
@@ -880,7 +883,7 @@ int window_fit_wcs(GtkWidget *window)
 		sl = g_slist_next(sl);
 	}
 
-    int npairs = g_slist_length(pairs);
+    int npairs = g_slist_length(pairs) / 2;
 	if (npairs < 2) {
 		err_printf_sb2(window, "Need at Least 2 Pairs to Attempt WCS Fit");
 		error_beep();
@@ -889,7 +892,7 @@ int window_fit_wcs(GtkWidget *window)
 		return -1;
 	}
 
-    int gpairs = g_slist_length(goodpairs);
+    int gpairs = g_slist_length(goodpairs) / 2;
 	if (gpairs >= 3 && gpairs > VLD_PAIRS && gpairs > P_INT(FIT_MIN_PAIRS)) {
 		g_slist_free(pairs);
         pairs = goodpairs;
@@ -940,6 +943,8 @@ int window_fit_wcs(GtkWidget *window)
     wcs_to_fits_header(fr);
 
     gtk_widget_queue_draw(window);
+
+    release_frame(fr, "window_fit_wcs");
 
 	return 0;
 }
@@ -1269,7 +1274,7 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
 
                 abort = check_user_abort(window);
 			}
-            printf("depth_c %d\n", depth_c); fflush(NULL);
+//            printf("depth_c %d\n", depth_c); fflush(NULL);
 
             cb_list = g_slist_next(cb_list);
 
@@ -1309,13 +1314,13 @@ static int match_from_a_b(gpointer window, struct gui_star *fa, struct gui_star 
                 if (cm) g_slist_free(cm);
 			}            
 		}
-        printf("depth_b %d\n", depth_b); fflush(NULL);
+//        printf("depth_b %d\n", depth_b); fflush(NULL);
 
         g_slist_free(cb_list_start);
         ca_list = g_slist_next(ca_list);
 	}
 //    d3_printf("no match ;-(\n");
-    printf("depth_a %d\n", depth_a); fflush(NULL);
+//    printf("depth_a %d\n", depth_a); fflush(NULL);
 
     return (abort) ? -1 : max;
 }
@@ -1349,7 +1354,7 @@ static int match_from(gpointer window, GSList *field, GSList *cat)
 
         abort = check_user_abort(window);
     }
-    printf("depth %d\n", depth); fflush(NULL);
+//    printf("depth %d\n", depth); fflush(NULL);
 
     return (abort == 0) ? match_from_a_b (window, fa, fb, fc_list, cat) : -1;
 }

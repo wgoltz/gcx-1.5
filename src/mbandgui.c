@@ -799,15 +799,15 @@ static gboolean gui_star_in_selection(GList *selected_gui_stars, struct gui_star
 }
 
 // delete existing mbds
-static void dialog_delete_mbds(gpointer mband_dialog)
+void dialog_delete_mbds(gpointer mband_dialog)
 {
     struct mband_dataset *mbds = g_object_get_data(G_OBJECT(mband_dialog), "mbds");
     if (mbds) {
         int i;
-        char *names[] = {"ofr_list", "sob_list", "band_list"};
+        char *names[] = {"ofr_list", "sob_list", "bands_list"};
         for (i = 0; i < 3; i++) {
             if (g_object_get_data(G_OBJECT(mband_dialog), names[i]))
-                g_object_set_data(G_OBJECT(mband_dialog), names[i], NULL);
+                g_object_set_data(G_OBJECT(mband_dialog), names[i], NULL); // calls gtk_widget_destroy
         }
         g_object_set_data(G_OBJECT(mband_dialog), "mbds", NULL);
     }
@@ -1078,13 +1078,14 @@ void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
 
             imf = fr->imf; // do we need allocate new imf?
             ofr->imf = imf; // try this
+
+            release_frame(fr, "act_mband_display_ofr_frame");
         }
         if (imf_load_frame(imf) < 0) return;
 
-//        get_frame(imf->fr, "act_mband_display_ofr_frame"); // use imf ?
         frame_to_channel(imf->fr, window, "i_channel");
 
-        imf_release_frame(imf, "act_mband_display_ofr_frame");
+//        imf_release_frame(imf, "act_mband_display_ofr_frame");
         update_fits_header_display(window);
 // update edit_star
     }
@@ -1114,22 +1115,37 @@ void act_mband_prev_ofr(GtkAction *action, gpointer data)
 /* rebuild star list in stars tab based on the first frame in the current selection */
 static void ofr_selection_cb(GtkWidget *ofr_selection, gpointer mband_dialog)
 {
+    if (ofr_selection == NULL) return;
+
     GtkTreeModel *ofr_store;
     GList *selected_ofr = gtk_tree_selection_get_selected_rows (GTK_TREE_SELECTION(ofr_selection), &ofr_store);
 
     char *buf = NULL;
 
     struct o_frame *ofr = NULL;
-    if (selected_ofr) {
+
+    if (selected_ofr) { // get first ofr from selection
         GtkTreeIter iter;
-        gtk_tree_model_get_iter (ofr_store, &iter, selected_ofr->data); // first selected frame
+        gtk_tree_model_get_iter (ofr_store, &iter, selected_ofr->data);
 
         gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
-        if (ofr->skip) ofr = NULL;
+        if (ofr->skip) ofr = NULL; // never happens ?
     }
 
-    if (ofr) {
+// need to do this before sobs displayed
+//    if (ofr == NULL) { // get first ofr from model
+//        GtkTreeIter iter;
+//        if (gtk_tree_model_get_iter_first (ofr_store, &iter)) {
+//            gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
 
+//            while (ofr && ofr->skip) {
+//                if (! gtk_tree_model_iter_next (ofr_store, &iter)) break;
+//                gtk_tree_model_get(ofr_store, &iter, 0, &ofr, -1);
+//            }
+//        }
+//    }
+
+    if (ofr) {
         GtkWidget *sob_list = dialog_get_sob_list(mband_dialog);
         if (sob_list != NULL) {
             GtkTreeModel *sob_store = gtk_tree_view_get_model (GTK_TREE_VIEW (sob_list));

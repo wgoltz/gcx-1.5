@@ -516,15 +516,15 @@ static struct image_file_list *dialog_set_imfl(gpointer processing_dialog, struc
 
     if (dialog_imfl == NULL) {
         if (imfl)
-            image_file_list_ref (imfl);
+            imfl_ref (imfl);
         else
-            imfl = image_file_list_new ();
+            imfl = imfl_new ();
     } else {
         if (imfl == NULL) imfl = dialog_imfl;
 
-        image_file_list_ref (imfl);
+        imfl_ref (imfl);
     }
-    g_object_set_data_full (G_OBJECT(processing_dialog), "imfl", imfl, (GDestroyNotify)(image_file_list_release));
+    g_object_set_data_full (G_OBJECT(processing_dialog), "imfl", imfl, (GDestroyNotify)(imfl_release));
 
     dialog_update_from_imfl (processing_dialog, imfl); // set from imfl
 
@@ -704,8 +704,8 @@ static void imf_rm_cb(GtkAction *action, gpointer processing_dialog)
 
         gtk_list_store_remove (GTK_LIST_STORE(image_file_store), &iter);
         imfl->imlist = g_list_remove(imfl->imlist, imf);
-// what is best way to handle imf that is being displayed
-		image_file_release(imf);
+
+        imf_release(imf);
 	}
 
 	g_list_foreach (sel, (GFunc) gtk_tree_row_reference_free, NULL);
@@ -794,30 +794,23 @@ d2_printf("reducegui.imf_display_cb\n");
             imf = NULL;
         }
 
-        if (imf) {
-d2_printf("reducegui.imf_display_cb load %s ref_count: %d\n", imf->filename, imf->fr->ref_count);
-
-            frame_to_channel(imf->fr, im_window, "i_channel");
-            imf_release_frame(imf, "imf_display_cb after frame_to_channel"); // this one is ok
-        }
         g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
         g_list_free (sel);
-
-//	} else {
-//		error_beep();
-//		log_msg("\nNo Frame selected\n", processing_dialog);
 	}
 
-    if (imf) { // new frame has been loaded
-        if (P_INT(FILE_SAVE_MEM)) {
-            if (imf->state_flags & IMG_STATE_DIRTY) get_frame(imf->fr, "imf_display_cb new frame loaded"); // keep current frame loaded
+    if (imf && imf->fr) { // new frame has been loaded
+        frame_to_channel(imf->fr, im_window, "i_channel");
 
+        if (P_INT(FILE_SAVE_MEM)) {
             struct image_file_list *imfl = g_object_get_data (G_OBJECT(processing_dialog), "imfl");
             g_return_if_fail (imfl != NULL);
 
-            unload_clean_frames (imfl);
+//            get_frame(imf->fr, "imf_display_cb before unload_clean_frames");
+            unload_clean_frames (im_window, imfl);
+//            imf_release_frame(imf, "imf_display_cb after unload_clean_frames");
 
-            if (imf->state_flags & IMG_STATE_DIRTY) release_frame(imf->fr, "after unload_clean_frames");
+        } else {
+            imf_release_frame(imf, "imf_display_cb");
         }
 
         update_mband_status_labels (processing_dialog); // display
@@ -889,6 +882,11 @@ static void imf_add_cb(GtkAction *action, gpointer processing_dialog)
 /* reload selected files */
 static void imf_reload_cb(GtkAction *action, gpointer processing_dialog)
 {
+    gpointer window = g_object_get_data(processing_dialog, "im_window");
+
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
     GtkTreeView *image_file_view = g_object_get_data (G_OBJECT(processing_dialog), "image_file_view");
     g_return_if_fail (image_file_view != NULL);
 
@@ -905,13 +903,14 @@ static void imf_reload_cb(GtkAction *action, gpointer processing_dialog)
         gtk_tree_model_get_iter (image_file_store, &iter, tmp->data);
         gtk_tree_model_get (image_file_store, &iter, IMFL_COL_IMF, (GValue *) &imf, -1);
 
-d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
+//        if (fr && fr != imf->fr) // if not currently displayed release it
+        if (imf->state_flags & IMG_STATE_DIRTY) {
+            imf->state_flags &= ~IMG_STATE_DIRTY;
+            imf_release_frame(imf, "imf_reload_cb (dirty)");
+        }
 
-        imf_release_frame(imf, "imf_reload_cb");
-
-        struct ccd_frame *fr = imf->fr;
-        if (fr) fr->imf = NULL;
-        imf->fr = NULL;
+        if (fr && fr != imf->fr) // if not currently displayed release it
+            imf_release_frame(imf, "imf_reload_cb (not currently displayed)");
 
         if (!(imf->state_flags & IMG_STATE_IN_MEMORY_ONLY)) { // for stack frame, turn off IN_MEMORY when file saved and change imf name
 
@@ -921,6 +920,7 @@ d2_printf("reducegui.imf_reload_cb unloading %s\n", imf->filename);
 
         tmp = tmp->next;
 	}
+    release_frame(fr, "imf_reload_cb");
 
 	g_list_foreach (sel, (GFunc) gtk_tree_path_free, NULL);
 	g_list_free (sel);
@@ -1089,17 +1089,17 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
         char *text = named_entry_text(processing_dialog, "bias_entry");
         if (text) {
             if ((ccdr->op_flags & IMG_OP_BIAS) && ccdr->bias && strcmp(text, ccdr->bias->filename)) {
-                image_file_release(ccdr->bias);
-                ccdr->bias = image_file_new(NULL, text);
+                imf_release(ccdr->bias);
+                ccdr->bias = imf_new(NULL, text);
             } else if (!(ccdr->op_flags & IMG_OP_BIAS)) {
-                ccdr->bias = image_file_new(NULL, text);
+                ccdr->bias = imf_new(NULL, text);
             }
             free(text);
         }
         ccdr->op_flags |= IMG_OP_BIAS;
 
 	} else {
-        if ((ccdr->op_flags & IMG_OP_BIAS) && ccdr->bias) image_file_release(ccdr->bias);
+        if ((ccdr->op_flags & IMG_OP_BIAS) && ccdr->bias) imf_release(ccdr->bias);
 
 		ccdr->bias = NULL;
         ccdr->op_flags &= ~IMG_OP_BIAS;
@@ -1109,17 +1109,17 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
         char *text = named_entry_text(processing_dialog, "dark_entry");
         if (text) {
             if ((ccdr->op_flags & IMG_OP_DARK) && ccdr->dark && strcmp(text, ccdr->dark->filename)) {
-                image_file_release(ccdr->dark);
-                ccdr->dark = image_file_new(NULL, text);
+                imf_release(ccdr->dark);
+                ccdr->dark = imf_new(NULL, text);
             } else if (!(ccdr->op_flags & IMG_OP_DARK)) {
-                ccdr->dark = image_file_new(NULL, text);
+                ccdr->dark = imf_new(NULL, text);
             }
             free(text);
         }
         ccdr->op_flags |= IMG_OP_DARK;
 
 	} else {
-        if ((ccdr->op_flags & IMG_OP_DARK) && ccdr->dark) image_file_release(ccdr->dark);
+        if ((ccdr->op_flags & IMG_OP_DARK) && ccdr->dark) imf_release(ccdr->dark);
 
 		ccdr->dark = NULL;
         ccdr->op_flags &= ~IMG_OP_DARK;
@@ -1129,17 +1129,17 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
         char *text = named_entry_text(processing_dialog, "flat_entry");
         if (text) {
             if ((ccdr->op_flags & IMG_OP_FLAT) && ccdr->flat && strcmp(text, ccdr->flat->filename)) {
-                image_file_release(ccdr->flat);
-                ccdr->flat = image_file_new(NULL, text);
+                imf_release(ccdr->flat);
+                ccdr->flat = imf_new(NULL, text);
             } else if (!(ccdr->op_flags & IMG_OP_FLAT)) {
-                ccdr->flat = image_file_new(NULL, text);
+                ccdr->flat = imf_new(NULL, text);
             }
             free(text);
         }
         ccdr->op_flags |= IMG_OP_FLAT;
 
 	} else {
-        if ((ccdr->op_flags & IMG_OP_FLAT) && ccdr->flat) image_file_release(ccdr->flat);
+        if ((ccdr->op_flags & IMG_OP_FLAT) && ccdr->flat) imf_release(ccdr->flat);
 
 		ccdr->flat = NULL;
         ccdr->op_flags &= ~IMG_OP_FLAT;
@@ -1174,12 +1174,12 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
         char *text = named_entry_text(processing_dialog, "align_entry");
         if (text) {
             if ((ccdr->op_flags & IMG_OP_ALIGN) && ccdr->alignref) { // && strcmp(text, ccdr->alignref->filename)) {
-                image_file_release(ccdr->alignref);
-                ccdr->alignref = image_file_new(NULL, text);
+                imf_release(ccdr->alignref);
+                ccdr->alignref = imf_new(NULL, text);
                 free_alignment_stars(ccdr);
 
             } else if (!(ccdr->op_flags & IMG_OP_ALIGN)) {
-                ccdr->alignref = image_file_new(NULL, text);
+                ccdr->alignref = imf_new(NULL, text);
             }
             free(text);
         }
@@ -1187,7 +1187,7 @@ static void dialog_to_ccdr(GtkWidget *processing_dialog, struct ccd_reduce *ccdr
 
 	} else {
         if ((ccdr->op_flags & IMG_OP_ALIGN) && ccdr->alignref) {
-            image_file_release(ccdr->alignref);
+            imf_release(ccdr->alignref);
             free_alignment_stars(ccdr);
         }
 
@@ -1413,7 +1413,7 @@ static int save_clipped_image_file(struct image_file *imf, char *outf, int inpla
     int width = named_spin_get_value(processing_dialog, "width_spin");
     int height = named_spin_get_value(processing_dialog, "height_spin");
 // move this to ccd_frame
-//    struct image_file *clipped_imf = image_file_new();
+//    struct image_file *clipped_imf = imf_new();
 //    clipped_imf->filename = strdup(imf->filename);
 //    clipped_imf->fr = new_frame_fr(imf->fr, width, height);
 
@@ -1426,7 +1426,7 @@ static int save_clipped_image_file(struct image_file *imf, char *outf, int inpla
 
 //    int ret = save_image_file (clipped_imf, outf, inplace, seq, progress, processing_dialog);
 
-//    image_file_release(clipped_imf);
+//    imf_release(clipped_imf);
 
 //    return ret;
 }
@@ -1489,6 +1489,9 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
         gl = g_list_next(gl);
 
         if (! (imf->state_flags & IMG_STATE_SKIP)) {
+
+            if (ccdr->op_flags & IMG_OP_STACK)
+                imf->state_flags |= IMG_STATE_STACK_PENDING;
 
             imf_display_cb (NULL, processing_dialog); // before run
 

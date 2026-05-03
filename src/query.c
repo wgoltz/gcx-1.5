@@ -2043,19 +2043,19 @@ static void cds_query(gpointer window, guint action)
 {
 	g_return_if_fail(action < QUERY_CATALOGS);
 
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) {
-		err_printf_sb2(window, "Load a frame or create a new one before loading stars");
-		error_beep();
-		return;
-	}
-
     struct wcs *wcs = window_get_wcs(window);
-	if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-		err_printf_sb2(window, "Set an initial WCS before loading stars");
-		error_beep();
-		return;
-	}
+    if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
+        err_printf_sb2(window, "Set an initial WCS before loading stars");
+        error_beep();
+        return;
+    }
+
+//    struct ccd_frame *fr = window_get_current_frame(window);
+//    if (fr == NULL) {
+//		err_printf_sb2(window, "Load a frame or create a new one before loading stars");
+//		error_beep();
+//		return;
+//	}
 
 /* not used
     w = 60.0*fabs(fr->w * wcs->xinc);

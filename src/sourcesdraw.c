@@ -541,158 +541,143 @@ static double star_size_flux(double flux, double ref_flux, double fwhm)
  */
 void find_stars_cb(gpointer window, guint action)
 {
-	struct sources *src;
-	struct gui_star_list *gsl;
-	struct gui_star *gs;
-	struct cat_star **csl;
-	int i,n;
-	struct catalog *cat;
-	double ref_flux = 0.0, ref_fwhm = 0.0;
-	double radius;
-	struct wcs *wcs;
-	int nstars;
-
-    struct ccd_frame *fr = window_get_current_frame(window); // currently displayed frame (not necessarily current imf->fr)
+    struct ccd_frame *fr = window_get_current_frame(window);
     if (fr == NULL && action != ADD_FROM_CATALOG) return;
 
-//	d3_printf("find_stars_cb action %d\n", action);
-    wcs = window_get_wcs(window);
+    struct wcs *wcs = window_get_wcs(window);
 
-	switch(action) {
-	case ADD_STARS_GSC:
-        if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-            err_printf_sb2(window, "Need an Initial WCS to Load GSC Stars");
+    double radius = (fr && wcs) ? 60.0*fabs(fr->w * wcs->xinc) : 0;
+    clamp_double(&radius, 1.0, P_DBL(SD_GSC_MAX_RADIUS));
+
+    if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
+        gboolean fail_bad_wcs = TRUE;
+        switch (action) {
+        case ADD_STARS_GSC: err_printf_sb2(window, "Need an Initial WCS to Load GSC Stars");
+            break;
+        case ADD_STARS_TYCHO2: err_printf_sb2(window, "Need an initial WCS to load Tycho2 stars");
+            break;
+        case ADD_STARS_OBJECT: err_printf_sb2(window, "Need an Initial WCS to Load objects");
+            break;
+        default: fail_bad_wcs = FALSE;
+        }
+        if (fail_bad_wcs) {
             error_beep();
+            release_frame(fr, "find_stars_cb no wcs");
+
             return;
         }
+    }
+
+    struct gui_star_list *gsl = NULL;
+
+    if (action != ADD_FROM_CATALOG) {
         gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-		if (gsl == NULL) {
-			gsl = gui_star_list_new();
-			attach_star_list(gsl, window);
-		}
-        radius = 60.0*fabs(fr->w * wcs->xinc);
-		clamp_double(&radius, 1.0, P_DBL(SD_GSC_MAX_RADIUS));
+        if (gsl == NULL) {
+            gsl = gui_star_list_new();
+            attach_star_list(gsl, window);
+        }
+    }
+
+	switch(action) {
+	case ADD_STARS_GSC:                
         add_stars_from_gsc(gsl, wcs, radius, P_DBL(SD_GSC_MAX_MAG), P_INT(SD_GSC_MAX_STARS));
 
         gsl->display_mask |= TYPE_CATREF;
         gsl->select_mask |= TYPE_CATREF;
 		break;
 
-	case ADD_STARS_TYCHO2:
-        if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-            err_printf_sb2(window, "Need an initial WCS to load Tycho2 stars");
-            error_beep();
-            return;
+    case ADD_STARS_TYCHO2: {
+        struct catalog *cat = open_catalog("tycho2");
+
+        struct cat_star **csl = NULL;
+        if (cat && cat->cat_search) csl = calloc(P_INT(SD_GSC_MAX_STARS), sizeof(struct cat_star *));
+
+        if (csl) {
+            int n = (* cat->cat_search)(csl, cat, wcs->xref, wcs->yref, radius, P_INT(SD_GSC_MAX_STARS));
+
+            d3_printf ("got %d from cat_search\n", n);
+
+            merge_cat_stars(csl, n, gsl, wcs);
+
+            free(csl);
+
+            gsl->display_mask |= TYPE_CATREF;
+            gsl->select_mask |= TYPE_CATREF;
         }
-		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-		if (gsl == NULL) {
-			gsl = gui_star_list_new();
-			attach_star_list(gsl, window);
-		}
-        radius = 60.0*fabs(fr->w * wcs->xinc);
-		clamp_double(&radius, 1.0, P_DBL(SD_GSC_MAX_RADIUS));
-
-		cat = open_catalog("tycho2");
-
-		if (cat == NULL || cat->cat_search == NULL)
-			return;
-
-		d3_printf("tycho2 opened\n");
-
-		csl = calloc(P_INT(SD_GSC_MAX_STARS),
-			sizeof(struct cat_star *));
-		if (csl == NULL)
-			return;
-
-		n = (* cat->cat_search)(csl, cat, wcs->xref, wcs->yref, radius,
-					P_INT(SD_GSC_MAX_STARS));
-
-		d3_printf ("got %d from cat_search\n", n);
-
-		merge_cat_stars(csl, n, gsl, wcs);
-
-		free(csl);
-
-        gsl->display_mask |= TYPE_CATREF;
-        gsl->select_mask |= TYPE_CATREF;
 		break;
+    }
 
-	case ADD_STARS_DETECT:
-		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-		if (gsl == NULL) {
-			gsl = gui_star_list_new();
-			attach_star_list(gsl, window);
-		}
-		src = new_sources(P_INT(SD_MAX_STARS));
-		if (src == NULL) {
-			err_printf("find_stars_cb: cannot create sources\n");
-			return;
-		}
-		info_printf_sb2(window, "Searching for stars...");
-//		d3_printf("Star det SNR: %f(%d)\n", P_DBL(SD_SIGMAS), SD_SIGMAS);
+    case ADD_STARS_DETECT: {
+        struct sources *src = new_sources(P_INT(SD_MAX_STARS));
+        if (src) {
 
-        /* give the mainloop a chance to redraw under the popup */
-//        while (gtk_events_pending ()) gtk_main_iteration ();
+            info_printf_sb2(window, "Searching for stars...");
+            //		d3_printf("Star det SNR: %f(%d)\n", P_DBL(SD_SIGMAS), SD_SIGMAS);
 
-        fr->window = window;
+            fr->window = window; // to catch abort
 
-        struct region reg = { 0 };
-        double fraction = 0.5;
-        reg.xs = fr->w * (1.0 - fraction) / 2.0;
-        reg.ys = fr->h * (1.0 - fraction) / 2.0;
-        reg.w = fr->w * fraction;
-        reg.h = fr->h * fraction;
+            double fraction = 0.5;
 
-//        extract_stars(fr, & reg, 0, P_DBL(SD_SIGMAS), src);
-        extract_stars(fr, NULL, P_DBL(SD_SIGMAS), NULL, src);
-        remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
-/* now add to the list */
-		for (i = 0; i < src->ns; i++) {
-//			if (src->s[i].peak > P_DBL(AP_SATURATION))
-//				continue;
-			ref_flux = src->s[i].flux;
-			ref_fwhm = src->s[i].fwhm;
-			break;
-		}
+            struct region reg = { 0 };
+            reg.xs = fr->w * (1.0 - fraction) / 2.0;
+            reg.ys = fr->h * (1.0 - fraction) / 2.0;
+            reg.w = fr->w * fraction;
+            reg.h = fr->h * fraction;
 
-		nstars = 0;
-		for (i = 0; i < src->ns; i++) {
-//			if (src->s[i].peak > P_DBL(AP_SATURATION))
-//				continue;
-			gs = gui_star_new();
-			gs->x = src->s[i].x;
-			gs->y = src->s[i].y;
-            if (src->s[i].datavalid) {
-				gs->size = star_size_flux(src->s[i].flux, ref_flux, ref_fwhm);
-			} else {
-				gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
-			}
-            gs->type = STAR_TYPE_SIMPLE;
+            //        extract_stars(fr, & reg, 0, P_DBL(SD_SIGMAS), src);
+            extract_stars(fr, NULL, P_DBL(SD_SIGMAS), NULL, src);
+            remove_stars_of_type(gsl, TYPE_MASK(STAR_TYPE_SIMPLE), 0);
 
-            gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
-			gsl->sl = g_slist_prepend(gsl->sl, gs);
+            /* now add to the list */
+            double ref_flux = 0.0, ref_fwhm = 0.0;
 
-			nstars++;
-		}
-		gsl->display_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
-		gsl->select_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
+            int i;
+            for (i = 0; i < src->ns; i++) {
+                //			if (src->s[i].peak > P_DBL(AP_SATURATION))
+                //				continue;
 
-        info_printf_sb2(window, "Found %d stars (sigmas > %.1f)", nstars, P_DBL(SD_SIGMAS));
-		release_sources(src);
+                ref_flux = src->s[i].flux;
+                ref_fwhm = src->s[i].fwhm;
+                break;
+            }
+
+            int nstars = 0;
+            for (i = 0; i < src->ns; i++) {
+                //			if (src->s[i].peak > P_DBL(AP_SATURATION))
+                //				continue;
+
+                struct gui_star *gs = gui_star_new();
+
+                gs->x = src->s[i].x;
+                gs->y = src->s[i].y;
+                if (src->s[i].datavalid) {
+                    gs->size = star_size_flux(src->s[i].flux, ref_flux, ref_fwhm);
+                } else {
+                    gs->size = 1.0 * P_INT(DO_DEFAULT_STAR_SZ);
+                }
+                gs->type = STAR_TYPE_SIMPLE;
+
+                gs->sort = (gsl->sl) ? GUI_STAR(gsl->sl->data)->sort + 1 : 0;
+                gsl->sl = g_slist_prepend(gsl->sl, gs);
+
+                nstars++;
+            }
+            gsl->display_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
+            gsl->select_mask |= TYPE_MASK(STAR_TYPE_SIMPLE);
+
+            info_printf_sb2(window, "Found %d stars (sigmas > %.1f)", nstars, P_DBL(SD_SIGMAS));
+            release_sources(src);
+
+        } else {
+            err_printf("find_stars_cb: cannot create sources\n");
+        }
+
 		break;
+    }
 
 	case ADD_STARS_OBJECT:
-        if (wcs == NULL || wcs->wcsset == WCS_INVALID) {
-            err_printf_sb2(window, "Need an Initial WCS to Load objects");
-            error_beep();
-            return;
-        }
-		gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-		if (gsl == NULL) {
-			gsl = gui_star_list_new();
-			attach_star_list(gsl, window);
-		}
         add_star_from_frame_header(fr, gsl, wcs);
+
         gsl->display_mask |= TYPE_CATREF;
         gsl->select_mask |= TYPE_CATREF;
 		break;
@@ -705,6 +690,8 @@ void find_stars_cb(gpointer window, guint action)
 		err_printf("find_stars_cb: unknown action %d \n", action);
 		break;
 	}
+
+    if (fr) release_frame(fr, "find_stars_cb");
 
 	gtk_widget_queue_draw(window);
 }
@@ -938,13 +925,14 @@ void redraw_cat_stars(GtkWidget *window)
 
 	cat_change_wcs(gsl->sl, wcs);
 
-    int w, h;
-    window_get_current_frame_size(window, &w, &h);
+//    struct ccd_frame *fr = window_get_current_frame(window);
 //    ignore_distant_stars(gsl->sl, w, h, 1.5, 1.5); // this clips stars if wcs is way off
 
     star_list_update_editstar(window);
 	star_list_update_size(window);
 	star_list_update_labels(window);
+
+//    release_frame(fr, "redraw_cat_stars");
 }
 
 
@@ -1191,11 +1179,6 @@ static void print_stars(GtkWidget *window, GSList *found)
 
 void plot_profile(GtkWidget *window, GSList *found)
 {
-
-
-	GSList *selection;
-	int ret = 0;
-
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL)
 		return;
@@ -1203,7 +1186,9 @@ void plot_profile(GtkWidget *window, GSList *found)
     struct ccd_frame *fr = window_get_current_frame(window);
     if (fr == NULL) return;
 
-    selection = gui_stars_selection(gsl, STAR_TYPE_ALL);
+    GSList *selection = gui_stars_selection(gsl, STAR_TYPE_ALL);
+
+    int ret = 0;
 	if (found) {
         ret = do_plot_profile(fr, found);
 	} else if (selection) {
@@ -1217,6 +1202,8 @@ void plot_profile(GtkWidget *window, GSList *found)
 		err_printf_sb2(window, "%s", last_err());
 		error_beep();
 	}
+
+    release_frame(fr, "plot_profile");
 }
 
 
@@ -1627,6 +1614,7 @@ static void detect_add_star(GtkWidget *window, double x, double y)
 
 		single_selection_gs(window, gs);
 	}
+    release_frame(fr, "detect_add_star");
 }
 
 /* print a short info line about the star */
@@ -1729,6 +1717,7 @@ struct star_obs *sob_from_current_frame(gpointer main_window, struct cat_star *c
 
         valid = gtk_tree_model_iter_next (ofr_store, &iter);
     }
+    release_frame(fr, "sob_from_current_frame");
 
     if (ofr == NULL) return NULL;
 

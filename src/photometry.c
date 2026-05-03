@@ -719,12 +719,6 @@ int stf_centering_stats(struct stf *stf, struct wcs *wcs, double *rms, double *m
 /* photometry callback from menu; report goes to stdout */
 static void photometry_cb(gpointer window, guint action)
 {
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) {
-        err_printf_sb2(window, "No frame - load a frame\n");
-		return;
-    }
-
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 
 	if (gsl == NULL) {
@@ -738,6 +732,12 @@ static void photometry_cb(gpointer window, guint action)
 		return;
 	}
 
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
+        err_printf_sb2(window, "No frame - load a frame\n");
+        return;
+    }
+
 //	d3_printf("airmass %f\n", frame_airmass(fr, wcs->xref, wcs->yref));
 
     struct stf *stf;
@@ -748,6 +748,8 @@ static void photometry_cb(gpointer window, guint action)
 		stf = run_phot(window, wcs, gsl, fr);
 		if (stf == NULL) {
 			err_printf_sb2(window, "Phot: %s\n", last_err());
+
+            release_frame(fr, "photometry_cb PHOT_CENTER_STARS failed");
 			return;
 
 		} else {
@@ -764,12 +766,17 @@ static void photometry_cb(gpointer window, guint action)
         stf = run_phot(window, wcs, gsl, fr);
         if (stf == NULL) {
             err_printf_sb2(window, "Phot: %s\n", last_err());
+
+            release_frame(fr, "photometry_cb PHOT_CENTER_PLOT failed");
             return;
 
         } else {
             FILE *plfp = popen(P_STR(FILE_GNUPLOT), "w");
             if (plfp == NULL) {
                 err_printf_sb2(window, "Error running gnuplot (with %s)\n", P_STR(FILE_GNUPLOT));
+
+                release_frame(fr, "photometry_cb gnuplot failed");
+
                 return;
 
             } else {
@@ -786,6 +793,9 @@ static void photometry_cb(gpointer window, guint action)
 
 		if (stf == NULL) {
 			err_printf_sb2(window, "Phot: %s\n", last_err());
+
+            release_frame(fr, "photometry_cb PHOT_RUN no stf");
+
 			return;
 
         } else if ((action & PHOT_OUTPUT_MASK) == PHOT_TO_MBDS) {
@@ -796,6 +806,9 @@ static void photometry_cb(gpointer window, guint action)
 			}
             struct o_frame *ofr = stf_to_mband(mbds, stf); // no imf to link to
             ofr_link_imf(ofr, fr->imf); // do an unlk somewhere
+
+            release_frame(fr, "photometry_cb PHOT_TO_MBDS");
+
             return;
 
         } else { // phot a single frame
@@ -855,6 +868,8 @@ printf("mbds has %d frames\n", g_list_length(mbds->ofrs)); fflush(NULL);
 	default:
 		err_printf("unknown action %d in photometry_cb\n", action);
 	}
+
+    release_frame(fr, "photometry_cb");
 }
 
 void act_phot_center_stars (GtkAction *action, gpointer window)
@@ -892,12 +907,6 @@ void act_phot_to_stdout (GtkAction *action, gpointer window)
  * a 'short' result (malloced string) is returned (NULL for an error) */
 char * phot_to_fd(gpointer window, FILE *fd, int format)
 {	
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) {
-		err_printf("No frame\n");
-		return NULL;
-    }
-
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
 	if (gsl == NULL) {
 		err_printf("in photometry.phot_to_fd: No phot stars\n");
@@ -910,15 +919,26 @@ char * phot_to_fd(gpointer window, FILE *fd, int format)
 		return NULL;
 	}
 
+    struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) {
+        err_printf("No frame\n");
+        return NULL;
+    }
+
     struct stf *stf = run_phot(window, wcs, gsl, fr);
-	if (stf == NULL)
+    if (stf == NULL) {
+        release_frame(fr, "phot_to_fd no stf");
 		return NULL;
+    }
+
+    release_frame(fr, "phot_to_fd");
 
     struct mband_dataset *mbds = mband_dataset_new();
     struct o_frame *ofr = mband_dataset_add_stf(mbds, stf);
     if (ofr == NULL) {
 		err_printf("cannot add stf: aborting\n");
         stf_free_all(stf, "phot_to_fd");
+
 		return NULL;
 	}
 //    mband_dataset_add_sobs_to_ofr(mbds, ofr, P_INT(AP_STD_SOURCE));

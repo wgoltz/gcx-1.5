@@ -1005,7 +1005,7 @@ int erase_stars_from_extracted(struct ccd_frame *fr)
 
     } while (first_last_y < fr->h);
 
-    release_frame(copy_fr, "erase_stars");
+//    release_frame(copy_fr, "erase_stars");
 
     fr->stats.statsok = 0;
 

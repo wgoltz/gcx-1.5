@@ -537,7 +537,7 @@ int extract_bad_pixels(char *badpix, char *outf)
 
 	struct bad_pix_map *map;
 
-    struct image_file *imf = image_file_new(NULL, badpix);
+    struct image_file *imf = imf_new(NULL, badpix);
 
 d3_printf("gcx.extract_bad_pixels %s\n", badpix);
     if (imf_load_frame(imf) >= 0) {
@@ -551,7 +551,7 @@ d3_printf("gcx.extract_bad_pixels %s\n", badpix);
 
 //        imf_release_frame(imf, "extract_bad_pixels");
     }
-    image_file_release(imf);
+    imf_release(imf);
 
     return 0;
 }
@@ -563,11 +563,11 @@ int extract_sources(char *starf, char *outf)
 	struct sources *src;
 	int i;
 
-    imf = image_file_new(NULL, starf);
+    imf = imf_new(NULL, starf);
 
 d3_printf("gcx.extract_sources %s\n", starf);
     if (imf_load_frame(imf) < 0) {
-        image_file_release(imf);
+        imf_release(imf);
         return 1;
     }
 
@@ -596,7 +596,7 @@ d3_printf("gcx.extract_sources %s\n", starf);
 	fclose(of);
     release_sources(src);
 //    imf_release_frame(imf, "extract_sources");
-    image_file_release(imf);
+    imf_release(imf);
     return 0;
 }
 
@@ -869,19 +869,19 @@ int fake_main(int ac, char **av)
                     continue;
 
                 case 'a': ccdr->op_flags |= IMG_OP_ALIGN; batch = TRUE;
-                    ccdr->alignref = image_file_new(NULL, optarg);
+                    ccdr->alignref = imf_new(NULL, optarg);
                     continue;
 
                 case 'b': ccdr->op_flags |= IMG_OP_BIAS; batch = TRUE;
-                    ccdr->bias = image_file_new(NULL, optarg);
+                    ccdr->bias = imf_new(NULL, optarg);
                     continue;
 
                 case 'f': ccdr->op_flags |= IMG_OP_FLAT; batch = TRUE;
-                    ccdr->flat = image_file_new(NULL, optarg);
+                    ccdr->flat = imf_new(NULL, optarg);
                     continue;
 
                 case 'd': ccdr->op_flags |= IMG_OP_DARK; batch = TRUE;
-                    ccdr->dark = image_file_new(NULL, optarg);
+                    ccdr->dark = imf_new(NULL, optarg);
                     continue;
 
                 case 'B': ccdr->op_flags |= IMG_OP_BADPIX; batch = TRUE;
@@ -980,7 +980,7 @@ int fake_main(int ac, char **av)
 	}
 
     if (ac > optind) { /* build the image list */
-		imfl = image_file_list_new();
+        imfl = imfl_new();
         int i;
         for (i = optind; i < ac; i++) add_image_file_to_list(imfl, NULL, av[i], 0);
 	}
@@ -1047,13 +1047,12 @@ printf("home_path: %s\n", cwd); fflush(NULL);
             }
 
             if (fr) {
-                get_frame(fr, "main");
+//                get_frame(fr, "main");
                 if (obj && obj[0]) set_wcs_from_object(fr, obj, NAN);
 
                 //printf("gcx.main 2\n");
 
                 frame_to_channel(fr, window, "i_channel");
-//                release_frame(fr, "main"); // don't release first frame
 
                 interactive = FALSE;
 
@@ -1118,10 +1117,9 @@ printf("home_path: %s\n", cwd); fflush(NULL);
                         //printf("running photometry on %s\n", imf->filename);
                         if (imf_load_frame(imf) < 0) continue;
 
-//                        if (!imf->fr) continue;
-
                         frame_to_channel(imf->fr, window, "i_channel");
-                        imf_release_frame(imf, "gcx 1");
+
+//                        get_frame(imf->fr, "main before match_field_in_window_quiet");
 
                         match_field_in_window_quiet(window);
 
@@ -1131,7 +1129,8 @@ printf("home_path: %s\n", cwd); fflush(NULL);
                             phot_to_fd(window, output_file, run_phot);
                         }
 
-//                        imf_release_frame(imf, "gcx in batch photometry");
+//                        imf_release_frame(imf, "main after phot_to_fd");
+
                     }
 
                     if (output_file) fclose(output_file);
@@ -1139,7 +1138,7 @@ printf("home_path: %s\n", cwd); fflush(NULL);
                     interactive = TRUE;
                 }
             }
-            release_frame(fr, "gcx 2");
+//            release_frame(fr, "gcx 2");
 
             if (interactive) {
                 if (of && of[0]) main_ret = run_obs_file(window, of); /* run obs */
@@ -1149,7 +1148,7 @@ printf("home_path: %s\n", cwd); fflush(NULL);
         }
     }
 
-    image_file_list_release(imfl);
+    imfl_release(imfl);
     ccd_reduce_release(ccdr);
 
 exit_main:

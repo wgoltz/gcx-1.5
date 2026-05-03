@@ -803,11 +803,8 @@ int remove_off_frame_stars(gpointer window)
     struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
     if (gsl == NULL) return 0;
 
-    struct ccd_frame *fr = window_get_current_frame(window);
-    if (fr == NULL) {
-		err_printf("No image frame\n");
-		return 0;
-	}
+    int w = 0, h = 0;
+    window_get_current_frame_size(window, &w, &h);
 
     double extra = P_DBL(AP_R3);
 
@@ -819,7 +816,7 @@ int remove_off_frame_stars(gpointer window)
 	while (sl != NULL) {
         struct gui_star *gs = GUI_STAR(sl->data);
 
-        if (gs->x < extra || gs->x > fr->w - 1 - extra || gs->y < extra || gs->y > fr->h - 1 - extra) {
+        if (gs->x < extra || gs->x > w - 1 - extra || gs->y < extra || gs->y > h - 1 - extra) {
 			i++;
 			gs->flags &= ~STAR_HAS_PAIR;
 //            gui_star_release(gs, "remove_off_frame_stars"); // nooo

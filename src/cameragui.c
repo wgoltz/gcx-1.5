@@ -861,7 +861,7 @@ static int expose_indi_cb(gpointer cam_control_dialog)
             save_frame_auto_name(fr, cam_control_dialog);
         }
 
-        release_frame(fr, "expose_indi_cb");
+//        release_frame(fr, "expose_indi_cb");
     } else {
         err_printf("Received unsupported image format: %s\n", camera->image_format);
     }

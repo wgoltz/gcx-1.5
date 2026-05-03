@@ -611,6 +611,9 @@ static int do_save_cmd (char *args, GtkWidget *cam_control_dialog)
 	}
 
     save_frame_auto_name(fr, cam_control_dialog);
+
+    release_frame(fr, "do_save_cmd");
+
 	return OBS_NEXT_COMMAND;
 }
 

@@ -125,7 +125,7 @@ void ofr_link_imf(struct o_frame *ofr, struct image_file *imf)
 {
     if (imf) {
         ofr->imf = imf;
-        image_file_ref(imf);
+        imf_ref(imf);
         imf->ofr = ofr;
     }
 }
@@ -135,12 +135,12 @@ void ofr_unlink_imf(struct o_frame *ofr)
 {
     g_return_if_fail(ofr != NULL);
 
-    if (ofr->imf) {
-        struct image_file *imf = ofr->imf;
+    struct image_file *imf = ofr->imf;
+    if (imf) {
         imf->ofr = NULL; // clear link back to ofr
-        image_file_release(imf);
-        ofr->imf = NULL;
+        imf_release(imf);
     }
+    ofr->imf = NULL;
 }
 
 static void mband_dataset_remove_sob(struct mband_dataset *mbds, struct star_obs *sob)
@@ -236,9 +236,9 @@ void mband_dataset_release(struct mband_dataset *mbds)
 
     g_hash_table_destroy(mbds->objhash);
     g_list_free(mbds->sobs);
-    g_list_free_full(mbds->ofrs, (GDestroyNotify) ofr_unlink_imf); // apparently not
-    g_list_free(mbds->ofrs);
     g_list_free(mbds->ostars);
+    g_list_free_full(mbds->ofrs, (GDestroyNotify) ofr_unlink_imf);
+
     free(mbds);
 }
 

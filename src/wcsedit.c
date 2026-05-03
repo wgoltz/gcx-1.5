@@ -173,6 +173,8 @@ void wcs_set_validation(gpointer window, int valid)
     if (valid == WCS_VALID) wcs_to_fits_header(fr); // update frame header
 
     wcsedit_refresh(window);
+
+    release_frame(fr, "wcs_set_validation");
 }
 
 static gboolean window_wcs_to_wcsedit(gpointer window)
@@ -430,59 +432,83 @@ static int wcsedit_to_window_wcs(gpointer window)
  */
 void wcsedit_refresh(gpointer window)
 {
+    struct ccd_frame* fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
     struct wcs *wcs = window_get_wcs(window);
-    if (wcs == NULL) return;
+    if (wcs) {
 
-    window_wcs_to_wcsedit(window);
+        window_wcs_to_wcsedit(window);
 
-    // refresh gui stars
-    struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
-    if (gsl != NULL) cat_change_wcs(gsl->sl, wcs); // cat star is released before this
+        // refresh gui stars
+        struct gui_star_list *gsl = g_object_get_data(G_OBJECT(window), "gui_star_list");
+        if (gsl != NULL) cat_change_wcs(gsl->sl, wcs); // cat star is released before this
 
-    gtk_widget_queue_draw(window);
+        gtk_widget_queue_draw(window);
+    }
+
+    release_frame(fr, "wcsedit_refresh");
 }
 
 
 void act_wcs_auto (GtkAction *action, gpointer window)
 {
 /* we just do the "sgpw" here */
+    struct ccd_frame* fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
 	act_stars_add_detected(NULL, window);
 	act_stars_add_gsc(NULL, window);
-	act_stars_add_tycho2(NULL, window);
+    act_stars_add_tycho2(NULL, window);
 
-    if (window_auto_pairs(window) < 1) return;
+    if (window_auto_pairs(window) > 0) {
 
-    window_fit_wcs(window);
-//    gtk_widget_queue_draw(window);
+        window_fit_wcs(window);
+        //    gtk_widget_queue_draw(window);
 
-	wcsedit_refresh(window);
+        wcsedit_refresh(window);
+    }
+
+    release_frame(fr, "act_wcs_auto");
 }
 
 void act_wcs_quiet_auto (GtkAction *action, gpointer window)
 {
 /* we just do the "sgpw<shift>f<shift>s" here */
+    struct ccd_frame* fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
 	act_stars_add_detected(NULL, window);
 	act_stars_add_gsc(NULL, window);
 	act_stars_add_tycho2(NULL, window);
-    if (window_auto_pairs(window) < 1) return;
-    window_fit_wcs(window);
+    if (window_auto_pairs(window) > 0) {
+        window_fit_wcs(window);
 
-//	act_stars_rm_field(NULL, window);
-	act_stars_rm_detected(NULL, window);
+        //	act_stars_rm_field(NULL, window);
+        act_stars_rm_detected(NULL, window);
 
-	wcsedit_refresh(window);
+        wcsedit_refresh(window);
+    }
+
+    release_frame(fr, "act_wcs_quiet_auto");
 }
 
 void act_wcs_existing (GtkAction *action, gpointer window)
 {
 	/* we just do the "spw" here */
+    struct ccd_frame* fr = window_get_current_frame(window);
+    if (fr == NULL) return;
+
 	act_stars_add_detected(NULL, window);
-    if (window_auto_pairs(window) < 1) return;
+    if (window_auto_pairs(window) > 0) {
 
-    window_fit_wcs(window);
-	gtk_widget_queue_draw(window);
+        window_fit_wcs(window);
+        gtk_widget_queue_draw(window);
 
-	wcsedit_refresh(window);
+        wcsedit_refresh(window);
+    }
+
+    release_frame(fr, "act_wcs_quiet_auto");
 }
 
 void act_wcs_fit_pairs (GtkAction *action, gpointer window)
@@ -568,6 +594,7 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer wcs_dialog )
     if (g_object_get_data(G_OBJECT(wcs_dialog), "ignore_flip")) return;
 
     struct ccd_frame *fr = window_get_current_frame(window);
+    if (fr == NULL) return;
 
     flip_frame(fr);
 
@@ -585,6 +612,8 @@ static void wcs_flip_field_cb( GtkWidget *widget, gpointer wcs_dialog )
     struct wcs *wcs = & fr->fim;
 
     if (gsl != NULL) cat_change_wcs(gsl->sl, wcs);
+
+    release_frame(fr, "wcs_flip_field_cb");
 
     gtk_widget_queue_draw(window);
 }
@@ -607,6 +636,8 @@ static void wcs_update_cb(GtkWidget *wid, gpointer wcs_dialog)
 
     struct wcs *frame_wcs = & fr->fim;
     wcs_clone(frame_wcs, window_wcs);
+
+    release_frame(fr, "wcs_update_cb");
 }
 
 /* called on entry activate */
@@ -738,13 +769,14 @@ static void scale(int dir, gpointer wcs_dialog)
     char *end;
     double scale = strtod(text, &end);
     if (text != end) {
-        scale *= 1 + 0.02 * dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(wcs_dialog);
+        double scale_change = 1 + 0.02 * dir * (1 + 9.0 * (btnstate > 0)) * 0.1 / get_zoom(wcs_dialog);
+        scale *= scale_change;
 
         char *buf = NULL; asprintf(&buf, "%.4f", scale);
         if (buf) named_entry_set(wcs_dialog, "wcs_scale_entry", buf), free(buf);
 
-        wcs->xinc *= scale;
-        wcs->yinc *= scale;
+        wcs->xinc *= scale_change;
+        wcs->yinc *= scale_change;
 
         wcsedit_refresh(window); // try this
 //        wcsedit_refresh_parent(wcs_dialog); // scale

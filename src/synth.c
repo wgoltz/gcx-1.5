@@ -325,11 +325,11 @@ static int synth_stars_to_frame(struct ccd_frame * fr, struct wcs *wcs, GList *s
 /* menu callback */
 void act_stars_add_synthetic (GtkAction *action, gpointer window)
 {
-    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-    if (i_ch == NULL) return;
+    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
+    if (i_channel == NULL) return;
 
 // start with current loaded frame, a dark frame with master dark subtracted so frame avg ~ 0
-    struct ccd_frame *dark_fr = i_ch->fr;
+    struct ccd_frame *dark_fr = i_channel->fr;
     if (dark_fr == NULL) return;
 
     struct wcs *wcs = window_get_wcs(window);
@@ -405,7 +405,7 @@ void act_stars_add_synthetic (GtkAction *action, gpointer window)
     }
 
     frame_stats(dark_fr);
-	i_ch->channel_changed = 1;
+    i_channel->channel_changed = 1;
 	gtk_widget_queue_draw(GTK_WIDGET(window));
 	g_list_free(ssl);
 

@@ -346,13 +346,14 @@ void act_frame_new (GtkAction *action, gpointer window)
 {
     struct ccd_frame *fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
 
-    get_frame(fr, "act_frame_new");
+//    get_frame(fr, "act_frame_new");
 // set wcs from window
 
     window_add_frame(fr, NEW_FRAME, IMG_STATE_IN_MEMORY_ONLY | IMG_STATE_DIRTY | IMG_STATE_LOADED, window);
 
-	frame_to_channel(fr, window, "i_channel");
-    release_frame(fr, "act_frame_new");
+    frame_to_channel(fr, window, "i_channel");
+
+//    release_frame(fr, "act_frame_new");
 }
 
 static struct mouse_motion *get_mouse_motion(gpointer parent)
@@ -1519,6 +1520,8 @@ void show_xy_status(GtkWidget *window, double x, double y)
 	info_printf_sb2(window, "%.0f, %.0f", x, y);
 }
 
+// Get displayed frame. Ref it.
+// After finished using frame, do release_frame
 struct ccd_frame *window_get_current_frame(gpointer window)
 {
     struct image_channel *channel = g_object_get_data(G_OBJECT(window), "i_channel");
@@ -1526,6 +1529,7 @@ struct ccd_frame *window_get_current_frame(gpointer window)
         err_printf("no image\n");
         return NULL;
     }
+    get_frame(channel->fr, "window_get_current_frame");
     return channel->fr;
 }
 

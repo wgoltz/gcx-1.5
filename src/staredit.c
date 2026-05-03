@@ -775,8 +775,8 @@ void add_star_from_catalog(gpointer window)
 
     struct ccd_frame *fr;
 
-    struct image_channel *i_ch = g_object_get_data(G_OBJECT(window), "i_channel");
-    gboolean newframe = (i_ch == NULL || i_ch->fr == NULL);
+    struct image_channel *i_channel = g_object_get_data(G_OBJECT(window), "i_channel");
+    gboolean newframe = (i_channel == NULL || i_channel->fr == NULL);
     if (newframe) {
         if (modal_yes_no("An image frame is needed to load objects.\nCreate new frame using the default geometry?", "New Frame?") <= 0) {
             cat_star_release(cats, "add_star_from_catalog");
@@ -784,9 +784,9 @@ void add_star_from_catalog(gpointer window)
 		}
 		fr = new_frame(P_INT(FILE_NEW_WIDTH), P_INT(FILE_NEW_HEIGHT));
         frame_to_channel(fr, window, "i_channel");
-        release_frame(fr, "add_star_from_catalog");
+//        release_frame(fr, "add_star_from_catalog");
     } else {
-        fr = i_ch->fr;
+        fr = i_channel->fr;
     }
 
     struct wcs *wcs = window_get_wcs(window);

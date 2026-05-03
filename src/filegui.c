@@ -262,6 +262,7 @@ static void save_fits(GtkWidget *chooser, gpointer user_data)
 
             imf->state_flags &= ~IMG_STATE_IN_MEMORY_ONLY;
         }
+
         imf->state_flags &= ~IMG_STATE_DIRTY;
         // queue draw reduction window to load changed name?
     }
@@ -383,7 +384,10 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         }
     }
 
-    if (obj_name == NULL && file_name == NULL) return -1;
+    if (obj_name == NULL && file_name == NULL) {
+        release_frame(fr, "load_rcp_to_window fail: no object name");
+        return -1;
+    }
     // if (obj_name && name_type == NAME_TYPE_name)
 
     // file_name is existing rcp file generated from object or NULL
@@ -430,6 +434,7 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
                 err_printf("read_rcp: cannot open file %s\n", file_name);
                 if (obj_name) free(obj_name);
                 free(file_name);
+                release_frame(fr, "load_rcp_to_window fail: no rcp file");
                 return -1;
             }
 
@@ -445,7 +450,10 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
         }
 	}
 
-    if (stf == NULL) return -1;
+    if (stf == NULL) {
+        release_frame(fr, "load_rcp_to_window fail: no stf");
+        return -1;
+    }
 
     // get wcs
     // initialize if new
@@ -489,6 +497,8 @@ int load_rcp_to_window(gpointer window, char *name, char *object)
     }
 
     wcsedit_refresh(window);
+
+    release_frame(fr, "load_rcp_to_window");
 
     GList *rsl = stf_find_glist(stf, 0, SYM_STARS);
     if (rsl == NULL) return -1;

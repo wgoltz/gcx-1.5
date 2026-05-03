@@ -47,6 +47,7 @@ struct image_file {
 #define IMG_STATE_QUICKPHOT 0x80	   /* request only "quick" photometry, rather than going to the mbds */
 #define IMG_STATE_IN_MEMORY_ONLY 0x100 /* image is new frame (in memory only) */
 #define IMG_STATE_OVERRIDE_FILE_VALUES 0x200 /* file values have been over-ridden by par values */
+#define IMG_STATE_STACK_PENDING 0x400  /* delay release until end of stack operation */
 
 #define IMG_BAYER_MASK 0xf000000
 #define IMG_BAYER_SHIFT 24
@@ -54,9 +55,26 @@ struct image_file {
 #define STACK_RESULT "Stack Result"
 #define NEW_FRAME "New Frame"
 
-struct image_file * image_file_new(struct ccd_frame *fr, char *filename);
-void image_file_ref(struct image_file *imf);
-void image_file_release(struct image_file *imf);
+struct image_file * imf_new(struct ccd_frame *fr, char *filename);
+void imf_ref(struct image_file *imf);
+void imf_release(struct image_file *imf);
+
+void imf_set_dirty(struct image_file *imf, gboolean dirty);
+int imf_load_frame(struct image_file *imf);
+void imf_release_frame(struct image_file *imf, char *msg);
+void imf_unload(struct image_file *imf);
+int imf_check_reload(struct image_file *imf);
+
+
+struct image_file_list {
+    int ref_count;
+    GList *imlist;
+};
+
+struct image_file_list * imfl_new(void);
+void imfl_ref(struct image_file_list *imfl);
+void imfl_release(struct image_file_list *imfl);
+
 
 /* a ccd reduction data set */
 struct ccd_reduce {
@@ -85,22 +103,18 @@ struct ccd_reduce {
 struct ccd_reduce * ccd_reduce_new(void);
 void ccd_reduce_ref(struct ccd_reduce *ccdr);
 void ccd_reduce_release(struct ccd_reduce *ccdr);
+void dialog_delete_mbds(gpointer mband_dialog);
 
-struct image_file_list {
-	int ref_count;
-	GList *imlist;
-};
+struct image_file *add_image_file_to_list(struct image_file_list *imfl, struct ccd_frame *fr, char *filename, int flags);
+int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, char *outf);
+
+
+
+typedef  int (* progress_print_func)(char *msg, gpointer processing_dialog);
+
 
 struct bad_pix_map *bad_pix_map_new(char *filename);
 struct bad_pix_map *bad_pix_map_release(struct bad_pix_map *map);
-struct image_file *add_image_file_to_list(struct image_file_list *imfl, struct ccd_frame *fr, char *filename, int flags);
-struct image_file_list * image_file_list_new(void);
-void image_file_list_ref(struct image_file_list *imfl);
-void image_file_list_release(struct image_file_list *imfl);
-
-int batch_reduce_frames(struct image_file_list *imfl, struct ccd_reduce *ccdr, char *outf);
-
-typedef  int (* progress_print_func)(char *msg, gpointer processing_dialog);
 
 int setup_for_ccd_reduce(struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
 int ccd_reduce_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func progress, gpointer processing_dialog);
@@ -114,13 +128,9 @@ int fit_wcs(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_func
 
 struct ccd_frame *reduce_frames_load(struct image_file_list *imfl, struct ccd_reduce *ccdr);
 
-int imf_load_frame(struct image_file *imf);
-void imf_release_frame(struct image_file *imf, char *msg);
-void imf_unload(struct image_file *imf);
-void unload_clean_frames(struct image_file_list *imfl);
+void unload_clean_frames(gpointer window, struct image_file_list *imfl);
 int load_alignment_stars(struct ccd_reduce *ccdr);
 void free_alignment_stars(struct ccd_reduce *ccdr);
-int imf_check_reload(struct image_file *imf);
 
 /* from reducegui.h */
 
