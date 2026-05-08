@@ -1076,8 +1076,8 @@ void act_mband_display_ofr_frame(GtkAction *action, gpointer data)
 
             printf("imf == NULL use copy of current frame\n"); fflush(NULL);
 
-            imf = fr->imf; // do we need allocate new imf?
-            ofr->imf = imf; // try this
+            imf = fr->imf;
+            ofr->imf = imf;
 
             release_frame(fr, "act_mband_display_ofr_frame");
         }

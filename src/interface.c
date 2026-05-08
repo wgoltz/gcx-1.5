@@ -1935,125 +1935,46 @@ GtkWidget* create_adjust_params (void)
 
 GtkWidget* create_image_processing (void)
 {
- GtkWidget *vbox19;
- GtkWidget *top_hbox;
- GtkWidget *imf_info_label;
- GtkWidget *vpaned1;
- GtkWidget *table25;
- GtkWidget *frame3;
- GtkWidget *hbox15;
- GtkWidget *dark_entry;
- GtkWidget *dark_browse;
- GtkWidget *dark_checkb;
- GtkWidget *frame4;
- GtkWidget *hbox16;
- GtkWidget *flat_entry;
- GtkWidget *flat_browse;
- GtkWidget *flat_checkb;
- GtkWidget *frame5;
- GtkWidget *hbox17;
- GtkWidget *badpix_entry;
- GtkWidget *badpix_browse;
- GtkWidget *badpix_checkb;
- GtkWidget *frame7;
- GtkWidget *hbox19;
- GtkObject *mul_spin_adj;
- GtkWidget *mul_spin;
-//  GtkWidget *mul_checkb;
- GtkObject *add_spin_adj;
- GtkWidget *add_spin;
- GtkWidget *add_checkb;
- GtkWidget *frame15;
- GtkWidget *hbox28;
- GtkWidget *output_file_entry;
- GtkWidget *output_file_browse;
- GtkWidget *overwrite_checkb;
- GtkWidget *frame6;
- GtkWidget *hbox18;
- GtkWidget *align_entry;
- GtkWidget *align_browse;
- GtkWidget *align_checkb;
- GtkWidget *frame10;
- GtkWidget *hbox22;
- GtkObject *blur_spin_adj;
- GtkWidget *blur_spin;
- GtkWidget *label90;
- GtkWidget *blur_checkb;
- GtkWidget *frame11;
- GtkWidget *hbox23;
- GtkWidget *demosaic_method_combo;
- GtkWidget *demosaic_checkb;
- GtkWidget *frame8;
- GtkWidget *hbox20;
- GtkWidget *table26;
- GtkWidget *stack_method_combo;
- GtkObject *stack_sigmas_spin_adj;
- GtkWidget *stack_sigmas_spin;
- GtkObject *stack_iter_spin_adj;
- GtkWidget *stack_iter_spin;
+    GtkWidget *image_processing = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    //  g_object_set_data (G_OBJECT (image_processing), "image_processing", image_processing);
+    gtk_window_set_title (GTK_WINDOW (image_processing), "CCD Reduction");
+    gtk_window_set_position (GTK_WINDOW (image_processing), GTK_WIN_POS_CENTER);
+    gtk_window_set_default_size (GTK_WINDOW (image_processing), 640, 420);
+    //goto exit;
 
- GtkWidget *bg_match_off_rb;
- GtkWidget *bg_match_add_rb;
- GtkWidget *bg_match_mul_rb;
- GtkWidget *stack_checkb;
- GtkWidget *label83;
- GtkWidget *label82;
- GtkWidget *label106;
- GtkWidget *frame2;
- GtkWidget *hbox14;
- GtkWidget *bias_entry;
- GtkWidget *bias_browse;
- GtkWidget *bias_checkb;
- GtkWidget *gggg;
- GtkWidget *hbox27;
- GtkWidget *phot_reuse_wcs_checkb;
- GtkWidget *frame17;
- GtkWidget *hbox29;
- GtkWidget *recipe_entry;
- GtkWidget *recipe_browse;
- GtkWidget *phot_en_checkb;
- GtkWidget *label80;
+    GtkWidget *vbox  = gtk_vbox_new (FALSE, 0);
+    gtk_widget_show (vbox);
+    gtk_container_add (GTK_CONTAINER (image_processing), vbox);
 
- GtkWidget *image_processing = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-//  g_object_set_data (G_OBJECT (image_processing), "image_processing", image_processing);
- gtk_window_set_title (GTK_WINDOW (image_processing), "CCD Reduction");
- gtk_window_set_position (GTK_WINDOW (image_processing), GTK_WIN_POS_CENTER);
- gtk_window_set_default_size (GTK_WINDOW (image_processing), 640, 420);
+    GtkWidget *menu_hbox = gtk_hbox_new (FALSE, 0);
+    g_object_ref (menu_hbox);
+    g_object_set_data_full (G_OBJECT (image_processing), "menu_hbox", menu_hbox, (GDestroyNotify) g_object_unref);
+    gtk_widget_show (menu_hbox);
+    gtk_box_pack_start (GTK_BOX (vbox), menu_hbox, FALSE, FALSE, 0);
+
+    GtkWidget *reduce_notebook = gtk_notebook_new ();
+
+    g_object_ref(reduce_notebook);
+    g_object_set_data_full(G_OBJECT(image_processing), "reduce_notebook", reduce_notebook, (GDestroyNotify) g_object_unref);
+    gtk_widget_show (reduce_notebook);
+    gtk_box_pack_start (GTK_BOX (vbox), reduce_notebook, FALSE, FALSE, 0);
+
 //goto exit;
- GtkWidget *reduce_notebook = gtk_notebook_new ();
- gtk_container_add (GTK_CONTAINER (image_processing), reduce_notebook);
- gtk_notebook_set_tab_pos (GTK_NOTEBOOK (reduce_notebook), GTK_POS_BOTTOM);
- g_object_ref(reduce_notebook);
- g_object_set_data_full(G_OBJECT(image_processing), "reduce_notebook", reduce_notebook, (GDestroyNotify) g_object_unref);
- gtk_widget_show (reduce_notebook);
-//goto exit;
- /* Looks a bit ugly without, but it's deprecated, of course.
 
- gtk_notebook_set_tab_hborder (GTK_NOTEBOOK (reduce_notebook), 16);
- */
+ // ********************** reduce tab
 
- vbox19 = gtk_vbox_new (FALSE, 0);
- gtk_widget_show (vbox19);
- gtk_container_add (GTK_CONTAINER (reduce_notebook), vbox19);
+  GtkWidget *reduce_label = gtk_label_new ("Reduce");
+  gtk_widget_show (reduce_label);
 
- top_hbox = gtk_hbox_new (FALSE, 0);
- g_object_ref (top_hbox);
- g_object_set_data_full (G_OBJECT (image_processing), "top_hbox", top_hbox, (GDestroyNotify) g_object_unref);
- gtk_widget_show (top_hbox);
- gtk_box_pack_start (GTK_BOX (vbox19), top_hbox, FALSE, FALSE, 0);
+ GtkWidget *reduce_tab = gtk_vpaned_new ();
+ gtk_widget_show (reduce_tab);
+ gtk_paned_set_position (GTK_PANED (reduce_tab), 250);
 
- imf_info_label = gtk_label_new ("");
- gtk_widget_show (imf_info_label);
- gtk_box_pack_start (GTK_BOX (top_hbox), imf_info_label, FALSE, TRUE, 0);
-//goto exit;
- vpaned1 = gtk_vpaned_new ();
- gtk_widget_show (vpaned1);
- gtk_box_pack_start (GTK_BOX (vbox19), vpaned1, TRUE, TRUE, 0);
- gtk_paned_set_position (GTK_PANED (vpaned1), 250);
+ gtk_notebook_append_page(GTK_NOTEBOOK (reduce_notebook), reduce_tab, reduce_label); // add page 0 to notebook
 
- GtkWidget *image_files_frame = gtk_frame_new ("Image Files");
+ GtkWidget *image_files_frame = gtk_frame_new ("Image Files"); // top vpane
  gtk_widget_show (image_files_frame);
- gtk_paned_pack1 (GTK_PANED (vpaned1), image_files_frame, FALSE, TRUE);
+ gtk_paned_pack1 (GTK_PANED (reduce_tab), image_files_frame, FALSE, TRUE);
  gtk_container_set_border_width (GTK_CONTAINER (image_files_frame), 3);
 
  GtkWidget *image_files_scw = gtk_scrolled_window_new (NULL, NULL);
@@ -2063,6 +1984,7 @@ GtkWidget* create_image_processing (void)
 
  GtkListStore *image_file_store = gtk_list_store_new (IMFL_COL_SIZE,
                G_TYPE_STRING, G_TYPE_STRING, G_TYPE_POINTER); // filename, status, imf *
+
  GtkWidget *image_file_view = gtk_tree_view_new_with_model (GTK_TREE_MODEL(image_file_store));
  g_object_unref(image_file_store);
  g_object_ref (image_file_view);
@@ -2084,9 +2006,9 @@ GtkWidget* create_image_processing (void)
  gtk_tree_selection_set_mode (selection, GTK_SELECTION_MULTIPLE);
 
 //goto exit;
- GtkWidget *log_output_frame = gtk_frame_new ("Log output");
+ GtkWidget *log_output_frame = gtk_frame_new ("Log output"); // bottom vpane
  gtk_widget_show (log_output_frame);
- gtk_paned_pack2 (GTK_PANED (vpaned1), log_output_frame, TRUE, TRUE);
+ gtk_paned_pack2 (GTK_PANED (reduce_tab), log_output_frame, TRUE, TRUE);
  gtk_container_set_border_width (GTK_CONTAINER (log_output_frame), 3);
 
  GtkWidget *log_output_scw = gtk_scrolled_window_new (NULL, NULL);
@@ -2104,24 +2026,21 @@ GtkWidget* create_image_processing (void)
  gtk_text_view_set_editable(GTK_TEXT_VIEW(processing_log_text), FALSE);
  gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(processing_log_text), FALSE);
 
-// ********************** reduce setup
+ // ********************** setup tab
 
- GtkWidget *reduce_label = gtk_label_new ("Reduce");
- gtk_widget_show (reduce_label);
- gtk_notebook_set_tab_label (GTK_NOTEBOOK (reduce_notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (reduce_notebook), 0), reduce_label);
+ GtkWidget *setup_label = gtk_label_new ("Setup");
+ gtk_widget_show (setup_label);
 
- GtkWidget *table = gtk_table_new (8, 2, TRUE);
- gtk_table_set_col_spacings (GTK_TABLE (table), 12);
- gtk_container_add (GTK_CONTAINER (reduce_notebook), table);
+ GtkWidget *setup_tab = gtk_table_new (8, 2, TRUE);
+ gtk_table_set_col_spacings (GTK_TABLE (setup_tab), 12);
 
-// column 1
+ gtk_notebook_append_page(GTK_NOTEBOOK (reduce_notebook), setup_tab, setup_label); // add page 1 to notebook
 
-// **************** bias
-
+ // **************** bias
   GtkWidget *frame = gtk_frame_new ("Bias frame");
   gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
-  TABLE_ATTACH(table, frame, 0, 0, 1, 1);
+  TABLE_ATTACH(setup_tab, frame, 0, 0, 1, 1);
 
   GtkWidget *hbox = gtk_hbox_new (FALSE, 0);
   gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2150,7 +2069,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Dark frame");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 1, 0, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 1, 0, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2180,7 +2099,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Flat frame");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 2, 0, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 2, 0, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_widget_show (hbox);
@@ -2210,7 +2129,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Bad pixel file");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 3, 0, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 3, 0, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2239,7 +2158,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Multiply/Add");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 4, 0, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 4, 0, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2291,7 +2210,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Photometry recipe file");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 5, 0, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 5, 0, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2320,7 +2239,7 @@ GtkWidget* create_image_processing (void)
   frame = gtk_frame_new ("Photometry options");
   gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
-  TABLE_ATTACH(table, frame, 6, 0, 1, 1);
+  TABLE_ATTACH(setup_tab, frame, 6, 0, 1, 1);
 
   hbox = gtk_hbox_new (FALSE, 0);
   gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2338,7 +2257,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Demosaic");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 0, 1, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 0, 1, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2361,7 +2280,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Alignment reference frame");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 1, 1, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 1, 1, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2401,7 +2320,7 @@ GtkWidget* create_image_processing (void)
    frame = gtk_frame_new ("Alignment options");
    gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
-   TABLE_ATTACH(table, frame, 2, 1, 1, 1);
+   TABLE_ATTACH(setup_tab, frame, 2, 1, 1, 1);
 
    hbox = gtk_hbox_new (FALSE, 0);
    gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2423,7 +2342,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Lowpass Filter");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 3, 1, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 3, 1, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2473,7 +2392,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Stacking");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 4, 1, 2, 1);
+ TABLE_ATTACH(setup_tab, frame, 4, 1, 2, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2528,7 +2447,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Background Matching");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 6, 1, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 6, 1, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2562,7 +2481,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Output file/directory");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 7, 0, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 7, 0, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2593,7 +2512,7 @@ GtkWidget* create_image_processing (void)
  frame = gtk_frame_new ("Save Only a Clipped Area");
  gtk_container_set_border_width (GTK_CONTAINER (frame), 3);
 
- TABLE_ATTACH(table, frame, 7, 1, 1, 1);
+ TABLE_ATTACH(setup_tab, frame, 7, 1, 1, 1);
 
  hbox = gtk_hbox_new (FALSE, 0);
  gtk_container_add (GTK_CONTAINER (frame), hbox);
@@ -2638,15 +2557,6 @@ GtkWidget* create_image_processing (void)
  gtk_widget_set_tooltip_text (item, "Save only the clipped area");
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
-
- label80 = gtk_label_new ("Setup");
-//  g_object_ref (label80);
-//  g_object_set_data_full (G_OBJECT (image_processing), "label80", label80,
-//                            (GDestroyNotify) g_object_unref);
- gtk_widget_show (label80);
-
- gtk_notebook_set_tab_label (GTK_NOTEBOOK (reduce_notebook), gtk_notebook_get_nth_page (GTK_NOTEBOOK (reduce_notebook), 1), label80);
-
 //  printf("interface.create_image_processing\n");
  return image_processing;
 }
@@ -2655,7 +2565,7 @@ GtkWidget* create_image_processing (void)
 GtkWidget* create_image_processing (void)
 {
   GtkWidget *vbox19;
-  GtkWidget *top_hbox;
+  GtkWidget *menu_hbox;
   GtkWidget *imf_info_label;
   GtkWidget *vpaned1;
   GtkWidget *table25;
@@ -2755,15 +2665,15 @@ GtkWidget* create_image_processing (void)
   gtk_widget_show (vbox19);
   gtk_container_add (GTK_CONTAINER (reduce_notebook), vbox19);
 
-  top_hbox = gtk_hbox_new (FALSE, 0);
-  g_object_ref (top_hbox);
-  g_object_set_data_full (G_OBJECT (image_processing), "top_hbox", top_hbox, (GDestroyNotify) g_object_unref);
-  gtk_widget_show (top_hbox);
-  gtk_box_pack_start (GTK_BOX (vbox19), top_hbox, FALSE, FALSE, 0);
+  menu_hbox = gtk_hbox_new (FALSE, 0);
+  g_object_ref (menu_hbox);
+  g_object_set_data_full (G_OBJECT (image_processing), "menu_hbox", menu_hbox, (GDestroyNotify) g_object_unref);
+  gtk_widget_show (menu_hbox);
+  gtk_box_pack_start (GTK_BOX (vbox19), menu_hbox, FALSE, FALSE, 0);
 
   imf_info_label = gtk_label_new ("");
   gtk_widget_show (imf_info_label);
-  gtk_box_pack_start (GTK_BOX (top_hbox), imf_info_label, FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (menu_hbox), imf_info_label, FALSE, TRUE, 0);
 //goto exit;
   vpaned1 = gtk_vpaned_new ();
   gtk_widget_show (vpaned1);

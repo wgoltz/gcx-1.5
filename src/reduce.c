@@ -1021,8 +1021,10 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
             } else {
 
-//                if (P_INT(FILE_SAVE_MEM)) imf->state_flags &= ~IMG_STATE_DIRTY;
-//                imf->state_flags &= IMG_STATE_SKIP; // clear flags but keep skip
+                if (P_INT(FILE_SAVE_MEM)) {
+                    imf->state_flags &= ~IMG_STATE_DIRTY; // mark it clean so it will release
+                    imf->state_flags &= IMG_STATE_SKIP; // clear flags but keep skip
+                }
 
             }
 
