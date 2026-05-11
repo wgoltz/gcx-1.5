@@ -307,7 +307,7 @@ void free_frame_data(struct ccd_frame *fr)
 // the frame will still be needed after they return
 void get_frame(struct ccd_frame *fr, char *msg)
 {
-printf("get_frame     %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
+// printf("get_frame     %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
 
 	fr->ref_count ++;
 }
@@ -326,7 +326,7 @@ struct ccd_frame *release_frame(struct ccd_frame *fr, char *msg)
 
         } else {
             fr->ref_count --;
-            printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
+//            printf("release_frame %d %s %s\n", fr->ref_count, fr->name, msg); fflush(NULL);
 
             if (fr->ref_count < 1) {
                 if (fr->imf) fr->imf->fr = NULL; // unlink frame from imf

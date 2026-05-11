@@ -791,7 +791,7 @@ float array_median_exclude(GPtrArray *array, Point *points, int medw)
     double stddev = sqrt(sum2 / n - mean * mean);
 
     long int median_ix = medw / 2;
-    double k = 1.3;
+    double k = 0.7;
 
     Point **vptr = (Point **)array->pdata;
     v = vptr[n - 1];
@@ -906,7 +906,7 @@ int median_with_star_exclusion(struct ccd_frame *fr, int medw)
 
         int xi; float *column; // filter columns
 
-#undef MEDIAN_OF_MEDIANS
+#define MEDIAN_OF_MEDIANS
 
 #ifdef MEDIAN_OF_MEDIANS
         column = row_median; // column median of row medians

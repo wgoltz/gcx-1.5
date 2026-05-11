@@ -475,16 +475,10 @@ void unload_clean_frames(gpointer window, struct image_file_list *imfl)
         fl = g_list_next(fl);
 
         if (imf->state_flags & IMG_STATE_LOADED) {
-            if ( (imf->state_flags & (IMG_STATE_DIRTY | IMG_STATE_STACK_PENDING)) == 0 ) {
+            if ((imf->state_flags & (IMG_STATE_DIRTY | IMG_STATE_STACK_PENDING)) == 0) {
                 imf->op_flags = 0;
                 imf_release_frame(imf, "unload_clean_frames (not dirty)");
-            } else if (fr == imf->fr) {
-                imf_release_frame(imf, "unload_clean_frames current loaded frame");
-            } else {
-                printf("loaded, dirty, but not current frame %d %s\n", imf->fr->ref_count, imf->filename); fflush(NULL);
             }
-        } else {
-            printf("not loaded %d %s\n", (imf->fr) ? imf->fr->ref_count : 0, imf->filename); fflush(NULL);
         }
     }
     release_frame(fr, "unload_clean_frames\n");
@@ -656,6 +650,8 @@ static int ccd_reduce_imf_body(struct image_file *imf, struct ccd_reduce *ccdr, 
 
     g_return_val_if_fail(imf != NULL, -1);
     g_return_val_if_fail(imf->fr != NULL, -1);
+
+    get_frame(imf->fr, "ccd_reduce_imf_body");
 
     gboolean is_dirty = (imf->state_flags & IMG_STATE_DIRTY) != 0;
 
@@ -1039,6 +1035,8 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 
     if (! is_dirty && (imf->state_flags & IMG_STATE_DIRTY)) // imf has become dirty
         get_frame(imf->fr, "ccd_reduce_imf_body becomes dirty");
+
+    imf_release_frame(imf, "ccd_reduce_imf_body");
 
 //	d4_printf("\nrdnoise: %.3f\n", imf->fr->exp.rdnoise);
 //	d4_printf("scale: %.3f\n", imf->fr->exp.scale);
@@ -2040,6 +2038,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
     gboolean match_WCS = FALSE;
     gboolean rotate = FALSE;
     gboolean smooth = FALSE;
+    get_frame(imf->fr, "align_imf");
 
     if (ccdr->window) { // get options for gui mode
         GtkWidget *ccdred = g_object_get_data(ccdr->window, "processing");
@@ -2055,7 +2054,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 
     if (match_WCS) { // looks like two passes required
         if (imf_load_frame(ccdr->alignref) < 0) {
-            imf_release_frame(imf, "align_imf");
+            imf_release_frame(imf, "align_imf no alignref");
             printf("align_imf: can't load alignment frame\n"); fflush(NULL);
             return -1;
         }
@@ -2199,7 +2198,7 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 //        wcs_to_fits_header(imf->fr);
 //    }
 
-//    imf_release_frame(imf, "wcs_align_imf end");
+    imf_release_frame(imf, "wcs_align_imf end");
 
     if ( ! return_ok ) {
         err_printf(" align_imf aborted\n");
@@ -2410,7 +2409,7 @@ void imf_release(struct image_file *imf)
         if (imf->fr) imf->fr->imf = NULL;
 
     } else {
-        printf("imf release %s frame not loaded\n", imf->filename); fflush(NULL);
+//        printf("imf release %s frame not loaded\n", imf->filename); fflush(NULL);
     }
 
     if (imf->filename) free(imf->filename);

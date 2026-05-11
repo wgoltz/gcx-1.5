@@ -863,7 +863,7 @@ GtkWidget* create_camera_control (void)
   item = gtk_spin_button_new (GTK_ADJUSTMENT (adjustment), 1, 5);
   g_object_ref (item);
   g_object_set_data_full (G_OBJECT (camera_control), "exp_spin", item, (GDestroyNotify) g_object_unref);
-  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE);
+//  gtk_spin_button_set_numeric (GTK_SPIN_BUTTON (item), TRUE); // try this
   gtk_spin_button_set_snap_to_ticks (GTK_SPIN_BUTTON (item), TRUE);
   TABLE_ATTACH(table, item, 0, 0, 1, 1);
 
@@ -2348,7 +2348,7 @@ GtkWidget* create_image_processing (void)
  gtk_container_add (GTK_CONTAINER (frame), hbox);
 
  adjustment = gtk_adjustment_new (20, 0, 150, 1, 20, 0);
- item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 1);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 5, 0);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "median_spin", item, (GDestroyNotify) g_object_unref);
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);
@@ -2365,7 +2365,7 @@ GtkWidget* create_image_processing (void)
  gtk_box_pack_start (GTK_BOX (hbox), item, FALSE, FALSE, 0);
 
  adjustment = gtk_adjustment_new (0.5, 0, 50, 0.1, 10, 0);
- item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 1, 1);
+ item = gtk_spin_button_new (GTK_ADJUSTMENT(adjustment), 0.1, 2);
  g_object_ref (item);
  g_object_set_data_full (G_OBJECT (image_processing), "blur_spin", item, (GDestroyNotify) g_object_unref);
  gtk_box_pack_start (GTK_BOX (hbox), item, TRUE, TRUE, 0);

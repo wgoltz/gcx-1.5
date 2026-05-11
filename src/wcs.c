@@ -302,9 +302,9 @@ struct wcs *wcs_release(struct wcs *wcs)
 void wcs_clone(struct wcs *dst, struct wcs *src)
 {
     if (src == dst) return;
-    if (src == NULL || src->wcsset == WCS_INVALID || isnan(src->xinc) || isnan(src->xref) || isnan(src->yinc) || isnan(src->yref)) {
-//        printf("wcs_clone: src not initialized\n"); fflush(NULL);
-    }
+    if (src == NULL) return;
+    if (src->wcsset == WCS_INVALID || isnan(src->xinc) || isnan(src->xref) || isnan(src->yinc) || isnan(src->yref)) return;
+
     int rc = dst->ref_count;
     double jd = dst->jd;
 

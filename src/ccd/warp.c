@@ -943,21 +943,53 @@ int make_gaussian(float sigma, int size, float *kern)
 
     float sum = 0;
     int x, y;
-	for (y = 0; y < mid + 1; y++)
-		for(x = 0; x < mid + 1; x++) {
+    for (y = 0; y < mid + 1; y++)
+        for(x = 0; x <= y; x++) {
+
+            if (x == 0 && y == 0) {
+                sum += 1;
+                *mp = 1;
+                continue;
+            }
+
+            if (x == 0) {
+                float v = exp(- y / sigma);
+                sum += 4 * v;
+                *(mp + size * y) = v;
+                *(mp - size * y) = v;
+                *(mp + y) = v;
+                *(mp - y) = v;
+                continue;
+            }
+
+            if (x == y) {
+                float v = exp(- sqrt(2) * y / sigma);
+                sum += 4 * v;
+                *(mp + y + size * y) = v;
+                *(mp + y - size * y) = v;
+                *(mp - y - size * y) = v;
+                *(mp - y + size * y) = v;
+                continue;
+            }
+
             float v = exp(- sqrt(sqr(x) + sqr(y)) / sigma);
-
-            sum += 4 * v;
-
-			*(mp + x + size * y) = v;
-			*(mp + x - size * y) = v;
-			*(mp - x - size * y) = v;
-			*(mp - x + size * y) = v;
-		}
+            sum += 8 * v;
+            *(mp + x + size * y) = v;
+            *(mp + x - size * y) = v;
+            *(mp - x - size * y) = v;
+            *(mp - x + size * y) = v;
+            *(mp + y + size * x) = v;
+            *(mp + y - size * x) = v;
+            *(mp - y - size * x) = v;
+            *(mp - y + size * x) = v;
+        }
 
     int all = size * size;
-	for (y = 0; y < all; y++)
+    for (y = 0; y < all; y++) {
 		kern[y] /= sum;
+//        printf("%0.4f%s", kern[y], (((y + 1) % size) == 0) ? "\n" : " ");
+    }
+//    fflush(NULL);
 
     return 0;
 }
