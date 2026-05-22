@@ -947,13 +947,14 @@ int make_gaussian(float sigma, int size, float *kern)
         for(x = 0; x <= y; x++) {
 
             if (x == 0 && y == 0) {
-                sum += 1;
-                *mp = 1;
+                float v = 0; // 1;
+                sum += v;
+                *mp = v;
                 continue;
             }
 
-            if (x == 0) {
-                float v = exp(- y / sigma);
+            if (x == 0) { // also y = 0
+                float v = -2 * exp(- y / sigma);
                 sum += 4 * v;
                 *(mp + size * y) = v;
                 *(mp - size * y) = v;
@@ -963,7 +964,7 @@ int make_gaussian(float sigma, int size, float *kern)
             }
 
             if (x == y) {
-                float v = exp(- sqrt(2) * y / sigma);
+                float v = -4 * exp(- M_SQRT2 * y / sigma);
                 sum += 4 * v;
                 *(mp + y + size * y) = v;
                 *(mp + y - size * y) = v;
@@ -972,7 +973,7 @@ int make_gaussian(float sigma, int size, float *kern)
                 continue;
             }
 
-            float v = exp(- sqrt(sqr(x) + sqr(y)) / sigma);
+            float v = 10 * exp(- sqrt(sqr(x) + sqr(y)) / sigma);
             sum += 8 * v;
             *(mp + x + size * y) = v;
             *(mp + x - size * y) = v;

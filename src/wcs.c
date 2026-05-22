@@ -160,8 +160,7 @@ void fits_frame_params_to_fim(struct ccd_frame *fr)
         fflush(NULL);
     }
 
-//    wcs->xrefpix = fr->w / 2.0;
-//    wcs->yrefpix = fr->h / 2.0;
+    if (WCS_HAVE_INITIAL(wcs)) wcs->wcsset = WCS_INITIAL;
 
     // use hinted flag to indicate we have called this function already
     // TODO need to clear flag if there are changes to relevant params

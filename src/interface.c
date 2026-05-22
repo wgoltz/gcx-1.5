@@ -1957,7 +1957,7 @@ GtkWidget* create_image_processing (void)
     g_object_ref(reduce_notebook);
     g_object_set_data_full(G_OBJECT(image_processing), "reduce_notebook", reduce_notebook, (GDestroyNotify) g_object_unref);
     gtk_widget_show (reduce_notebook);
-    gtk_box_pack_start (GTK_BOX (vbox), reduce_notebook, FALSE, FALSE, 0);
+    gtk_box_pack_start (GTK_BOX (vbox), reduce_notebook, TRUE, TRUE, 0);
 
 //goto exit;
 
@@ -1974,7 +1974,7 @@ GtkWidget* create_image_processing (void)
 
  GtkWidget *image_files_frame = gtk_frame_new ("Image Files"); // top vpane
  gtk_widget_show (image_files_frame);
- gtk_paned_pack1 (GTK_PANED (reduce_tab), image_files_frame, FALSE, TRUE);
+ gtk_paned_pack1 (GTK_PANED (reduce_tab), image_files_frame, TRUE, TRUE);
  gtk_container_set_border_width (GTK_CONTAINER (image_files_frame), 3);
 
  GtkWidget *image_files_scw = gtk_scrolled_window_new (NULL, NULL);

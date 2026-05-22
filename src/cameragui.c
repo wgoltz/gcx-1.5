@@ -189,6 +189,12 @@ static int tele_coords_indi_cb(gpointer cam_control_dialog)
                 if (obs) str_join_varg(&msg, "%s", obs->objname);
                 str_join_str(&msg, "%s", "\n");
 
+                struct wcs *wcs = window_get_wcs(main_window); // try this
+                if (wcs && WCS_HAVE_INITIAL(wcs)) {
+                    wcs->xref = ra;
+                    wcs->yref = dec;
+                    wcs->wcsset = WCS_INITIAL;
+                }
             }
 
             if (ras) free(ras);

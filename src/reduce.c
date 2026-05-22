@@ -975,10 +975,17 @@ d2_printf("reduce.ccd_reduce_imf setting background %.2f\n", imf->fr->stats.medi
 //        if ( ! (imf->op_flags & IMG_OP_ALIGN) ) {
 
             if (ccdr->alignref->fr && (align_imf(imf, ccdr, progress, processing_dialog) == 0)) {
-                fits_add_history(imf->fr, "'ALIGNED'");
-//                imf->fim->wcsset = WCS_VALID;
+
+                imf->fim->wcsset = WCS_VALID;
                 imf->state_flags |= IMG_STATE_DIRTY;
                 imf->op_flags |= IMG_OP_ALIGN;
+
+                // assume alignment frame wcs is valid
+                wcs_clone(&imf->fr->fim, &ccdr->alignref->fr->fim);
+
+                fits_add_history(imf->fr, "'ALIGNED'");
+
+                refresh_wcs(ccdr->window);
 
             } else {
                 REPORT( " (FAILED)" )
@@ -1755,8 +1762,9 @@ struct ccd_frame * stack_frames(struct image_file_list *imfl, struct ccd_reduce 
 
         imf->state_flags &= ~IMG_STATE_STACK_PENDING; // allow release
 
-        if ( ! (imf->state_flags & IMG_STATE_SKIP) )
-            imf_release_frame(imf, "stack_frames");
+        if ( P_INT(FILE_SAVE_MEM) && ! (imf->state_flags & IMG_STATE_SKIP) ) {
+           imf_release_frame(imf, "stack_frames");
+        }
     }
 
     if (fr) {
@@ -2052,18 +2060,19 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
         }
     }
 
+    struct wcs *align_wcs = &ccdr->alignref->fr->fim;
+    //        wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+
+    struct wcs *imf_wcs = &(imf->fr->fim);
+    //                wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
+
+
     if (match_WCS) { // looks like two passes required
         if (imf_load_frame(ccdr->alignref) < 0) {
             imf_release_frame(imf, "align_imf no alignref");
             printf("align_imf: can't load alignment frame\n"); fflush(NULL);
             return -1;
         }
-
-        struct wcs *align_wcs = &ccdr->alignref->fr->fim;
-        //        wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
-
-        struct wcs *imf_wcs = &(imf->fr->fim);
-        //                wcs_transform_from_frame (ccdr->alignref->fr, align_wcs);
 
         double d_rot = imf_wcs->rot - align_wcs->rot;
 
@@ -2157,12 +2166,10 @@ int align_imf(struct image_file *imf, struct ccd_reduce *ccdr, progress_print_fu
 
                             shift_frame(imf->fr, -dx, -dy);
 
-                            struct wcs *wcs = & imf->fr->fim;
-                            if (wcs->wcsset == WCS_VALID) {
-                                adjust_wcs(wcs, 0, 0, 1, -dtheta);
-                                adjust_wcs(wcs, -dx, -dy, 1, 0);
-                                wcs_to_fits_header(imf->fr); // not quite correct
-                            }
+// doesn't work
+//                           adjust_wcs(wcs, 0, 0, 1, -dtheta);
+//                           adjust_wcs(wcs, -dx, -dy, 1, 0);
+
                         }
 
                         g_slist_free(pairs);

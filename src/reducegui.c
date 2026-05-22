@@ -1483,8 +1483,8 @@ static void ccdred_run_cb(GtkAction *action, gpointer processing_dialog)
 
         if (! (imf->state_flags & IMG_STATE_SKIP)) {
 
-            if (ccdr->op_flags & IMG_OP_STACK)
-                imf->state_flags |= IMG_STATE_STACK_PENDING;
+//            if (ccdr->op_flags & IMG_OP_STACK)
+//                imf->state_flags |= IMG_STATE_STACK_PENDING;
 
             imf_display_cb (NULL, processing_dialog); // before run
 

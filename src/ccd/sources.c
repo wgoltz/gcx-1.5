@@ -757,6 +757,17 @@ typedef struct _point {
     int id; // offset into frame (-edge_lo to +edge_hi)
 } Point;
 
+typedef struct _patch {
+    GPtrArray *array; // of Points
+    double sum;
+    double sum2;
+    double median;
+    double sigma;
+    int n;
+    int size; // size x size = n patch
+} Patch;
+
+
 gint sort_points(gconstpointer pa, gconstpointer pb)
 {
     const Point *a = *(Point **)pa;
@@ -767,11 +778,51 @@ gint sort_points(gconstpointer pa, gconstpointer pb)
     return 0;
 }
 
-
-void array_insert(GPtrArray *array, int b, Point *v)
+/*
+float patch_median_exclude(Patch *patch, float *p0, int w, int h, int patch_size)
 {
-    g_ptr_array_insert(array, b, v);
+    Point *v;
+    double sum = 0, sum2 = 0;
+    for (v = points; v < points + medw; v++) {
+        sum += v->value;
+        sum2 += v->value * v->value;
+    }
+
+    double mean = sum / n;
+    double stddev = sqrt(sum2 / n - mean * mean);
+
+    long int median_ix = medw / 2;
+    double k = 1.0;
+
+    Point **vptr = (Point **)array->pdata;
+    v = vptr[n - 1];
+    while (v->value - mean > k * stddev) { // remove bright values (stars)
+        if (! v->exclude) {
+            v->exclude = TRUE; // drop it
+            n--;
+            sum -= v->value;
+            sum2 -= v->value * v->value;
+
+            mean = sum / n;
+            stddev = sqrt(sum2 / n - mean * mean);
+
+            if (n % 2) median_ix--;
+        } else
+            n--;
+
+        v = vptr[n - 1];
+    }
+
+    v = vptr[median_ix]; // median Point
+    float median = v->value;
+    if (n % 2 == 0) {
+        v = vptr[median_ix - 1]; // median Point
+        median = (median + v->value) / 2;
+    }
+
+    return median;
 }
+*/
 
 float array_median_exclude(GPtrArray *array, Point *points, int medw)
 {
@@ -791,7 +842,7 @@ float array_median_exclude(GPtrArray *array, Point *points, int medw)
     double stddev = sqrt(sum2 / n - mean * mean);
 
     long int median_ix = medw / 2;
-    double k = 0.7;
+    double k = 1.0;
 
     Point **vptr = (Point **)array->pdata;
     v = vptr[n - 1];
@@ -822,11 +873,10 @@ float array_median_exclude(GPtrArray *array, Point *points, int medw)
     return median;
 }
 
-// median filter row and column with star exclusion
+
+// median filter row and column (whole frame) with star exclusion
 int median_with_star_exclusion(struct ccd_frame *fr, int medw)
 {
-    // find avg, std dev, exclude points more than k * (std dev) above avg, iterate
-    // interpolate excluded values
     if (medw % 2 == 0) medw++;
 
     Point *points = calloc(medw, sizeof(Point));
@@ -855,7 +905,7 @@ int median_with_star_exclusion(struct ccd_frame *fr, int medw)
         edge_hi = (do_edges) ? medw - edge_lo - 1 : 0;
 
         int yi; float *row; // filter rows
-        for (yi = 0, row = dpi; yi < fr->h; yi++, row += fr->w) {
+        for (yi = 0, row = dpi; yi < fr->h; yi++, row += fr->w) { // each frame row
 
             float *in = row;
             float *out_start = row_median + yi * fr->w;
@@ -864,29 +914,29 @@ int median_with_star_exclusion(struct ccd_frame *fr, int medw)
 
             Point *v = points;
             int b;
-            for (b = -edge_lo; b < fr->w + edge_hi; b++) {
+            for (b = -edge_lo; b < fr->w + edge_hi; b++) { // each point in row
                 v->value = *in;
                 v->exclude = FALSE;
                 v->id = b;
 
-                if (array == NULL) array = g_ptr_array_sized_new(medw);
+                if (array == NULL) array = g_ptr_array_sized_new(medw); // new accum for each medw sized sample
 
                 if (array == NULL) break;
 
-                g_ptr_array_insert(array, v - points, v);
+                g_ptr_array_insert(array, v - points, v); // add point to accum
 
                 if (b >= 0 && b < fr->w - 1) in++;
                 v++;
 
-                if (v == points + medw || b == fr->w + edge_hi - 1) { // calculate median for sample
-                    float median = array_median_exclude(array, points, medw);
+                if (v == points + medw || b == fr->w + edge_hi - 1) { // calculate median for medw sample
+                    float median = array_median_exclude(array, points, medw); // sort, exclude, calculate median
 
-                    for (v = points; v < points + medw; v++) { // output sample
+                    for (v = points; v < points + medw; v++) { // output medw sized sample
                         if (v->id >= 0) {
                             if (v->id >= fr->w) break;
 
                             float *out = out_start + v->id;
-                            *out = (v->exclude) ? median : v->value;
+                            *out = (v->exclude) ? median : v->value; // median or existing value
                         }
                     }
 
